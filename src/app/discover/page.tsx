@@ -19,16 +19,17 @@ export default function DiscoverPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showDetail, setShowDetail] = useState(false);
-  const [swipeDir, setSwipeDir] = useState<"left" | "right" | null>(null);
   const [showHint, setShowHint] = useState(true);
 
-  // 스와이프 상태
-  const cardRef = useRef<HTMLDivElement>(null);
+  // 스와이프 애니메이션 상태
+  const [offsetX, setOffsetX] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [exitDir, setExitDir] = useState<"left" | "right" | null>(null);
+
   const startX = useRef(0);
   const startY = useRef(0);
-  const deltaX = useRef(0);
-  const deltaY = useRef(0);
-  const swiping = useRef(false);
+  const isDragging = useRef(false);
+  const directionLocked = useRef<"horizontal" | "vertical" | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -40,7 +41,6 @@ export default function DiscoverPage() {
   }, [router]);
 
   const loadRecommendations = async () => {
-    // 캐시된 추천이 있으면 사용
     const cached = getRecommendations();
     if (cached.length > 0) {
       setRecs(cached);
@@ -63,78 +63,123 @@ export default function DiscoverPage() {
 
   const current = recs[currentIndex];
 
-  const handleSwipe = useCallback(
+  const goNext = useCallback(
     (direction: "left" | "right") => {
-      if (!current) return;
-      setSwipeDir(direction);
+      if (!current || isAnimating) return;
+
       if (direction === "right") {
         addSaved(current);
       }
       if (showHint && currentIndex >= 2) setShowHint(false);
+
+      // 카드를 화면 밖으로 날리는 애니메이션
+      setIsAnimating(true);
+      setExitDir(direction);
+
       setTimeout(() => {
-        setSwipeDir(null);
-        setShowDetail(false);
         setCurrentIndex((i) => i + 1);
-      }, 200);
+        setOffsetX(0);
+        setExitDir(null);
+        setIsAnimating(false);
+        setShowDetail(false);
+      }, 300);
     },
-    [current, currentIndex, showHint]
+    [current, currentIndex, showHint, isAnimating]
   );
 
-  // Touch handlers
-  const onTouchStart = (e: React.TouchEvent) => {
-    if (showDetail) return;
-    startX.current = e.touches[0].clientX;
-    startY.current = e.touches[0].clientY;
-    deltaX.current = 0;
-    deltaY.current = 0;
-    swiping.current = true;
-  };
+  // Touch handlers — 수평 스와이프만 처리, 수직은 무시
+  const onTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (showDetail || isAnimating) return;
+      startX.current = e.touches[0].clientX;
+      startY.current = e.touches[0].clientY;
+      isDragging.current = true;
+      directionLocked.current = null;
+    },
+    [showDetail, isAnimating]
+  );
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!swiping.current) return;
-    deltaX.current = e.touches[0].clientX - startX.current;
-    deltaY.current = e.touches[0].clientY - startY.current;
-    if (cardRef.current) {
-      const rotation = deltaX.current * 0.1;
-      cardRef.current.style.transform = `translateX(${deltaX.current}px) rotate(${rotation}deg)`;
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isDragging.current) return;
+
+      const dx = e.touches[0].clientX - startX.current;
+      const dy = e.touches[0].clientY - startY.current;
+
+      // 방향 잠금: 처음 10px 이동으로 수평/수직 결정
+      if (!directionLocked.current) {
+        if (Math.abs(dx) > 10) {
+          directionLocked.current = "horizontal";
+        } else if (Math.abs(dy) > 10) {
+          directionLocked.current = "vertical";
+          isDragging.current = false;
+          return;
+        } else {
+          return;
+        }
+      }
+
+      if (directionLocked.current !== "horizontal") return;
+
+      // 수평 스와이프 중에는 페이지 스크롤 방지
+      e.preventDefault();
+      setOffsetX(dx);
+    },
+    []
+  );
+
+  const onTouchEnd = useCallback(() => {
+    if (!isDragging.current && directionLocked.current !== "horizontal") return;
+    isDragging.current = false;
+
+    const threshold = 80;
+    if (Math.abs(offsetX) > threshold) {
+      goNext(offsetX > 0 ? "right" : "left");
+    } else {
+      // 스냅백 애니메이션
+      setOffsetX(0);
     }
-  };
-
-  const onTouchEnd = () => {
-    if (!swiping.current) return;
-    swiping.current = false;
-
-    const absX = Math.abs(deltaX.current);
-    const absY = Math.abs(deltaY.current);
-
-    if (absX > 80 && absX > absY) {
-      handleSwipe(deltaX.current > 0 ? "right" : "left");
-    } else if (deltaY.current < -60 && absY > absX) {
-      setShowDetail(true);
-    } else if (cardRef.current) {
-      cardRef.current.style.transform = "";
-    }
-
-    if (cardRef.current) {
-      cardRef.current.style.transition = "transform 0.2s ease-out";
-      setTimeout(() => {
-        if (cardRef.current) cardRef.current.style.transition = "";
-      }, 200);
-    }
-  };
+    directionLocked.current = null;
+  }, [offsetX, goNext]);
 
   // 키보드 지원
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") handleSwipe("left");
-      else if (e.key === "ArrowRight") handleSwipe("right");
+      if (e.key === "ArrowLeft") goNext("left");
+      else if (e.key === "ArrowRight") goNext("right");
       else if (e.key === "ArrowUp") setShowDetail(true);
       else if (e.key === "ArrowDown" || e.key === "Escape")
         setShowDetail(false);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [handleSwipe]);
+  }, [goNext]);
+
+  // 카드 transform 계산
+  const getCardStyle = (): React.CSSProperties => {
+    if (exitDir) {
+      const x = exitDir === "left" ? -500 : 500;
+      return {
+        transform: `translateX(${x}px) rotate(${x * 0.05}deg)`,
+        transition: "transform 0.3s ease-out, opacity 0.3s ease-out",
+        opacity: 0,
+      };
+    }
+    if (offsetX !== 0) {
+      return {
+        transform: `translateX(${offsetX}px) rotate(${offsetX * 0.05}deg)`,
+        transition: "none",
+      };
+    }
+    return {
+      transform: "translateX(0) rotate(0deg)",
+      transition: "transform 0.2s ease-out",
+    };
+  };
+
+  // 스와이프 방향 인디케이터 opacity
+  const passOpacity = Math.min(1, Math.max(0, -offsetX / 120));
+  const saveOpacity = Math.min(1, Math.max(0, offsetX / 120));
 
   if (!mounted || loading) {
     return (
@@ -166,7 +211,10 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="h-dvh flex flex-col">
+    <div
+      className="h-dvh flex flex-col overflow-hidden"
+      style={{ touchAction: "pan-y" }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="text-lg font-bold">Discover</span>
@@ -175,20 +223,19 @@ export default function DiscoverPage() {
         </span>
       </div>
 
-      {/* Card */}
-      <div className="flex-1 min-h-0 px-4 pb-2 relative">
+      {/* Card area — 스크롤 차단 */}
+      <div
+        className="flex-1 min-h-0 px-4 pb-2 relative"
+        style={{ touchAction: "none", overscrollBehavior: "none" }}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* 카드 */}
         <div
-          ref={cardRef}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-          className={`h-full rounded-2xl overflow-hidden relative ${
-            swipeDir === "left"
-              ? "-translate-x-full opacity-0 transition-all duration-200"
-              : swipeDir === "right"
-                ? "translate-x-full opacity-0 transition-all duration-200"
-                : ""
-          }`}
+          key={currentIndex}
+          className="h-full rounded-2xl overflow-hidden relative will-change-transform"
+          style={getCardStyle()}
         >
           {/* 포스터 */}
           {current.posterUrl ? (
@@ -196,6 +243,7 @@ export default function DiscoverPage() {
               src={current.posterUrl}
               alt={current.title}
               className="absolute inset-0 w-full h-full object-cover"
+              draggable={false}
             />
           ) : (
             <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
@@ -231,27 +279,30 @@ export default function DiscoverPage() {
             </div>
           </div>
 
-          {/* 스와이프 인디케이터 */}
-          {swipeDir === "left" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-red-500/20">
-              <span className="text-6xl">👋</span>
-            </div>
-          )}
-          {swipeDir === "right" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-green-500/20">
-              <span className="text-6xl">💚</span>
-            </div>
-          )}
+          {/* 스와이프 방향 오버레이 — 드래그 중 점진적 표시 */}
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-red-500/30 pointer-events-none"
+            style={{ opacity: passOpacity }}
+          >
+            <span className="text-7xl">👋</span>
+          </div>
+          <div
+            className="absolute inset-0 flex items-center justify-center bg-green-500/30 pointer-events-none"
+            style={{ opacity: saveOpacity }}
+          >
+            <span className="text-7xl">💚</span>
+          </div>
         </div>
 
         {/* Detail 오버레이 */}
         {showDetail && (
           <div
-            className="absolute inset-0 mx-4 bg-zinc-950/95 backdrop-blur rounded-2xl overflow-y-auto p-5 animate-fade-in"
+            className="absolute inset-0 bg-zinc-950/95 backdrop-blur rounded-2xl overflow-y-auto p-5 animate-fade-in z-10"
+            style={{ touchAction: "pan-y" }}
             onClick={() => setShowDetail(false)}
           >
             <button
-              className="absolute top-4 right-4 text-zinc-400 text-xl"
+              className="absolute top-4 right-4 text-zinc-400 text-xl z-20"
               onClick={() => setShowDetail(false)}
             >
               ✕
@@ -298,8 +349,8 @@ export default function DiscoverPage() {
         )}
       </div>
 
-      {/* 스와이프 힌트 + 버튼 */}
-      <div className="px-4 pb-2">
+      {/* 버튼 영역 */}
+      <div className="px-4 pb-2 shrink-0">
         {showHint && (
           <div className="flex justify-between text-xs text-zinc-600 mb-2 px-8">
             <span>← Pass</span>
@@ -309,7 +360,8 @@ export default function DiscoverPage() {
         )}
         <div className="flex gap-3 justify-center">
           <button
-            onClick={() => handleSwipe("left")}
+            onClick={() => goNext("left")}
+            disabled={isAnimating}
             className="w-14 h-14 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center text-xl active:scale-90 transition-transform"
           >
             👋
@@ -321,7 +373,8 @@ export default function DiscoverPage() {
             ℹ️
           </button>
           <button
-            onClick={() => handleSwipe("right")}
+            onClick={() => goNext("right")}
+            disabled={isAnimating}
             className="w-14 h-14 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-xl active:scale-90 transition-transform"
           >
             💚
