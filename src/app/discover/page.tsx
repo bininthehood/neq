@@ -14,6 +14,7 @@ import BottomNav from "@/components/BottomNav";
 
 export default function DiscoverPage() {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -30,6 +31,7 @@ export default function DiscoverPage() {
   const swiping = useRef(false);
 
   useEffect(() => {
+    setMounted(true);
     if (!hasOnboarded()) {
       router.replace("/onboarding");
       return;
@@ -134,9 +136,9 @@ export default function DiscoverPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [handleSwipe]);
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
-      <div className="h-dvh flex flex-col items-center justify-center gap-4">
+      <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <div className="text-4xl animate-pulse">🐱</div>
         <div className="text-zinc-400">취향을 분석하고 있어요...</div>
         <div className="text-zinc-600 text-sm">첫 로딩은 10-20초 걸려요</div>
