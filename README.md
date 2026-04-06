@@ -1,36 +1,131 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Neko
 
-## Getting Started
+OTT 콘텐츠 발굴/큐레이션 서비스 기획 초안
 
-First, run the development server:
+## 서비스 한 줄 정의
+좋아하는 작품 몇 개를 바탕으로, OTT 전체에서 볼 만한 콘텐츠를 스와이프 방식으로 발굴하고 결국 오늘 볼 작품 하나를 고르게 도와주는 서비스.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 현재 기획 방향
+- 추천 서비스보다는 **발굴/큐레이션 서비스**에 가깝다.
+- 넷플릭스 하나가 아니라 **OTT 전체**를 대상으로 한다.
+- 핵심 경험은 "재미있게 넘기다가 결국 오늘 볼 작품을 하나 고르게 되는 것"이다.
+- 사용자는 단순한 추천 정확도보다 **발굴의 재미 + 빠른 결정**에서 가치를 느낀다.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 서비스명
+- **Neko**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 문제 정의
+OTT에는 볼 작품이 많지만, 사용자는 오히려 선택 피로를 느낀다.
+플랫폼 내부 추천은 뻔하거나 이유가 불명확하게 느껴질 수 있고, 리뷰 정보도 흩어져 있어 빠르게 결정을 내리기 어렵다.
+Neko는 사용자가 오늘 볼 작품을 더 쉽고 재미있게 발견하고 결정하도록 돕는 것을 목표로 한다.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 핵심 가치
+- **발굴성**: 미처 몰랐던 작품을 발견하는 재미
+- **개인화**: 좋아하는 작품 기반의 추천/발굴
+- **직관성**: 설명보다 행동이 먼저 나오는 UX
+- **결정 보조**: 결국 오늘 볼 작품 하나를 고르게 함
 
-## Learn More
+## 핵심 가설
+1. 사용자는 단순 추천보다 **좋아하는 작품과 결이 비슷하면서도 덜 뻔한 콘텐츠**에 더 흥미를 느낀다.
+2. 사용자는 긴 설명보다 **스와이프 기반의 빠른 탐색 경험**을 선호한다.
+3. 사용자는 단순 보관함보다, 저장한 작품 중에서 **오늘 볼 작품을 고르는 공간**에 가치를 느낀다.
+4. 서비스의 성공 신호는 추천의 정교함만이 아니라, **계속 넘겨보게 되는 재미**와 **실제로 하나를 고르는 결과**다.
 
-To learn more about Next.js, take a look at the following resources:
+## 초기 사용자 흐름
+1. 앱 첫 진입
+2. 좋아하는 작품 5개 선택
+3. Discover 진입
+4. 카드 스와이프를 통해 작품 발굴
+5. Save한 작품이 Saved에 쌓임
+6. Saved에서 오늘 볼 작품 하나를 결정
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 화면 구조
+### 1. Onboarding
+- 좋아하는 작품 5개 선택
+- 검색 기반 선택
+- 진행 상태 표시
+- 선택 완료 후 Discover 진입
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 2. Discover
+- 카드 1장 즉시 노출
+- Neko의 핵심 경험 화면
+- 작품을 빠르게 넘기며 발굴하는 공간
+- **완전 제스처 중심 UI**로 구성
 
-## Deploy on Vercel
+#### 카드 앞면 정보
+- 포스터
+- 제목
+- 한 줄 내용 요약
+- OTT 제공처
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+#### 제스처 액션
+- **Left** = Pass
+- **Right** = Save
+- **Up** = Detail open
+- **Down** = Detail close
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+#### Detail 구조
+- 왜 추천했는지
+- 평점 / 반응
+- 조금 더 긴 줄거리
+- 비슷한 작품
+- 장르 / 분위기 태그
+
+### 3. Saved
+- 저장한 작품을 보여주는 공간
+- 단순 보관함이 아니라 **나중에 볼 작품 + 오늘 볼 후보를 고르는 공간**
+- 포스터 중심 **아이콘 그리드 형태**
+- 작품 클릭 시 Discover의 Detail 구조를 그대로 재사용
+
+### 4. Profile
+- 초기 선택 작품 5개 확인
+- 취향 요약
+- 활동 요약
+- 기본 추천 설정
+- MVP에서는 후순위
+
+## 추천/발굴 로직 방향
+- 핵심 축은 **유사도 + 발굴성**
+- 사용자가 좋아한 작품과 결이 비슷하면서도 너무 뻔하지 않은 작품을 제안
+- 유명작과 비유명작을 섞되, **비유명작 비중을 약간 더 높이는 방식**을 지향
+- 이후 스와이프 데이터(Pass / Save / Detail)를 반영해 개인화 강화
+
+## MVP 범위
+### 포함
+1. 좋아하는 작품 5개 선택 온보딩
+2. Discover 스와이프 피드
+3. Detail 보기
+4. Saved 화면
+5. 기본적인 개인화 반영
+
+### 제외
+- 사용자 리뷰/커뮤니티
+- 친구 공유 기능
+- 고급 취향 그래프
+- 복잡한 추천 알고리즘
+- 알림 기능
+- 소셜 기능
+- Profile의 고도화
+
+## MVP 첫 구현 범위
+- **Onboarding + Discover + Saved**
+- Profile은 후순위
+
+## MVP 성공 기준
+1. 사용자가 **재미있어서 계속 작품 카드를 넘겨보게 된다**
+2. 그 과정 끝에 **실제로 오늘 볼 작품 하나를 고르게 된다**
+
+즉 Neko의 첫 버전은 추천 정확도만 높은 서비스가 아니라,
+**재미있게 탐색하다가 결국 결정을 돕는 서비스**여야 한다.
+
+## 이후 확장 아이디어
+- 사용자 리뷰 기반 추천
+- 플랫폼별 / 기분별 발굴 모드
+- 취향 맵 시각화
+- 친구/커뮤니티 큐레이션
+- 더 정교한 발굴 알고리즘
+- Saved에서 "오늘 볼 것 하나 골라주기" 기능
+
+## 현재 상태 메모
+- 아이디어 단계는 넘었고, 초기 기획 1차가 정리된 상태
+- 다음 단계부터는 데이터 구조, 와이어프레임, 기술 설계 등 구현 직전 설계로 넘어갈 수 있음
