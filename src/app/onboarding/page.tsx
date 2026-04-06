@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { setFavorites } from "@/lib/store";
 
@@ -10,6 +10,22 @@ interface SearchResult {
   posterUrl: string | null;
   year: string;
 }
+
+// 한국에서 인기 있는 작품 추천 (검색 전 표시)
+const SUGGESTIONS: SearchResult[] = [
+  { id: 496243, title: "기생충", posterUrl: "https://image.tmdb.org/t/p/w200/jjHccoFjbqlfr4VGLVLT7yek0Xn.jpg", year: "2019" },
+  { id: 278, title: "쇼생크 탈출", posterUrl: "https://image.tmdb.org/t/p/w200/oAt6OtpwYCdJI76AVtVKW1eorYx.jpg", year: "1994" },
+  { id: 157336, title: "인터스텔라", posterUrl: "https://image.tmdb.org/t/p/w200/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg", year: "2014" },
+  { id: 238, title: "대부", posterUrl: "https://image.tmdb.org/t/p/w200/I1fkNd5CeJGv56mhrTDoOeMc2r.jpg", year: "1972" },
+  { id: 372058, title: "너의 이름은.", posterUrl: "https://image.tmdb.org/t/p/w200/wJsOzBoMSdkLJEFwpPIl0GTvPaJ.jpg", year: "2016" },
+  { id: 550, title: "파이트 클럽", posterUrl: "https://image.tmdb.org/t/p/w200/pB8BM7pdSp6B6Ih7QZ4DrQ3PmJK.jpg", year: "1999" },
+  { id: 121, title: "반지의 제왕: 두 개의 탑", posterUrl: "https://image.tmdb.org/t/p/w200/5VTN0pR8gcqV3EPUHHfMGnJYN9L.jpg", year: "2002" },
+  { id: 569094, title: "스파이더맨: 어크로스 더 유니버스", posterUrl: "https://image.tmdb.org/t/p/w200/8Vt6mWEReuy4Of61Lnj5Xj704m8.jpg", year: "2023" },
+  { id: 497, title: "그린 마일", posterUrl: "https://image.tmdb.org/t/p/w200/sOHqdY1RnSn6kcfAHKu74CU1HwI.jpg", year: "1999" },
+  { id: 578, title: "라라랜드", posterUrl: "https://image.tmdb.org/t/p/w200/uDO8zWDhfWwoFdKS4fzkUJt0Rf0.jpg", year: "2016" },
+  { id: 680, title: "펄프 픽션", posterUrl: "https://image.tmdb.org/t/p/w200/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg", year: "1994" },
+  { id: 129, title: "센과 치히로의 행방불명", posterUrl: "https://image.tmdb.org/t/p/w200/39wmItIWsg5sZMyRUHLkWBcuVCM.jpg", year: "2001" },
+];
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -50,9 +66,12 @@ export default function OnboardingPage() {
     router.push("/discover");
   };
 
+  // 검색어가 없고 결과도 없을 때 추천 목록 표시
+  const showSuggestions = query.length === 0 && results.length === 0;
+
   return (
     <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-5 py-8">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold">🐱 Neko</h1>
         <p className="text-zinc-400 mt-2">
           좋아하는 작품을 {selected.length < 3 ? "3-5개" : "더"} 골라주세요
@@ -76,7 +95,7 @@ export default function OnboardingPage() {
             <button
               key={item.id}
               onClick={() => toggleSelect(item)}
-              className="flex-shrink-0 relative group"
+              className="flex-shrink-0 relative"
             >
               {item.posterUrl ? (
                 <img
@@ -89,7 +108,7 @@ export default function OnboardingPage() {
                   {item.title.slice(0, 4)}
                 </div>
               )}
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs">
                 ✕
               </div>
             </button>
@@ -107,11 +126,52 @@ export default function OnboardingPage() {
         autoFocus
       />
 
-      {/* 검색 결과 */}
+      {/* 검색 결과 또는 추천 작품 */}
       <div className="mt-3 flex-1 overflow-y-auto">
         {searching && (
           <div className="text-center text-zinc-500 py-4">검색 중...</div>
         )}
+
+        {/* 추천 작품 그리드 (검색 전) */}
+        {showSuggestions && (
+          <div>
+            <p className="text-xs text-zinc-500 mb-3 px-1">이런 작품은 어떠세요?</p>
+            <div className="grid grid-cols-4 gap-2">
+              {SUGGESTIONS.map((item) => {
+                const isSelected = selected.some((s) => s.id === item.id);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => toggleSelect(item)}
+                    className={`relative rounded-lg overflow-hidden transition-all ${
+                      isSelected ? "ring-2 ring-green-500 scale-95" : "active:scale-95"
+                    }`}
+                  >
+                    {item.posterUrl ? (
+                      <img
+                        src={item.posterUrl}
+                        alt={item.title}
+                        className="w-full aspect-[2/3] object-cover"
+                      />
+                    ) : (
+                      <div className="w-full aspect-[2/3] bg-zinc-800" />
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
+                      <div className="text-[10px] font-medium truncate">{item.title}</div>
+                    </div>
+                    {isSelected && (
+                      <div className="absolute top-1 right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-xs text-black font-bold">
+                        ✓
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 검색 결과 리스트 */}
         {results.map((item) => {
           const isSelected = selected.some((s) => s.id === item.id);
           return (

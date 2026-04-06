@@ -251,11 +251,12 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {/* 매칭 점수 */}
-          <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+          {/* 매칭 점수 + 출처 */}
+          <div className="absolute top-4 right-4 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg flex items-center gap-1.5">
             <span className="text-green-400 font-bold">
               ⭐ {current.rating.toFixed(1)}
             </span>
+            <span className="text-zinc-400 text-[10px]">TMDB</span>
           </div>
 
           {/* 타입 뱃지 */}
