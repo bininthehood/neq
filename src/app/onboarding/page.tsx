@@ -11,8 +11,8 @@ interface SearchResult {
   year: string;
 }
 
-// 한국에서 인기 있는 작품 추천 (검색 전 표시)
-const SUGGESTIONS: SearchResult[] = [
+// 초기 폴백용 (API 로딩 전 표시)
+const FALLBACK_SUGGESTIONS: SearchResult[] = [
   { id: 496243, title: "기생충", posterUrl: "https://image.tmdb.org/t/p/w200/jjHccoFjbqlfr4VGLVLT7yek0Xn.jpg", year: "2019" },
   { id: 278, title: "쇼생크 탈출", posterUrl: "https://image.tmdb.org/t/p/w200/oAt6OtpwYCdJI76AVtVKW1eorYx.jpg", year: "1994" },
   { id: 157336, title: "인터스텔라", posterUrl: "https://image.tmdb.org/t/p/w200/gEU2QniE6E77NI6lCU6MxlNBvIx.jpg", year: "2014" },
@@ -33,7 +33,26 @@ export default function OnboardingPage() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [suggestions, setSuggestions] = useState<SearchResult[]>(FALLBACK_SUGGESTIONS);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 첫 로드 시 트렌딩 목록 가져오기
+  useEffect(() => {
+    fetchTrending();
+  }, []);
+
+  const fetchTrending = async () => {
+    setLoadingSuggestions(true);
+    try {
+      const res = await fetch("/api/trending");
+      const data = await res.json();
+      if (data.length > 0) setSuggestions(data);
+    } catch {
+      // 실패하면 폴백 유지
+    }
+    setLoadingSuggestions(false);
+  };
 
   const search = useCallback(async (q: string) => {
     if (q.length < 1) {
@@ -66,7 +85,6 @@ export default function OnboardingPage() {
     router.push("/discover");
   };
 
-  // 검색어가 없고 결과도 없을 때 추천 목록 표시
   const showSuggestions = query.length === 0 && results.length === 0;
 
   return (
@@ -135,9 +153,18 @@ export default function OnboardingPage() {
         {/* 추천 작품 그리드 (검색 전) */}
         {showSuggestions && (
           <div>
-            <p className="text-xs text-zinc-500 mb-3 px-1">이런 작품은 어떠세요?</p>
+            <div className="flex items-center justify-between mb-3 px-1">
+              <p className="text-xs text-zinc-500">이런 작품은 어떠세요?</p>
+              <button
+                onClick={fetchTrending}
+                disabled={loadingSuggestions}
+                className="text-xs text-zinc-500 hover:text-green-400 transition-colors disabled:opacity-30"
+              >
+                {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
+              </button>
+            </div>
             <div className="grid grid-cols-4 gap-2">
-              {SUGGESTIONS.map((item) => {
+              {suggestions.map((item) => {
                 const isSelected = selected.some((s) => s.id === item.id);
                 return (
                   <button
