@@ -120,7 +120,7 @@ export default function SavedPage() {
               </div>
               <button
                 onClick={() => handleRemove(item.recommendation.tmdbId)}
-                className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute top-1 right-1 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               >
                 ✕
               </button>
