@@ -218,9 +218,20 @@ export default function DiscoverPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="text-lg font-bold">Discover</span>
-        <span className="text-sm text-zinc-500">
-          {currentIndex + 1}/{recs.length}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-zinc-500">
+            {currentIndex + 1}/{recs.length}
+          </span>
+          <button
+            onClick={() => {
+              localStorage.clear();
+              router.replace("/onboarding");
+            }}
+            className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+          >
+            취향 재설정
+          </button>
+        </div>
       </div>
 
       {/* Card area — 스크롤 차단 */}
