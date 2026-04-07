@@ -21,7 +21,6 @@ import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 type FilterType = "all" | "movie" | "series";
 type FilterOrigin = "all" | "kr" | "foreign";
 
-// 한국 주요 OTT 목록 (필터용)
 const OTT_OPTIONS = ["Netflix", "Disney Plus", "Watcha", "wavve", "Coupang Play", "TVING", "Apple TV Plus"];
 
 export default function DiscoverPage() {
@@ -30,53 +29,39 @@ export default function DiscoverPage() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [slideUp, setSlideUp] = useState(0); // 0=카드, 100=디테일
-  const [slideSnapping, setSlideSnapping] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterOTT, setFilterOTT] = useState<string>("all");
 
-  // 캐러셀 회전
+  // 캐러셀 (좌우만 JS)
   const [rotation, setRotation] = useState(0);
   const [isSnapping, setIsSnapping] = useState(false);
   const rotationAtDragStart = useRef(0);
-  const [pullY, setPullY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
-
-  // 통합 터치 refs
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const touchActive = useRef(false);
   const touchDir = useRef<"h" | "v" | null>(null);
-  const slideAtTouchStart = useRef(0);
+
+  // 스크롤 snap ref
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDetailView, setIsDetailView] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (!hasOnboarded()) {
-      router.replace("/onboarding");
-      return;
-    }
+    if (!hasOnboarded()) { router.replace("/onboarding"); return; }
     loadRecs("all", "all");
     setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
   }, [router]);
 
   const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
     const cached = getRecommendations(ft, fo);
-    if (cached.length > 0) {
-      setRecs(cached);
-      setCurrentIndex(0);
-      setLoading(false);
-      return;
-    }
-
+    if (cached.length > 0) { setRecs(cached); setCurrentIndex(0); setLoading(false); return; }
     setLoading(true);
     const favorites = getFavorites();
     const filter: any = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
-
     const reports = getWatchReports();
     const savedItems = getSaved();
     const feedback: { loved: string[]; good: string[]; meh: string[]; dropped: string[] } = { loved: [], good: [], meh: [], dropped: [] };
@@ -90,7 +75,6 @@ export default function DiscoverPage() {
       else if (r.reaction === "dropped") feedback.dropped.push(title);
     }
     const hasFeedback = feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length > 0;
-
     const res = await fetch("/api/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,16 +83,12 @@ export default function DiscoverPage() {
     const data = await res.json();
     const newRecs = data.recommendations ?? [];
     setRecommendations(newRecs, ft, fo);
-    setRecs(newRecs);
-    setCurrentIndex(0);
-    setLoading(false);
+    setRecs(newRecs); setCurrentIndex(0); setLoading(false);
   };
 
   const handleFilterChange = (newType: FilterType, newOrigin: FilterOrigin) => {
-    setFilterType(newType);
-    setFilterOrigin(newOrigin);
-    setSlideUp(0);
-    setFilterOTT("all");
+    setFilterType(newType); setFilterOrigin(newOrigin); setFilterOTT("all");
+    scrollToCard();
     loadRecs(newType, newOrigin);
   };
 
@@ -117,150 +97,92 @@ export default function DiscoverPage() {
     await loadRecs(filterType, filterOrigin);
   };
 
-  // OTT 필터 적용 (클라이언트 측 — 이미 로드된 추천에서 필터링)
-  const filteredRecs = filterOTT === "all"
-    ? recs
-    : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
-
-  // 원통 캐러셀 계산
+  const filteredRecs = filterOTT === "all" ? recs : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
   const cardCount = filteredRecs.length;
   const anglePerCard = cardCount > 0 ? 360 / cardCount : 0;
   const totalRotation = rotation;
-  const activeIndex = cardCount > 0
-    ? ((Math.round(-totalRotation / anglePerCard) % cardCount) + cardCount) % cardCount
-    : 0;
+  const activeIndex = cardCount > 0 ? ((Math.round(-totalRotation / anglePerCard) % cardCount) + cardCount) % cardCount : 0;
   const current = filteredRecs[activeIndex];
 
-  // 카드로 이동
-  const goTo = useCallback(
-    (direction: "left" | "right") => {
-      if (isSnapping) return;
-      const delta = direction === "right" ? -anglePerCard : anglePerCard;
-      const target = rotation + delta;
-      setIsSnapping(true);
-      setRotation(target);
-      setTimeout(() => setIsSnapping(false), 400);
-    },
-    [rotation, anglePerCard, isSnapping]
-  );
+  const goTo = useCallback((direction: "left" | "right") => {
+    if (isSnapping) return;
+    const delta = direction === "right" ? -anglePerCard : anglePerCard;
+    setIsSnapping(true); setRotation((r) => r + delta);
+    setTimeout(() => setIsSnapping(false), 400);
+  }, [anglePerCard, isSnapping]);
 
-  // 인덱스 동기화
-  useEffect(() => {
-    setCurrentIndex(activeIndex);
-  }, [activeIndex]);
+  useEffect(() => { setCurrentIndex(activeIndex); }, [activeIndex]);
 
-  // === 통합 터치 핸들러 (카드 영역 + 디테일 영역 공통) ===
-  const onUnifiedTouchStart = useCallback((e: React.TouchEvent) => {
+  // 스크롤 snap → 디테일 상태 감지
+  const onScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setIsDetailView(el.scrollTop > el.clientHeight * 0.3);
+  }, []);
+
+  const scrollToCard = () => { scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); };
+  const scrollToDetail = () => { scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" }); };
+
+  // 좌우 터치 (카드 뷰에서만) — 수직은 네이티브 스크롤에 맡김
+  const onCardTouchStart = useCallback((e: React.TouchEvent) => {
     if (isSnapping) return;
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
     touchActive.current = true;
     touchDir.current = null;
     rotationAtDragStart.current = rotation;
-    slideAtTouchStart.current = slideUp;
-  }, [isSnapping, rotation, slideUp]);
+  }, [isSnapping, rotation]);
 
-  const onUnifiedTouchMove = useCallback((e: React.TouchEvent) => {
+  const onCardTouchMove = useCallback((e: React.TouchEvent) => {
     if (!touchActive.current) return;
     const dx = e.touches[0].clientX - touchStartX.current;
     const dy = e.touches[0].clientY - touchStartY.current;
-
-    // 방향 잠금
     if (!touchDir.current) {
-      if (Math.abs(dx) > 10) touchDir.current = "h";
-      else if (Math.abs(dy) > 10) touchDir.current = "v";
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) touchDir.current = "h";
+      else if (Math.abs(dy) > 10) { touchDir.current = "v"; touchActive.current = false; return; }
       else return;
     }
-
-    if (touchDir.current === "h" && slideUp < 50) {
-      // 좌우 캐러셀 (디테일 닫힌 상태에서만)
-      e.preventDefault();
+    if (touchDir.current === "h") {
+      e.preventDefault(); // 수평 드래그만 가로채기
       const dragAngle = (dx / window.innerWidth) * anglePerCard * 1.2;
       setRotation(rotationAtDragStart.current + dragAngle);
-    } else if (touchDir.current === "v") {
-      e.preventDefault();
-      // 시작 시 slideUp 위치에서 dy만큼 이동
-      const deltaPct = (-dy / window.innerHeight) * 150;
-      const newSlide = Math.min(100, Math.max(0, slideAtTouchStart.current + deltaPct));
-      setSlideUp(newSlide);
-
-      // pull-to-refresh (카드 상태에서 아래로 당길 때만)
-      if (slideAtTouchStart.current === 0 && dy > 0 && !refreshing) {
-        setPullY(Math.min(80, dy * 0.5));
-      }
     }
-  }, [anglePerCard, refreshing]);
+  }, [anglePerCard]);
 
-  const onUnifiedTouchEnd = useCallback(() => {
-    if (!touchActive.current) return;
-    touchActive.current = false;
-    const dir = touchDir.current;
-    touchDir.current = null;
-
-    if (dir === "h" && slideUp < 50) {
-      // 캐러셀 스냅
-      const dragDelta = rotation - rotationAtDragStart.current;
-      let snapped: number;
-      if (Math.abs(dragDelta) > anglePerCard * 0.2) {
-        snapped = dragDelta > 0
-          ? Math.ceil(rotation / anglePerCard) * anglePerCard
-          : Math.floor(rotation / anglePerCard) * anglePerCard;
-      } else {
-        snapped = Math.round(rotationAtDragStart.current / anglePerCard) * anglePerCard;
-      }
-      setRotation(snapped);
-      setIsSnapping(true);
-      setTimeout(() => setIsSnapping(false), 400);
-    } else if (dir === "v") {
-      // 슬라이드 스냅: 30% 기준으로 열기/닫기
-      if (slideUp > 30) snapSlide(100); else snapSlide(0);
-      // pull-to-refresh
-      if (pullY > 50) {
-        setRefreshing(true); setPullY(40);
-        refreshRecommendations().then(() => { setRefreshing(false); setPullY(0); });
-      } else { setPullY(0); }
+  const onCardTouchEnd = useCallback(() => {
+    if (!touchActive.current || touchDir.current !== "h") { touchActive.current = false; return; }
+    touchActive.current = false; touchDir.current = null;
+    const dragDelta = rotation - rotationAtDragStart.current;
+    let snapped: number;
+    if (Math.abs(dragDelta) > anglePerCard * 0.2) {
+      snapped = dragDelta > 0 ? Math.ceil(rotation / anglePerCard) * anglePerCard : Math.floor(rotation / anglePerCard) * anglePerCard;
+    } else {
+      snapped = Math.round(rotationAtDragStart.current / anglePerCard) * anglePerCard;
     }
-  }, [rotation, anglePerCard, slideUp, pullY]);
-
-  const snapSlide = useCallback((target: number) => {
-    setSlideSnapping(true);
-    setSlideUp(target);
-    setTimeout(() => setSlideSnapping(false), 300);
-  }, []);
-  const openDetail = useCallback(() => snapSlide(100), [snapSlide]);
-  const closeDetail = useCallback(() => snapSlide(0), [snapSlide]);
+    setRotation(snapped); setIsSnapping(true);
+    setTimeout(() => setIsSnapping(false), 400);
+  }, [rotation, anglePerCard]);
 
   // 키보드
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") goTo("left");
       else if (e.key === "ArrowRight") goTo("right");
-      else if (e.key === "ArrowUp" || e.key === "Enter") openDetail();
-      else if (e.key === "ArrowDown" || e.key === "Escape") closeDetail();
+      else if (e.key === "ArrowUp" || e.key === "Enter") scrollToDetail();
+      else if (e.key === "ArrowDown" || e.key === "Escape") scrollToCard();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goTo, openDetail, closeDetail]);
+  }, [goTo]);
 
-  useEffect(() => {
-    if (slideUp > 50) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
-  }, [slideUp]);
-
-  // 전체 이미지 프리로드
-  useEffect(() => {
-    filteredRecs.forEach((r) => {
-      if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; }
-    });
-  }, [filteredRecs]);
-
-  // 원통 캐러셀 제거 — 평면 peek 슬라이드 사용
+  // 이미지 프리로드
+  useEffect(() => { filteredRecs.forEach((r) => { if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; } }); }, [filteredRecs]);
 
   const filterLabel = [
     filterOrigin === "kr" ? "국내" : filterOrigin === "foreign" ? "해외" : "",
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
-  // 메타 정보 문자열
   const metaInfo = (r: Recommendation) => {
     const parts: string[] = [];
     if (r.country?.length > 0) parts.push(r.country.join("/"));
@@ -287,7 +209,6 @@ export default function DiscoverPage() {
           {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
         </button>
       ))}
-      {/* OTT 필터 */}
       {recs.length > 0 && (
         <>
           <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
@@ -295,12 +216,7 @@ export default function DiscoverPage() {
             <button key={ott} onClick={() => { setFilterOTT(ott); setCurrentIndex(0); }}
               className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5"
               style={{ background: filterOTT === ott ? "var(--accent)" : "var(--surface)", color: filterOTT === ott ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOTT === ott ? "none" : "1px solid var(--border)" }}>
-              {ott === "all" ? "모든 OTT" : (
-                <>
-                  <img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />
-                  {ott}
-                </>
-              )}
+              {ott === "all" ? "모든 OTT" : (<><img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />{ott}</>)}
             </button>
           ))}
         </>
@@ -308,20 +224,15 @@ export default function DiscoverPage() {
     </div>
   );
 
-  // 로딩
   if (!mounted || loading) {
     return (
       <div className="h-dvh flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 shrink-0">
-          <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
-        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
         <FilterChips />
         <div className="flex-1 flex flex-col items-center justify-center gap-5">
           <div className="w-10 h-10 animate-spin" style={{ border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
           <div className="text-center">
-            <h2 className="font-display text-lg" style={{ color: "var(--text-primary)" }}>
-              {filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}
-            </h2>
+            <h2 className="font-display text-lg" style={{ color: "var(--text-primary)" }}>{filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}</h2>
             <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>잠시만 기다려주세요</p>
           </div>
         </div>
@@ -330,30 +241,19 @@ export default function DiscoverPage() {
     );
   }
 
-  // 빈 결과
   if (filteredRecs.length === 0) {
     const hasFilter = filterType !== "all" || filterOrigin !== "all" || filterOTT !== "all";
     return (
       <div className="h-dvh flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 shrink-0">
-          <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
-          <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
-        </div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button></div>
         <FilterChips />
         <div className="flex-1 flex flex-col px-8 justify-center">
           <div className="space-y-5">
             <IconFilm size={36} color="var(--text-muted)" />
-            <div>
-              <p className="font-display text-lg font-semibold">{hasFilter ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p>
-              <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p>
-            </div>
+            <div><p className="font-display text-lg font-semibold">{hasFilter ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p><p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p></div>
             <div className="flex gap-3">
-              {hasFilter && (
-                <button onClick={() => { handleFilterChange("all", "all"); setFilterOTT("all"); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>
-              )}
-              <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
-                <IconRefresh size={14} /> 다시 시도
-              </button>
+              {hasFilter && (<button onClick={() => { handleFilterChange("all", "all"); setFilterOTT("all"); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>)}
+              <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}><IconRefresh size={14} /> 다시 시도</button>
             </div>
           </div>
         </div>
@@ -368,40 +268,90 @@ export default function DiscoverPage() {
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         <div className="flex items-center gap-3">
-          <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>
-            {currentIndex + 1}/{filteredRecs.length}
-          </span>
+          <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>{currentIndex + 1}/{filteredRecs.length}</span>
           <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
       </div>
 
       <FilterChips />
 
-      {/* Pull-to-refresh indicator */}
-      {pullY > 0 && (
-        <div className="flex justify-center py-1 shrink-0" style={{ opacity: Math.min(1, pullY / 40) }}>
-          <div className={`w-6 h-6 ${refreshing ? "animate-spin" : ""}`} style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)", transform: `rotate(${pullY * 4}deg)` }} />
-        </div>
-      )}
-
-      {/* 카드 + 디테일 영역 */}
+      {/* 스크롤 snap 컨테이너 — 상하는 네이티브 스크롤, 좌우는 JS */}
       <div
-        className="flex-1 min-h-0 relative overflow-hidden"
-        style={{ touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "none" : "transform 0.2s ease-out" }}
-        onTouchStart={onUnifiedTouchStart}
-        onTouchMove={onUnifiedTouchMove}
-        onTouchEnd={onUnifiedTouchEnd}
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto snap-y snap-mandatory"
+        style={{ scrollSnapType: "y mandatory", overscrollBehavior: "none" }}
+        onScroll={onScroll}
       >
-        {/* 디테일 (카드 뒤에 깔려있음, 카드가 올라가면 드러남) */}
-        {current && slideUp > 0 && (
-          <div
-            className="absolute inset-0 overflow-y-auto px-5 pt-4 pb-8 z-20"
-            style={{ background: "var(--bg)", touchAction: "none", pointerEvents: slideUp > 50 ? "auto" : "none" }}
-          >
+        {/* === Snap 1: 카드 영역 === */}
+        <div
+          className="snap-start relative"
+          style={{ height: "100%", minHeight: "100%", scrollSnapAlign: "start" }}
+          onTouchStart={onCardTouchStart}
+          onTouchMove={onCardTouchMove}
+          onTouchEnd={onCardTouchEnd}
+        >
+          <div className="h-full flex items-stretch px-3 pb-2">
+            {filteredRecs.map((rec, i) => {
+              const continuousIndex = cardCount > 0 ? (-totalRotation / anglePerCard) : 0;
+              const offset = i - continuousIndex;
+              let adj = offset;
+              if (cardCount > 0) { while (adj > cardCount / 2) adj -= cardCount; while (adj < -cardCount / 2) adj += cardCount; }
+              if (Math.abs(adj) > 1.5) return null;
+
+              const translateX = adj * 85;
+              const scale = 1 - Math.abs(adj) * 0.12;
+              const rotateY = adj * -8;
+              const z = 10 - Math.abs(Math.round(adj));
+              const op = 1 - Math.abs(adj) * 0.4;
+
+              return (
+                <div key={rec.tmdbId} className="absolute inset-y-0 overflow-hidden will-change-transform" style={{
+                  left: "3%", right: "3%", bottom: "8px",
+                  transform: `translateX(${translateX}%) scale(${scale}) rotateY(${rotateY}deg)`,
+                  transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out" : "none",
+                  borderRadius: "var(--radius-xl)", zIndex: z, opacity: op,
+                  pointerEvents: Math.abs(adj) < 0.5 ? "auto" : "none",
+                }}>
+                  {rec.posterUrl ? (
+                    <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
+                      <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                    </div>
+                  )}
+                  {Math.abs(adj) < 0.5 && (
+                    <>
+                      <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                        <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
+                      </div>
+                      <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                        {rec.type === "series" ? "시리즈" : "영화"}
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                        <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
+                        {metaInfo(rec) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>}
+                        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
+                        <div className="flex gap-1.5 mt-3 items-center">
+                          {rec.providers.slice(0, 4).map((p) => (
+                            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* === Snap 2: 디테일 영역 === */}
+        {current && (
+          <div className="snap-start px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
             <div className="flex justify-center mb-3">
               <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
             </div>
-            <button className="absolute top-4 right-5 w-11 h-11 flex items-center justify-center z-30" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
+            <button className="absolute right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={scrollToCard}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
 
@@ -411,14 +361,8 @@ export default function DiscoverPage() {
               <IconStar size={13} color="var(--accent)" />
               <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
             </div>
-
-            {current.backdrop && (
-              <img src={current.backdrop} alt="" className="w-full h-40 object-cover mt-4" style={{ borderRadius: "var(--radius-md)" }} />
-            )}
-
-            <div className="mt-4">
-              <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div>
-            </div>
+            {current.backdrop && <img src={current.backdrop} alt="" className="w-full h-40 object-cover mt-4" style={{ borderRadius: "var(--radius-md)" }} />}
+            <div className="mt-4"><div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div></div>
             {(current.director || current.cast?.length > 0) && (
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
                 {current.director && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>)}
@@ -431,7 +375,7 @@ export default function DiscoverPage() {
                 <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
               </div>
             )}
-            <div className="mt-5 pb-4">
+            <div className="mt-5">
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
               <div className="flex flex-col gap-2">
                 {current.providers.map((p) => {
@@ -448,86 +392,6 @@ export default function DiscoverPage() {
             </div>
           </div>
         )}
-
-        {/* 카드 캐러셀 (위에 덮여있음, 위로 슬라이드하면 올라감) */}
-        <div className="absolute inset-0 z-10" style={{ pointerEvents: slideUp > 80 ? "none" : "auto" }}>
-        <div className="h-full flex items-stretch px-3">
-          {filteredRecs.map((rec, i) => {
-            // 연속 위치 계산 (소수점 포함 — 드래그 중 부드러운 보간)
-            const continuousIndex = cardCount > 0 ? (-totalRotation / anglePerCard) : 0;
-            const offset = i - continuousIndex;
-            // 무한 회전 보정
-            let adjustedOffset = offset;
-            if (cardCount > 0) {
-              while (adjustedOffset > cardCount / 2) adjustedOffset -= cardCount;
-              while (adjustedOffset < -cardCount / 2) adjustedOffset += cardCount;
-            }
-            const pos = adjustedOffset;
-
-            // 인접 3장만 렌더
-            if (Math.abs(pos) > 1.5) return null;
-
-            const translateX = pos * 85;
-            const scale = 1 - Math.abs(pos) * 0.12;
-            const rotateYDeg = pos * -8;
-            const zIndex = 10 - Math.abs(Math.round(pos));
-            const opacity = 1 - Math.abs(pos) * 0.4;
-            // 활성 카드만 위로 슬라이드
-            const isActive = Math.abs(pos) < 0.5;
-            const slideYPx = isActive ? -(slideUp / 100) * window.innerHeight * 0.85 : 0;
-
-            return (
-              <div
-                key={rec.tmdbId}
-                className="absolute inset-y-0 overflow-hidden will-change-transform"
-                style={{
-                  left: "3%",
-                  right: "3%",
-                  transform: `translateX(${translateX}%) translateY(${slideYPx}px) scale(${scale}) rotateY(${rotateYDeg}deg)`,
-                  transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out" : slideSnapping ? "transform 0.3s ease-out, opacity 0.3s ease-out" : "none",
-                  borderRadius: "var(--radius-xl)",
-                  zIndex,
-                  opacity,
-                  pointerEvents: Math.abs(pos) < 0.5 ? "auto" : "none",
-                }}
-              >
-                {rec.posterUrl ? (
-                  <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-                ) : (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-                    <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
-                  </div>
-                )}
-
-                {Math.abs(pos) < 0.5 && (
-                  <>
-                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                      <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
-                    </div>
-
-                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                      {rec.type === "series" ? "시리즈" : "영화"}
-                    </div>
-
-                    <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
-                      <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
-                      {metaInfo(rec) && (
-                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>
-                      )}
-                      <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
-                      <div className="flex gap-1.5 mt-3 items-center">
-                        {rec.providers.slice(0, 4).map((p) => (
-                          <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        </div>
       </div>
 
       {/* Bottom actions */}
@@ -535,30 +399,18 @@ export default function DiscoverPage() {
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5 flex-1 mr-3 items-center justify-center">
             {filteredRecs.map((_, i) => (
-              <div key={i} className="transition-all" style={{
-                width: i === activeIndex ? 16 : 6,
-                height: 6,
-                background: i === activeIndex ? "var(--accent)" : "var(--border)",
-                borderRadius: "var(--radius-full)",
-              }} />
+              <div key={i} className="transition-all" style={{ width: i === activeIndex ? 16 : 6, height: 6, background: i === activeIndex ? "var(--accent)" : "var(--border)", borderRadius: "var(--radius-full)" }} />
             ))}
           </div>
           <div className="flex gap-2">
-            {/* Detail 버튼 */}
-            <button onClick={openDetail} aria-label="상세보기"
-              className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+            <button onClick={scrollToDetail} aria-label="상세보기" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
               <IconDetail size={18} color="var(--text-secondary)" />
             </button>
-            {/* 저장 토글 */}
-            <button
-              onClick={() => {
-                const id = current.tmdbId;
-                if (savedIds.has(id)) { removeSaved(id); setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
-                else { addSaved(current); setSavedIds((s) => new Set(s).add(id)); }
-              }}
-              aria-label={savedIds.has(current.tmdbId) ? "저장 취소" : "저장"}
-              className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
+            <button onClick={() => {
+              const id = current.tmdbId;
+              if (savedIds.has(id)) { removeSaved(id); setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
+              else { addSaved(current); setSavedIds((s) => new Set(s).add(id)); }
+            }} aria-label={savedIds.has(current.tmdbId) ? "저장 취소" : "저장"} className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
               style={{ background: savedIds.has(current.tmdbId) ? "var(--accent-dim)" : "var(--surface)", border: `1px solid ${savedIds.has(current.tmdbId) ? "var(--accent-border)" : "var(--border)"}`, borderRadius: "var(--radius-full)" }}>
               <IconSave size={20} color={savedIds.has(current.tmdbId) ? "var(--accent)" : "var(--text-muted)"} filled={savedIds.has(current.tmdbId)} />
             </button>
