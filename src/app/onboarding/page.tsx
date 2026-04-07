@@ -128,7 +128,7 @@ export default function OnboardingPage() {
         value={query}
         onChange={(e) => handleInput(e.target.value)}
         placeholder="영화나 시리즈 제목을 검색하세요"
-        className="w-full px-4 py-3 focus:outline-none transition-colors"
+        className="w-full px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors"
         style={{
           background: "var(--surface)",
           border: "1px solid var(--border)",
