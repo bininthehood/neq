@@ -135,6 +135,12 @@ body::after {
   animation: spin 1.2s linear infinite;
 }
 
+/* 3D carousel */
+.backface-hidden {
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
 /* Selection color */
 ::selection {
   background: var(--accent-dim);

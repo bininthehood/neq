@@ -39,11 +39,12 @@ export default function DiscoverPage() {
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterOTT, setFilterOTT] = useState<string>("all");
 
-  const [offsetX, setOffsetX] = useState(0);
-  const [pullY, setPullY] = useState(0); // pull-to-refresh offset
+  // 3D 원통 캐러셀
+  const [rotation, setRotation] = useState(0);       // 현재 회전 각도
+  const [dragRotation, setDragRotation] = useState(0); // 드래그 중 추가 회전
+  const [isSnapping, setIsSnapping] = useState(false);
+  const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
 
   const startX = useRef(0);
   const startY = useRef(0);
@@ -122,41 +123,43 @@ export default function DiscoverPage() {
     ? recs
     : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
 
-  const current = filteredRecs[currentIndex];
+  // 원통 캐러셀 계산
+  const cardCount = filteredRecs.length;
+  const anglePerCard = cardCount > 0 ? 360 / cardCount : 0;
+  const totalRotation = rotation + dragRotation;
+  const activeIndex = cardCount > 0
+    ? ((Math.round(-totalRotation / anglePerCard) % cardCount) + cardCount) % cardCount
+    : 0;
+  const current = filteredRecs[activeIndex];
 
-  // 좌우 캐러셀
+  // 카드로 이동
   const goTo = useCallback(
     (direction: "left" | "right") => {
-      if (isAnimating) return;
-      const nextIdx = direction === "right" ? currentIndex + 1 : currentIndex - 1;
-      if (nextIdx < 0 || nextIdx > filteredRecs.length) return;
-
-      setIsAnimating(true);
-      setSlideDir(direction);
-      // 카드가 빠지는 도중에 인덱스를 바꿔 다음 카드가 slide-in
-      setTimeout(() => {
-        setCurrentIndex(nextIdx);
-        setSlideDir(null);
-        setOffsetX(0);
-      }, 150);
-      setTimeout(() => {
-        setIsAnimating(false);
-        setDetailOpen(false);
-      }, 300);
+      if (isSnapping) return;
+      const delta = direction === "right" ? -anglePerCard : anglePerCard;
+      const target = rotation + delta;
+      setIsSnapping(true);
+      setRotation(target);
+      setTimeout(() => setIsSnapping(false), 400);
     },
-    [currentIndex, filteredRecs.length, isAnimating]
+    [rotation, anglePerCard, isSnapping]
   );
+
+  // 인덱스 동기화
+  useEffect(() => {
+    setCurrentIndex(activeIndex);
+  }, [activeIndex]);
 
   // 카드 터치 핸들러
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (detailOpen || isAnimating) return;
+      if (detailOpen || isSnapping) return;
       startX.current = e.touches[0].clientX;
       startY.current = e.touches[0].clientY;
       isDragging.current = true;
       directionLocked.current = null;
     },
-    [detailOpen, isAnimating]
+    [detailOpen, isSnapping]
   );
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -170,25 +173,21 @@ export default function DiscoverPage() {
     }
     if (directionLocked.current === "horizontal") {
       e.preventDefault();
-      if ((currentIndex === 0 && dx > 0) || (currentIndex >= filteredRecs.length && dx < 0)) {
-        setOffsetX(dx * 0.3);
-      } else {
-        setOffsetX(dx);
-      }
+      // 드래그 → 회전 각도로 변환 (화면 폭 = 1카드분 회전)
+      const dragAngle = (dx / window.innerWidth) * anglePerCard * 1.2;
+      setDragRotation(dragAngle);
     } else if (directionLocked.current === "vertical") {
       if (dy < 0) {
-        // 위로 스와이프 → Detail
         e.preventDefault();
         const progress = Math.min(100, Math.max(0, 100 + (dy / window.innerHeight) * 120));
         setDetailY(progress);
         if (!detailOpen) setDetailOpen(true);
       } else if (dy > 0 && !refreshing) {
-        // 아래로 끌어당기기 → Pull-to-refresh
         e.preventDefault();
         setPullY(Math.min(80, dy * 0.5));
       }
     }
-  }, [currentIndex, filteredRecs.length, detailOpen, refreshing]);
+  }, [anglePerCard, detailOpen, refreshing]);
 
   const onTouchEnd = useCallback(() => {
     if (!isDragging.current) return;
@@ -196,28 +195,22 @@ export default function DiscoverPage() {
     const dir = directionLocked.current;
     directionLocked.current = null;
     if (dir === "horizontal") {
-      if (offsetX < -60) goTo("right");
-      else if (offsetX > 60) goTo("left");
-      else setOffsetX(0);
+      // 가장 가까운 카드로 스냅
+      const totalAngle = rotation + dragRotation;
+      const snapped = Math.round(totalAngle / anglePerCard) * anglePerCard;
+      setDragRotation(0);
+      setRotation(snapped);
+      setIsSnapping(true);
+      setTimeout(() => setIsSnapping(false), 400);
     } else if (dir === "vertical") {
-      if (detailOpen && detailY < 70) {
-        snapDetail(0);
-      } else if (detailOpen) {
-        snapDetail(100);
-      }
-      // Pull-to-refresh 트리거
+      if (detailOpen && detailY < 70) snapDetail(0);
+      else if (detailOpen) snapDetail(100);
       if (pullY > 50) {
-        setRefreshing(true);
-        setPullY(40);
-        refreshRecommendations().then(() => {
-          setRefreshing(false);
-          setPullY(0);
-        });
-      } else {
-        setPullY(0);
-      }
+        setRefreshing(true); setPullY(40);
+        refreshRecommendations().then(() => { setRefreshing(false); setPullY(0); });
+      } else { setPullY(0); }
     }
-  }, [offsetX, detailY, pullY, detailOpen, goTo]);
+  }, [rotation, dragRotation, anglePerCard, detailY, pullY, detailOpen]);
 
   // Detail 드래그
   const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
@@ -261,22 +254,15 @@ export default function DiscoverPage() {
     if (detailOpen) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
   }, [detailOpen]);
 
-  // 인접 카드 이미지 프리로드
+  // 전체 이미지 프리로드
   useEffect(() => {
-    [currentIndex - 1, currentIndex + 1].forEach((i) => {
-      const r = filteredRecs[i];
-      if (r?.posterUrl) { const img = new Image(); img.src = r.posterUrl; }
+    filteredRecs.forEach((r) => {
+      if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; }
     });
-  }, [currentIndex, filteredRecs]);
+  }, [filteredRecs]);
 
-  const getCardStyle = (): React.CSSProperties => {
-    if (slideDir) {
-      const x = slideDir === "right" ? -500 : 500;
-      return { transform: `translateX(${x}px) rotate(${x * 0.05}deg)`, transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out", opacity: 0 };
-    }
-    if (offsetX !== 0) return { transform: `translateX(${offsetX}px) rotate(${offsetX * 0.05}deg)`, transition: "none" };
-    return { transform: "translateX(0) rotate(0deg)", transition: "transform 0.2s ease-out" };
-  };
+  // 원통 반지름 계산 (카드 수에 따라 조절)
+  const carouselRadius = cardCount <= 3 ? 300 : cardCount <= 6 ? 400 : 500;
 
   const filterLabel = [
     filterOrigin === "kr" ? "국내" : filterOrigin === "foreign" ? "해외" : "",
@@ -385,8 +371,8 @@ export default function DiscoverPage() {
     );
   }
 
-  // 끝 화면
-  if (currentIndex >= filteredRecs.length) {
+  // 끝 화면 (원통형이므로 필터 결과 0일때만)
+  if (false && currentIndex >= filteredRecs.length) {
     return (
       <div className="h-dvh flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
@@ -433,45 +419,79 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* Card area */}
+      {/* 3D 원통 캐러셀 */}
       <div
-        className="flex-1 min-h-0 px-3 pb-2 relative"
-        style={{ touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
+        className="flex-1 min-h-0 relative overflow-hidden"
+        style={{ perspective: "1200px", touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
         <div
-          className="h-full overflow-hidden relative will-change-transform"
-          style={{ ...getCardStyle(), borderRadius: "var(--radius-xl)" }}
+          className="w-full h-full flex items-center justify-center"
+          style={{ transformStyle: "preserve-3d" }}
         >
-          {current.posterUrl ? (
-            <img src={current.posterUrl} alt={current.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-              <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
-            </div>
-          )}
+          <div
+            className="relative will-change-transform"
+            style={{
+              width: "calc(100% - 24px)",
+              height: "100%",
+              transformStyle: "preserve-3d",
+              transform: `rotateY(${totalRotation}deg)`,
+              transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
+            }}
+          >
+            {filteredRecs.map((rec, i) => {
+              const cardAngle = i * anglePerCard;
+              // 현재 보이는 각도 범위만 렌더링 (성능)
+              const relAngle = ((cardAngle + totalRotation) % 360 + 360) % 360;
+              const isVisible = relAngle < 90 || relAngle > 270;
 
-          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-            <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
-          </div>
+              return (
+                <div
+                  key={rec.tmdbId}
+                  className="absolute inset-0 overflow-hidden backface-hidden"
+                  style={{
+                    transform: `rotateY(${cardAngle}deg) translateZ(${carouselRadius}px)`,
+                    borderRadius: "var(--radius-xl)",
+                    visibility: isVisible ? "visible" : "hidden",
+                  }}
+                >
+                  {isVisible && (
+                    <>
+                      {rec.posterUrl ? (
+                        <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
+                          <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                        </div>
+                      )}
 
-          <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-            {current.type === "series" ? "시리즈" : "영화"}
-          </div>
+                      <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                        <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
+                      </div>
 
-          <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
-            <h2 className="font-display text-2xl font-bold">{current.title}</h2>
-            {metaInfo(current) && (
-              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(current)}</p>
-            )}
-            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{current.reason}</p>
-            <div className="flex gap-1.5 mt-3 items-center">
-              {current.providers.slice(0, 4).map((p) => (
-                <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
-              ))}
-            </div>
+                      <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                        {rec.type === "series" ? "시리즈" : "영화"}
+                      </div>
+
+                      <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                        <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
+                        {metaInfo(rec) && (
+                          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>
+                        )}
+                        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
+                        <div className="flex gap-1.5 mt-3 items-center">
+                          {rec.providers.slice(0, 4).map((p) => (
+                            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
