@@ -80,9 +80,9 @@ export default function OnboardingPage() {
   const showSuggestions = query.length === 0 && results.length === 0;
 
   return (
-    <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-5 pt-8 pb-0 relative">
-      {/* Header */}
-      <div className="mb-6">
+    <div className="h-dvh flex flex-col max-w-lg mx-auto w-full">
+      {/* Fixed header */}
+      <div className="shrink-0 px-5 pt-8 pb-3">
         <h1 className="font-display font-bold" style={{ color: "var(--accent)", fontSize: "36px" }}>
           Neko
         </h1>
@@ -101,45 +101,45 @@ export default function OnboardingPage() {
             />
           ))}
         </div>
+
+        {/* Selected items */}
+        {selected.length > 0 && (
+          <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+            {selected.map((item) => (
+              <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
+                {item.posterUrl ? (
+                  <img src={item.posterUrl} alt={item.title} className="w-16 h-24 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
+                ) : (
+                  <div className="w-16 h-24 flex items-center justify-center text-xs" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", color: "var(--text-muted)" }}>
+                    {item.title.slice(0, 4)}
+                  </div>
+                )}
+                <div className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
+                  <IconClose size={12} color="var(--text-primary)" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Search */}
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => handleInput(e.target.value)}
+          placeholder="영화나 시리즈 제목을 검색하세요"
+          className="w-full px-4 py-3 mt-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors"
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            color: "var(--text-primary)",
+          }}
+        />
       </div>
 
-      {/* Selected items */}
-      {selected.length > 0 && (
-        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-          {selected.map((item) => (
-            <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
-              {item.posterUrl ? (
-                <img src={item.posterUrl} alt={item.title} className="w-16 h-24 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
-              ) : (
-                <div className="w-16 h-24 flex items-center justify-center text-xs" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", color: "var(--text-muted)" }}>
-                  {item.title.slice(0, 4)}
-                </div>
-              )}
-              <div className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
-                <IconClose size={12} color="var(--text-primary)" />
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Search */}
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => handleInput(e.target.value)}
-        placeholder="영화나 시리즈 제목을 검색하세요"
-        className="w-full px-4 py-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors"
-        style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
-          color: "var(--text-primary)",
-        }}
-      />
-
-      {/* Results / Suggestions */}
-      <div className="mt-3 flex-1 overflow-y-auto">
+      {/* Scrollable content area */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-24">
         {searching && (
           <div className="text-center py-4" style={{ color: "var(--text-muted)" }}>검색 중...</div>
         )}
@@ -232,9 +232,6 @@ export default function OnboardingPage() {
           );
         })}
       </div>
-
-      {/* Spacer for fixed button */}
-      <div className="h-24 shrink-0" />
 
       {/* Next button — fixed bottom */}
       <div className="fixed bottom-0 left-0 right-0 px-5 pb-6 pt-3 max-w-lg mx-auto" style={{ background: "linear-gradient(transparent, var(--bg) 30%)" }}>

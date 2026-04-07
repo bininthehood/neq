@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   getSaved,
   removeSaved,
@@ -37,6 +37,10 @@ export default function SavedPage() {
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [selected, setSelected] = useState<SavedItem | null>(null);
   const [detailItem, setDetailItem] = useState<SavedItem | null>(null);
+  const [detailY, setDetailY] = useState(100);
+  const [detailAnimating, setDetailAnimating] = useState(false);
+  const detailStartY = useRef(0);
+  const detailDragging = useRef(false);
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
@@ -72,6 +76,45 @@ export default function SavedPage() {
     removeWatchReport(tmdbId);
     refreshData();
   };
+
+  const snapDetail = useCallback((target: number) => {
+    setDetailAnimating(true);
+    setDetailY(target);
+    setTimeout(() => {
+      setDetailAnimating(false);
+      if (target === 100) setDetailItem(null);
+    }, 300);
+  }, []);
+
+  const openDetailFor = useCallback((item: SavedItem) => {
+    setDetailItem(item);
+    setDetailY(100);
+    requestAnimationFrame(() => snapDetail(0));
+  }, [snapDetail]);
+
+  const closeDetail = useCallback(() => {
+    snapDetail(100);
+  }, [snapDetail]);
+
+  const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
+    detailStartY.current = e.touches[0].clientY;
+    detailDragging.current = true;
+  }, []);
+
+  const onDetailTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!detailDragging.current) return;
+    const dy = e.touches[0].clientY - detailStartY.current;
+    if (dy > 0) {
+      e.preventDefault();
+      setDetailY(Math.min(100, (dy / window.innerHeight) * 120));
+    }
+  }, []);
+
+  const onDetailTouchEnd = useCallback(() => {
+    detailDragging.current = false;
+    if (detailY > 30) snapDetail(100);
+    else snapDetail(0);
+  }, [detailY, snapDetail]);
 
   const handlePickTonight = () => {
     if (saved.length === 0) return;
@@ -166,7 +209,7 @@ export default function SavedPage() {
         <div
           className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border-light)", borderRadius: "var(--radius-lg)" }}
-          onClick={() => setDetailItem(selected)}
+          onClick={() => { if (selected) openDetailFor(selected); }}
         >
           <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>
             오늘의 선택
@@ -214,7 +257,7 @@ export default function SavedPage() {
                 key={tmdbId}
                 className="relative group cursor-pointer"
                 style={{ height: i % 3 === 0 ? "240px" : "200px" }}
-                onClick={() => setDetailItem(item)}
+                onClick={() => openDetailFor(item)}
               >
                 {/* Poster */}
                 {item.recommendation.posterUrl ? (
@@ -340,17 +383,26 @@ export default function SavedPage() {
         </div>
       )}
 
-      {/* Detail overlay */}
+      {/* Detail bottom sheet — 제스처 기반 */}
       {detailItem && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center"
-          onClick={() => setDetailItem(null)}
+          onClick={closeDetail}
         >
-          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)" }} />
+          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
           <div
-            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8 animate-fade-in"
-            style={{ background: "var(--bg)", borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", touchAction: "pan-y" }}
+            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8"
+            style={{
+              background: "var(--bg)",
+              borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
+              transform: `translateY(${detailY}%)`,
+              transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
+              touchAction: "pan-y",
+            }}
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={onDetailTouchStart}
+            onTouchMove={onDetailTouchMove}
+            onTouchEnd={onDetailTouchEnd}
           >
             {/* Handle bar */}
             <div className="flex justify-center mb-4">
@@ -360,7 +412,7 @@ export default function SavedPage() {
             <button
               className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center"
               style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
-              onClick={() => setDetailItem(null)}
+              onClick={closeDetail}
             >
               <IconClose size={16} color="var(--text-secondary)" />
             </button>

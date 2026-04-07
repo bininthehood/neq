@@ -8,13 +8,14 @@ import {
   setRecommendations,
   clearAllRecommendations,
   addSaved,
+  removeSaved,
   hasOnboarded,
   getWatchReports,
   getSaved,
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
-import { IconPass, IconSave, IconInfo, IconUndo, IconClose, IconRefresh, IconStar, IconFilm } from "@/components/Icons";
+import { IconSave, IconClose, IconRefresh, IconStar, IconFilm } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 type FilterType = "all" | "movie" | "series";
@@ -26,21 +27,26 @@ export default function DiscoverPage() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showDetail, setShowDetail] = useState(false);
-  const [showHint, setShowHint] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailY, setDetailY] = useState(100); // 0=fully open, 100=fully closed (%)
+  const [detailAnimating, setDetailAnimating] = useState(false);
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
-  const [history, setHistory] = useState<number[]>([]);
 
   const [offsetX, setOffsetX] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [exitDir, setExitDir] = useState<"left" | "right" | null>(null);
+  const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
 
   const startX = useRef(0);
   const startY = useRef(0);
   const isDragging = useRef(false);
   const directionLocked = useRef<"horizontal" | "vertical" | null>(null);
+
+  // Detail 드래그 refs
+  const detailStartY = useRef(0);
+  const detailDragging = useRef(false);
 
   useEffect(() => {
     setMounted(true);
@@ -49,15 +55,14 @@ export default function DiscoverPage() {
       return;
     }
     loadRecs("all", "all");
+    setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
   }, [router]);
 
   const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
-    // 캐시 확인
     const cached = getRecommendations(ft, fo);
     if (cached.length > 0) {
       setRecs(cached);
       setCurrentIndex(0);
-      setHistory([]);
       setLoading(false);
       return;
     }
@@ -68,7 +73,6 @@ export default function DiscoverPage() {
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
 
-    // 시청 피드백 수집
     const reports = getWatchReports();
     const savedItems = getSaved();
     const feedback: { loved: string[]; dropped: string[] } = { loved: [], dropped: [] };
@@ -90,62 +94,54 @@ export default function DiscoverPage() {
     setRecommendations(newRecs, ft, fo);
     setRecs(newRecs);
     setCurrentIndex(0);
-    setHistory([]);
     setLoading(false);
   };
 
   const handleFilterChange = (newType: FilterType, newOrigin: FilterOrigin) => {
     setFilterType(newType);
     setFilterOrigin(newOrigin);
-    setShowDetail(false);
+    setDetailOpen(false);
     loadRecs(newType, newOrigin);
   };
 
-  const refreshRecommendations = async () => {
-    // 현재 필터의 캐시만 삭제하고 새로 요청
+  const refreshRecommendations = () => {
     setRecommendations([], filterType, filterOrigin);
     loadRecs(filterType, filterOrigin);
   };
 
   const current = recs[currentIndex];
 
-  const goNext = useCallback(
+  // 좌우 캐러셀 네비게이션
+  const goTo = useCallback(
     (direction: "left" | "right") => {
-      if (!current || isAnimating) return;
-      if (direction === "right") addSaved(current);
-      if (showHint && currentIndex >= 2) setShowHint(false);
+      if (isAnimating) return;
+      const nextIdx = direction === "right" ? currentIndex + 1 : currentIndex - 1;
+      if (nextIdx < 0 || nextIdx > recs.length) return; // recs.length = 끝 화면 허용
 
       setIsAnimating(true);
-      setExitDir(direction);
-      setHistory((h) => [...h, currentIndex]);
+      setSlideDir(direction);
 
       setTimeout(() => {
-        setCurrentIndex((i) => i + 1);
+        setCurrentIndex(nextIdx);
         setOffsetX(0);
-        setExitDir(null);
+        setSlideDir(null);
         setIsAnimating(false);
-        setShowDetail(false);
-      }, 300);
+        setDetailOpen(false);
+      }, 250);
     },
-    [current, currentIndex, showHint, isAnimating]
+    [currentIndex, recs.length, isAnimating]
   );
 
-  const handleUndo = useCallback(() => {
-    if (history.length === 0 || isAnimating) return;
-    const prevIndex = history[history.length - 1];
-    setHistory((h) => h.slice(0, -1));
-    setCurrentIndex(prevIndex);
-  }, [history, isAnimating]);
-
+  // 카드 터치 핸들러
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (showDetail || isAnimating) return;
+      if (detailOpen || isAnimating) return;
       startX.current = e.touches[0].clientX;
       startY.current = e.touches[0].clientY;
       isDragging.current = true;
       directionLocked.current = null;
     },
-    [showDetail, isAnimating]
+    [detailOpen, isAnimating]
   );
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -154,51 +150,124 @@ export default function DiscoverPage() {
     const dy = e.touches[0].clientY - startY.current;
     if (!directionLocked.current) {
       if (Math.abs(dx) > 10) directionLocked.current = "horizontal";
-      else if (Math.abs(dy) > 10) { directionLocked.current = "vertical"; isDragging.current = false; return; }
+      else if (Math.abs(dy) > 10) directionLocked.current = "vertical";
       else return;
     }
-    if (directionLocked.current !== "horizontal") return;
-    e.preventDefault();
-    setOffsetX(dx);
-  }, []);
+    if (directionLocked.current === "horizontal") {
+      e.preventDefault();
+      if ((currentIndex === 0 && dx > 0) || (currentIndex >= recs.length && dx < 0)) {
+        setOffsetX(dx * 0.3);
+      } else {
+        setOffsetX(dx);
+      }
+    } else if (directionLocked.current === "vertical" && dy < 0) {
+      // 위로 스와이프 → Detail을 손가락 따라 밀어올림
+      e.preventDefault();
+      const progress = Math.min(100, Math.max(0, 100 + (dy / window.innerHeight) * 120));
+      setDetailY(progress);
+      if (!detailOpen) setDetailOpen(true);
+    }
+  }, [currentIndex, recs.length, detailOpen]);
 
   const onTouchEnd = useCallback(() => {
-    if (!isDragging.current && directionLocked.current !== "horizontal") return;
+    if (!isDragging.current) return;
     isDragging.current = false;
-    if (Math.abs(offsetX) > 80) goNext(offsetX > 0 ? "right" : "left");
-    else setOffsetX(0);
+    const dir = directionLocked.current;
     directionLocked.current = null;
-  }, [offsetX, goNext]);
+    if (dir === "horizontal") {
+      if (offsetX < -60) goTo("right");
+      else if (offsetX > 60) goTo("left");
+      else setOffsetX(0);
+    } else if (dir === "vertical") {
+      // 30% 이상 열렸으면 완전히 열기, 아니면 닫기
+      if (detailY < 70) {
+        snapDetail(0);
+      } else {
+        snapDetail(100);
+      }
+    }
+  }, [offsetX, detailY, goTo]);
 
+  // Detail 내부 드래그 (아래로 밀어서 닫기)
+  const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
+    detailStartY.current = e.touches[0].clientY;
+    detailDragging.current = true;
+  }, []);
+
+  const onDetailTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!detailDragging.current) return;
+    const dy = e.touches[0].clientY - detailStartY.current;
+    if (dy > 0) {
+      // 아래로 드래그 — 닫기 방향
+      e.preventDefault();
+      const progress = Math.min(100, (dy / window.innerHeight) * 120);
+      setDetailY(progress);
+    }
+  }, []);
+
+  const onDetailTouchEnd = useCallback(() => {
+    detailDragging.current = false;
+    if (detailY > 30) {
+      snapDetail(100);
+    } else {
+      snapDetail(0);
+    }
+  }, [detailY]);
+
+  // Detail 스냅 애니메이션
+  const snapDetail = useCallback((target: number) => {
+    setDetailAnimating(true);
+    setDetailY(target);
+    setTimeout(() => {
+      setDetailAnimating(false);
+      if (target === 100) setDetailOpen(false);
+    }, 300);
+  }, []);
+
+  const openDetail = useCallback(() => {
+    setDetailOpen(true);
+    setDetailY(100);
+    requestAnimationFrame(() => snapDetail(0));
+  }, [snapDetail]);
+
+  const closeDetail = useCallback(() => {
+    snapDetail(100);
+  }, [snapDetail]);
+
+  // 키보드 네비게이션
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") goNext("left");
-      else if (e.key === "ArrowRight") goNext("right");
-      else if (e.key === "ArrowUp" || e.key === "Enter") setShowDetail(true);
-      else if (e.key === "ArrowDown" || e.key === "Escape") setShowDetail(false);
+      if (e.key === "ArrowLeft") goTo("left");
+      else if (e.key === "ArrowRight") goTo("right");
+      else if (e.key === "ArrowUp" || e.key === "Enter") openDetail();
+      else if (e.key === "ArrowDown" || e.key === "Escape") closeDetail();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goNext]);
+  }, [goTo, openDetail, closeDetail]);
+
+  // Detail이 열리면 body 스크롤 차단
+  useEffect(() => {
+    if (detailOpen) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [detailOpen]);
 
   const getCardStyle = (): React.CSSProperties => {
-    if (exitDir) {
-      const x = exitDir === "left" ? -500 : 500;
+    if (slideDir) {
+      const x = slideDir === "right" ? -500 : 500;
       return { transform: `translateX(${x}px) rotate(${x * 0.05}deg)`, transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out", opacity: 0 };
     }
     if (offsetX !== 0) return { transform: `translateX(${offsetX}px) rotate(${offsetX * 0.05}deg)`, transition: "none" };
     return { transform: "translateX(0) rotate(0deg)", transition: "transform 0.2s ease-out" };
   };
 
-  const passOpacity = Math.min(1, Math.max(0, -offsetX / 120));
-  const saveOpacity = Math.min(1, Math.max(0, offsetX / 120));
-
   const filterLabel = [
     filterOrigin === "kr" ? "국내" : filterOrigin === "foreign" ? "해외" : "",
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
-  // --- Filter chips component (shared) ---
   const FilterChips = () => (
     <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
       {(["all", "movie", "series"] as const).map((t) => (
@@ -237,6 +306,7 @@ export default function DiscoverPage() {
     </div>
   );
 
+  // 로딩
   if (!mounted || loading) {
     return (
       <div className="h-dvh flex flex-col">
@@ -258,73 +328,58 @@ export default function DiscoverPage() {
     );
   }
 
-  // 추천 결과가 없을 때
-  if (recs.length === 0 || currentIndex >= recs.length) {
+  // 빈 결과
+  if (recs.length === 0) {
     const hasFilter = filterType !== "all" || filterOrigin !== "all";
     return (
       <div className="h-dvh flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
-          <button
-            onClick={() => {
-              ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k));
-              clearAllRecommendations();
-              router.replace("/onboarding");
-            }}
-            className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}
-          >
-            재설정
-          </button>
+          <button onClick={() => { ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k)); clearAllRecommendations(); router.replace("/onboarding"); }} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
         <FilterChips />
         <div className="flex-1 flex flex-col px-8 justify-center">
-          {currentIndex >= recs.length && recs.length > 0 ? (
-            <div className="space-y-5">
-              <div className="font-display text-xl font-bold">
-                {recs.length}편을 모두 확인했어요
-              </div>
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                새로운 추천을 받아볼까요?
-              </p>
-              <button
-                onClick={refreshRecommendations}
-                className="px-6 py-3 font-semibold flex items-center gap-2 active:scale-95 transition-transform"
-                style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
-              >
+          <div className="space-y-5">
+            <IconFilm size={36} color="var(--text-muted)" />
+            <div>
+              <p className="font-display text-lg font-semibold">{hasFilter ? `${filterLabel} 결과가 없어요` : "추천을 만들지 못했어요"}</p>
+              <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p>
+            </div>
+            <div className="flex gap-3">
+              {hasFilter && (
+                <button onClick={() => handleFilterChange("all", "all")} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>
+              )}
+              <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
+                <IconRefresh size={14} /> 다시 시도
+              </button>
+            </div>
+          </div>
+        </div>
+        <BottomNav active="discover" />
+      </div>
+    );
+  }
+
+  // 끝 화면 (모든 카드 소진)
+  if (currentIndex >= recs.length) {
+    return (
+      <div className="h-dvh flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
+          <button onClick={() => { ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k)); clearAllRecommendations(); router.replace("/onboarding"); }} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
+        </div>
+        <FilterChips />
+        <div className="flex-1 flex flex-col px-8 justify-center">
+          <div className="space-y-5">
+            <div className="font-display text-xl font-bold">{recs.length}편을 모두 확인했어요</div>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>새로운 추천을 받아볼까요?</p>
+            <div className="flex gap-3">
+              <button onClick={() => { setCurrentIndex(0); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>처음부터 보기</button>
+              <button onClick={refreshRecommendations} className="px-6 py-3 font-semibold flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
                 <IconRefresh size={16} /> 더 찾아보기
               </button>
             </div>
-          ) : (
-            <div className="space-y-5">
-              <IconFilm size={36} color="var(--text-muted)" />
-              <div>
-                <p className="font-display text-lg font-semibold">
-                  {hasFilter ? `${filterLabel} 결과가 없어요` : "추천을 만들지 못했어요"}
-                </p>
-                <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>
-                  {hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}
-                </p>
-              </div>
-              <div className="flex gap-3">
-                {hasFilter && (
-                  <button
-                    onClick={() => handleFilterChange("all", "all")}
-                    className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform"
-                    style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}
-                  >
-                    필터 초기화
-                  </button>
-                )}
-                <button
-                  onClick={refreshRecommendations}
-                  className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform"
-                  style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
-                >
-                  <IconRefresh size={14} /> 다시 시도
-                </button>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
         <BottomNav active="discover" />
       </div>
@@ -332,7 +387,7 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden" style={{ touchAction: "pan-y" }}>
+    <div className="h-dvh flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
@@ -340,16 +395,7 @@ export default function DiscoverPage() {
           <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>
             {currentIndex + 1}/{recs.length}
           </span>
-          <button
-            onClick={() => {
-              ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k));
-              clearAllRecommendations();
-              router.replace("/onboarding");
-            }}
-            className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}
-          >
-            재설정
-          </button>
+          <button onClick={() => { ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k)); clearAllRecommendations(); router.replace("/onboarding"); }} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
       </div>
 
@@ -367,7 +413,6 @@ export default function DiscoverPage() {
           key={`${filterType}-${filterOrigin}-${currentIndex}`}
           className="h-full overflow-hidden relative will-change-transform cursor-pointer"
           style={{ ...getCardStyle(), borderRadius: "var(--radius-xl)" }}
-          onClick={() => { if (Math.abs(offsetX) < 5) setShowDetail(true); }}
         >
           {current.posterUrl ? (
             <img src={current.posterUrl} alt={current.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
@@ -379,7 +424,6 @@ export default function DiscoverPage() {
 
           <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
             <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
-            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>TMDB</span>
           </div>
 
           <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
@@ -391,81 +435,82 @@ export default function DiscoverPage() {
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{current.reason}</p>
             <div className="flex gap-1.5 mt-3 items-center">
               {current.providers.slice(0, 4).map((p) => (
-                <img
-                  key={p.name}
-                  src={getOTTIcon(p.name) ?? p.logoUrl ?? ""}
-                  alt={p.name}
-                  title={p.name}
-                  className="w-8 h-8 object-contain"
-                  style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }}
-                />
+                <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
               ))}
               {current.providers.length > 4 && (
                 <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>+{current.providers.length - 4}</span>
               )}
             </div>
           </div>
-
-          {showHint && (
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-              <div className="text-xs px-3 py-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}>탭하여 상세보기</div>
-            </div>
-          )}
-
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "var(--danger-overlay)", opacity: passOpacity }}>
-            <IconPass size={80} color="var(--danger)" />
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "var(--accent-dim)", opacity: saveOpacity }}>
-            <IconSave size={80} color="var(--accent)" />
-          </div>
         </div>
 
-        {showDetail && (
-          <div className="absolute inset-0 mx-3 backdrop-blur overflow-y-auto p-5 animate-fade-in z-10" style={{ background: "var(--bg-overlay-solid)", borderRadius: "var(--radius-xl)", touchAction: "pan-y" }}>
-            <button className="absolute top-4 right-4 z-20 w-11 h-11 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={() => setShowDetail(false)}>
+      </div>
+
+      {/* Detail bottom sheet — 제스처 기반 */}
+      {detailOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={closeDetail}
+          style={{ pointerEvents: detailY > 95 ? "none" : "auto" }}
+        >
+          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
+          <div
+            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8"
+            style={{
+              background: "var(--bg)",
+              borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
+              transform: `translateY(${detailY}%)`,
+              transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
+              touchAction: "pan-y",
+            }}
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={onDetailTouchStart}
+            onTouchMove={onDetailTouchMove}
+            onTouchEnd={onDetailTouchEnd}
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
+            </div>
+            <button className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
-            <h2 className="font-display text-2xl font-bold pr-10">{current.title}</h2>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {current.date.slice(0, 4)}</p>
+
+            <div className="flex gap-4">
+              {current.posterUrl && (
+                <img src={current.posterUrl} alt={current.title} className="w-24 h-36 object-cover flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
+              )}
+              <div className="flex-1 min-w-0 pt-1">
+                <h2 className="font-display text-xl font-bold">{current.title}</h2>
+                <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {current.date.slice(0, 4)}</p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <IconStar size={13} color="var(--accent)" />
+                  <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
+                </div>
+              </div>
+            </div>
+
             <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>왜 추천했나요?</h3>
               <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div>
             </div>
             {(current.director || current.cast?.length > 0) && (
-              <div className="mt-5 flex flex-wrap gap-x-5 gap-y-1.5">
-                {current.director && (
-                  <div>
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span>
-                    <span className="text-sm">{current.director}</span>
-                  </div>
-                )}
-                {current.cast?.length > 0 && (
-                  <div>
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span>
-                    <span className="text-sm">{current.cast.join(", ")}</span>
-                  </div>
-                )}
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
+                {current.director && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>)}
+                {current.cast?.length > 0 && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>)}
               </div>
             )}
-
-            <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
-            </div>
+            {current.overview && (
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
+              </div>
+            )}
             <div className="mt-5">
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
               <div className="flex flex-col gap-2">
                 {current.providers.map((p) => {
                   const ottUrl = getOTTLink(p.name, current.title);
                   return (
-                    <a
-                      key={p.name}
-                      href={ottUrl ?? current.watchLink ?? "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform"
-                      style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}
-                    >
+                    <a key={p.name} href={ottUrl ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>
                       <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
                       <span className="flex-1">{p.name}</span>
                       <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
@@ -475,30 +520,44 @@ export default function DiscoverPage() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Action buttons */}
+      {/* Bottom actions — 저장 + 페이지 인디케이터 */}
       <div className="px-4 pb-2 shrink-0">
-        {showHint && (
-          <div className="flex justify-between text-xs mb-2 px-8" style={{ color: "var(--text-muted)" }}>
-            <span>← Pass</span><span>탭 = Detail</span><span>Save →</span>
+        <div className="flex items-center justify-between">
+          {/* 페이지 도트 */}
+          <div className="flex gap-1 flex-1 mr-3 overflow-hidden">
+            {recs.map((_, i) => (
+              <div
+                key={i}
+                className="h-0.5 flex-1 transition-colors"
+                style={{
+                  background: i === currentIndex ? "var(--accent)" : i < currentIndex ? "var(--text-muted)" : "var(--border)",
+                  borderRadius: "var(--radius-full)",
+                  maxWidth: 24,
+                }}
+              />
+            ))}
           </div>
-        )}
-        <div className="flex gap-3 justify-center items-center">
-          {history.length > 0 && (
-            <button onClick={handleUndo} disabled={isAnimating} className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }} title="되돌리기">
-              <IconUndo size={16} color="var(--text-muted)" />
-            </button>
-          )}
-          <button onClick={() => goNext("left")} disabled={isAnimating} aria-label="패스" className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
-            <IconPass size={22} color="var(--text-secondary)" />
-          </button>
-          <button onClick={() => setShowDetail(!showDetail)} aria-label="상세보기" className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
-            <IconInfo size={22} color="var(--text-secondary)" />
-          </button>
-          <button onClick={() => goNext("right")} disabled={isAnimating} aria-label="저장" className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-full)" }}>
-            <IconSave size={22} color="var(--accent)" />
+          {/* 저장 토글 */}
+          <button
+            onClick={() => {
+              const id = current.tmdbId;
+              if (savedIds.has(id)) {
+                // 이미 저장됨 — 제거
+                removeSaved(id);
+                setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; });
+              } else {
+                addSaved(current);
+                setSavedIds((s) => new Set(s).add(id));
+              }
+            }}
+            aria-label={savedIds.has(current.tmdbId) ? "저장 취소" : "저장"}
+            className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform"
+            style={{ background: savedIds.has(current.tmdbId) ? "var(--accent-dim)" : "var(--surface)", border: `1px solid ${savedIds.has(current.tmdbId) ? "var(--accent-border)" : "var(--border)"}`, borderRadius: "var(--radius-full)" }}
+          >
+            <IconSave size={22} color={savedIds.has(current.tmdbId) ? "var(--accent)" : "var(--text-muted)"} filled={savedIds.has(current.tmdbId)} />
           </button>
         </div>
       </div>
