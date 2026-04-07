@@ -39,6 +39,7 @@ export default function DiscoverPage() {
   const [swiping, setSwiping] = useState(false);
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [scrollLocked, setScrollLocked] = useState(false);
   const startX = useRef(0);
   const startY = useRef(0);
   const dragging = useRef(false);
@@ -153,6 +154,7 @@ export default function DiscoverPage() {
     }
     if (dirLock.current === "h") {
       e.preventDefault();
+      if (!scrollLocked) setScrollLocked(true);
       setDragX(dx);
       setDragY(Math.abs(dx) * -0.15);
     } else if (dirLock.current === "v" && dy > 0 && !refreshing) {
@@ -160,7 +162,7 @@ export default function DiscoverPage() {
       e.preventDefault();
       setPullY(Math.min(80, dy * 0.5));
     }
-  }, [refreshing]);
+  }, [refreshing, scrollLocked]);
 
   const onTouchEnd = useCallback(() => {
     if (!dragging.current) return;
@@ -168,6 +170,7 @@ export default function DiscoverPage() {
     const dir = dirLock.current;
     dirLock.current = null;
     if (dir === "h") {
+      setScrollLocked(false);
       if (dragX < -80) nextCard();
       else if (dragX > 80) prevCard();
       else { setDragX(0); setDragY(0); }
@@ -293,13 +296,13 @@ export default function DiscoverPage() {
       <FilterChips />
 
       {/* Pull-to-refresh indicator */}
-      {pullY > 0 && (
-        <div className="flex justify-center py-1 shrink-0" style={{ opacity: Math.min(1, pullY / 40) }}>
-          <div className={`w-6 h-6 ${refreshing ? "animate-spin" : ""}`} style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)", transform: `rotate(${pullY * 4}deg)` }} />
+      {(pullY > 0 || refreshing) && (
+        <div className="flex justify-center py-1 shrink-0" style={{ opacity: refreshing ? 1 : Math.min(1, pullY / 40) }}>
+          <div className={`w-6 h-6 ${refreshing ? "animate-spin" : ""}`} style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)", ...(!refreshing ? { transform: `rotate(${pullY * 4}deg)` } : {}) }} />
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ scrollSnapType: "y mandatory", overscrollBehavior: "none" }}>
+      <div ref={scrollRef} className="flex-1 min-h-0" style={{ overflowY: scrollLocked ? "hidden" : "auto", scrollSnapType: scrollLocked ? "none" : "y mandatory", overscrollBehavior: "none" }}>
 
         {/* Snap 1: 카드 덱 */}
         <div className="relative px-3 pb-2" style={{ height: "100%", scrollSnapAlign: "start", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
