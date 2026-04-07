@@ -411,13 +411,14 @@ export default function DiscoverPage() {
       >
         <div className="h-full flex items-stretch px-3">
           {filteredRecs.map((rec, i) => {
-            // 현재 카드 대비 위치
-            const offset = i - activeIndex;
-            // 무한 회전 보정 (원형 인덱싱)
+            // 연속 위치 계산 (소수점 포함 — 드래그 중 부드러운 보간)
+            const continuousIndex = cardCount > 0 ? (-totalRotation / anglePerCard) : 0;
+            const offset = i - continuousIndex;
+            // 무한 회전 보정
             let adjustedOffset = offset;
             if (cardCount > 0) {
-              if (offset > cardCount / 2) adjustedOffset = offset - cardCount;
-              if (offset < -cardCount / 2) adjustedOffset = offset + cardCount;
+              while (adjustedOffset > cardCount / 2) adjustedOffset -= cardCount;
+              while (adjustedOffset < -cardCount / 2) adjustedOffset += cardCount;
             }
             const pos = adjustedOffset;
 
