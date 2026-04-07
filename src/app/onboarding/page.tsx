@@ -135,7 +135,6 @@ export default function OnboardingPage() {
           borderRadius: "var(--radius-lg)",
           color: "var(--text-primary)",
         }}
-        autoFocus
       />
 
       {/* Results / Suggestions */}
