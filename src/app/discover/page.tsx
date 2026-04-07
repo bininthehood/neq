@@ -409,7 +409,7 @@ export default function DiscoverPage() {
 
         {showDetail && (
           <div className="absolute inset-0 mx-3 backdrop-blur overflow-y-auto p-5 animate-fade-in z-10" style={{ background: "rgba(12,10,9,0.97)", borderRadius: "var(--radius-xl)", touchAction: "pan-y" }}>
-            <button className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={() => setShowDetail(false)}>
+            <button className="absolute top-4 right-4 z-20 w-11 h-11 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={() => setShowDetail(false)}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
             <h2 className="font-display text-2xl font-bold pr-10">{current.title}</h2>
