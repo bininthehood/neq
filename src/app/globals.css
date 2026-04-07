@@ -165,13 +165,13 @@ body::after {
     position: relative;
   }
   body {
-    background: #080706;
+    background: var(--bg);
   }
   body::before {
     content: '';
     position: fixed;
     inset: 0;
-    background: radial-gradient(ellipse at center, var(--surface) 0%, #080706 70%);
+    background: radial-gradient(ellipse at center, var(--surface) 0%, var(--bg) 70%);
     z-index: -1;
   }
 }
