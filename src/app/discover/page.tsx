@@ -371,7 +371,7 @@ export default function DiscoverPage() {
 
           <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}>
             <span className="font-data font-semibold" style={{ color: "var(--accent)" }}>⭐ {current.rating.toFixed(1)}</span>
-            <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>TMDB</span>
+            <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>TMDB</span>
           </div>
 
           <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}>

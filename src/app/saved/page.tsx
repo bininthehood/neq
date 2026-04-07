@@ -23,7 +23,7 @@ function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
   return (
     <span
-      className="px-2 py-0.5 text-[10px] font-semibold"
+      className="px-2 py-0.5 text-[11px] font-semibold"
       style={{ color: r.color, background: r.bg, borderRadius: "var(--radius-sm)" }}
     >
       {r.label}
@@ -257,10 +257,10 @@ export default function SavedPage() {
                 >
                   <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-data text-[10px]" style={{ color: "var(--text-muted)" }}>⭐ {item.recommendation.rating.toFixed(1)}</span>
+                    <span className="font-data text-[11px]" style={{ color: "var(--text-muted)" }}>⭐ {item.recommendation.rating.toFixed(1)}</span>
                     {report && <ReactionLabel reaction={report} />}
                     {!report && item.recommendation.watchLink && (
-                      <span className="text-[10px]" style={{ color: "var(--accent)" }}>지금 보기 →</span>
+                      <span className="text-[11px]" style={{ color: "var(--accent)" }}>지금 보기 →</span>
                     )}
                   </div>
                 </div>
@@ -269,7 +269,7 @@ export default function SavedPage() {
                 {!report && !isReporting && (
                   <button
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(tmdbId); }}
-                    className="absolute top-1.5 left-1.5 px-2 py-1 text-[10px] font-medium active:scale-90 transition-transform"
+                    className="absolute top-1.5 left-1.5 px-2 py-1 text-[11px] font-medium active:scale-90 transition-transform"
                     style={{
                       background: "rgba(12,10,9,0.7)",
                       backdropFilter: "blur(4px)",
@@ -285,7 +285,7 @@ export default function SavedPage() {
                 {report && !isReporting && (
                   <button
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(tmdbId); }}
-                    className="absolute top-1.5 left-1.5 px-2 py-1 text-[10px] font-medium active:scale-90 transition-transform"
+                    className="absolute top-1.5 left-1.5 px-2 py-1 text-[11px] font-medium active:scale-90 transition-transform"
                     style={{
                       background: "rgba(12,10,9,0.7)",
                       backdropFilter: "blur(4px)",
@@ -327,7 +327,7 @@ export default function SavedPage() {
                     ))}
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(null); }}
-                      className="mt-1 text-[10px] py-1 active:scale-95 transition-transform"
+                      className="mt-1 text-[11px] py-1 active:scale-95 transition-transform"
                       style={{ color: "var(--text-muted)" }}
                     >
                       닫기
