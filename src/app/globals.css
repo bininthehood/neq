@@ -116,3 +116,29 @@ body::after {
   background: var(--accent-dim);
   color: var(--text-primary);
 }
+
+/* Responsive — tablet/desktop enhancement */
+@media (min-width: 768px) {
+  body > div {
+    max-width: 480px;
+    margin-inline: auto;
+    position: relative;
+  }
+  body {
+    background: #080706;
+  }
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse at center, var(--surface) 0%, #080706 70%);
+    z-index: -1;
+  }
+}
+
+@media (min-width: 1024px) {
+  body > div {
+    max-width: 420px;
+    box-shadow: 0 0 80px rgba(232, 123, 53, 0.03);
+  }
+}
