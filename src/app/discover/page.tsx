@@ -399,11 +399,17 @@ export default function DiscoverPage() {
         {current && slideUp > 0 && (
           <div
             className="absolute inset-0 overflow-y-auto px-5 pt-4 pb-8 z-20"
-            style={{ touchAction: "pan-y", pointerEvents: slideUp > 30 ? "auto" : "none" }}
+            style={{ background: "var(--bg)", touchAction: "none", pointerEvents: slideUp > 30 ? "auto" : "none" }}
             onTouchStart={(e) => { slideStartY.current = e.touches[0].clientY; }}
-            onTouchEnd={(e) => {
-              const dy = e.changedTouches[0].clientY - slideStartY.current;
-              if (dy > 60) closeDetail();
+            onTouchMove={(e) => {
+              const dy = e.touches[0].clientY - slideStartY.current;
+              if (dy > 0) {
+                e.preventDefault();
+                setSlideUp(Math.max(0, 100 - (dy / window.innerHeight) * 150));
+              }
+            }}
+            onTouchEnd={() => {
+              if (slideUp < 70) snapSlide(0); else snapSlide(100);
             }}
           >
             <div className="flex justify-center mb-3">
@@ -492,7 +498,7 @@ export default function DiscoverPage() {
                   left: "3%",
                   right: "3%",
                   transform: `translateX(${translateX}%) translateY(${slideYPx}px) scale(${scale}) rotateY(${rotateYDeg}deg)`,
-                  transition: isSnapping || slideSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out" : "none",
+                  transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out" : slideSnapping ? "transform 0.3s ease-out, opacity 0.3s ease-out" : "none",
                   borderRadius: "var(--radius-xl)",
                   zIndex,
                   opacity,
