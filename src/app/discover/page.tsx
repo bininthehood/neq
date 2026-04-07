@@ -261,8 +261,7 @@ export default function DiscoverPage() {
     });
   }, [filteredRecs]);
 
-  // 원통 반지름 계산 (카드 수에 따라 조절)
-  const carouselRadius = cardCount <= 3 ? 300 : cardCount <= 6 ? 400 : 500;
+  // 원통 캐러셀 제거 — 평면 peek 슬라이드 사용
 
   const filterLabel = [
     filterOrigin === "kr" ? "국내" : filterOrigin === "foreign" ? "해외" : "",
@@ -371,32 +370,6 @@ export default function DiscoverPage() {
     );
   }
 
-  // 끝 화면 (원통형이므로 필터 결과 0일때만)
-  if (false && currentIndex >= filteredRecs.length) {
-    return (
-      <div className="h-dvh flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 shrink-0">
-          <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
-          <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
-        </div>
-        <FilterChips />
-        <div className="flex-1 flex flex-col px-8 justify-center">
-          <div className="space-y-5">
-            <div className="font-display text-xl font-bold">{filteredRecs.length}편을 모두 확인했어요</div>
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>새로운 추천을 받아볼까요?</p>
-            <div className="flex gap-3">
-              <button onClick={() => setCurrentIndex(0)} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>처음부터 보기</button>
-              <button onClick={refreshRecommendations} className="px-6 py-3 font-semibold flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
-                <IconRefresh size={16} /> 더 찾아보기
-              </button>
-            </div>
-          </div>
-        </div>
-        <BottomNav active="discover" />
-      </div>
-    );
-  }
-
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
       {/* Header */}
@@ -419,80 +392,87 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* 3D 원통 캐러셀 */}
+      {/* 평면 peek 캐러셀 */}
       <div
         className="flex-1 min-h-0 relative overflow-hidden"
-        style={{ perspective: "1200px", touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
+        style={{ touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        <div
-          className="w-full h-full flex items-center justify-center"
-          style={{ transformStyle: "preserve-3d" }}
-        >
-          <div
-            className="relative will-change-transform"
-            style={{
-              width: "calc(100% - 24px)",
-              height: "100%",
-              transformStyle: "preserve-3d",
-              transform: `rotateY(${totalRotation}deg)`,
-              transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
-            }}
-          >
-            {filteredRecs.map((rec, i) => {
-              const cardAngle = i * anglePerCard;
-              // 현재 보이는 각도 범위만 렌더링 (성능)
-              const relAngle = ((cardAngle + totalRotation) % 360 + 360) % 360;
-              const isVisible = relAngle < 90 || relAngle > 270;
+        <div className="h-full flex items-stretch px-3">
+          {filteredRecs.map((rec, i) => {
+            // 현재 카드 대비 위치
+            const offset = i - activeIndex;
+            // 무한 회전 보정 (원형 인덱싱)
+            let adjustedOffset = offset;
+            if (cardCount > 0) {
+              if (offset > cardCount / 2) adjustedOffset = offset - cardCount;
+              if (offset < -cardCount / 2) adjustedOffset = offset + cardCount;
+            }
+            // 드래그 중 보간
+            const dragOffset = cardCount > 0 ? dragRotation / anglePerCard : 0;
+            const pos = adjustedOffset - dragOffset;
 
-              return (
-                <div
-                  key={rec.tmdbId}
-                  className="absolute inset-0 overflow-hidden backface-hidden"
-                  style={{
-                    transform: `rotateY(${cardAngle}deg) translateZ(${carouselRadius}px)`,
-                    borderRadius: "var(--radius-xl)",
-                    visibility: isVisible ? "visible" : "hidden",
-                  }}
-                >
-                  {isVisible && (
-                    <>
-                      {rec.posterUrl ? (
-                        <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-                          <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
-                        </div>
+            // 인접 3장만 렌더
+            if (Math.abs(pos) > 1.5) return null;
+
+            const translateX = pos * 85; // 카드 폭 85%만큼 이동
+            const scale = 1 - Math.abs(pos) * 0.12;
+            const rotateY = pos * -8; // 살짝 회전 (주크박스 힌트)
+            const zIndex = 10 - Math.abs(Math.round(pos));
+            const opacity = 1 - Math.abs(pos) * 0.4;
+
+            return (
+              <div
+                key={rec.tmdbId}
+                className="absolute inset-y-0 overflow-hidden will-change-transform"
+                style={{
+                  left: "3%",
+                  right: "3%",
+                  transform: `translateX(${translateX}%) scale(${scale}) rotateY(${rotateY}deg)`,
+                  transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out" : "none",
+                  borderRadius: "var(--radius-xl)",
+                  zIndex,
+                  opacity,
+                  pointerEvents: Math.abs(pos) < 0.5 ? "auto" : "none",
+                }}
+              >
+                {rec.posterUrl ? (
+                  <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
+                    <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                  </div>
+                )}
+
+                {Math.abs(pos) < 0.5 && (
+                  <>
+                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                      <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
+                    </div>
+
+                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                      {rec.type === "series" ? "시리즈" : "영화"}
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                      <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
+                      {metaInfo(rec) && (
+                        <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>
                       )}
-
-                      <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                        <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
+                      <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
+                      <div className="flex gap-1.5 mt-3 items-center">
+                        {rec.providers.slice(0, 4).map((p) => (
+                          <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                        ))}
                       </div>
-
-                      <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                        {rec.type === "series" ? "시리즈" : "영화"}
-                      </div>
-
-                      <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
-                        <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
-                        {metaInfo(rec) && (
-                          <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>
-                        )}
-                        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
-                        <div className="flex gap-1.5 mt-3 items-center">
-                          {rec.providers.slice(0, 4).map((p) => (
-                            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -517,8 +497,8 @@ export default function DiscoverPage() {
               <img src={current.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1" style={{ borderRadius: "var(--radius-md)" }} />
             )}
 
-            <div className="flex gap-4">
-              {current.posterUrl && (
+            <div className={current.backdrop ? "" : "flex gap-4"}>
+              {!current.backdrop && current.posterUrl && (
                 <img src={current.posterUrl} alt={current.title} className="w-24 h-36 object-cover flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
               )}
               <div className="flex-1 min-w-0 pt-1">
@@ -569,9 +549,14 @@ export default function DiscoverPage() {
       {/* Bottom actions */}
       <div className="px-4 pb-2 shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex gap-1 flex-1 mr-3 overflow-hidden">
+          <div className="flex gap-1.5 flex-1 mr-3 items-center justify-center">
             {filteredRecs.map((_, i) => (
-              <div key={i} className="h-0.5 flex-1 transition-colors" style={{ background: i === currentIndex ? "var(--accent)" : i < currentIndex ? "var(--text-muted)" : "var(--border)", borderRadius: "var(--radius-full)", maxWidth: 24 }} />
+              <div key={i} className="transition-all" style={{
+                width: i === activeIndex ? 16 : 6,
+                height: 6,
+                background: i === activeIndex ? "var(--accent)" : "var(--border)",
+                borderRadius: "var(--radius-full)",
+              }} />
             ))}
           </div>
           <div className="flex gap-2">

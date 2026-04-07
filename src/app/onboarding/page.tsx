@@ -124,7 +124,7 @@ export default function OnboardingPage() {
             }
             return (
               <div key={`empty-${i}`} className="w-14 h-20 flex-shrink-0 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", border: "1px dashed var(--border)" }}>
-                <span className="text-xs" style={{ color: "var(--text-muted)" }}>{i + 1}</span>
+                <span className="text-lg" style={{ color: "var(--text-muted)" }}>+</span>
               </div>
             );
           })}

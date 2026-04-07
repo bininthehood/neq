@@ -21,7 +21,7 @@ export default function Home() {
   return (
     <div
       className="flex-1 flex flex-col items-center justify-center gap-3 transition-opacity duration-400"
-      style={{ opacity: fadeOut ? 0 : 1 }}
+      style={{ opacity: fadeOut ? 0 : 1, background: "var(--bg)" }}
     >
       <img src="/icon-512.png" alt="Neko" className="w-20 h-20" style={{ borderRadius: "var(--radius-xl)" }} />
       <div>
