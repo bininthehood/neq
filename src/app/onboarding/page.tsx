@@ -160,7 +160,7 @@ export default function OnboardingPage() {
               <button
                 onClick={fetchTrending}
                 disabled={loadingSuggestions}
-                className="text-xs transition-colors disabled:opacity-30 py-2 px-3"
+                className="text-xs transition-colors disabled:opacity-30 min-h-[44px] flex items-center py-2 px-3"
                 style={{ color: "var(--text-muted)" }}
               >
                 {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
