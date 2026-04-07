@@ -4,8 +4,8 @@
   "description": "OTT 콘텐츠 발굴/큐레이션",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0C0A09",
+  "theme_color": "#0C0A09",
   "icons": [
     {
       "src": "/icon-192.png",
