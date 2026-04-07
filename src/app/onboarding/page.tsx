@@ -157,24 +157,26 @@ export default function OnboardingPage() {
                 {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-2">
-              {suggestions.map((item) => {
+            <div className="grid grid-cols-3 gap-2.5">
+              {suggestions.map((item, i) => {
                 const isSelected = selected.some((s) => s.id === item.id);
+                const tall = i % 5 === 0 || i % 5 === 3;
                 return (
                   <button
                     key={item.id}
                     onClick={() => toggleSelect(item)}
                     className="relative overflow-hidden transition-all active:scale-95"
                     style={{
-                      borderRadius: "var(--radius-md)",
+                      borderRadius: "var(--radius-lg)",
                       outline: isSelected ? "2px solid var(--accent)" : "none",
                       outlineOffset: "-2px",
+                      aspectRatio: tall ? "2/3.5" : "2/3",
                     }}
                   >
                     {item.posterUrl ? (
-                      <img src={item.posterUrl} alt={item.title} className="w-full aspect-[2/3] object-cover" />
+                      <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full aspect-[2/3]" style={{ background: "var(--surface)" }} />
+                      <div className="w-full h-full" style={{ background: "var(--surface)" }} />
                     )}
                     <div
                       className="absolute bottom-0 left-0 right-0 p-1.5"
