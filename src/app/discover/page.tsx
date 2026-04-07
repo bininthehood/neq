@@ -276,7 +276,7 @@ export default function DiscoverPage() {
         <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8">
           {currentIndex >= recs.length && recs.length > 0 ? (
             <>
-              <div className="text-4xl" style={{ color: "var(--text-muted)" }}>✨</div>
+              <div className="text-4xl" style={{ color: "var(--text-muted)" }}>◆</div>
               <div className="font-display text-lg">모든 추천을 확인했어요!</div>
               <button
                 onClick={refreshRecommendations}
@@ -288,7 +288,7 @@ export default function DiscoverPage() {
             </>
           ) : (
             <>
-              <div className="text-4xl" style={{ color: "var(--text-muted)" }}>🔍</div>
+              <div className="font-display text-4xl" style={{ color: "var(--text-muted)" }}>?</div>
               <div className="text-center">
                 <p className="font-display text-lg">
                   {hasFilter ? `${filterLabel} 추천을 찾지 못했어요` : "추천을 생성하지 못했어요"}
@@ -365,7 +365,7 @@ export default function DiscoverPage() {
             <img src={current.posterUrl} alt={current.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-              <span className="text-6xl">🎬</span>
+              <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
             </div>
           )}
 
