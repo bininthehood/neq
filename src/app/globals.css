@@ -64,6 +64,10 @@
   --font-sans: var(--font-body);
 }
 
+html {
+  font-family: var(--font-body);
+}
+
 body {
   background: var(--bg);
   color: var(--text-primary);
