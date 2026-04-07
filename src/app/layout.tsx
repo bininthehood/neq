@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Outfit } from "next/font/google";
 import "./globals.css";
+import InstallBanner from "@/components/InstallBanner";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -51,6 +52,7 @@ export default function RootLayout({
       </head>
       <body className="h-full">
         <div className="h-dvh flex flex-col">{children}</div>
+        <InstallBanner />
       </body>
     </html>
   );
