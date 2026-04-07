@@ -256,4 +256,86 @@ f9dcee7 fix: anti-slop 수정 + 터치 타겟 개선
 - [ ] 앱 캐릭터/로고 디자인 → 로딩 스피너 리디자인
 - [ ] Saved 화면 고도화 (OTT별 그룹핑?)
 - [ ] 추천 품질 개선 (사용자 피드백 데이터 더 활용)
-- [ ] Detail 바텀시트 내부 스크롤 vs 드래그 닫기 충돌 개선
+- [x] Detail 바텀시트 내부 스크롤 vs 드래그 닫기 충돌 개선 → Day 4에서 CSS scroll-snap으로 해결
+
+---
+
+## 2026-04-08 (Day 4)
+
+### 진행 요약
+피드백 9건 대량 구현 + 카드 UX 대규모 리팩토링 (5차 진화) + 디자인 리뷰(Codex+서브에이전트 병렬) + 버그 수정 다수.
+
+### 완료된 작업
+
+**피드백 9건 구현**
+- Pull-to-refresh: 아래로 끌어당겨 추천 새로고침
+- Detail 버튼: 하단 액션 바에 상세보기 버튼
+- OTT 필터: Discover 필터 칩에 OTT별 필터
+- 온보딩 레이아웃: 5슬롯 플레이스홀더 + 3로우 그리드 고정
+- 메타데이터: TMDB /details API → 러닝타임, 시즌, 국가, 스틸컷
+- 셀프 리포트 강화: 4단계(loved/good/meh/dropped) 모두 프롬프트 반영
+- OTT 필터: 클라이언트 측 provider별 필터링
+- 제목 오표기: 영문 검색 시 TMDB 공식 한글 제목으로 교정
+- 재설정: /reset 페이지 (경고 → 작품 재선택, Saved 유지)
+
+**추천 속도 3배 개선**
+- TMDB API 순차 처리 → 2단계 병렬 배치 (검색 15건 동시 → 메타데이터 동시)
+
+**카드 UX 5차 진화**
+1. 기존 틴더 → 좌우 캐러셀 (Day 3)
+2. rotation 기반 → 3D 원통형 캐러셀 → 모바일 왜곡/성능 문제
+3. 평면 peek 캐러셀 → 중앙정렬/50% 멈춤 버그
+4. CSS scroll-snap 기반 재작성 → 좌우는 JS, 상하는 네이티브
+5. **부채꼴 카드 덱** (최종) → 10장 미리 렌더, 맨 앞 카드 치우면 뒤 카드 승격
+
+**디테일 UX 진화**
+- 바텀시트 → JS 제스처 → CSS scroll-snap (최종)
+- 위로 스와이프 → scroll-snap으로 디테일에 착지
+- 아래로 스와이프 → snap으로 카드 복귀
+
+**디자인 리뷰 (/design-review)**
+- Codex + Claude 서브에이전트 병렬 코드 감사
+- 8건 수정: Geist 폰트 유출, 순수 블랙 제거, 터치 타겟 44px (6곳), prefers-reduced-motion, borderRadius 토큰 통일, InstallBanner 워며블랙 그림자
+
+### 핵심 버그 수정
+- 카드 전환 깜빡임 (React key 리마운트)
+- BottomNav 줌 (active:scale 영역)
+- 50% 드래그 멈춤 (stale closure)
+- 드래그 중 카드 미추적 (정수 vs 소수점 인덱스)
+- 스와이프 방향 반전
+- 이전 카드 복귀 불가 → prevCard 추가
+- 마지막 카드 이후 화면 없음 → 첫 카드 순환
+- Pull-to-refresh 누락 복원
+- 좌우 스와이프 중 detail 이동 (scrollLocked)
+- 스피너 미회전 (인라인 transform override)
+
+### 커밋 히스토리 (Day 4)
+```
+776c1f1 fix: 좌우 스와이프 중 detail 이동 방지 + 스피너 회전 수정
+5b6515a fix: 아래로 스와이프 pull-to-refresh 복원
+4c4483c fix: 이전 카드 복귀 + 마지막 카드 순환
+1bc2943 style(design): FINDING-F10 — OTT 아이콘 borderRadius 토큰
+ee5ae74 style(design): FINDING-F4/F5/F6 — Saved 터치 타겟 44px
+cc3eda4 style(design): FINDING-F2 — InstallBanner 워며블랙 그림자
+4683300 style(design): FINDING-006 — prefers-reduced-motion
+1601b4e style(design): FINDING-003 — 터치 타겟 44px
+e125004 style(design): FINDING-002 — 배경 var(--bg) 통일
+3dfe2dd style(design): FINDING-001 — Geist 폰트 유출 방지
+03de515 feat: 부채꼴 카드 덱 + CSS 진입 애니메이션
+63795f3 refactor: CSS scroll-snap 기반 카드/디테일 전면 재작성
+da76c57 feat: Day 4 피드백 9건
+7954d7e feat: TMDB 메타데이터 확장 + 제목 교정 + 셀프 리포트 강화
+(+ 다수 버그 수정 커밋)
+```
+
+### 아키텍처 메모
+- **부채꼴 카드 덱**: topIdx부터 3장을 역순 렌더 (뒤→앞). 맨 앞 카드만 dragX/dragY 적용. 치우면 topIdx+1. DOM 생성/삭제 없이 인덱스만 변경 → 전환 매끄러움.
+- **CSS scroll-snap 디테일**: 카드(snap 1, 100%) + 디테일(snap 2, auto). 상하는 브라우저 네이티브 스크롤, 좌우만 JS 터치. 수평 드래그 중 scrollLocked로 수직 스크롤 차단.
+- **TMDB 병렬**: 15건 검색 동시 → 성공한 것들 provider+credits+details 동시 조회. 순차 대비 약 3배 빠름.
+
+### 미해결 / 다음 할 일
+- [ ] 한글 폰트 개선 (보류)
+- [ ] 앱 캐릭터/로고 → 스피너 리디자인
+- [ ] Saved 화면 고도화
+- [ ] /review (코드 리뷰) — 새 세션에서 실행 권장
+- [ ] 카드 덱에서 이전 카드로 돌아갈 때 진입 애니메이션 개선
