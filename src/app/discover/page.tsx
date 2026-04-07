@@ -38,6 +38,7 @@ export default function DiscoverPage() {
   const [rotation, setRotation] = useState(0);
   const [isSnapping, setIsSnapping] = useState(false);
   const rotationAtDragStart = useRef(0);
+  const rotationRef = useRef(0);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const touchActive = useRef(false);
@@ -112,6 +113,7 @@ export default function DiscoverPage() {
   }, [anglePerCard, isSnapping]);
 
   useEffect(() => { setCurrentIndex(activeIndex); }, [activeIndex]);
+  useEffect(() => { rotationRef.current = rotation; }, [rotation]);
 
   // 스크롤 snap → 디테일 상태 감지
   const onScroll = useCallback(() => {
@@ -152,22 +154,19 @@ export default function DiscoverPage() {
   const onCardTouchEnd = useCallback(() => {
     if (!touchActive.current || touchDir.current !== "h") { touchActive.current = false; return; }
     touchActive.current = false; touchDir.current = null;
-    // 드래그 방향 기준으로 확실하게 1칸 이동 or 복귀
-    const dragDelta = rotation - rotationAtDragStart.current;
+    const currentRotation = rotationRef.current;
+    const dragDelta = currentRotation - rotationAtDragStart.current;
     let snapped: number;
     if (dragDelta > anglePerCard * 0.15) {
-      // 양수 = 왼쪽으로 드래그 → 이전 카드
       snapped = rotationAtDragStart.current + anglePerCard;
     } else if (dragDelta < -anglePerCard * 0.15) {
-      // 음수 = 오른쪽으로 드래그 → 다음 카드
       snapped = rotationAtDragStart.current - anglePerCard;
     } else {
-      // 미세 드래그 → 원래 카드
       snapped = rotationAtDragStart.current;
     }
     setRotation(snapped); setIsSnapping(true);
     setTimeout(() => setIsSnapping(false), 400);
-  }, [rotation, anglePerCard]);
+  }, [anglePerCard]);
 
   // 키보드
   useEffect(() => {
