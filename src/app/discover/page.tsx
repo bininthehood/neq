@@ -244,11 +244,14 @@ export default function DiscoverPage() {
           <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         </div>
         <FilterChips />
-        <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <h2 className="font-display text-xl" style={{ color: "var(--accent)" }}>
-            {filterLabel ? `${filterLabel} 추천 생성 중...` : "취향을 분석하고 있어요..."}
-          </h2>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>10-20초 걸려요</p>
+        <div className="flex-1 flex flex-col items-center justify-center gap-5">
+          <div className="w-10 h-10 animate-spin" style={{ border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
+          <div className="text-center">
+            <h2 className="font-display text-lg" style={{ color: "var(--text-primary)" }}>
+              {filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}
+            </h2>
+            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>잠시만 기다려주세요</p>
+          </div>
         </div>
         <BottomNav active="discover" />
       </div>

@@ -111,6 +111,14 @@ body::after {
   animation: fadeIn 0.25s ease-out;
 }
 
+/* Loading spinner */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 1.2s linear infinite;
+}
+
 /* Selection color */
 ::selection {
   background: var(--accent-dim);

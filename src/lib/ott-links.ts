@@ -5,42 +5,51 @@
 interface OTTProvider {
   domain: string;
   search: (title: string) => string;
-  iconOverride?: string; // Google Favicon API가 부정확한 경우 직접 지정
+  appLink?: (title: string) => string; // 모바일 앱 딥링크 (Universal Link)
+  iconOverride?: string;
 }
 
 const providers: Record<string, OTTProvider> = {
   "Netflix": {
     domain: "www.netflix.com",
     search: (t) => `https://www.netflix.com/search?q=${enc(t)}`,
+    appLink: (t) => `https://www.netflix.com/search?q=${enc(t)}`, // Universal Link → 앱 자동 전환
   },
   "Disney Plus": {
     domain: "www.disneyplus.com",
     search: (t) => `https://www.disneyplus.com/ko-kr/search?q=${enc(t)}`,
+    appLink: (t) => `https://www.disneyplus.com/ko-kr/search?q=${enc(t)}`,
   },
   "Watcha": {
     domain: "watcha.com",
     search: (t) => `https://watcha.com/search?query=${enc(t)}`,
+    appLink: (t) => `watcha://search?query=${enc(t)}`,
   },
   "wavve": {
     domain: "wavve.com",
     search: (t) => `https://www.wavve.com/search?searchWord=${enc(t)}`,
+    appLink: (t) => `https://www.wavve.com/search?searchWord=${enc(t)}`,
     iconOverride: "https://www.wavve.com/favicon.ico",
   },
   "Coupang Play": {
     domain: "www.coupangplay.com",
     search: (t) => `https://www.coupangplay.com/search?q=${enc(t)}`,
+    appLink: (t) => `https://www.coupangplay.com/search?q=${enc(t)}`,
   },
   "Apple TV Plus": {
     domain: "tv.apple.com",
     search: (t) => `https://tv.apple.com/kr/search?term=${enc(t)}`,
+    appLink: (t) => `https://tv.apple.com/kr/search?term=${enc(t)}`,
   },
   "Apple TV": {
     domain: "tv.apple.com",
     search: (t) => `https://tv.apple.com/kr/search?term=${enc(t)}`,
+    appLink: (t) => `https://tv.apple.com/kr/search?term=${enc(t)}`,
   },
   "Amazon Prime Video": {
     domain: "www.primevideo.com",
     search: (t) => `https://www.primevideo.com/search?phrase=${enc(t)}`,
+    appLink: (t) => `https://www.primevideo.com/search?phrase=${enc(t)}`,
   },
   "Google Play Movies": {
     domain: "play.google.com",
@@ -49,6 +58,7 @@ const providers: Record<string, OTTProvider> = {
   "TVING": {
     domain: "www.tving.com",
     search: (t) => `https://www.tving.com/search?keyword=${enc(t)}`,
+    appLink: (t) => `https://www.tving.com/search?keyword=${enc(t)}`,
   },
   "Naver Store": {
     domain: "serieson.naver.com",
@@ -60,9 +70,14 @@ function enc(s: string) {
   return encodeURIComponent(s);
 }
 
+/** OTT 링크 — 모바일이면 앱 딥링크, 아니면 웹 검색 */
 export function getOTTLink(providerName: string, title: string): string | null {
   const provider = providers[providerName];
   if (!provider) return null;
+  // 모바일 환경에서 앱 딥링크 우선
+  if (provider.appLink && typeof navigator !== "undefined" && /iPhone|iPad|Android/i.test(navigator.userAgent)) {
+    return provider.appLink(title);
+  }
   return provider.search(title);
 }
 

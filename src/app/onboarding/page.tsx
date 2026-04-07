@@ -80,7 +80,7 @@ export default function OnboardingPage() {
   const showSuggestions = query.length === 0 && results.length === 0;
 
   return (
-    <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-5 py-8">
+    <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-5 pt-8 pb-0 relative">
       {/* Header */}
       <div className="mb-6">
         <h1 className="font-display font-bold" style={{ color: "var(--accent)", fontSize: "36px" }}>
@@ -233,22 +233,27 @@ export default function OnboardingPage() {
         })}
       </div>
 
-      {/* Next button */}
-      <button
-        onClick={handleNext}
-        disabled={selected.length < 3}
-        className="mt-4 w-full py-4 text-lg font-semibold transition-all active:scale-[0.98]"
-        style={{
-          background: selected.length >= 3 ? "var(--accent)" : "var(--surface)",
-          color: selected.length >= 3 ? "var(--bg)" : "var(--text-muted)",
-          borderRadius: "var(--radius-lg)",
-          cursor: selected.length >= 3 ? "pointer" : "not-allowed",
-        }}
-      >
-        {selected.length < 3
-          ? `${3 - selected.length}개 더 선택해주세요`
-          : `${selected.length}개 선택 완료 → 시작하기`}
-      </button>
+      {/* Spacer for fixed button */}
+      <div className="h-24 shrink-0" />
+
+      {/* Next button — fixed bottom */}
+      <div className="fixed bottom-0 left-0 right-0 px-5 pb-6 pt-3 max-w-lg mx-auto" style={{ background: "linear-gradient(transparent, var(--bg) 30%)" }}>
+        <button
+          onClick={handleNext}
+          disabled={selected.length < 3}
+          className="w-full py-4 text-lg font-semibold transition-all active:scale-[0.98]"
+          style={{
+            background: selected.length >= 3 ? "var(--accent)" : "var(--surface)",
+            color: selected.length >= 3 ? "var(--bg)" : "var(--text-muted)",
+            borderRadius: "var(--radius-lg)",
+            cursor: selected.length >= 3 ? "pointer" : "not-allowed",
+          }}
+        >
+          {selected.length < 3
+            ? `${3 - selected.length}개 더 선택해주세요`
+            : `${selected.length}개 선택 완료 → 시작하기`}
+        </button>
+      </div>
     </div>
   );
 }
