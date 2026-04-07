@@ -86,7 +86,7 @@ export default function InstallBanner() {
       </div>
       <button
         onClick={handleDismiss}
-        className="flex-shrink-0 w-8 h-8 flex items-center justify-center"
+        className="flex-shrink-0 w-11 h-11 flex items-center justify-center"
         style={{ color: "var(--text-muted)" }}
       >
         <IconClose size={14} />
