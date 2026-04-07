@@ -30,7 +30,7 @@ export default function DiscoverPage() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [slideUp, setSlideUp] = useState(0); // 0=카드만, 100=디테일 완전 노출 (%)
+  const [slideUp, setSlideUp] = useState(0); // 0=카드, 100=디테일
   const [slideSnapping, setSlideSnapping] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
@@ -45,11 +45,12 @@ export default function DiscoverPage() {
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
-  const startX = useRef(0);
-  const startY = useRef(0);
-  const isDragging = useRef(false);
-  const directionLocked = useRef<"horizontal" | "vertical" | null>(null);
-  const slideStartY = useRef(0);
+  // 통합 터치 refs
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchActive = useRef(false);
+  const touchDir = useRef<"h" | "v" | null>(null);
+  const slideAtTouchStart = useRef(0);
 
   useEffect(() => {
     setMounted(true);
@@ -148,76 +149,72 @@ export default function DiscoverPage() {
     setCurrentIndex(activeIndex);
   }, [activeIndex]);
 
-  // 카드 터치 핸들러
-  const onTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      if (slideUp > 50 || isSnapping) return;
-      startX.current = e.touches[0].clientX;
-      startY.current = e.touches[0].clientY;
-      isDragging.current = true;
-      directionLocked.current = null;
-      rotationAtDragStart.current = rotation;
-    },
-    [slideUp, isSnapping, rotation]
-  );
+  // === 통합 터치 핸들러 (카드 영역 + 디테일 영역 공통) ===
+  const onUnifiedTouchStart = useCallback((e: React.TouchEvent) => {
+    if (isSnapping) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchActive.current = true;
+    touchDir.current = null;
+    rotationAtDragStart.current = rotation;
+    slideAtTouchStart.current = slideUp;
+  }, [isSnapping, rotation, slideUp]);
 
-  const onTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!isDragging.current) return;
-    const dx = e.touches[0].clientX - startX.current;
-    const dy = e.touches[0].clientY - startY.current;
-    if (!directionLocked.current) {
-      if (Math.abs(dx) > 10) directionLocked.current = "horizontal";
-      else if (Math.abs(dy) > 10) directionLocked.current = "vertical";
+  const onUnifiedTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchActive.current) return;
+    const dx = e.touches[0].clientX - touchStartX.current;
+    const dy = e.touches[0].clientY - touchStartY.current;
+
+    // 방향 잠금
+    if (!touchDir.current) {
+      if (Math.abs(dx) > 10) touchDir.current = "h";
+      else if (Math.abs(dy) > 10) touchDir.current = "v";
       else return;
     }
-    if (directionLocked.current === "horizontal") {
+
+    if (touchDir.current === "h" && slideUp < 50) {
+      // 좌우 캐러셀 (디테일 닫힌 상태에서만)
       e.preventDefault();
-      // 드래그 → 회전 각도로 직접 변환
       const dragAngle = (dx / window.innerWidth) * anglePerCard * 1.2;
       setRotation(rotationAtDragStart.current + dragAngle);
-    } else if (directionLocked.current === "vertical") {
-      if (dy < 0) {
-        // 위로 스와이프 → 카드 자체를 위로 밀어올림
-        e.preventDefault();
-        const pct = Math.min(100, Math.max(0, (-dy / window.innerHeight) * 150));
-        setSlideUp(pct);
-      } else if (dy > 0 && slideUp > 0) {
-        // 디테일 상태에서 아래로 → 카드 복귀
-        e.preventDefault();
-        const pct = Math.max(0, slideUp - (dy / window.innerHeight) * 150);
-        setSlideUp(pct);
-      } else if (dy > 0 && !refreshing) {
-        e.preventDefault();
+    } else if (touchDir.current === "v") {
+      e.preventDefault();
+      // 시작 시 slideUp 위치에서 dy만큼 이동
+      const deltaPct = (-dy / window.innerHeight) * 150;
+      const newSlide = Math.min(100, Math.max(0, slideAtTouchStart.current + deltaPct));
+      setSlideUp(newSlide);
+
+      // pull-to-refresh (카드 상태에서 아래로 당길 때만)
+      if (slideAtTouchStart.current === 0 && dy > 0 && !refreshing) {
         setPullY(Math.min(80, dy * 0.5));
       }
     }
-  }, [anglePerCard, slideUp, refreshing]);
+  }, [anglePerCard, refreshing]);
 
-  const onTouchEnd = useCallback(() => {
-    if (!isDragging.current) return;
-    isDragging.current = false;
-    const dir = directionLocked.current;
-    directionLocked.current = null;
-    if (dir === "horizontal") {
-      // 드래그 방향 감지 후 가장 가까운 카드로 스냅
+  const onUnifiedTouchEnd = useCallback(() => {
+    if (!touchActive.current) return;
+    touchActive.current = false;
+    const dir = touchDir.current;
+    touchDir.current = null;
+
+    if (dir === "h" && slideUp < 50) {
+      // 캐러셀 스냅
       const dragDelta = rotation - rotationAtDragStart.current;
       let snapped: number;
       if (Math.abs(dragDelta) > anglePerCard * 0.2) {
-        // 20% 이상 드래그 → 다음/이전 카드로 확정 이동
         snapped = dragDelta > 0
           ? Math.ceil(rotation / anglePerCard) * anglePerCard
           : Math.floor(rotation / anglePerCard) * anglePerCard;
       } else {
-        // 미세 드래그 → 원래 카드로 복귀
         snapped = Math.round(rotationAtDragStart.current / anglePerCard) * anglePerCard;
       }
       setRotation(snapped);
       setIsSnapping(true);
       setTimeout(() => setIsSnapping(false), 400);
-    } else if (dir === "vertical") {
-      // 30% 이상 밀었으면 디테일 열기, 아니면 닫기
-      if (slideUp > 30) snapSlide(100);
-      else snapSlide(0);
+    } else if (dir === "v") {
+      // 슬라이드 스냅: 30% 기준으로 열기/닫기
+      if (slideUp > 30) snapSlide(100); else snapSlide(0);
+      // pull-to-refresh
       if (pullY > 50) {
         setRefreshing(true); setPullY(40);
         refreshRecommendations().then(() => { setRefreshing(false); setPullY(0); });
@@ -228,7 +225,7 @@ export default function DiscoverPage() {
   const snapSlide = useCallback((target: number) => {
     setSlideSnapping(true);
     setSlideUp(target);
-    setTimeout(() => setSlideSnapping(false), 350);
+    setTimeout(() => setSlideSnapping(false), 300);
   }, []);
   const openDetail = useCallback(() => snapSlide(100), [snapSlide]);
   const closeDetail = useCallback(() => snapSlide(0), [snapSlide]);
@@ -391,26 +388,15 @@ export default function DiscoverPage() {
       <div
         className="flex-1 min-h-0 relative overflow-hidden"
         style={{ touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "none" : "transform 0.2s ease-out" }}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        onTouchStart={onUnifiedTouchStart}
+        onTouchMove={onUnifiedTouchMove}
+        onTouchEnd={onUnifiedTouchEnd}
       >
         {/* 디테일 (카드 뒤에 깔려있음, 카드가 올라가면 드러남) */}
         {current && slideUp > 0 && (
           <div
             className="absolute inset-0 overflow-y-auto px-5 pt-4 pb-8 z-20"
-            style={{ background: "var(--bg)", touchAction: "none", pointerEvents: slideUp > 30 ? "auto" : "none" }}
-            onTouchStart={(e) => { slideStartY.current = e.touches[0].clientY; }}
-            onTouchMove={(e) => {
-              const dy = e.touches[0].clientY - slideStartY.current;
-              if (dy > 0) {
-                e.preventDefault();
-                setSlideUp(Math.max(0, 100 - (dy / window.innerHeight) * 150));
-              }
-            }}
-            onTouchEnd={() => {
-              if (slideUp < 70) snapSlide(0); else snapSlide(100);
-            }}
+            style={{ background: "var(--bg)", touchAction: "none", pointerEvents: slideUp > 50 ? "auto" : "none" }}
           >
             <div className="flex justify-center mb-3">
               <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
