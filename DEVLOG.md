@@ -160,8 +160,98 @@ c0e84da feat: 필터별 맞춤 추천 (LLM에 직접 조건 전달)
 - **레이트 리밋:** 인메모리 Map 기반. Vercel serverless라 인스턴스 간 공유 안 됨. 심각한 남용 방지 수준. 프로덕션에서는 Upstash Redis 권장.
 
 ### 미해결 / 다음 할 일
-- [ ] "어제 추천받은 거 봤어?" 셀프 리포트 기능
-- [ ] Vercel GitHub 자동 배포 연동 해결
+- [x] "어제 추천받은 거 봤어?" 셀프 리포트 기능 → Day 3에서 완료
+- [x] Vercel GitHub 자동 배포 연동 해결 → Day 3에서 완료
 - [ ] Saved 화면 고도화 (OTT별 그룹핑? 시청 완료 표시?)
 - [ ] 추천 품질 개선 (사용자 스와이프 데이터 반영)
 - [ ] Obsidian 체크리스트 업데이트
+
+---
+
+## 2026-04-07 (Day 3)
+
+### 진행 요약
+에이전트 하네스 구축 + 셀프 리포트 기능 + Vercel CI/CD + 디자인 리뷰/anti-slop 수정 + OTT 통합 + UX 대규모 개선 + PWA 앱 설치.
+
+### 완료된 작업
+
+**에이전트 하네스 구축**
+- 5인 에이전트 팀 (Producer-Reviewer 패턴):
+  - rec-engineer: OpenAI 프롬프트 + TMDB 필터링
+  - content-manager: TMDB API + OTT 가용성 + 메타데이터
+  - frontend-builder: React 컴포넌트 + 애니메이션
+  - ux-reviewer: DESIGN.md 준수 + 터치 UX 리뷰
+  - qa-tester: 통합 정합성 + 엣지 케이스
+- 6개 스킬 + 오케스트레이터 (neko-orchestrator)
+- CLAUDE.md에 하네스 컨텍스트 등록
+- Obsidian에 스킬 매핑 예시 문서 작성
+
+**셀프 리포트 기능**
+- Saved에서 "봤어요?" → 인생작/재밌었어/그저그래/포기 반응
+- 시청 리포트 통계 카드 (Saved 상단)
+- 시청 피드백 → OpenAI 프롬프트에 반영 (추천 개인화)
+- "오늘 뭐 볼까" → 안 본 작품 우선 추천
+
+**Vercel GitHub 자동 배포**
+- GitHub App (Vercel) 설치로 자동 배포 연동
+- "unverified commit" 문제 해결 (설정 변경)
+- main push → 프로덕션 자동 배포 확인
+
+**디자인 리뷰 + Anti-Slop 수정**
+- UX 리뷰: PASS 20 / FAIL 5 / WARN 5 항목 도출
+- 필터 칩/Undo 버튼 44px 터치 타겟 확보
+- BottomNav active:scale 터치 피드백 추가
+- 온보딩 그리드 3열 → 4열 (DESIGN.md 준수)
+- 유니코드 문자 (✕✓⭐♡◆) → SVG 아이콘 전면 교체
+- 빈 상태 좌측 정렬 탈템플릿화
+- "지금 보기 →" 문구 컨텍스트별 변주
+
+**OTT 통합 고도화**
+- TMDB provider → OTT 검색 URL 매핑 (11개 OTT)
+- Google Favicon API로 OTT 앱 아이콘 표시 (wavve는 직접 참조)
+- 모바일: Universal Link/커스텀 스킴으로 OTT 앱 직접 실행
+- TMDB /credits API → 감독 + 주연 4명 정보 추가
+- Provider 타입: `string[]` → `{ name, logoUrl }[]` 확장
+
+**UX 대규모 개선**
+- Discover: like/pass 스와이프 → 좌우 캐러셀 브라우징으로 전환
+- 카드 전환: 주크박스 회전 애니메이션 (cubic-bezier 스프링)
+- Detail: 카드 위로 스와이프 → 손가락 추적 바텀시트 (제스처 기반)
+- 바텀시트: 아래로 드래그하여 닫기 (포인터 추적 + 30% 임계값)
+- 저장 버튼: filled/outline 하트 토글 (저장 취소 가능)
+- 온보딩: 헤더(타이틀/선택/검색) 상단 고정, 그리드만 스크롤
+- 시작하기 버튼 하단 고정 (그라디언트 페이드)
+- 로딩: 스피너 애니메이션 추가
+- Pass/Undo/3버튼 제거 → 저장 1버튼 + 진행 인디케이터로 단순화
+- Saved Detail도 동일한 제스처 바텀시트 적용
+
+**PWA 앱 경험**
+- 앱 아이콘 생성 (512/192/180/32px, Warm Cinema 오렌지 N)
+- manifest 색상 수정 (#0C0A09)
+- apple-touch-icon, favicon 추가
+- 모바일 방문 시 설치 유도 배너 (iOS 안내 + Android 네이티브)
+
+### 커밋 히스토리 (Day 3)
+```
+c6fbb8b feat: PWA 설치 유도 배너 (iOS 안내 + Android 네이티브 설치)
+ddb0681 feat: UX 대규모 개선 — 캐러셀 스와이프 + 제스처 바텀시트 + 하트 토글
+ba5dedb fix: 온보딩 버튼 하단 고정 + 로딩 스피너 + OTT 앱 딥링크
+479e506 feat: PWA 앱 아이콘 + manifest 수정
+09db84b chore: Vercel 배포 테스트
+61b7184 feat: OTT 직접 링크 + favicon 아이콘 + 감독/출연진 정보
+f9dcee7 fix: anti-slop 수정 + 터치 타겟 개선
+9ef5b9d chore: 에이전트 하네스 구축 (5 에이전트 Producer-Reviewer 팀)
+17d3e37 feat: 셀프 리포트 — 시청 피드백으로 추천 개인화
+```
+
+### 아키텍처 메모
+- **제스처 바텀시트 패턴:** CSS 애니메이션이 아닌 `translateY(%)` 직접 제어. `detailY` state (0=완전 열림, 100=닫힘)을 터치 이벤트에서 실시간 업데이트. `detailAnimating` flag로 스냅 시에만 transition 적용.
+- **OTT 아이콘 전략:** Google Favicon API (`/s2/favicons?domain=...&sz=64`) 우선, SPA로 favicon 감지 안 되는 경우 (wavve) `iconOverride`로 직접 지정.
+- **시청 피드백 → 추천:** `WatchFeedback { loved[], dropped[] }` → `buildFeedbackPrompt()` → LLM 프롬프트에 주입. "인생작과 비슷한 결 더 추천 + 포기한 류 제외".
+
+### 미해결 / 다음 할 일
+- [ ] 한글 폰트 개선 (Helvetica 방향 vs 현행 유지 — 보류)
+- [ ] 앱 캐릭터/로고 디자인 → 로딩 스피너 리디자인
+- [ ] Saved 화면 고도화 (OTT별 그룹핑?)
+- [ ] 추천 품질 개선 (사용자 피드백 데이터 더 활용)
+- [ ] Detail 바텀시트 내부 스크롤 vs 드래그 닫기 충돌 개선
