@@ -206,7 +206,7 @@ export default function DiscoverPage() {
             <button key={ott} onClick={() => { setFilterOTT(ott); setTopIdx(0); }}
               className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5"
               style={{ background: filterOTT === ott ? "var(--accent)" : "var(--surface)", color: filterOTT === ott ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOTT === ott ? "none" : "1px solid var(--border)" }}>
-              {ott === "all" ? "모든 OTT" : (<><img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />{ott}</>)}
+              {ott === "all" ? "모든 OTT" : (<><img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />{ott}</>)}
             </button>
           ))}
         </>

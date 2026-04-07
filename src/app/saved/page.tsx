@@ -294,7 +294,7 @@ export default function SavedPage() {
                     <span className="font-data text-[11px] flex items-center gap-0.5" style={{ color: "var(--text-muted)" }}><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
                     {report && <ReactionLabel reaction={report} />}
                     {!report && item.recommendation.providers.slice(0, 2).map((p) => (
-                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />
+                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />
                     ))}
                   </div>
                 </div>
