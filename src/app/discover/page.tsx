@@ -21,6 +21,10 @@ export default function DiscoverPage() {
   const [showDetail, setShowDetail] = useState(false);
   const [showHint, setShowHint] = useState(true);
 
+  const [filterType, setFilterType] = useState<"all" | "movie" | "series">("all");
+  const [filterOrigin, setFilterOrigin] = useState<"all" | "kr" | "foreign">("all");
+  const [history, setHistory] = useState<number[]>([]); // 이전 인덱스 스택
+
   const [offsetX, setOffsetX] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [exitDir, setExitDir] = useState<"left" | "right" | null>(null);
@@ -60,7 +64,14 @@ export default function DiscoverPage() {
     setLoading(false);
   };
 
-  const current = recs[currentIndex];
+  const KR_CODES = ["KR"];
+  const filteredRecs = recs.filter((r) => {
+    if (filterType !== "all" && r.type !== filterType) return false;
+    if (filterOrigin === "kr" && !(r.originCountry ?? []).some((c) => KR_CODES.includes(c))) return false;
+    if (filterOrigin === "foreign" && (r.originCountry ?? []).some((c) => KR_CODES.includes(c))) return false;
+    return true;
+  });
+  const current = filteredRecs[currentIndex];
 
   const goNext = useCallback(
     (direction: "left" | "right") => {
@@ -70,6 +81,7 @@ export default function DiscoverPage() {
 
       setIsAnimating(true);
       setExitDir(direction);
+      setHistory((h) => [...h, currentIndex]);
 
       setTimeout(() => {
         setCurrentIndex((i) => i + 1);
@@ -81,6 +93,13 @@ export default function DiscoverPage() {
     },
     [current, currentIndex, showHint, isAnimating]
   );
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0 || isAnimating) return;
+    const prevIndex = history[history.length - 1];
+    setHistory((h) => h.slice(0, -1));
+    setCurrentIndex(prevIndex);
+  }, [history, isAnimating]);
 
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
@@ -181,7 +200,7 @@ export default function DiscoverPage() {
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         <div className="flex items-center gap-3">
           <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>
-            {currentIndex + 1}/{recs.length}
+            {currentIndex + 1}/{filteredRecs.length}
           </span>
           <button
             onClick={() => { localStorage.clear(); router.replace("/onboarding"); }}
@@ -191,6 +210,41 @@ export default function DiscoverPage() {
             재설정
           </button>
         </div>
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
+        {(["all", "movie", "series"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => { setFilterType(t); setCurrentIndex(0); }}
+            className="px-3 py-1 text-xs whitespace-nowrap transition-colors"
+            style={{
+              background: filterType === t ? "var(--accent)" : "var(--surface)",
+              color: filterType === t ? "var(--bg)" : "var(--text-secondary)",
+              borderRadius: "var(--radius-full)",
+              border: filterType === t ? "none" : "1px solid var(--border)",
+            }}
+          >
+            {t === "all" ? "전체" : t === "movie" ? "🎬 영화" : "📺 시리즈"}
+          </button>
+        ))}
+        <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
+        {(["all", "kr", "foreign"] as const).map((o) => (
+          <button
+            key={o}
+            onClick={() => { setFilterOrigin(o); setCurrentIndex(0); }}
+            className="px-3 py-1 text-xs whitespace-nowrap transition-colors"
+            style={{
+              background: filterOrigin === o ? "var(--accent)" : "var(--surface)",
+              color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)",
+              borderRadius: "var(--radius-full)",
+              border: filterOrigin === o ? "none" : "1px solid var(--border)",
+            }}
+          >
+            {o === "all" ? "전체" : o === "kr" ? "🇰🇷 국내" : "🌍 해외"}
+          </button>
+        ))}
       </div>
 
       {/* Card area */}
@@ -241,7 +295,7 @@ export default function DiscoverPage() {
           >
             <h2 className="font-display text-2xl font-bold">{current.title}</h2>
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{current.reason}</p>
-            <div className="flex gap-2 mt-3 flex-wrap">
+            <div className="flex gap-2 mt-3 flex-wrap items-center">
               {current.providers.slice(0, 3).map((p) => (
                 <span
                   key={p}
@@ -251,6 +305,18 @@ export default function DiscoverPage() {
                   {p}
                 </span>
               ))}
+              {current.watchLink && (
+                <a
+                  href={current.watchLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 text-xs font-medium"
+                  style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-sm)" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  지금 보기 →
+                </a>
+              )}
             </div>
           </div>
 
@@ -338,7 +404,18 @@ export default function DiscoverPage() {
             <span>Save →</span>
           </div>
         )}
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3 justify-center items-center">
+          {history.length > 0 && (
+            <button
+              onClick={handleUndo}
+              disabled={isAnimating}
+              className="w-10 h-10 flex items-center justify-center text-sm active:scale-90 transition-transform"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)", color: "var(--text-muted)" }}
+              title="되돌리기"
+            >
+              ↩
+            </button>
+          )}
           <button
             onClick={() => goNext("left")}
             disabled={isAnimating}

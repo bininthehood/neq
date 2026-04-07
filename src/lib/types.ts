@@ -20,6 +20,8 @@ export interface Recommendation {
   date: string;
   overview: string;
   providers: string[];
+  watchLink: string | null;
+  originCountry?: string[];
 }
 
 export interface SavedItem {

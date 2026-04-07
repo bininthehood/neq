@@ -106,32 +106,39 @@ export default function SavedPage() {
               className="relative group"
               style={{ height: i % 3 === 0 ? "240px" : "200px" }}
             >
-              {item.recommendation.posterUrl ? (
-                <img
-                  src={item.recommendation.posterUrl}
-                  alt={item.recommendation.title}
-                  className="w-full h-full object-cover"
-                  style={{ borderRadius: "var(--radius-lg)" }}
-                />
+              {item.recommendation.watchLink ? (
+                <a href={item.recommendation.watchLink} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
+                  {item.recommendation.posterUrl ? (
+                    <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
+                      {item.recommendation.title}
+                    </div>
+                  )}
+                </a>
               ) : (
-                <div
-                  className="w-full h-full flex items-center justify-center text-xs p-2 text-center"
-                  style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}
-                >
-                  {item.recommendation.title}
-                </div>
+                item.recommendation.posterUrl ? (
+                  <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
+                    {item.recommendation.title}
+                  </div>
+                )
               )}
               <div
-                className="absolute bottom-0 left-0 right-0 p-2"
+                className="absolute bottom-0 left-0 right-0 p-2 pointer-events-none"
                 style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85))", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}
               >
                 <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
-                <div className="font-data text-[10px]" style={{ color: "var(--text-muted)" }}>
-                  ⭐ {item.recommendation.rating.toFixed(1)}
+                <div className="flex items-center gap-2">
+                  <span className="font-data text-[10px]" style={{ color: "var(--text-muted)" }}>⭐ {item.recommendation.rating.toFixed(1)}</span>
+                  {item.recommendation.watchLink && (
+                    <span className="text-[10px]" style={{ color: "var(--accent)" }}>지금 보기 →</span>
+                  )}
                 </div>
               </div>
               <button
-                onClick={() => handleRemove(item.recommendation.tmdbId)}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(item.recommendation.tmdbId); }}
                 className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-full)" }}
               >

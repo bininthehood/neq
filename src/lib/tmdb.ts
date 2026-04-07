@@ -38,24 +38,32 @@ export async function searchMulti(query: string): Promise<TMDBResult[]> {
     }));
 }
 
+export interface ProviderInfo {
+  name: string;
+  type: "flatrate" | "rent" | "buy";
+}
+
 export async function getKoreanProviders(
   id: number,
   type: "movie" | "series"
-): Promise<string[]> {
+): Promise<{ providers: string[]; watchLink: string | null }> {
   const mediaType = type === "series" ? "tv" : "movie";
   const res = await fetch(
     `${BASE}/${mediaType}/${id}/watch/providers?api_key=${API_KEY}`
   );
   const data = await res.json();
   const kr = data.results?.KR;
-  if (!kr) return [];
+  if (!kr) return { providers: [], watchLink: null };
 
   const providers: Array<{ provider_name: string }> = [
     ...(kr.flatrate ?? []),
     ...(kr.rent ?? []),
     ...(kr.buy ?? []),
   ];
-  return [...new Set(providers.map((p) => p.provider_name))];
+  return {
+    providers: [...new Set(providers.map((p) => p.provider_name))],
+    watchLink: kr.link ?? null,
+  };
 }
 
 export function posterUrl(path: string | null, size = "w500"): string | null {

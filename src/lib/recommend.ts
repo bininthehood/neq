@@ -61,7 +61,7 @@ export async function getRecommendations(
     if (!tmdb) tmdb = await searchTMDB(rec.title_en, rec.type);
     if (!tmdb) continue;
 
-    const providers = await getKoreanProviders(tmdb.id, rec.type);
+    const { providers, watchLink } = await getKoreanProviders(tmdb.id, rec.type);
     if (providers.length === 0) continue;
 
     results.push({
@@ -75,6 +75,8 @@ export async function getRecommendations(
       date: tmdb.release_date ?? tmdb.first_air_date ?? "",
       overview: tmdb.overview ?? "",
       providers,
+      watchLink,
+      originCountry: (tmdb as any).origin_country ?? [],
     });
 
     if (results.length >= 10) break;
