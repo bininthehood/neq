@@ -152,12 +152,18 @@ export default function DiscoverPage() {
   const onCardTouchEnd = useCallback(() => {
     if (!touchActive.current || touchDir.current !== "h") { touchActive.current = false; return; }
     touchActive.current = false; touchDir.current = null;
+    // 드래그 방향 기준으로 확실하게 1칸 이동 or 복귀
     const dragDelta = rotation - rotationAtDragStart.current;
     let snapped: number;
-    if (Math.abs(dragDelta) > anglePerCard * 0.2) {
-      snapped = dragDelta > 0 ? Math.ceil(rotation / anglePerCard) * anglePerCard : Math.floor(rotation / anglePerCard) * anglePerCard;
+    if (dragDelta > anglePerCard * 0.15) {
+      // 양수 = 왼쪽으로 드래그 → 이전 카드
+      snapped = rotationAtDragStart.current + anglePerCard;
+    } else if (dragDelta < -anglePerCard * 0.15) {
+      // 음수 = 오른쪽으로 드래그 → 다음 카드
+      snapped = rotationAtDragStart.current - anglePerCard;
     } else {
-      snapped = Math.round(rotationAtDragStart.current / anglePerCard) * anglePerCard;
+      // 미세 드래그 → 원래 카드
+      snapped = rotationAtDragStart.current;
     }
     setRotation(snapped); setIsSnapping(true);
     setTimeout(() => setIsSnapping(false), 400);
@@ -296,13 +302,13 @@ export default function DiscoverPage() {
               const offset = i - continuousIndex;
               let adj = offset;
               if (cardCount > 0) { while (adj > cardCount / 2) adj -= cardCount; while (adj < -cardCount / 2) adj += cardCount; }
-              if (Math.abs(adj) > 1.5) return null;
+              if (Math.abs(adj) > 1.2) return null;
 
-              const translateX = adj * 85;
-              const scale = 1 - Math.abs(adj) * 0.12;
-              const rotateY = adj * -8;
+              const translateX = adj * 100; // 카드 폭만큼 완전히 밀기
+              const scale = 1 - Math.abs(adj) * 0.08;
+              const rotateY = adj * -5;
               const z = 10 - Math.abs(Math.round(adj));
-              const op = 1 - Math.abs(adj) * 0.4;
+              const op = Math.abs(adj) < 0.01 ? 1 : Math.max(0, 1 - Math.abs(adj) * 0.8); // 비활성 카드는 거의 투명
 
               return (
                 <div key={rec.tmdbId} className="absolute inset-y-0 overflow-hidden will-change-transform" style={{
