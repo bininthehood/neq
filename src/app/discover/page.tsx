@@ -416,7 +416,7 @@ export default function DiscoverPage() {
             <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {current.date.slice(0, 4)}</p>
             <div className="mt-5">
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>왜 추천했나요?</h3>
-              <div className="pl-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderLeft: "2px solid var(--accent)" }}>{current.reason}</div>
+              <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div>
             </div>
             <div className="mt-5">
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
