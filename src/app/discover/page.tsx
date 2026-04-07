@@ -369,21 +369,21 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}>
+          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
             <span className="font-data font-semibold" style={{ color: "var(--accent)" }}>⭐ {current.rating.toFixed(1)}</span>
             <span className="text-[11px]" style={{ color: "var(--text-muted)" }}>TMDB</span>
           </div>
 
-          <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}>
+          <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
             {current.type === "series" ? "시리즈" : "영화"}
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85) 40%, var(--bg))" }}>
+          <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
             <h2 className="font-display text-2xl font-bold">{current.title}</h2>
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{current.reason}</p>
             <div className="flex gap-2 mt-3 flex-wrap items-center">
               {current.providers.slice(0, 3).map((p) => (
-                <span key={p} className="px-2.5 py-1 text-xs" style={{ background: "rgba(245,240,235,0.08)", borderRadius: "var(--radius-sm)" }}>{p}</span>
+                <span key={p} className="px-2.5 py-1 text-xs" style={{ background: "var(--text-primary-dim)", borderRadius: "var(--radius-sm)" }}>{p}</span>
               ))}
               {current.watchLink && (
                 <a href={current.watchLink} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs font-medium" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-sm)" }} onClick={(e) => e.stopPropagation()}>
@@ -395,11 +395,11 @@ export default function DiscoverPage() {
 
           {showHint && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-              <div className="text-xs px-3 py-1.5" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-full)" }}>탭하여 상세보기</div>
+              <div className="text-xs px-3 py-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}>탭하여 상세보기</div>
             </div>
           )}
 
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "rgba(220,74,58,0.25)", opacity: passOpacity }}>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "var(--danger-overlay)", opacity: passOpacity }}>
             <IconPass size={80} color="var(--danger)" />
           </div>
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "var(--accent-dim)", opacity: saveOpacity }}>
@@ -408,7 +408,7 @@ export default function DiscoverPage() {
         </div>
 
         {showDetail && (
-          <div className="absolute inset-0 mx-3 backdrop-blur overflow-y-auto p-5 animate-fade-in z-10" style={{ background: "rgba(12,10,9,0.97)", borderRadius: "var(--radius-xl)", touchAction: "pan-y" }}>
+          <div className="absolute inset-0 mx-3 backdrop-blur overflow-y-auto p-5 animate-fade-in z-10" style={{ background: "var(--bg-overlay-solid)", borderRadius: "var(--radius-xl)", touchAction: "pan-y" }}>
             <button className="absolute top-4 right-4 z-20 w-11 h-11 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={() => setShowDetail(false)}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
@@ -458,7 +458,7 @@ export default function DiscoverPage() {
           <button onClick={() => setShowDetail(!showDetail)} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
             <IconInfo size={22} color="var(--text-secondary)" />
           </button>
-          <button onClick={() => goNext("right")} disabled={isAnimating} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--accent-dim)", border: "1px solid rgba(232,123,53,0.3)", borderRadius: "var(--radius-full)" }}>
+          <button onClick={() => goNext("right")} disabled={isAnimating} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-full)" }}>
             <IconSave size={22} color="var(--accent)" />
           </button>
         </div>

@@ -17,10 +17,23 @@
 
   --danger: #DC4A3A;
   --danger-dim: rgba(220, 74, 58, 0.15);
+  --danger-overlay: rgba(220, 74, 58, 0.25);
   --warning: #D4942A;
   --info: #5B8CD4;
   --success: #4A9E5C;
   --success-dim: rgba(74, 158, 92, 0.15);
+
+  /* Overlays — bg 기반 투명도 레이어 */
+  --bg-overlay-light: rgba(12, 10, 9, 0.4);
+  --bg-overlay: rgba(12, 10, 9, 0.7);
+  --bg-overlay-heavy: rgba(12, 10, 9, 0.85);
+  --bg-overlay-dense: rgba(12, 10, 9, 0.92);
+  --bg-overlay-solid: rgba(12, 10, 9, 0.97);
+
+  /* Borders & dim surfaces */
+  --accent-border: rgba(232, 123, 53, 0.3);
+  --accent-border-light: rgba(232, 123, 53, 0.2);
+  --text-primary-dim: rgba(245, 240, 235, 0.08);
 
   /* Spacing */
   --space-2xs: 2px;

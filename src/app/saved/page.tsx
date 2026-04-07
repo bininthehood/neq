@@ -162,7 +162,7 @@ export default function SavedPage() {
       {selected && (
         <div
           className="mx-5 mb-4 p-4 animate-fade-in"
-          style={{ background: "var(--accent-dim)", border: "1px solid rgba(232,123,53,0.2)", borderRadius: "var(--radius-lg)" }}
+          style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border-light)", borderRadius: "var(--radius-lg)" }}
         >
           <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>
             오늘의 선택
@@ -243,7 +243,7 @@ export default function SavedPage() {
                     <div
                       className="absolute inset-0"
                       style={{
-                        background: "rgba(12,10,9,0.4)",
+                        background: "var(--bg-overlay-light)",
                         borderRadius: "var(--radius-lg)",
                       }}
                     />
@@ -253,7 +253,7 @@ export default function SavedPage() {
                 {/* Bottom info */}
                 <div
                   className="absolute bottom-0 left-0 right-0 p-2 pointer-events-none"
-                  style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85))", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}
+                  style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}
                 >
                   <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
                   <div className="flex items-center gap-2">
@@ -271,7 +271,7 @@ export default function SavedPage() {
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(tmdbId); }}
                     className="absolute top-1.5 left-1.5 px-2 py-1 text-[11px] font-medium active:scale-90 transition-transform"
                     style={{
-                      background: "rgba(12,10,9,0.7)",
+                      background: "var(--bg-overlay)",
                       backdropFilter: "blur(4px)",
                       borderRadius: "var(--radius-full)",
                       color: "var(--text-secondary)",
@@ -287,7 +287,7 @@ export default function SavedPage() {
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(tmdbId); }}
                     className="absolute top-1.5 left-1.5 px-2 py-1 text-[11px] font-medium active:scale-90 transition-transform"
                     style={{
-                      background: "rgba(12,10,9,0.7)",
+                      background: "var(--bg-overlay)",
                       backdropFilter: "blur(4px)",
                       borderRadius: "var(--radius-full)",
                       color: REACTIONS.find((x) => x.key === report)?.color,
@@ -303,7 +303,7 @@ export default function SavedPage() {
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center gap-2 animate-fade-in z-10"
                     style={{
-                      background: "rgba(12,10,9,0.92)",
+                      background: "var(--bg-overlay-dense)",
                       backdropFilter: "blur(8px)",
                       borderRadius: "var(--radius-lg)",
                     }}
@@ -339,7 +339,7 @@ export default function SavedPage() {
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(tmdbId); }}
                   className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                  style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-full)" }}
+                  style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
                 >
                   ✕
                 </button>

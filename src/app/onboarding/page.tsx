@@ -178,7 +178,7 @@ export default function OnboardingPage() {
                     )}
                     <div
                       className="absolute bottom-0 left-0 right-0 p-1.5"
-                      style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85))" }}
+                      style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))" }}
                     >
                       <div className="text-[11px] font-medium truncate">{item.title}</div>
                     </div>
@@ -208,7 +208,7 @@ export default function OnboardingPage() {
               style={{
                 borderRadius: "var(--radius-lg)",
                 background: isSelected ? "var(--accent-dim)" : "transparent",
-                border: isSelected ? "1px solid rgba(232,123,53,0.3)" : "1px solid transparent",
+                border: isSelected ? "1px solid var(--accent-border)" : "1px solid transparent",
               }}
             >
               {item.posterUrl ? (
