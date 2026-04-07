@@ -59,7 +59,7 @@ export default function InstallBanner() {
         background: "var(--surface)",
         border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.4)",
+        boxShadow: "0 8px 32px rgba(12,10,9,0.6)",
       }}
     >
       <img src="/icon-192.png" alt="Neko" className="w-12 h-12 flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
