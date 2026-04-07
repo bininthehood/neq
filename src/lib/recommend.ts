@@ -11,9 +11,30 @@ interface LLMRec {
   reason: string;
 }
 
+export interface RecommendFilter {
+  type?: "movie" | "series"; // undefined = 둘 다
+  origin?: "kr" | "foreign"; // undefined = 둘 다
+}
+
+function buildFilterPrompt(filter: RecommendFilter): string {
+  const parts: string[] = [];
+
+  if (filter.type === "movie") parts.push("영화만 추천하세요. 시리즈/드라마는 제외.");
+  else if (filter.type === "series") parts.push("시리즈/드라마만 추천하세요. 영화는 제외.");
+  else parts.push("영화와 시리즈를 섞어서 추천하세요.");
+
+  if (filter.origin === "kr") parts.push("한국 작품만 추천하세요. 외국 작품은 제외.");
+  else if (filter.origin === "foreign") parts.push("외국 작품만 추천하세요. 한국 작품은 제외.");
+
+  return parts.join("\n");
+}
+
 export async function getRecommendations(
-  favorites: string[]
+  favorites: string[],
+  filter: RecommendFilter = {}
 ): Promise<Recommendation[]> {
+  const filterPrompt = buildFilterPrompt(filter);
+
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
@@ -26,10 +47,11 @@ export async function getRecommendations(
 - 사용자의 입력 작품 및 그 리메이크/속편은 절대 추천하지 마세요
 - 누구나 아는 초유명작(예: 어벤져스, 타이타닉, 해리 포터)은 제외
 - 한국에서 OTT로 볼 수 있는 작품 위주
-- 영화와 시리즈를 섞어서 추천하세요
 - 대중적이지 않지만 숨겨진 명작을 우선적으로 추천하세요
 - 각 추천에 대해 왜 이 사용자에게 맞는지 한 줄 이유를 포함
 - **15개를 추천하세요**
+
+${filterPrompt}
 
 반드시 아래 정확한 JSON 형식으로 응답하세요:
 {"recommendations": [{"title": "한글 제목", "title_en": "English Title", "type": "movie 또는 series", "reason": "추천 이유"}, ...]}`,
@@ -59,7 +81,6 @@ export async function getRecommendations(
     (Object.values(parsed).find((v: any) => Array.isArray(v)) as LLMRec[]) ??
     [];
 
-  // TMDB 검증 + 한국 OTT 필터링
   const results: Recommendation[] = [];
 
   for (const rec of recs) {
@@ -69,6 +90,12 @@ export async function getRecommendations(
 
     const { providers, watchLink } = await getKoreanProviders(tmdb.id, rec.type);
     if (providers.length === 0) continue;
+
+    const originCountry = (tmdb as any).origin_country ?? [];
+
+    // 서버 측 origin 필터 검증 (LLM이 잘못 추천한 경우 방어)
+    if (filter.origin === "kr" && !originCountry.includes("KR")) continue;
+    if (filter.origin === "foreign" && originCountry.includes("KR")) continue;
 
     results.push({
       title: rec.title,
@@ -82,7 +109,7 @@ export async function getRecommendations(
       overview: tmdb.overview ?? "",
       providers,
       watchLink,
-      originCountry: (tmdb as any).origin_country ?? [],
+      originCountry,
     });
 
     if (results.length >= 10) break;

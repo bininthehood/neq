@@ -6,12 +6,16 @@ import {
   getFavorites,
   getRecommendations,
   setRecommendations,
+  clearAllRecommendations,
   addSaved,
   hasOnboarded,
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import { IconPass, IconSave, IconInfo, IconUndo, IconClose, IconRefresh } from "@/components/Icons";
+
+type FilterType = "all" | "movie" | "series";
+type FilterOrigin = "all" | "kr" | "foreign";
 
 export default function DiscoverPage() {
   const router = useRouter();
@@ -22,8 +26,8 @@ export default function DiscoverPage() {
   const [showDetail, setShowDetail] = useState(false);
   const [showHint, setShowHint] = useState(true);
 
-  const [filterType, setFilterType] = useState<"all" | "movie" | "series">("all");
-  const [filterOrigin, setFilterOrigin] = useState<"all" | "kr" | "foreign">("all");
+  const [filterType, setFilterType] = useState<FilterType>("all");
+  const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [history, setHistory] = useState<number[]>([]);
 
   const [offsetX, setOffsetX] = useState(0);
@@ -41,55 +45,54 @@ export default function DiscoverPage() {
       router.replace("/onboarding");
       return;
     }
-    loadRecommendations();
+    loadRecs("all", "all");
   }, [router]);
 
-  const loadRecommendations = async () => {
-    const cached = getRecommendations();
+  const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
+    // 캐시 확인
+    const cached = getRecommendations(ft, fo);
     if (cached.length > 0) {
       setRecs(cached);
+      setCurrentIndex(0);
+      setHistory([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     const favorites = getFavorites();
+    const filter: any = {};
+    if (ft !== "all") filter.type = ft;
+    if (fo !== "all") filter.origin = fo;
+
     const res = await fetch("/api/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favorites }),
+      body: JSON.stringify({ favorites, filter }),
     });
     const data = await res.json();
-    setRecommendations(data.recommendations);
-    setRecs(data.recommendations);
+    const newRecs = data.recommendations ?? [];
+    setRecommendations(newRecs, ft, fo);
+    setRecs(newRecs);
+    setCurrentIndex(0);
+    setHistory([]);
     setLoading(false);
+  };
+
+  const handleFilterChange = (newType: FilterType, newOrigin: FilterOrigin) => {
+    setFilterType(newType);
+    setFilterOrigin(newOrigin);
+    setShowDetail(false);
+    loadRecs(newType, newOrigin);
   };
 
   const refreshRecommendations = async () => {
-    setRecommendations([]);
-    setCurrentIndex(0);
-    setHistory([]);
-    setLoading(true);
-    const favorites = getFavorites();
-    const res = await fetch("/api/recommend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favorites }),
-    });
-    const data = await res.json();
-    setRecommendations(data.recommendations);
-    setRecs(data.recommendations);
-    setLoading(false);
+    // 현재 필터의 캐시만 삭제하고 새로 요청
+    setRecommendations([], filterType, filterOrigin);
+    loadRecs(filterType, filterOrigin);
   };
 
-  const KR_CODES = ["KR"];
-  const filteredRecs = recs.filter((r) => {
-    if (filterType !== "all" && r.type !== filterType) return false;
-    if (filterOrigin === "kr" && !(r.originCountry ?? []).some((c) => KR_CODES.includes(c))) return false;
-    if (filterOrigin === "foreign" && (r.originCountry ?? []).some((c) => KR_CODES.includes(c))) return false;
-    return true;
-  });
-  const current = filteredRecs[currentIndex];
+  const current = recs[currentIndex];
 
   const goNext = useCallback(
     (direction: "left" | "right") => {
@@ -134,14 +137,10 @@ export default function DiscoverPage() {
     if (!isDragging.current) return;
     const dx = e.touches[0].clientX - startX.current;
     const dy = e.touches[0].clientY - startY.current;
-
     if (!directionLocked.current) {
       if (Math.abs(dx) > 10) directionLocked.current = "horizontal";
-      else if (Math.abs(dy) > 10) {
-        directionLocked.current = "vertical";
-        isDragging.current = false;
-        return;
-      } else return;
+      else if (Math.abs(dy) > 10) { directionLocked.current = "vertical"; isDragging.current = false; return; }
+      else return;
     }
     if (directionLocked.current !== "horizontal") return;
     e.preventDefault();
@@ -170,121 +169,98 @@ export default function DiscoverPage() {
   const getCardStyle = (): React.CSSProperties => {
     if (exitDir) {
       const x = exitDir === "left" ? -500 : 500;
-      return {
-        transform: `translateX(${x}px) rotate(${x * 0.05}deg)`,
-        transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out",
-        opacity: 0,
-      };
+      return { transform: `translateX(${x}px) rotate(${x * 0.05}deg)`, transition: "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease-out", opacity: 0 };
     }
-    if (offsetX !== 0) {
-      return { transform: `translateX(${offsetX}px) rotate(${offsetX * 0.05}deg)`, transition: "none" };
-    }
+    if (offsetX !== 0) return { transform: `translateX(${offsetX}px) rotate(${offsetX * 0.05}deg)`, transition: "none" };
     return { transform: "translateX(0) rotate(0deg)", transition: "transform 0.2s ease-out" };
   };
 
   const passOpacity = Math.min(1, Math.max(0, -offsetX / 120));
   const saveOpacity = Math.min(1, Math.max(0, offsetX / 120));
 
-  // 필터 라벨
-  const filterLabel = filterType !== "all" || filterOrigin !== "all"
-    ? `${filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : ""}${filterOrigin === "kr" ? " 국내" : filterOrigin === "foreign" ? " 해외" : ""}`.trim()
-    : "";
+  const filterLabel = [
+    filterOrigin === "kr" ? "국내" : filterOrigin === "foreign" ? "해외" : "",
+    filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
+  ].filter(Boolean).join(" ");
+
+  // --- Filter chips component (shared) ---
+  const FilterChips = () => (
+    <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
+      {(["all", "movie", "series"] as const).map((t) => (
+        <button
+          key={t}
+          onClick={() => handleFilterChange(t, filterOrigin)}
+          disabled={loading}
+          className="px-3 py-1 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
+          style={{
+            background: filterType === t ? "var(--accent)" : "var(--surface)",
+            color: filterType === t ? "var(--bg)" : "var(--text-secondary)",
+            borderRadius: "var(--radius-full)",
+            border: filterType === t ? "none" : "1px solid var(--border)",
+          }}
+        >
+          {t === "all" ? "전체" : t === "movie" ? "영화" : "시리즈"}
+        </button>
+      ))}
+      <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
+      {(["all", "kr", "foreign"] as const).map((o) => (
+        <button
+          key={o}
+          onClick={() => handleFilterChange(filterType, o)}
+          disabled={loading}
+          className="px-3 py-1 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
+          style={{
+            background: filterOrigin === o ? "var(--accent)" : "var(--surface)",
+            color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)",
+            borderRadius: "var(--radius-full)",
+            border: filterOrigin === o ? "none" : "1px solid var(--border)",
+          }}
+        >
+          {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
+        </button>
+      ))}
+    </div>
+  );
 
   if (!mounted || loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <h2 className="font-display text-2xl" style={{ color: "var(--accent)" }}>Neko</h2>
-        <p style={{ color: "var(--text-secondary)" }}>취향을 분석하고 있어요...</p>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>첫 로딩은 10-20초 걸려요</p>
+      <div className="h-dvh flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 shrink-0">
+          <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
+        </div>
+        <FilterChips />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <h2 className="font-display text-xl" style={{ color: "var(--accent)" }}>
+            {filterLabel ? `${filterLabel} 추천 생성 중...` : "취향을 분석하고 있어요..."}
+          </h2>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>10-20초 걸려요</p>
+        </div>
+        <BottomNav active="discover" />
       </div>
     );
   }
 
-  // 필터 결과가 비어있을 때
-  if (filteredRecs.length === 0 || currentIndex >= filteredRecs.length) {
-    const isFiltered = filterType !== "all" || filterOrigin !== "all";
+  // 추천 결과가 없을 때
+  if (recs.length === 0 || currentIndex >= recs.length) {
+    const hasFilter = filterType !== "all" || filterOrigin !== "all";
     return (
       <div className="h-dvh flex flex-col">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
           <button
             onClick={() => {
-              ["neko_favorites", "neko_saved", "neko_recommendations"].forEach((k) => localStorage.removeItem(k));
+              ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k));
+              clearAllRecommendations();
               router.replace("/onboarding");
             }}
-            className="text-xs transition-colors"
-            style={{ color: "var(--text-muted)" }}
+            className="text-xs" style={{ color: "var(--text-muted)" }}
           >
             재설정
           </button>
         </div>
-
-        {/* Filter chips (visible so user can change filter) */}
-        <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
-          {(["all", "movie", "series"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => { setFilterType(t); setCurrentIndex(0); }}
-              className="px-3 py-1 text-xs whitespace-nowrap transition-colors"
-              style={{
-                background: filterType === t ? "var(--accent)" : "var(--surface)",
-                color: filterType === t ? "var(--bg)" : "var(--text-secondary)",
-                borderRadius: "var(--radius-full)",
-                border: filterType === t ? "none" : "1px solid var(--border)",
-              }}
-            >
-              {t === "all" ? "전체" : t === "movie" ? "영화" : "시리즈"}
-            </button>
-          ))}
-          <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
-          {(["all", "kr", "foreign"] as const).map((o) => (
-            <button
-              key={o}
-              onClick={() => { setFilterOrigin(o); setCurrentIndex(0); }}
-              className="px-3 py-1 text-xs whitespace-nowrap transition-colors"
-              style={{
-                background: filterOrigin === o ? "var(--accent)" : "var(--surface)",
-                color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)",
-                borderRadius: "var(--radius-full)",
-                border: filterOrigin === o ? "none" : "1px solid var(--border)",
-              }}
-            >
-              {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
-            </button>
-          ))}
-        </div>
-
-        {/* Empty state */}
+        <FilterChips />
         <div className="flex-1 flex flex-col items-center justify-center gap-5 px-8">
-          {isFiltered ? (
-            <>
-              <div className="text-4xl" style={{ color: "var(--text-muted)" }}>🔍</div>
-              <div className="text-center">
-                <p className="font-display text-lg">{filterLabel} 작품이 없어요</p>
-                <p className="text-sm mt-2" style={{ color: "var(--text-secondary)" }}>
-                  이번 추천에 {filterLabel} 작품이 포함되지 않았어요.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setFilterType("all"); setFilterOrigin("all"); setCurrentIndex(0); }}
-                  className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}
-                >
-                  필터 초기화
-                </button>
-                <button
-                  onClick={refreshRecommendations}
-                  className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform"
-                  style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
-                >
-                  <IconRefresh size={14} />
-                  새 추천 받기
-                </button>
-              </div>
-            </>
-          ) : (
+          {currentIndex >= recs.length && recs.length > 0 ? (
             <>
               <div className="text-4xl" style={{ color: "var(--text-muted)" }}>✨</div>
               <div className="font-display text-lg">모든 추천을 확인했어요!</div>
@@ -293,13 +269,41 @@ export default function DiscoverPage() {
                 className="px-6 py-3 font-semibold flex items-center gap-2 active:scale-95 transition-transform"
                 style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
               >
-                <IconRefresh size={16} />
-                새로운 추천 받기
+                <IconRefresh size={16} /> 새로운 추천 받기
               </button>
+            </>
+          ) : (
+            <>
+              <div className="text-4xl" style={{ color: "var(--text-muted)" }}>🔍</div>
+              <div className="text-center">
+                <p className="font-display text-lg">
+                  {hasFilter ? `${filterLabel} 추천을 찾지 못했어요` : "추천을 생성하지 못했어요"}
+                </p>
+                <p className="text-sm mt-2" style={{ color: "var(--text-secondary)" }}>
+                  다시 시도하거나 다른 필터를 선택해보세요.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                {hasFilter && (
+                  <button
+                    onClick={() => handleFilterChange("all", "all")}
+                    className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform"
+                    style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}
+                  >
+                    필터 초기화
+                  </button>
+                )}
+                <button
+                  onClick={refreshRecommendations}
+                  className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform"
+                  style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
+                >
+                  <IconRefresh size={14} /> 다시 시도
+                </button>
+              </div>
             </>
           )}
         </div>
-
         <BottomNav active="discover" />
       </div>
     );
@@ -312,55 +316,22 @@ export default function DiscoverPage() {
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         <div className="flex items-center gap-3">
           <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>
-            {currentIndex + 1}/{filteredRecs.length}
+            {currentIndex + 1}/{recs.length}
           </span>
           <button
             onClick={() => {
-              ["neko_favorites", "neko_saved", "neko_recommendations"].forEach((k) => localStorage.removeItem(k));
+              ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k));
+              clearAllRecommendations();
               router.replace("/onboarding");
             }}
-            className="text-xs transition-colors"
-            style={{ color: "var(--text-muted)" }}
+            className="text-xs" style={{ color: "var(--text-muted)" }}
           >
             재설정
           </button>
         </div>
       </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
-        {(["all", "movie", "series"] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => { setFilterType(t); setCurrentIndex(0); }}
-            className="px-3 py-1 text-xs whitespace-nowrap transition-colors"
-            style={{
-              background: filterType === t ? "var(--accent)" : "var(--surface)",
-              color: filterType === t ? "var(--bg)" : "var(--text-secondary)",
-              borderRadius: "var(--radius-full)",
-              border: filterType === t ? "none" : "1px solid var(--border)",
-            }}
-          >
-            {t === "all" ? "전체" : t === "movie" ? "영화" : "시리즈"}
-          </button>
-        ))}
-        <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
-        {(["all", "kr", "foreign"] as const).map((o) => (
-          <button
-            key={o}
-            onClick={() => { setFilterOrigin(o); setCurrentIndex(0); }}
-            className="px-3 py-1 text-xs whitespace-nowrap transition-colors"
-            style={{
-              background: filterOrigin === o ? "var(--accent)" : "var(--surface)",
-              color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)",
-              borderRadius: "var(--radius-full)",
-              border: filterOrigin === o ? "none" : "1px solid var(--border)",
-            }}
-          >
-            {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
-          </button>
-        ))}
-      </div>
+      <FilterChips />
 
       {/* Card area */}
       <div
@@ -376,7 +347,6 @@ export default function DiscoverPage() {
           style={{ ...getCardStyle(), borderRadius: "var(--radius-xl)" }}
           onClick={() => { if (Math.abs(offsetX) < 5) setShowDetail(true); }}
         >
-          {/* Poster */}
           {current.posterUrl ? (
             <img src={current.posterUrl} alt={current.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
           ) : (
@@ -385,143 +355,68 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {/* Rating badge */}
-          <div
-            className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5"
-            style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}
-          >
-            <span className="font-data font-semibold" style={{ color: "var(--accent)" }}>
-              ⭐ {current.rating.toFixed(1)}
-            </span>
+          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}>
+            <span className="font-data font-semibold" style={{ color: "var(--accent)" }}>⭐ {current.rating.toFixed(1)}</span>
             <span className="text-[10px]" style={{ color: "var(--text-muted)" }}>TMDB</span>
           </div>
 
-          {/* Type badge */}
-          <div
-            className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm"
-            style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}
-          >
+          <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-md)" }}>
             {current.type === "series" ? "시리즈" : "영화"}
           </div>
 
-          {/* Bottom info */}
-          <div
-            className="absolute bottom-0 left-0 right-0 p-5 pt-24"
-            style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85) 40%, var(--bg))" }}
-          >
+          <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85) 40%, var(--bg))" }}>
             <h2 className="font-display text-2xl font-bold">{current.title}</h2>
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{current.reason}</p>
             <div className="flex gap-2 mt-3 flex-wrap items-center">
               {current.providers.slice(0, 3).map((p) => (
-                <span
-                  key={p}
-                  className="px-2.5 py-1 text-xs"
-                  style={{ background: "rgba(245,240,235,0.08)", borderRadius: "var(--radius-sm)" }}
-                >
-                  {p}
-                </span>
+                <span key={p} className="px-2.5 py-1 text-xs" style={{ background: "rgba(245,240,235,0.08)", borderRadius: "var(--radius-sm)" }}>{p}</span>
               ))}
               {current.watchLink && (
-                <a
-                  href={current.watchLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-2.5 py-1 text-xs font-medium"
-                  style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-sm)" }}
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <a href={current.watchLink} target="_blank" rel="noopener noreferrer" className="px-2.5 py-1 text-xs font-medium" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-sm)" }} onClick={(e) => e.stopPropagation()}>
                   지금 보기 →
                 </a>
               )}
             </div>
           </div>
 
-          {/* Tap hint on card */}
           {showHint && (
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-50">
-              <div className="text-xs px-3 py-1.5" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-full)" }}>
-                탭하여 상세보기
-              </div>
+              <div className="text-xs px-3 py-1.5" style={{ background: "rgba(12,10,9,0.7)", borderRadius: "var(--radius-full)" }}>탭하여 상세보기</div>
             </div>
           )}
 
-          {/* Swipe overlays */}
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: "rgba(220,74,58,0.25)", opacity: passOpacity }}
-          >
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "rgba(220,74,58,0.25)", opacity: passOpacity }}>
             <IconPass size={80} color="var(--danger)" />
           </div>
-          <div
-            className="absolute inset-0 flex items-center justify-center pointer-events-none"
-            style={{ background: "var(--accent-dim)", opacity: saveOpacity }}
-          >
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ background: "var(--accent-dim)", opacity: saveOpacity }}>
             <IconSave size={80} color="var(--accent)" />
           </div>
         </div>
 
-        {/* Detail overlay */}
         {showDetail && (
-          <div
-            className="absolute inset-0 mx-3 backdrop-blur overflow-y-auto p-5 animate-fade-in z-10"
-            style={{ background: "rgba(12,10,9,0.97)", borderRadius: "var(--radius-xl)", touchAction: "pan-y" }}
-          >
-            <button
-              className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center"
-              style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
-              onClick={() => setShowDetail(false)}
-            >
+          <div className="absolute inset-0 mx-3 backdrop-blur overflow-y-auto p-5 animate-fade-in z-10" style={{ background: "rgba(12,10,9,0.97)", borderRadius: "var(--radius-xl)", touchAction: "pan-y" }}>
+            <button className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={() => setShowDetail(false)}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
             <h2 className="font-display text-2xl font-bold pr-10">{current.title}</h2>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-              {current.titleEn} · {current.date.slice(0, 4)}
-            </p>
-
+            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {current.date.slice(0, 4)}</p>
             <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-                왜 추천했나요?
-              </h3>
-              <div
-                className="pl-3 py-2 text-sm"
-                style={{ background: "var(--accent-dim)", borderLeft: "2px solid var(--accent)" }}
-              >
-                {current.reason}
-              </div>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>왜 추천했나요?</h3>
+              <div className="pl-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderLeft: "2px solid var(--accent)" }}>{current.reason}</div>
             </div>
-
             <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-                줄거리
-              </h3>
-              <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                {current.overview}
-              </p>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
+              <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
             </div>
-
             <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>
-                시청 가능
-              </h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
               <div className="flex gap-2 flex-wrap">
                 {current.providers.map((p) => (
-                  <span
-                    key={p}
-                    className="px-3 py-1.5 text-sm"
-                    style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}
-                  >
-                    {p}
-                  </span>
+                  <span key={p} className="px-3 py-1.5 text-sm" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>{p}</span>
                 ))}
               </div>
               {current.watchLink && (
-                <a
-                  href={current.watchLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium active:scale-95 transition-transform"
-                  style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
-                >
+                <a href={current.watchLink} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
                   지금 보기 →
                 </a>
               )}
@@ -534,44 +429,22 @@ export default function DiscoverPage() {
       <div className="px-4 pb-2 shrink-0">
         {showHint && (
           <div className="flex justify-between text-xs mb-2 px-8" style={{ color: "var(--text-muted)" }}>
-            <span>← Pass</span>
-            <span>탭 = Detail</span>
-            <span>Save →</span>
+            <span>← Pass</span><span>탭 = Detail</span><span>Save →</span>
           </div>
         )}
         <div className="flex gap-3 justify-center items-center">
           {history.length > 0 && (
-            <button
-              onClick={handleUndo}
-              disabled={isAnimating}
-              className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}
-              title="되돌리기"
-            >
+            <button onClick={handleUndo} disabled={isAnimating} className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }} title="되돌리기">
               <IconUndo size={16} color="var(--text-muted)" />
             </button>
           )}
-          <button
-            onClick={() => goNext("left")}
-            disabled={isAnimating}
-            className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}
-          >
+          <button onClick={() => goNext("left")} disabled={isAnimating} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
             <IconPass size={22} color="var(--text-secondary)" />
           </button>
-          <button
-            onClick={() => setShowDetail(!showDetail)}
-            className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}
-          >
+          <button onClick={() => setShowDetail(!showDetail)} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
             <IconInfo size={22} color="var(--text-secondary)" />
           </button>
-          <button
-            onClick={() => goNext("right")}
-            disabled={isAnimating}
-            className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform"
-            style={{ background: "var(--accent-dim)", border: "1px solid rgba(232,123,53,0.3)", borderRadius: "var(--radius-full)" }}
-          >
+          <button onClick={() => goNext("right")} disabled={isAnimating} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--accent-dim)", border: "1px solid rgba(232,123,53,0.3)", borderRadius: "var(--radius-full)" }}>
             <IconSave size={22} color="var(--accent)" />
           </button>
         </div>
