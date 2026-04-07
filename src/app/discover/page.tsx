@@ -36,7 +36,9 @@ export default function DiscoverPage() {
   // 부채꼴 덱 — 맨 앞 카드의 드래그 오프셋
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
-  const [swiping, setSwiping] = useState(false); // exit 애니메이션 중
+  const [swiping, setSwiping] = useState(false);
+  const [pullY, setPullY] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
   const startX = useRef(0);
   const startY = useRef(0);
   const dragging = useRef(false);
@@ -146,28 +148,40 @@ export default function DiscoverPage() {
     const dy = e.touches[0].clientY - startY.current;
     if (!dirLock.current) {
       if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) dirLock.current = "h";
-      else if (Math.abs(dy) > 10) { dirLock.current = "v"; dragging.current = false; return; }
+      else if (Math.abs(dy) > 10) dirLock.current = "v";
       else return;
     }
     if (dirLock.current === "h") {
       e.preventDefault();
       setDragX(dx);
-      setDragY(Math.abs(dx) * -0.15); // 약간 위로 들어올림
+      setDragY(Math.abs(dx) * -0.15);
+    } else if (dirLock.current === "v" && dy > 0 && !refreshing) {
+      // 아래로 당기기 → pull-to-refresh
+      e.preventDefault();
+      setPullY(Math.min(80, dy * 0.5));
     }
-  }, []);
+  }, [refreshing]);
 
   const onTouchEnd = useCallback(() => {
-    if (!dragging.current || dirLock.current !== "h") { dragging.current = false; dirLock.current = null; return; }
-    dragging.current = false; dirLock.current = null;
-    if (dragX < -80) {
-      nextCard();
-    } else if (dragX > 80) {
-      prevCard();
-    } else {
-      // 스냅백
-      setDragX(0); setDragY(0);
+    if (!dragging.current) return;
+    dragging.current = false;
+    const dir = dirLock.current;
+    dirLock.current = null;
+    if (dir === "h") {
+      if (dragX < -80) nextCard();
+      else if (dragX > 80) prevCard();
+      else { setDragX(0); setDragY(0); }
+    } else if (dir === "v") {
+      if (pullY > 50) {
+        setRefreshing(true); setPullY(40);
+        refreshRecommendations().then(() => {
+          setRefreshing(false); setPullY(0); setTopIdx(0);
+        });
+      } else {
+        setPullY(0);
+      }
     }
-  }, [dragX, nextCard, prevCard]);
+  }, [dragX, pullY, nextCard, prevCard]);
 
   // 키보드
   useEffect(() => {
@@ -278,10 +292,17 @@ export default function DiscoverPage() {
       </div>
       <FilterChips />
 
+      {/* Pull-to-refresh indicator */}
+      {pullY > 0 && (
+        <div className="flex justify-center py-1 shrink-0" style={{ opacity: Math.min(1, pullY / 40) }}>
+          <div className={`w-6 h-6 ${refreshing ? "animate-spin" : ""}`} style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)", transform: `rotate(${pullY * 4}deg)` }} />
+        </div>
+      )}
+
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ scrollSnapType: "y mandatory", overscrollBehavior: "none" }}>
 
         {/* Snap 1: 카드 덱 */}
-        <div className="relative px-3 pb-2" style={{ height: "100%", scrollSnapAlign: "start" }}
+        <div className="relative px-3 pb-2" style={{ height: "100%", scrollSnapAlign: "start", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           {deckCards.map((rec, stackIdx) => {
             const isTop = stackIdx === deckCards.length - 1;
