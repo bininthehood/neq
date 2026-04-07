@@ -397,12 +397,23 @@ export default function DiscoverPage() {
       >
         {/* 디테일 (카드 뒤에 깔려있음, 카드가 올라가면 드러남) */}
         {current && slideUp > 0 && (
-          <div className="absolute inset-0 overflow-y-auto px-5 pt-4 pb-8 z-0" style={{ touchAction: slideUp > 80 ? "pan-y" : "none" }}>
+          <div
+            className="absolute inset-0 overflow-y-auto px-5 pt-4 pb-8 z-20"
+            style={{ touchAction: "pan-y", pointerEvents: slideUp > 30 ? "auto" : "none" }}
+            onTouchStart={(e) => { slideStartY.current = e.touches[0].clientY; }}
+            onTouchEnd={(e) => {
+              const dy = e.changedTouches[0].clientY - slideStartY.current;
+              if (dy > 60) closeDetail();
+            }}
+          >
             <div className="flex justify-center mb-3">
               <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
             </div>
+            <button className="absolute top-4 right-5 w-11 h-11 flex items-center justify-center z-30" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
+              <IconClose size={16} color="var(--text-secondary)" />
+            </button>
 
-            <h2 className="font-display text-xl font-bold">{current.title}</h2>
+            <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
             <div className="flex items-center gap-1.5 mt-2">
               <IconStar size={13} color="var(--accent)" />
@@ -447,7 +458,7 @@ export default function DiscoverPage() {
         )}
 
         {/* 카드 캐러셀 (위에 덮여있음, 위로 슬라이드하면 올라감) */}
-        <div className="absolute inset-0 z-10">
+        <div className="absolute inset-0 z-10" style={{ pointerEvents: slideUp > 80 ? "none" : "auto" }}>
         <div className="h-full flex items-stretch px-3">
           {filteredRecs.map((rec, i) => {
             // 연속 위치 계산 (소수점 포함 — 드래그 중 부드러운 보간)
