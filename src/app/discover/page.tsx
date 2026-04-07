@@ -20,33 +20,30 @@ import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 type FilterType = "all" | "movie" | "series";
 type FilterOrigin = "all" | "kr" | "foreign";
-
 const OTT_OPTIONS = ["Netflix", "Disney Plus", "Watcha", "wavve", "Coupang Play", "TVING", "Apple TV Plus"];
 
 export default function DiscoverPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [recs, setRecs] = useState<Recommendation[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [topIdx, setTopIdx] = useState(0); // 덱 맨 위 카드 인덱스
   const [loading, setLoading] = useState(true);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterOTT, setFilterOTT] = useState<string>("all");
 
-  // 캐러셀 (좌우만 JS)
-  const [rotation, setRotation] = useState(0);
-  const [isSnapping, setIsSnapping] = useState(false);
-  const rotationAtDragStart = useRef(0);
-  const rotationRef = useRef(0);
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const touchActive = useRef(false);
-  const touchDir = useRef<"h" | "v" | null>(null);
+  // 부채꼴 덱 — 맨 앞 카드의 드래그 오프셋
+  const [dragX, setDragX] = useState(0);
+  const [dragY, setDragY] = useState(0);
+  const [swiping, setSwiping] = useState(false); // exit 애니메이션 중
+  const startX = useRef(0);
+  const startY = useRef(0);
+  const dragging = useRef(false);
+  const dirLock = useRef<"h" | "v" | null>(null);
 
-  // 스크롤 snap ref
+  // 디테일 scroll-snap
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [isDetailView, setIsDetailView] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -57,7 +54,7 @@ export default function DiscoverPage() {
 
   const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
     const cached = getRecommendations(ft, fo);
-    if (cached.length > 0) { setRecs(cached); setCurrentIndex(0); setLoading(false); return; }
+    if (cached.length > 0) { setRecs(cached); setTopIdx(0); setLoading(false); return; }
     setLoading(true);
     const favorites = getFavorites();
     const filter: any = {};
@@ -69,28 +66,26 @@ export default function DiscoverPage() {
     for (const r of reports) {
       const item = savedItems.find((s) => s.recommendation.tmdbId === r.tmdbId);
       if (!item) continue;
-      const title = item.recommendation.title;
-      if (r.reaction === "loved") feedback.loved.push(title);
-      else if (r.reaction === "good") feedback.good.push(title);
-      else if (r.reaction === "meh") feedback.meh.push(title);
-      else if (r.reaction === "dropped") feedback.dropped.push(title);
+      const t = item.recommendation.title;
+      if (r.reaction === "loved") feedback.loved.push(t);
+      else if (r.reaction === "good") feedback.good.push(t);
+      else if (r.reaction === "meh") feedback.meh.push(t);
+      else if (r.reaction === "dropped") feedback.dropped.push(t);
     }
     const hasFeedback = feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length > 0;
     const res = await fetch("/api/recommend", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}) }),
     });
     const data = await res.json();
-    const newRecs = data.recommendations ?? [];
-    setRecommendations(newRecs, ft, fo);
-    setRecs(newRecs); setCurrentIndex(0); setLoading(false);
+    setRecommendations(data.recommendations ?? [], ft, fo);
+    setRecs(data.recommendations ?? []); setTopIdx(0); setLoading(false);
   };
 
-  const handleFilterChange = (newType: FilterType, newOrigin: FilterOrigin) => {
-    setFilterType(newType); setFilterOrigin(newOrigin); setFilterOTT("all");
-    scrollToCard();
-    loadRecs(newType, newOrigin);
+  const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
+    setFilterType(t); setFilterOrigin(o); setFilterOTT("all");
+    scrollRef.current?.scrollTo({ top: 0 });
+    loadRecs(t, o);
   };
 
   const refreshRecommendations = async () => {
@@ -98,109 +93,99 @@ export default function DiscoverPage() {
     await loadRecs(filterType, filterOrigin);
   };
 
-  const filteredRecs = filterOTT === "all" ? recs : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
-  const cardCount = filteredRecs.length;
-  const anglePerCard = cardCount > 0 ? 360 / cardCount : 0;
-  const totalRotation = rotation;
-  const activeIndex = cardCount > 0 ? ((Math.round(-totalRotation / anglePerCard) % cardCount) + cardCount) % cardCount : 0;
-  const current = filteredRecs[activeIndex];
+  const filtered = filterOTT === "all" ? recs : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
+  const current = filtered[topIdx];
 
-  const goTo = useCallback((direction: "left" | "right") => {
-    if (isSnapping) return;
-    const delta = direction === "right" ? -anglePerCard : anglePerCard;
-    setIsSnapping(true); setRotation((r) => r + delta);
-    setTimeout(() => setIsSnapping(false), 400);
-  }, [anglePerCard, isSnapping]);
+  // 맨 앞 카드를 치우기
+  const dismissCard = useCallback((dirX: number) => {
+    if (swiping || topIdx >= filtered.length - 1) return;
+    setSwiping(true);
+    // exit 방향으로 날리기
+    setDragX(dirX > 0 ? 500 : -500);
+    setDragY(-80);
+    setTimeout(() => {
+      setTopIdx((i) => i + 1);
+      setDragX(0); setDragY(0);
+      setSwiping(false);
+      scrollRef.current?.scrollTo({ top: 0 });
+    }, 280);
+  }, [swiping, topIdx, filtered.length]);
 
-  useEffect(() => { setCurrentIndex(activeIndex); }, [activeIndex]);
-  useEffect(() => { rotationRef.current = rotation; }, [rotation]);
+  // 이전 카드로 (덱 되감기)
+  const undoCard = useCallback(() => {
+    if (swiping || topIdx <= 0) return;
+    setTopIdx((i) => i - 1);
+  }, [swiping, topIdx]);
 
-  // 스크롤 snap → 디테일 상태 감지
-  const onScroll = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    setIsDetailView(el.scrollTop > el.clientHeight * 0.3);
-  }, []);
+  // 터치 — 맨 앞 카드만 드래그
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    if (swiping) return;
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    dragging.current = true;
+    dirLock.current = null;
+  }, [swiping]);
 
-  const scrollToCard = () => { scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" }); };
-  const scrollToDetail = () => { scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" }); };
-
-  // 좌우 터치 (카드 뷰에서만) — 수직은 네이티브 스크롤에 맡김
-  const onCardTouchStart = useCallback((e: React.TouchEvent) => {
-    if (isSnapping) return;
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-    touchActive.current = true;
-    touchDir.current = null;
-    rotationAtDragStart.current = rotation;
-  }, [isSnapping, rotation]);
-
-  const onCardTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!touchActive.current) return;
-    const dx = e.touches[0].clientX - touchStartX.current;
-    const dy = e.touches[0].clientY - touchStartY.current;
-    if (!touchDir.current) {
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) touchDir.current = "h";
-      else if (Math.abs(dy) > 10) { touchDir.current = "v"; touchActive.current = false; return; }
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragging.current) return;
+    const dx = e.touches[0].clientX - startX.current;
+    const dy = e.touches[0].clientY - startY.current;
+    if (!dirLock.current) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) dirLock.current = "h";
+      else if (Math.abs(dy) > 10) { dirLock.current = "v"; dragging.current = false; return; }
       else return;
     }
-    if (touchDir.current === "h") {
-      e.preventDefault(); // 수평 드래그만 가로채기
-      const dragAngle = (dx / window.innerWidth) * anglePerCard * 1.2;
-      setRotation(rotationAtDragStart.current + dragAngle);
+    if (dirLock.current === "h") {
+      e.preventDefault();
+      setDragX(dx);
+      setDragY(Math.abs(dx) * -0.15); // 약간 위로 들어올림
     }
-  }, [anglePerCard]);
+  }, []);
 
-  const onCardTouchEnd = useCallback(() => {
-    if (!touchActive.current || touchDir.current !== "h") { touchActive.current = false; return; }
-    touchActive.current = false; touchDir.current = null;
-    const currentRotation = rotationRef.current;
-    const dragDelta = currentRotation - rotationAtDragStart.current;
-    let snapped: number;
-    if (dragDelta > anglePerCard * 0.15) {
-      snapped = rotationAtDragStart.current + anglePerCard;
-    } else if (dragDelta < -anglePerCard * 0.15) {
-      snapped = rotationAtDragStart.current - anglePerCard;
+  const onTouchEnd = useCallback(() => {
+    if (!dragging.current || dirLock.current !== "h") { dragging.current = false; dirLock.current = null; return; }
+    dragging.current = false; dirLock.current = null;
+    if (Math.abs(dragX) > 80) {
+      dismissCard(dragX);
     } else {
-      snapped = rotationAtDragStart.current;
+      // 스냅백
+      setDragX(0); setDragY(0);
     }
-    setRotation(snapped); setIsSnapping(true);
-    setTimeout(() => setIsSnapping(false), 400);
-  }, [anglePerCard]);
+  }, [dragX, dismissCard]);
 
   // 키보드
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") goTo("left");
-      else if (e.key === "ArrowRight") goTo("right");
-      else if (e.key === "ArrowUp" || e.key === "Enter") scrollToDetail();
-      else if (e.key === "ArrowDown" || e.key === "Escape") scrollToCard();
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") undoCard();
+      else if (e.key === "ArrowRight") dismissCard(1);
+      else if (e.key === "ArrowUp") scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" });
+      else if (e.key === "ArrowDown" || e.key === "Escape") scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [goTo]);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [dismissCard, undoCard]);
 
-  // 이미지 프리로드
-  useEffect(() => { filteredRecs.forEach((r) => { if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; } }); }, [filteredRecs]);
+  // 전체 이미지 프리로드
+  useEffect(() => {
+    filtered.forEach((r) => { if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; } });
+  }, [filtered]);
+
+  const metaInfo = (r: Recommendation) => [
+    r.country?.length > 0 ? r.country.join("/") : null,
+    r.date ? r.date.slice(0, 4) : null,
+    r.runtime ? `${r.runtime}분` : null,
+    r.seasons ? `시즌 ${r.seasons}` : null,
+  ].filter(Boolean).join(" · ");
 
   const filterLabel = [
     filterOrigin === "kr" ? "국내" : filterOrigin === "foreign" ? "해외" : "",
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
-  const metaInfo = (r: Recommendation) => {
-    const parts: string[] = [];
-    if (r.country?.length > 0) parts.push(r.country.join("/"));
-    if (r.date) parts.push(r.date.slice(0, 4));
-    if (r.runtime) parts.push(`${r.runtime}분`);
-    if (r.seasons) parts.push(`시즌 ${r.seasons}`);
-    return parts.join(" · ");
-  };
-
   const FilterChips = () => (
     <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
       {(["all", "movie", "series"] as const).map((t) => (
-        <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setCurrentIndex(0); }} disabled={loading}
+        <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); }} disabled={loading}
           className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
           style={{ background: filterType === t ? "var(--accent)" : "var(--surface)", color: filterType === t ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType === t ? "none" : "1px solid var(--border)" }}>
           {t === "all" ? "전체" : t === "movie" ? "영화" : "시리즈"}
@@ -208,7 +193,7 @@ export default function DiscoverPage() {
       ))}
       <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
       {(["all", "kr", "foreign"] as const).map((o) => (
-        <button key={o} onClick={() => { handleFilterChange(filterType, o); setCurrentIndex(0); }} disabled={loading}
+        <button key={o} onClick={() => { handleFilterChange(filterType, o); }} disabled={loading}
           className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
           style={{ background: filterOrigin === o ? "var(--accent)" : "var(--surface)", color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin === o ? "none" : "1px solid var(--border)" }}>
           {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
@@ -218,7 +203,7 @@ export default function DiscoverPage() {
         <>
           <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
           {["all", ...OTT_OPTIONS.filter((ott) => recs.some((r) => r.providers.some((p) => p.name === ott)))].map((ott) => (
-            <button key={ott} onClick={() => { setFilterOTT(ott); setCurrentIndex(0); }}
+            <button key={ott} onClick={() => { setFilterOTT(ott); setTopIdx(0); }}
               className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5"
               style={{ background: filterOTT === ott ? "var(--accent)" : "var(--surface)", color: filterOTT === ott ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOTT === ott ? "none" : "1px solid var(--border)" }}>
               {ott === "all" ? "모든 OTT" : (<><img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />{ott}</>)}
@@ -229,137 +214,121 @@ export default function DiscoverPage() {
     </div>
   );
 
-  if (!mounted || loading) {
-    return (
-      <div className="h-dvh flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
-        <FilterChips />
-        <div className="flex-1 flex flex-col items-center justify-center gap-5">
-          <div className="w-10 h-10 animate-spin" style={{ border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
-          <div className="text-center">
-            <h2 className="font-display text-lg" style={{ color: "var(--text-primary)" }}>{filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}</h2>
-            <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>잠시만 기다려주세요</p>
-          </div>
+  if (!mounted || loading) return (
+    <div className="h-dvh flex flex-col">
+      <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
+      <FilterChips />
+      <div className="flex-1 flex flex-col items-center justify-center gap-5">
+        <div className="w-10 h-10 animate-spin" style={{ border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
+        <div className="text-center">
+          <h2 className="font-display text-lg">{filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}</h2>
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>잠시만 기다려주세요</p>
         </div>
-        <BottomNav active="discover" />
       </div>
-    );
-  }
+      <BottomNav active="discover" />
+    </div>
+  );
 
-  if (filteredRecs.length === 0) {
-    const hasFilter = filterType !== "all" || filterOrigin !== "all" || filterOTT !== "all";
+  if (filtered.length === 0) {
+    const hasF = filterType !== "all" || filterOrigin !== "all" || filterOTT !== "all";
     return (
       <div className="h-dvh flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button></div>
         <FilterChips />
-        <div className="flex-1 flex flex-col px-8 justify-center">
-          <div className="space-y-5">
-            <IconFilm size={36} color="var(--text-muted)" />
-            <div><p className="font-display text-lg font-semibold">{hasFilter ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p><p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p></div>
-            <div className="flex gap-3">
-              {hasFilter && (<button onClick={() => { handleFilterChange("all", "all"); setFilterOTT("all"); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>)}
-              <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}><IconRefresh size={14} /> 다시 시도</button>
-            </div>
+        <div className="flex-1 flex flex-col px-8 justify-center"><div className="space-y-5">
+          <IconFilm size={36} color="var(--text-muted)" />
+          <div><p className="font-display text-lg font-semibold">{hasF ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p><p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasF ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p></div>
+          <div className="flex gap-3">
+            {hasF && <button onClick={() => { handleFilterChange("all", "all"); setFilterOTT("all"); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>}
+            <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}><IconRefresh size={14} /> 다시 시도</button>
           </div>
-        </div>
+        </div></div>
         <BottomNav active="discover" />
       </div>
     );
   }
 
+  // 카드 덱: topIdx부터 최대 3장 역순 렌더 (뒤→앞)
+  const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();
+
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         <div className="flex items-center gap-3">
-          <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>{currentIndex + 1}/{filteredRecs.length}</span>
+          <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>{topIdx + 1}/{filtered.length}</span>
           <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
       </div>
-
       <FilterChips />
 
-      {/* 스크롤 snap 컨테이너 — 상하는 네이티브 스크롤, 좌우는 JS */}
-      <div
-        ref={scrollRef}
-        className="flex-1 min-h-0 overflow-y-auto snap-y snap-mandatory"
-        style={{ scrollSnapType: "y mandatory", overscrollBehavior: "none" }}
-        onScroll={onScroll}
-      >
-        {/* === Snap 1: 카드 영역 === */}
-        <div
-          className="snap-start relative"
-          style={{ height: "100%", minHeight: "100%", scrollSnapAlign: "start" }}
-          onTouchStart={onCardTouchStart}
-          onTouchMove={onCardTouchMove}
-          onTouchEnd={onCardTouchEnd}
-        >
-          <div className="h-full flex items-stretch px-3 pb-2">
-            {filteredRecs.map((rec, i) => {
-              const continuousIndex = cardCount > 0 ? (-totalRotation / anglePerCard) : 0;
-              const offset = i - continuousIndex;
-              let adj = offset;
-              if (cardCount > 0) { while (adj > cardCount / 2) adj -= cardCount; while (adj < -cardCount / 2) adj += cardCount; }
-              if (Math.abs(adj) > 1.2) return null;
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto" style={{ scrollSnapType: "y mandatory", overscrollBehavior: "none" }}>
 
-              const translateX = adj * 100; // 카드 폭만큼 완전히 밀기
-              const scale = 1 - Math.abs(adj) * 0.08;
-              const rotateY = adj * -5;
-              const z = 10 - Math.abs(Math.round(adj));
-              const op = Math.abs(adj) < 0.01 ? 1 : Math.max(0, 1 - Math.abs(adj) * 0.8); // 비활성 카드는 거의 투명
+        {/* Snap 1: 카드 덱 */}
+        <div className="relative px-3 pb-2" style={{ height: "100%", scrollSnapAlign: "start" }}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+          {deckCards.map((rec, stackIdx) => {
+            const isTop = stackIdx === deckCards.length - 1;
+            const depth = deckCards.length - 1 - stackIdx; // 0=맨앞, 1=그다음, 2=맨뒤
 
-              return (
-                <div key={rec.tmdbId} className="absolute inset-y-0 overflow-hidden will-change-transform" style={{
-                  left: "3%", right: "3%", bottom: "8px",
-                  transform: `translateX(${translateX}%) scale(${scale}) rotateY(${rotateY}deg)`,
-                  transition: isSnapping ? "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease-out" : "none",
-                  borderRadius: "var(--radius-xl)", zIndex: z, opacity: op,
-                  pointerEvents: Math.abs(adj) < 0.5 ? "auto" : "none",
+            // 부채꼴 오프셋: 뒤 카드일수록 작고, 아래로 살짝
+            const scaleVal = 1 - depth * 0.04;
+            const yOffset = depth * 12;
+
+            // 맨 앞 카드만 드래그 적용
+            const tx = isTop ? dragX : 0;
+            const ty = isTop ? dragY + yOffset : yOffset;
+            const rot = isTop ? dragX * 0.06 : 0;
+
+            return (
+              <div key={rec.tmdbId} className="absolute overflow-hidden will-change-transform"
+                style={{
+                  top: 0, bottom: "8px", left: "12px", right: "12px",
+                  transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rot}deg) scale(${scaleVal})`,
+                  transition: isTop && !dragging.current ? "transform 0.3s ease-out" : (isTop ? "none" : "transform 0.3s ease-out"),
+                  borderRadius: "var(--radius-xl)",
+                  zIndex: 10 - depth,
                 }}>
-                  {rec.posterUrl ? (
-                    <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-                      <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                {rec.posterUrl ? (
+                  <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
+                    <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                  </div>
+                )}
+                {isTop && (
+                  <>
+                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                      <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
                     </div>
-                  )}
-                  {Math.abs(adj) < 0.5 && (
-                    <>
-                      <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                        <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
+                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                      {rec.type === "series" ? "시리즈" : "영화"}
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                      <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
+                      {metaInfo(rec) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>}
+                      <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
+                      <div className="flex gap-1.5 mt-3 items-center">
+                        {rec.providers.slice(0, 4).map((p) => (
+                          <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                        ))}
                       </div>
-                      <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                        {rec.type === "series" ? "시리즈" : "영화"}
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
-                        <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
-                        {metaInfo(rec) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>}
-                        <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
-                        <div className="flex gap-1.5 mt-3 items-center">
-                          {rec.providers.slice(0, 4).map((p) => (
-                            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* === Snap 2: 디테일 영역 === */}
+        {/* Snap 2: 디테일 */}
         {current && (
-          <div className="snap-start px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
-            <div className="flex justify-center mb-3">
-              <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
-            </div>
-            <button className="absolute right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={scrollToCard}>
+          <div className="px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
+            <div className="flex justify-center mb-3"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
+            <button className="absolute right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
+              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
-
             <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
             <div className="flex items-center gap-1.5 mt-2">
@@ -370,8 +339,8 @@ export default function DiscoverPage() {
             <div className="mt-4"><div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div></div>
             {(current.director || current.cast?.length > 0) && (
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
-                {current.director && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>)}
-                {current.cast?.length > 0 && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>)}
+                {current.director && <div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>}
+                {current.cast?.length > 0 && <div><span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>}
               </div>
             )}
             {current.overview && (
@@ -384,9 +353,9 @@ export default function DiscoverPage() {
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
               <div className="flex flex-col gap-2">
                 {current.providers.map((p) => {
-                  const ottUrl = getOTTLink(p.name, current.title);
+                  const u = getOTTLink(p.name, current.title);
                   return (
-                    <a key={p.name} href={ottUrl ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>
+                    <a key={p.name} href={u ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>
                       <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
                       <span className="flex-1">{p.name}</span>
                       <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
@@ -399,30 +368,30 @@ export default function DiscoverPage() {
         )}
       </div>
 
-      {/* Bottom actions */}
+      {/* 하단 */}
       <div className="px-4 pb-2 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex gap-1.5 flex-1 mr-3 items-center justify-center">
-            {filteredRecs.map((_, i) => (
-              <div key={i} className="transition-all" style={{ width: i === activeIndex ? 16 : 6, height: 6, background: i === activeIndex ? "var(--accent)" : "var(--border)", borderRadius: "var(--radius-full)" }} />
+            {filtered.map((_, i) => (
+              <div key={i} className="transition-all" style={{ width: i === topIdx ? 16 : 6, height: 6, background: i === topIdx ? "var(--accent)" : i < topIdx ? "var(--text-muted)" : "var(--border)", borderRadius: "var(--radius-full)" }} />
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={scrollToDetail} aria-label="상세보기" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+            <button onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" })} aria-label="상세보기" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
               <IconDetail size={18} color="var(--text-secondary)" />
             </button>
             <button onClick={() => {
+              if (!current) return;
               const id = current.tmdbId;
               if (savedIds.has(id)) { removeSaved(id); setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
               else { addSaved(current); setSavedIds((s) => new Set(s).add(id)); }
-            }} aria-label={savedIds.has(current.tmdbId) ? "저장 취소" : "저장"} className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
-              style={{ background: savedIds.has(current.tmdbId) ? "var(--accent-dim)" : "var(--surface)", border: `1px solid ${savedIds.has(current.tmdbId) ? "var(--accent-border)" : "var(--border)"}`, borderRadius: "var(--radius-full)" }}>
-              <IconSave size={20} color={savedIds.has(current.tmdbId) ? "var(--accent)" : "var(--text-muted)"} filled={savedIds.has(current.tmdbId)} />
+            }} aria-label="저장" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
+              style={{ background: current && savedIds.has(current.tmdbId) ? "var(--accent-dim)" : "var(--surface)", border: `1px solid ${current && savedIds.has(current.tmdbId) ? "var(--accent-border)" : "var(--border)"}`, borderRadius: "var(--radius-full)" }}>
+              <IconSave size={20} color={current && savedIds.has(current.tmdbId) ? "var(--accent)" : "var(--text-muted)"} filled={!!(current && savedIds.has(current.tmdbId))} />
             </button>
           </div>
         </div>
       </div>
-
       <BottomNav active="discover" />
     </div>
   );

@@ -127,6 +127,18 @@ body::after {
   animation: slideDown 0.25s ease-in forwards;
 }
 
+/* Card enter animations */
+@keyframes enterFromLeft {
+  from { transform: translateX(-120%) rotate(-5deg); opacity: 0; }
+  to { transform: translateX(0) rotate(0deg); opacity: 1; }
+}
+@keyframes enterFromRight {
+  from { transform: translateX(120%) rotate(5deg); opacity: 0; }
+  to { transform: translateX(0) rotate(0deg); opacity: 1; }
+}
+.animate-enter-left { animation: enterFromLeft 0.3s ease-out; }
+.animate-enter-right { animation: enterFromRight 0.3s ease-out; }
+
 /* Loading spinner */
 @keyframes spin {
   to { transform: rotate(360deg); }
