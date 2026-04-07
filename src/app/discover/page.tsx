@@ -412,7 +412,7 @@ export default function DiscoverPage() {
             }
             // 드래그 중 보간
             const dragOffset = cardCount > 0 ? dragRotation / anglePerCard : 0;
-            const pos = adjustedOffset - dragOffset;
+            const pos = adjustedOffset + dragOffset;
 
             // 인접 3장만 렌더
             if (Math.abs(pos) > 1.5) return null;
