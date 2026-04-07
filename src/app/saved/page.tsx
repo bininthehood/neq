@@ -11,6 +11,8 @@ import {
 } from "@/lib/store";
 import type { SavedItem, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
+import { IconStar, IconClose, IconCheck, IconHeart } from "@/components/Icons";
+import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string }[] = [
   { key: "loved", label: "인생작", color: "var(--accent)", bg: "var(--accent-dim)" },
@@ -34,6 +36,7 @@ function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
 export default function SavedPage() {
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [selected, setSelected] = useState<SavedItem | null>(null);
+  const [detailItem, setDetailItem] = useState<SavedItem | null>(null);
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
@@ -161,8 +164,9 @@ export default function SavedPage() {
       {/* Tonight pick */}
       {selected && (
         <div
-          className="mx-5 mb-4 p-4 animate-fade-in"
+          className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform"
           style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border-light)", borderRadius: "var(--radius-lg)" }}
+          onClick={() => setDetailItem(selected)}
         >
           <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>
             오늘의 선택
@@ -181,11 +185,9 @@ export default function SavedPage() {
               <div className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
                 {selected.recommendation.reason}
               </div>
-              <div className="flex gap-1.5 mt-2 flex-wrap">
-                {selected.recommendation.providers.slice(0, 2).map((p) => (
-                  <span key={p} className="px-2 py-0.5 text-xs" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-sm)" }}>
-                    {p}
-                  </span>
+              <div className="flex gap-1 mt-2">
+                {selected.recommendation.providers.slice(0, 3).map((p) => (
+                  <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-6 h-6 object-contain" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
                 ))}
               </div>
             </div>
@@ -195,10 +197,10 @@ export default function SavedPage() {
 
       {/* Poster grid */}
       {saved.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-2" style={{ color: "var(--text-muted)" }}>
-          <span className="text-4xl">♡</span>
-          <span>아직 저장한 작품이 없어요</span>
-          <span className="text-sm">Discover에서 오른쪽으로 스와이프하세요</span>
+        <div className="flex-1 flex flex-col justify-center px-8" style={{ color: "var(--text-muted)" }}>
+          <IconHeart size={32} />
+          <p className="mt-4 font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>아직 저장한 작품이 없어요</p>
+          <p className="text-sm mt-1.5">Discover에서 오른쪽으로 스와이프하면 여기에 모여요</p>
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 px-5 pb-4 flex-1 auto-rows-min">
@@ -210,28 +212,17 @@ export default function SavedPage() {
             return (
               <div
                 key={tmdbId}
-                className="relative group"
+                className="relative group cursor-pointer"
                 style={{ height: i % 3 === 0 ? "240px" : "200px" }}
+                onClick={() => setDetailItem(item)}
               >
                 {/* Poster */}
-                {item.recommendation.watchLink ? (
-                  <a href={item.recommendation.watchLink} target="_blank" rel="noopener noreferrer" className="block w-full h-full">
-                    {item.recommendation.posterUrl ? (
-                      <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
-                        {item.recommendation.title}
-                      </div>
-                    )}
-                  </a>
+                {item.recommendation.posterUrl ? (
+                  <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
                 ) : (
-                  item.recommendation.posterUrl ? (
-                    <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
-                      {item.recommendation.title}
-                    </div>
-                  )
+                  <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
+                    {item.recommendation.title}
+                  </div>
                 )}
 
                 {/* Watched overlay — 시청 완료 시 반투명 오버레이 */}
@@ -257,11 +248,11 @@ export default function SavedPage() {
                 >
                   <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
                   <div className="flex items-center gap-2">
-                    <span className="font-data text-[11px]" style={{ color: "var(--text-muted)" }}>⭐ {item.recommendation.rating.toFixed(1)}</span>
+                    <span className="font-data text-[11px] flex items-center gap-0.5" style={{ color: "var(--text-muted)" }}><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
                     {report && <ReactionLabel reaction={report} />}
-                    {!report && item.recommendation.watchLink && (
-                      <span className="text-[11px]" style={{ color: "var(--accent)" }}>지금 보기 →</span>
-                    )}
+                    {!report && item.recommendation.providers.slice(0, 2).map((p) => (
+                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />
+                    ))}
                   </div>
                 </div>
 
@@ -294,7 +285,7 @@ export default function SavedPage() {
                     }}
                     title="리포트 취소"
                   >
-                    ✓ 시청
+                    <IconCheck size={11} /> 시청
                   </button>
                 )}
 
@@ -341,11 +332,123 @@ export default function SavedPage() {
                   className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
                 >
-                  ✕
+                  <IconClose size={12} />
                 </button>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Detail overlay */}
+      {detailItem && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          onClick={() => setDetailItem(null)}
+        >
+          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)" }} />
+          <div
+            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8 animate-fade-in"
+            style={{ background: "var(--bg)", borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", touchAction: "pan-y" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle bar */}
+            <div className="flex justify-center mb-4">
+              <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
+            </div>
+
+            <button
+              className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center"
+              style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
+              onClick={() => setDetailItem(null)}
+            >
+              <IconClose size={16} color="var(--text-secondary)" />
+            </button>
+
+            {/* Poster + Title */}
+            <div className="flex gap-4">
+              {detailItem.recommendation.posterUrl && (
+                <img
+                  src={detailItem.recommendation.posterUrl}
+                  alt={detailItem.recommendation.title}
+                  className="w-24 h-36 object-cover flex-shrink-0"
+                  style={{ borderRadius: "var(--radius-md)" }}
+                />
+              )}
+              <div className="flex-1 min-w-0 pt-1">
+                <h2 className="font-display text-xl font-bold">{detailItem.recommendation.title}</h2>
+                <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {detailItem.recommendation.titleEn} · {detailItem.recommendation.date.slice(0, 4)}
+                </p>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <IconStar size={13} color="var(--accent)" />
+                  <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{detailItem.recommendation.rating.toFixed(1)}</span>
+                </div>
+                {reports[detailItem.recommendation.tmdbId] && (
+                  <div className="mt-2">
+                    <ReactionLabel reaction={reports[detailItem.recommendation.tmdbId]} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Reason */}
+            <div className="mt-5">
+              <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>
+                {detailItem.recommendation.reason}
+              </div>
+            </div>
+
+            {/* Credits */}
+            {(detailItem.recommendation.director || detailItem.recommendation.cast?.length > 0) && (
+              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
+                {detailItem.recommendation.director && (
+                  <div>
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span>
+                    <span className="text-sm">{detailItem.recommendation.director}</span>
+                  </div>
+                )}
+                {detailItem.recommendation.cast?.length > 0 && (
+                  <div>
+                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span>
+                    <span className="text-sm">{detailItem.recommendation.cast.join(", ")}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Overview */}
+            {detailItem.recommendation.overview && (
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{detailItem.recommendation.overview}</p>
+              </div>
+            )}
+
+            {/* OTT links */}
+            <div className="mt-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
+              <div className="flex flex-col gap-2">
+                {detailItem.recommendation.providers.map((p) => {
+                  const ottUrl = getOTTLink(p.name, detailItem.recommendation.title);
+                  return (
+                    <a
+                      key={p.name}
+                      href={ottUrl ?? detailItem.recommendation.watchLink ?? "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform"
+                      style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}
+                    >
+                      <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
+                      <span className="flex-1">{p.name}</span>
+                      <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

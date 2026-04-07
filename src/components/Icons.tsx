@@ -65,3 +65,51 @@ export function IconClose({ size = 20, color = "currentColor", className }: Icon
     </svg>
   );
 }
+
+export function IconCheck({ size = 16, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+export function IconStar({ size = 14, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
+  );
+}
+
+export function IconDiscover({ size = 20, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill={color} stroke="none" />
+    </svg>
+  );
+}
+
+export function IconHeart({ size = 20, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    </svg>
+  );
+}
+
+export function IconFilm({ size = 40, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+      <line x1="7" y1="2" x2="7" y2="22" />
+      <line x1="17" y1="2" x2="17" y2="22" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <line x1="2" y1="7" x2="7" y2="7" />
+      <line x1="2" y1="17" x2="7" y2="17" />
+      <line x1="17" y1="7" x2="22" y2="7" />
+      <line x1="17" y1="17" x2="22" y2="17" />
+    </svg>
+  );
+}

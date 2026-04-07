@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { setFavorites } from "@/lib/store";
+import { IconClose, IconCheck } from "@/components/Icons";
 
 interface SearchResult {
   id: number;
@@ -114,8 +115,8 @@ export default function OnboardingPage() {
                   {item.title.slice(0, 4)}
                 </div>
               )}
-              <div className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center text-xs" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
-                ✕
+              <div className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
+                <IconClose size={12} color="var(--text-primary)" />
               </div>
             </button>
           ))}
@@ -157,10 +158,10 @@ export default function OnboardingPage() {
                 {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
               </button>
             </div>
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-4 gap-2">
               {suggestions.map((item, i) => {
                 const isSelected = selected.some((s) => s.id === item.id);
-                const tall = i % 5 === 0 || i % 5 === 3;
+                const tall = i % 4 === 0 || i % 4 === 3;
                 return (
                   <button
                     key={item.id}
@@ -186,10 +187,10 @@ export default function OnboardingPage() {
                     </div>
                     {isSelected && (
                       <div
-                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-xs font-bold"
-                        style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
+                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center"
+                        style={{ background: "var(--accent)", borderRadius: "var(--radius-full)" }}
                       >
-                        ✓
+                        <IconCheck size={12} color="var(--bg)" />
                       </div>
                     )}
                   </button>
@@ -223,7 +224,9 @@ export default function OnboardingPage() {
                 <div className="text-sm" style={{ color: "var(--text-muted)" }}>{item.year}</div>
               </div>
               {isSelected && (
-                <div className="text-lg flex-shrink-0" style={{ color: "var(--accent)" }}>✓</div>
+                <div className="flex-shrink-0" style={{ color: "var(--accent)" }}>
+                  <IconCheck size={18} />
+                </div>
               )}
             </button>
           );

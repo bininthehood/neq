@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { IconDiscover, IconHeart } from "./Icons";
 
 interface Props {
   active: "discover" | "saved";
@@ -14,18 +15,18 @@ export default function BottomNav({ active }: Props) {
     >
       <Link
         href="/discover"
-        className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors"
+        className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors active:scale-95"
         style={{ color: active === "discover" ? "var(--accent)" : "var(--text-muted)" }}
       >
-        <span className="text-lg">◆</span>
+        <IconDiscover size={20} />
         <span>Discover</span>
       </Link>
       <Link
         href="/saved"
-        className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors"
+        className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors active:scale-95"
         style={{ color: active === "saved" ? "var(--accent)" : "var(--text-muted)" }}
       >
-        <span className="text-lg">♡</span>
+        <IconHeart size={20} />
         <span>Saved</span>
       </Link>
     </nav>
