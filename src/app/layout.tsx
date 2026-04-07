@@ -43,6 +43,12 @@ export default function RootLayout({
       lang="ko"
       className={`${fraunces.variable} ${outfit.variable} h-full antialiased`}
     >
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+        />
+      </head>
       <body className="h-full">
         <div className="h-dvh flex flex-col">{children}</div>
       </body>
