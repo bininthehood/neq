@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { searchTMDB, getKoreanProviders, posterUrl } from "./tmdb";
+import { searchTMDB, getKoreanProviders, getCredits, posterUrl } from "./tmdb";
 import type { Recommendation } from "./types";
 
 const openai = new OpenAI();
@@ -108,7 +108,10 @@ ${feedbackPrompt}
     if (!tmdb) tmdb = await searchTMDB(rec.title_en, rec.type);
     if (!tmdb) continue;
 
-    const { providers, watchLink } = await getKoreanProviders(tmdb.id, rec.type);
+    const [{ providers, watchLink }, credits] = await Promise.all([
+      getKoreanProviders(tmdb.id, rec.type),
+      getCredits(tmdb.id, rec.type),
+    ]);
     if (providers.length === 0) continue;
 
     const originCountry = (tmdb as any).origin_country ?? [];
@@ -129,6 +132,8 @@ ${feedbackPrompt}
       overview: tmdb.overview ?? "",
       providers,
       watchLink,
+      director: credits.director,
+      cast: credits.cast,
       originCountry,
     });
 

@@ -46,7 +46,7 @@ export interface ProviderInfo {
 export async function getKoreanProviders(
   id: number,
   type: "movie" | "series"
-): Promise<{ providers: string[]; watchLink: string | null }> {
+): Promise<{ providers: { name: string; logoUrl: string | null }[]; watchLink: string | null }> {
   const mediaType = type === "series" ? "tv" : "movie";
   const res = await fetch(
     `${BASE}/${mediaType}/${id}/watch/providers?api_key=${API_KEY}`
@@ -55,15 +55,44 @@ export async function getKoreanProviders(
   const kr = data.results?.KR;
   if (!kr) return { providers: [], watchLink: null };
 
-  const providers: Array<{ provider_name: string }> = [
+  const raw: Array<{ provider_name: string; logo_path: string | null }> = [
     ...(kr.flatrate ?? []),
     ...(kr.rent ?? []),
     ...(kr.buy ?? []),
   ];
-  return {
-    providers: [...new Set(providers.map((p) => p.provider_name))],
-    watchLink: kr.link ?? null,
-  };
+  const seen = new Set<string>();
+  const providers: { name: string; logoUrl: string | null }[] = [];
+  for (const p of raw) {
+    if (seen.has(p.provider_name)) continue;
+    seen.add(p.provider_name);
+    providers.push({
+      name: p.provider_name,
+      logoUrl: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
+    });
+  }
+  return { providers, watchLink: kr.link ?? null };
+}
+
+export async function getCredits(
+  id: number,
+  type: "movie" | "series"
+): Promise<{ director: string | null; cast: string[] }> {
+  const mediaType = type === "series" ? "tv" : "movie";
+  const res = await fetch(
+    `${BASE}/${mediaType}/${id}/credits?api_key=${API_KEY}&language=ko-KR`
+  );
+  const data = await res.json();
+
+  const director =
+    (data.crew ?? []).find((c: any) => c.job === "Director")?.name ??
+    (data.crew ?? []).find((c: any) => c.department === "Directing")?.name ??
+    null;
+
+  const cast = (data.cast ?? [])
+    .slice(0, 4)
+    .map((c: any) => c.name as string);
+
+  return { director, cast };
 }
 
 export function posterUrl(path: string | null, size = "w500"): string | null {

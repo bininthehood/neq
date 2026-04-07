@@ -19,8 +19,10 @@ export interface Recommendation {
   rating: number;
   date: string;
   overview: string;
-  providers: string[];
+  providers: { name: string; logoUrl: string | null }[];
   watchLink: string | null;
+  director: string | null;
+  cast: string[];
   originCountry?: string[];
 }
 
