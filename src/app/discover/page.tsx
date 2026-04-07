@@ -30,9 +30,8 @@ export default function DiscoverPage() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailY, setDetailY] = useState(100);
-  const [detailAnimating, setDetailAnimating] = useState(false);
+  const [slideUp, setSlideUp] = useState(0); // 0=카드만, 100=디테일 완전 노출 (%)
+  const [slideSnapping, setSlideSnapping] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
   const [filterType, setFilterType] = useState<FilterType>("all");
@@ -50,8 +49,7 @@ export default function DiscoverPage() {
   const startY = useRef(0);
   const isDragging = useRef(false);
   const directionLocked = useRef<"horizontal" | "vertical" | null>(null);
-  const detailStartY = useRef(0);
-  const detailDragging = useRef(false);
+  const slideStartY = useRef(0);
 
   useEffect(() => {
     setMounted(true);
@@ -108,7 +106,7 @@ export default function DiscoverPage() {
   const handleFilterChange = (newType: FilterType, newOrigin: FilterOrigin) => {
     setFilterType(newType);
     setFilterOrigin(newOrigin);
-    setDetailOpen(false);
+    setSlideUp(0);
     setFilterOTT("all");
     loadRecs(newType, newOrigin);
   };
@@ -153,14 +151,14 @@ export default function DiscoverPage() {
   // 카드 터치 핸들러
   const onTouchStart = useCallback(
     (e: React.TouchEvent) => {
-      if (detailOpen || isSnapping) return;
+      if (slideUp > 50 || isSnapping) return;
       startX.current = e.touches[0].clientX;
       startY.current = e.touches[0].clientY;
       isDragging.current = true;
       directionLocked.current = null;
       rotationAtDragStart.current = rotation;
     },
-    [detailOpen, isSnapping, rotation]
+    [slideUp, isSnapping, rotation]
   );
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -179,16 +177,21 @@ export default function DiscoverPage() {
       setRotation(rotationAtDragStart.current + dragAngle);
     } else if (directionLocked.current === "vertical") {
       if (dy < 0) {
+        // 위로 스와이프 → 카드 자체를 위로 밀어올림
         e.preventDefault();
-        const progress = Math.min(100, Math.max(0, 100 + (dy / window.innerHeight) * 120));
-        setDetailY(progress);
-        if (!detailOpen) setDetailOpen(true);
+        const pct = Math.min(100, Math.max(0, (-dy / window.innerHeight) * 150));
+        setSlideUp(pct);
+      } else if (dy > 0 && slideUp > 0) {
+        // 디테일 상태에서 아래로 → 카드 복귀
+        e.preventDefault();
+        const pct = Math.max(0, slideUp - (dy / window.innerHeight) * 150);
+        setSlideUp(pct);
       } else if (dy > 0 && !refreshing) {
         e.preventDefault();
         setPullY(Math.min(80, dy * 0.5));
       }
     }
-  }, [anglePerCard, detailOpen, refreshing]);
+  }, [anglePerCard, slideUp, refreshing]);
 
   const onTouchEnd = useCallback(() => {
     if (!isDragging.current) return;
@@ -212,40 +215,23 @@ export default function DiscoverPage() {
       setIsSnapping(true);
       setTimeout(() => setIsSnapping(false), 400);
     } else if (dir === "vertical") {
-      if (detailOpen && detailY < 70) snapDetail(0);
-      else if (detailOpen) snapDetail(100);
+      // 30% 이상 밀었으면 디테일 열기, 아니면 닫기
+      if (slideUp > 30) snapSlide(100);
+      else snapSlide(0);
       if (pullY > 50) {
         setRefreshing(true); setPullY(40);
         refreshRecommendations().then(() => { setRefreshing(false); setPullY(0); });
       } else { setPullY(0); }
     }
-  }, [rotation, anglePerCard, detailY, pullY, detailOpen]);
+  }, [rotation, anglePerCard, slideUp, pullY]);
 
-  // Detail 드래그
-  const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
-    detailStartY.current = e.touches[0].clientY;
-    detailDragging.current = true;
+  const snapSlide = useCallback((target: number) => {
+    setSlideSnapping(true);
+    setSlideUp(target);
+    setTimeout(() => setSlideSnapping(false), 350);
   }, []);
-  const onDetailTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!detailDragging.current) return;
-    const dy = e.touches[0].clientY - detailStartY.current;
-    if (dy > 0) { e.preventDefault(); setDetailY(Math.min(100, (dy / window.innerHeight) * 120)); }
-  }, []);
-  const onDetailTouchEnd = useCallback(() => {
-    detailDragging.current = false;
-    if (detailY > 30) snapDetail(100); else snapDetail(0);
-  }, [detailY]);
-
-  const snapDetail = useCallback((target: number) => {
-    setDetailAnimating(true);
-    setDetailY(target);
-    setTimeout(() => { setDetailAnimating(false); if (target === 100) setDetailOpen(false); }, 300);
-  }, []);
-  const openDetail = useCallback(() => {
-    setDetailOpen(true); setDetailY(100);
-    requestAnimationFrame(() => snapDetail(0));
-  }, [snapDetail]);
-  const closeDetail = useCallback(() => { snapDetail(100); }, [snapDetail]);
+  const openDetail = useCallback(() => snapSlide(100), [snapSlide]);
+  const closeDetail = useCallback(() => snapSlide(0), [snapSlide]);
 
   // 키보드
   useEffect(() => {
@@ -260,8 +246,8 @@ export default function DiscoverPage() {
   }, [goTo, openDetail, closeDetail]);
 
   useEffect(() => {
-    if (detailOpen) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
-  }, [detailOpen]);
+    if (slideUp > 50) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
+  }, [slideUp]);
 
   // 전체 이미지 프리로드
   useEffect(() => {
@@ -401,14 +387,24 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* 평면 peek 캐러셀 */}
+      {/* 카드 + 디테일 슬라이드 영역 */}
       <div
         className="flex-1 min-h-0 relative overflow-hidden"
-        style={{ touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
+        style={{ touchAction: "none", overscrollBehavior: "none" }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
+        <div
+          className="will-change-transform"
+          style={{
+            height: "200%",
+            transform: `translateY(${pullY > 0 ? pullY * 0.3 : -slideUp * 0.5}px)`,
+            transition: slideSnapping ? "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)" : (pullY === 0 ? "none" : "transform 0.2s ease-out"),
+          }}
+        >
+        {/* 카드 캐러셀 (상반부) */}
+        <div className="relative" style={{ height: "50%" }}>
         <div className="h-full flex items-stretch px-3">
           {filteredRecs.map((rec, i) => {
             // 연속 위치 계산 (소수점 포함 — 드래그 중 부드러운 보간)
@@ -482,77 +478,65 @@ export default function DiscoverPage() {
             );
           })}
         </div>
-      </div>
+        </div>
 
-      {/* Detail bottom sheet */}
-      {detailOpen && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={closeDetail} style={{ pointerEvents: detailY > 95 ? "none" : "auto" }}>
-          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
-          <div
-            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8"
-            style={{ background: "var(--bg)", borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", transform: `translateY(${detailY}%)`, transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none", touchAction: "pan-y" }}
-            onClick={(e) => e.stopPropagation()} onTouchStart={onDetailTouchStart} onTouchMove={onDetailTouchMove} onTouchEnd={onDetailTouchEnd}
-          >
-            <div className="flex justify-center mb-4">
-              <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
-            </div>
-            <button className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
-              <IconClose size={16} color="var(--text-secondary)" />
-            </button>
+        {/* 디테일 (카드 바로 아래, 카드와 함께 슬라이드) */}
+        <div className="px-5 pt-4 pb-8 overflow-y-auto" style={{ height: "50%", touchAction: slideUp > 80 ? "pan-y" : "none" }}>
+          {current && (
+            <>
+              <div className="flex justify-center mb-3">
+                <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
+              </div>
+              <button className="absolute top-2 right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
+                <IconClose size={16} color="var(--text-secondary)" />
+              </button>
 
-            {/* 스틸컷 */}
-            {current.backdrop && (
-              <img src={current.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1" style={{ borderRadius: "var(--radius-md)" }} />
-            )}
+              <h2 className="font-display text-xl font-bold">{current.title}</h2>
+              <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <IconStar size={13} color="var(--accent)" />
+                <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
+              </div>
 
-            <div className={current.backdrop ? "" : "flex gap-4"}>
-              {!current.backdrop && current.posterUrl && (
-                <img src={current.posterUrl} alt={current.title} className="w-24 h-36 object-cover flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
+              {current.backdrop && (
+                <img src={current.backdrop} alt="" className="w-full h-40 object-cover mt-4" style={{ borderRadius: "var(--radius-md)" }} />
               )}
-              <div className="flex-1 min-w-0 pt-1">
-                <h2 className="font-display text-xl font-bold">{current.title}</h2>
-                <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn}</p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(current)}</p>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <IconStar size={13} color="var(--accent)" />
-                  <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
+
+              <div className="mt-4">
+                <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div>
+              </div>
+              {(current.director || current.cast?.length > 0) && (
+                <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
+                  {current.director && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>)}
+                  {current.cast?.length > 0 && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>)}
+                </div>
+              )}
+              {current.overview && (
+                <div className="mt-4">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
+                </div>
+              )}
+              <div className="mt-5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
+                <div className="flex flex-col gap-2">
+                  {current.providers.map((p) => {
+                    const ottUrl = getOTTLink(p.name, current.title);
+                    return (
+                      <a key={p.name} href={ottUrl ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>
+                        <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
+                        <span className="flex-1">{p.name}</span>
+                        <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
-
-            <div className="mt-5">
-              <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div>
-            </div>
-            {(current.director || current.cast?.length > 0) && (
-              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
-                {current.director && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>)}
-                {current.cast?.length > 0 && (<div><span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>)}
-              </div>
-            )}
-            {current.overview && (
-              <div className="mt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
-              </div>
-            )}
-            <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
-              <div className="flex flex-col gap-2">
-                {current.providers.map((p) => {
-                  const ottUrl = getOTTLink(p.name, current.title);
-                  return (
-                    <a key={p.name} href={ottUrl ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>
-                      <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
-                      <span className="flex-1">{p.name}</span>
-                      <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
-      )}
+        </div>
+      </div>
 
       {/* Bottom actions */}
       <div className="px-4 pb-2 shrink-0">
