@@ -15,11 +15,14 @@ import {
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
-import { IconSave, IconClose, IconRefresh, IconStar, IconFilm } from "@/components/Icons";
+import { IconSave, IconClose, IconRefresh, IconStar, IconFilm, IconDetail } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 type FilterType = "all" | "movie" | "series";
 type FilterOrigin = "all" | "kr" | "foreign";
+
+// 한국 주요 OTT 목록 (필터용)
+const OTT_OPTIONS = ["Netflix", "Disney Plus", "Watcha", "wavve", "Coupang Play", "TVING", "Apple TV Plus"];
 
 export default function DiscoverPage() {
   const router = useRouter();
@@ -28,14 +31,17 @@ export default function DiscoverPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [detailOpen, setDetailOpen] = useState(false);
-  const [detailY, setDetailY] = useState(100); // 0=fully open, 100=fully closed (%)
+  const [detailY, setDetailY] = useState(100);
   const [detailAnimating, setDetailAnimating] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
+  const [filterOTT, setFilterOTT] = useState<string>("all");
 
   const [offsetX, setOffsetX] = useState(0);
+  const [pullY, setPullY] = useState(0); // pull-to-refresh offset
+  const [refreshing, setRefreshing] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [slideDir, setSlideDir] = useState<"left" | "right" | null>(null);
 
@@ -43,8 +49,6 @@ export default function DiscoverPage() {
   const startY = useRef(0);
   const isDragging = useRef(false);
   const directionLocked = useRef<"horizontal" | "vertical" | null>(null);
-
-  // Detail 드래그 refs
   const detailStartY = useRef(0);
   const detailDragging = useRef(false);
 
@@ -75,14 +79,17 @@ export default function DiscoverPage() {
 
     const reports = getWatchReports();
     const savedItems = getSaved();
-    const feedback: { loved: string[]; dropped: string[] } = { loved: [], dropped: [] };
+    const feedback: { loved: string[]; good: string[]; meh: string[]; dropped: string[] } = { loved: [], good: [], meh: [], dropped: [] };
     for (const r of reports) {
       const item = savedItems.find((s) => s.recommendation.tmdbId === r.tmdbId);
       if (!item) continue;
-      if (r.reaction === "loved") feedback.loved.push(item.recommendation.title);
-      else if (r.reaction === "dropped") feedback.dropped.push(item.recommendation.title);
+      const title = item.recommendation.title;
+      if (r.reaction === "loved") feedback.loved.push(title);
+      else if (r.reaction === "good") feedback.good.push(title);
+      else if (r.reaction === "meh") feedback.meh.push(title);
+      else if (r.reaction === "dropped") feedback.dropped.push(title);
     }
-    const hasFeedback = feedback.loved.length > 0 || feedback.dropped.length > 0;
+    const hasFeedback = feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length > 0;
 
     const res = await fetch("/api/recommend", {
       method: "POST",
@@ -101,26 +108,31 @@ export default function DiscoverPage() {
     setFilterType(newType);
     setFilterOrigin(newOrigin);
     setDetailOpen(false);
+    setFilterOTT("all");
     loadRecs(newType, newOrigin);
   };
 
-  const refreshRecommendations = () => {
+  const refreshRecommendations = async () => {
     setRecommendations([], filterType, filterOrigin);
-    loadRecs(filterType, filterOrigin);
+    await loadRecs(filterType, filterOrigin);
   };
 
-  const current = recs[currentIndex];
+  // OTT 필터 적용 (클라이언트 측 — 이미 로드된 추천에서 필터링)
+  const filteredRecs = filterOTT === "all"
+    ? recs
+    : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
 
-  // 좌우 캐러셀 네비게이션
+  const current = filteredRecs[currentIndex];
+
+  // 좌우 캐러셀
   const goTo = useCallback(
     (direction: "left" | "right") => {
       if (isAnimating) return;
       const nextIdx = direction === "right" ? currentIndex + 1 : currentIndex - 1;
-      if (nextIdx < 0 || nextIdx > recs.length) return; // recs.length = 끝 화면 허용
+      if (nextIdx < 0 || nextIdx > filteredRecs.length) return;
 
       setIsAnimating(true);
       setSlideDir(direction);
-
       setTimeout(() => {
         setCurrentIndex(nextIdx);
         setOffsetX(0);
@@ -129,7 +141,7 @@ export default function DiscoverPage() {
         setDetailOpen(false);
       }, 250);
     },
-    [currentIndex, recs.length, isAnimating]
+    [currentIndex, filteredRecs.length, isAnimating]
   );
 
   // 카드 터치 핸들러
@@ -155,19 +167,25 @@ export default function DiscoverPage() {
     }
     if (directionLocked.current === "horizontal") {
       e.preventDefault();
-      if ((currentIndex === 0 && dx > 0) || (currentIndex >= recs.length && dx < 0)) {
+      if ((currentIndex === 0 && dx > 0) || (currentIndex >= filteredRecs.length && dx < 0)) {
         setOffsetX(dx * 0.3);
       } else {
         setOffsetX(dx);
       }
-    } else if (directionLocked.current === "vertical" && dy < 0) {
-      // 위로 스와이프 → Detail을 손가락 따라 밀어올림
-      e.preventDefault();
-      const progress = Math.min(100, Math.max(0, 100 + (dy / window.innerHeight) * 120));
-      setDetailY(progress);
-      if (!detailOpen) setDetailOpen(true);
+    } else if (directionLocked.current === "vertical") {
+      if (dy < 0) {
+        // 위로 스와이프 → Detail
+        e.preventDefault();
+        const progress = Math.min(100, Math.max(0, 100 + (dy / window.innerHeight) * 120));
+        setDetailY(progress);
+        if (!detailOpen) setDetailOpen(true);
+      } else if (dy > 0 && !refreshing) {
+        // 아래로 끌어당기기 → Pull-to-refresh
+        e.preventDefault();
+        setPullY(Math.min(80, dy * 0.5));
+      }
     }
-  }, [currentIndex, recs.length, detailOpen]);
+  }, [currentIndex, filteredRecs.length, detailOpen, refreshing]);
 
   const onTouchEnd = useCallback(() => {
     if (!isDragging.current) return;
@@ -179,62 +197,52 @@ export default function DiscoverPage() {
       else if (offsetX > 60) goTo("left");
       else setOffsetX(0);
     } else if (dir === "vertical") {
-      // 30% 이상 열렸으면 완전히 열기, 아니면 닫기
-      if (detailY < 70) {
+      if (detailOpen && detailY < 70) {
         snapDetail(0);
-      } else {
+      } else if (detailOpen) {
         snapDetail(100);
       }
+      // Pull-to-refresh 트리거
+      if (pullY > 50) {
+        setRefreshing(true);
+        setPullY(40);
+        refreshRecommendations().then(() => {
+          setRefreshing(false);
+          setPullY(0);
+        });
+      } else {
+        setPullY(0);
+      }
     }
-  }, [offsetX, detailY, goTo]);
+  }, [offsetX, detailY, pullY, detailOpen, goTo]);
 
-  // Detail 내부 드래그 (아래로 밀어서 닫기)
+  // Detail 드래그
   const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
     detailStartY.current = e.touches[0].clientY;
     detailDragging.current = true;
   }, []);
-
   const onDetailTouchMove = useCallback((e: React.TouchEvent) => {
     if (!detailDragging.current) return;
     const dy = e.touches[0].clientY - detailStartY.current;
-    if (dy > 0) {
-      // 아래로 드래그 — 닫기 방향
-      e.preventDefault();
-      const progress = Math.min(100, (dy / window.innerHeight) * 120);
-      setDetailY(progress);
-    }
+    if (dy > 0) { e.preventDefault(); setDetailY(Math.min(100, (dy / window.innerHeight) * 120)); }
   }, []);
-
   const onDetailTouchEnd = useCallback(() => {
     detailDragging.current = false;
-    if (detailY > 30) {
-      snapDetail(100);
-    } else {
-      snapDetail(0);
-    }
+    if (detailY > 30) snapDetail(100); else snapDetail(0);
   }, [detailY]);
 
-  // Detail 스냅 애니메이션
   const snapDetail = useCallback((target: number) => {
     setDetailAnimating(true);
     setDetailY(target);
-    setTimeout(() => {
-      setDetailAnimating(false);
-      if (target === 100) setDetailOpen(false);
-    }, 300);
+    setTimeout(() => { setDetailAnimating(false); if (target === 100) setDetailOpen(false); }, 300);
   }, []);
-
   const openDetail = useCallback(() => {
-    setDetailOpen(true);
-    setDetailY(100);
+    setDetailOpen(true); setDetailY(100);
     requestAnimationFrame(() => snapDetail(0));
   }, [snapDetail]);
+  const closeDetail = useCallback(() => { snapDetail(100); }, [snapDetail]);
 
-  const closeDetail = useCallback(() => {
-    snapDetail(100);
-  }, [snapDetail]);
-
-  // 키보드 네비게이션
+  // 키보드
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") goTo("left");
@@ -246,12 +254,8 @@ export default function DiscoverPage() {
     return () => window.removeEventListener("keydown", handler);
   }, [goTo, openDetail, closeDetail]);
 
-  // Detail이 열리면 body 스크롤 차단
   useEffect(() => {
-    if (detailOpen) {
-      document.body.style.overflow = "hidden";
-      return () => { document.body.style.overflow = ""; };
-    }
+    if (detailOpen) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
   }, [detailOpen]);
 
   const getCardStyle = (): React.CSSProperties => {
@@ -268,41 +272,51 @@ export default function DiscoverPage() {
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
+  // 메타 정보 문자열
+  const metaInfo = (r: Recommendation) => {
+    const parts: string[] = [];
+    if (r.country?.length > 0) parts.push(r.country.join("/"));
+    if (r.date) parts.push(r.date.slice(0, 4));
+    if (r.runtime) parts.push(`${r.runtime}분`);
+    if (r.seasons) parts.push(`시즌 ${r.seasons}`);
+    return parts.join(" · ");
+  };
+
   const FilterChips = () => (
     <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
       {(["all", "movie", "series"] as const).map((t) => (
-        <button
-          key={t}
-          onClick={() => handleFilterChange(t, filterOrigin)}
-          disabled={loading}
+        <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setCurrentIndex(0); }} disabled={loading}
           className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
-          style={{
-            background: filterType === t ? "var(--accent)" : "var(--surface)",
-            color: filterType === t ? "var(--bg)" : "var(--text-secondary)",
-            borderRadius: "var(--radius-full)",
-            border: filterType === t ? "none" : "1px solid var(--border)",
-          }}
-        >
+          style={{ background: filterType === t ? "var(--accent)" : "var(--surface)", color: filterType === t ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType === t ? "none" : "1px solid var(--border)" }}>
           {t === "all" ? "전체" : t === "movie" ? "영화" : "시리즈"}
         </button>
       ))}
       <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
       {(["all", "kr", "foreign"] as const).map((o) => (
-        <button
-          key={o}
-          onClick={() => handleFilterChange(filterType, o)}
-          disabled={loading}
+        <button key={o} onClick={() => { handleFilterChange(filterType, o); setCurrentIndex(0); }} disabled={loading}
           className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
-          style={{
-            background: filterOrigin === o ? "var(--accent)" : "var(--surface)",
-            color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)",
-            borderRadius: "var(--radius-full)",
-            border: filterOrigin === o ? "none" : "1px solid var(--border)",
-          }}
-        >
+          style={{ background: filterOrigin === o ? "var(--accent)" : "var(--surface)", color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin === o ? "none" : "1px solid var(--border)" }}>
           {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
         </button>
       ))}
+      {/* OTT 필터 */}
+      {recs.length > 0 && (
+        <>
+          <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
+          {["all", ...OTT_OPTIONS.filter((ott) => recs.some((r) => r.providers.some((p) => p.name === ott)))].map((ott) => (
+            <button key={ott} onClick={() => { setFilterOTT(ott); setCurrentIndex(0); }}
+              className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5"
+              style={{ background: filterOTT === ott ? "var(--accent)" : "var(--surface)", color: filterOTT === ott ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOTT === ott ? "none" : "1px solid var(--border)" }}>
+              {ott === "all" ? "모든 OTT" : (
+                <>
+                  <img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "2px" }} />
+                  {ott}
+                </>
+              )}
+            </button>
+          ))}
+        </>
+      )}
     </div>
   );
 
@@ -329,25 +343,25 @@ export default function DiscoverPage() {
   }
 
   // 빈 결과
-  if (recs.length === 0) {
-    const hasFilter = filterType !== "all" || filterOrigin !== "all";
+  if (filteredRecs.length === 0) {
+    const hasFilter = filterType !== "all" || filterOrigin !== "all" || filterOTT !== "all";
     return (
       <div className="h-dvh flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
-          <button onClick={() => { ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k)); clearAllRecommendations(); router.replace("/onboarding"); }} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
+          <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
         <FilterChips />
         <div className="flex-1 flex flex-col px-8 justify-center">
           <div className="space-y-5">
             <IconFilm size={36} color="var(--text-muted)" />
             <div>
-              <p className="font-display text-lg font-semibold">{hasFilter ? `${filterLabel} 결과가 없어요` : "추천을 만들지 못했어요"}</p>
+              <p className="font-display text-lg font-semibold">{hasFilter ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p>
               <p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p>
             </div>
             <div className="flex gap-3">
               {hasFilter && (
-                <button onClick={() => handleFilterChange("all", "all")} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>
+                <button onClick={() => { handleFilterChange("all", "all"); setFilterOTT("all"); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>
               )}
               <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
                 <IconRefresh size={14} /> 다시 시도
@@ -360,21 +374,21 @@ export default function DiscoverPage() {
     );
   }
 
-  // 끝 화면 (모든 카드 소진)
-  if (currentIndex >= recs.length) {
+  // 끝 화면
+  if (currentIndex >= filteredRecs.length) {
     return (
       <div className="h-dvh flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 shrink-0">
           <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
-          <button onClick={() => { ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k)); clearAllRecommendations(); router.replace("/onboarding"); }} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
+          <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
         <FilterChips />
         <div className="flex-1 flex flex-col px-8 justify-center">
           <div className="space-y-5">
-            <div className="font-display text-xl font-bold">{recs.length}편을 모두 확인했어요</div>
+            <div className="font-display text-xl font-bold">{filteredRecs.length}편을 모두 확인했어요</div>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>새로운 추천을 받아볼까요?</p>
             <div className="flex gap-3">
-              <button onClick={() => { setCurrentIndex(0); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>처음부터 보기</button>
+              <button onClick={() => setCurrentIndex(0)} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>처음부터 보기</button>
               <button onClick={refreshRecommendations} className="px-6 py-3 font-semibold flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
                 <IconRefresh size={16} /> 더 찾아보기
               </button>
@@ -393,25 +407,32 @@ export default function DiscoverPage() {
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         <div className="flex items-center gap-3">
           <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>
-            {currentIndex + 1}/{recs.length}
+            {currentIndex + 1}/{filteredRecs.length}
           </span>
-          <button onClick={() => { ["neko_favorites", "neko_saved"].forEach((k) => localStorage.removeItem(k)); clearAllRecommendations(); router.replace("/onboarding"); }} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
+          <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
       </div>
 
       <FilterChips />
 
+      {/* Pull-to-refresh indicator */}
+      {pullY > 0 && (
+        <div className="flex justify-center py-1 shrink-0" style={{ opacity: Math.min(1, pullY / 40) }}>
+          <div className={`w-6 h-6 ${refreshing ? "animate-spin" : ""}`} style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)", transform: `rotate(${pullY * 4}deg)` }} />
+        </div>
+      )}
+
       {/* Card area */}
       <div
         className="flex-1 min-h-0 px-3 pb-2 relative"
-        style={{ touchAction: "none", overscrollBehavior: "none" }}
+        style={{ touchAction: "none", overscrollBehavior: "none", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
         <div
-          key={`${filterType}-${filterOrigin}-${currentIndex}`}
-          className="h-full overflow-hidden relative will-change-transform cursor-pointer"
+          key={`${filterType}-${filterOrigin}-${filterOTT}-${currentIndex}`}
+          className="h-full overflow-hidden relative will-change-transform"
           style={{ ...getCardStyle(), borderRadius: "var(--radius-xl)" }}
         >
           {current.posterUrl ? (
@@ -432,41 +453,27 @@ export default function DiscoverPage() {
 
           <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
             <h2 className="font-display text-2xl font-bold">{current.title}</h2>
+            {metaInfo(current) && (
+              <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(current)}</p>
+            )}
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{current.reason}</p>
             <div className="flex gap-1.5 mt-3 items-center">
               {current.providers.slice(0, 4).map((p) => (
                 <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} title={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
               ))}
-              {current.providers.length > 4 && (
-                <span className="text-xs ml-1" style={{ color: "var(--text-muted)" }}>+{current.providers.length - 4}</span>
-              )}
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* Detail bottom sheet — 제스처 기반 */}
+      {/* Detail bottom sheet */}
       {detailOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
-          onClick={closeDetail}
-          style={{ pointerEvents: detailY > 95 ? "none" : "auto" }}
-        >
+        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={closeDetail} style={{ pointerEvents: detailY > 95 ? "none" : "auto" }}>
           <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
           <div
             className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8"
-            style={{
-              background: "var(--bg)",
-              borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
-              transform: `translateY(${detailY}%)`,
-              transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
-              touchAction: "pan-y",
-            }}
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={onDetailTouchStart}
-            onTouchMove={onDetailTouchMove}
-            onTouchEnd={onDetailTouchEnd}
+            style={{ background: "var(--bg)", borderRadius: "var(--radius-xl) var(--radius-xl) 0 0", transform: `translateY(${detailY}%)`, transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none", touchAction: "pan-y" }}
+            onClick={(e) => e.stopPropagation()} onTouchStart={onDetailTouchStart} onTouchMove={onDetailTouchMove} onTouchEnd={onDetailTouchEnd}
           >
             <div className="flex justify-center mb-4">
               <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
@@ -475,13 +482,19 @@ export default function DiscoverPage() {
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
 
+            {/* 스틸컷 */}
+            {current.backdrop && (
+              <img src={current.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1" style={{ borderRadius: "var(--radius-md)" }} />
+            )}
+
             <div className="flex gap-4">
               {current.posterUrl && (
                 <img src={current.posterUrl} alt={current.title} className="w-24 h-36 object-cover flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
               )}
               <div className="flex-1 min-w-0 pt-1">
                 <h2 className="font-display text-xl font-bold">{current.title}</h2>
-                <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {current.date.slice(0, 4)}</p>
+                <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn}</p>
+                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(current)}</p>
                 <div className="flex items-center gap-1.5 mt-2">
                   <IconStar size={13} color="var(--accent)" />
                   <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
@@ -523,42 +536,34 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      {/* Bottom actions — 저장 + 페이지 인디케이터 */}
+      {/* Bottom actions */}
       <div className="px-4 pb-2 shrink-0">
         <div className="flex items-center justify-between">
-          {/* 페이지 도트 */}
           <div className="flex gap-1 flex-1 mr-3 overflow-hidden">
-            {recs.map((_, i) => (
-              <div
-                key={i}
-                className="h-0.5 flex-1 transition-colors"
-                style={{
-                  background: i === currentIndex ? "var(--accent)" : i < currentIndex ? "var(--text-muted)" : "var(--border)",
-                  borderRadius: "var(--radius-full)",
-                  maxWidth: 24,
-                }}
-              />
+            {filteredRecs.map((_, i) => (
+              <div key={i} className="h-0.5 flex-1 transition-colors" style={{ background: i === currentIndex ? "var(--accent)" : i < currentIndex ? "var(--text-muted)" : "var(--border)", borderRadius: "var(--radius-full)", maxWidth: 24 }} />
             ))}
           </div>
-          {/* 저장 토글 */}
-          <button
-            onClick={() => {
-              const id = current.tmdbId;
-              if (savedIds.has(id)) {
-                // 이미 저장됨 — 제거
-                removeSaved(id);
-                setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; });
-              } else {
-                addSaved(current);
-                setSavedIds((s) => new Set(s).add(id));
-              }
-            }}
-            aria-label={savedIds.has(current.tmdbId) ? "저장 취소" : "저장"}
-            className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform"
-            style={{ background: savedIds.has(current.tmdbId) ? "var(--accent-dim)" : "var(--surface)", border: `1px solid ${savedIds.has(current.tmdbId) ? "var(--accent-border)" : "var(--border)"}`, borderRadius: "var(--radius-full)" }}
-          >
-            <IconSave size={22} color={savedIds.has(current.tmdbId) ? "var(--accent)" : "var(--text-muted)"} filled={savedIds.has(current.tmdbId)} />
-          </button>
+          <div className="flex gap-2">
+            {/* Detail 버튼 */}
+            <button onClick={openDetail} aria-label="상세보기"
+              className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+              <IconDetail size={18} color="var(--text-secondary)" />
+            </button>
+            {/* 저장 토글 */}
+            <button
+              onClick={() => {
+                const id = current.tmdbId;
+                if (savedIds.has(id)) { removeSaved(id); setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
+                else { addSaved(current); setSavedIds((s) => new Set(s).add(id)); }
+              }}
+              aria-label={savedIds.has(current.tmdbId) ? "저장 취소" : "저장"}
+              className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform"
+              style={{ background: savedIds.has(current.tmdbId) ? "var(--accent-dim)" : "var(--surface)", border: `1px solid ${savedIds.has(current.tmdbId) ? "var(--accent-border)" : "var(--border)"}`, borderRadius: "var(--radius-full)" }}>
+              <IconSave size={20} color={savedIds.has(current.tmdbId) ? "var(--accent)" : "var(--text-muted)"} filled={savedIds.has(current.tmdbId)} />
+            </button>
+          </div>
         </div>
       </div>
 

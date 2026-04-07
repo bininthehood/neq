@@ -417,6 +417,11 @@ export default function SavedPage() {
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
 
+            {/* 스틸컷 */}
+            {detailItem.recommendation.backdrop && (
+              <img src={detailItem.recommendation.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1" style={{ borderRadius: "var(--radius-md)" }} />
+            )}
+
             {/* Poster + Title */}
             <div className="flex gap-4">
               {detailItem.recommendation.posterUrl && (
@@ -430,7 +435,15 @@ export default function SavedPage() {
               <div className="flex-1 min-w-0 pt-1">
                 <h2 className="font-display text-xl font-bold">{detailItem.recommendation.title}</h2>
                 <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  {detailItem.recommendation.titleEn} · {detailItem.recommendation.date.slice(0, 4)}
+                  {detailItem.recommendation.titleEn}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  {[
+                    detailItem.recommendation.country?.join("/"),
+                    detailItem.recommendation.date?.slice(0, 4),
+                    detailItem.recommendation.runtime ? `${detailItem.recommendation.runtime}분` : null,
+                    detailItem.recommendation.seasons ? `시즌 ${detailItem.recommendation.seasons}` : null,
+                  ].filter(Boolean).join(" · ")}
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
                   <IconStar size={13} color="var(--accent)" />

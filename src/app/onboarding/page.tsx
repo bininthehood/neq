@@ -102,25 +102,33 @@ export default function OnboardingPage() {
           ))}
         </div>
 
-        {/* Selected items */}
-        {selected.length > 0 && (
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-            {selected.map((item) => (
-              <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
-                {item.posterUrl ? (
-                  <img src={item.posterUrl} alt={item.title} className="w-16 h-24 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
-                ) : (
-                  <div className="w-16 h-24 flex items-center justify-center text-xs" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", color: "var(--text-muted)" }}>
-                    {item.title.slice(0, 4)}
+        {/* Selected items — 항상 표시 */}
+        <div className="flex gap-2 mt-4 pb-2">
+          {Array.from({ length: 5 }).map((_, i) => {
+            const item = selected[i];
+            if (item) {
+              return (
+                <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
+                  {item.posterUrl ? (
+                    <img src={item.posterUrl} alt={item.title} className="w-14 h-20 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
+                  ) : (
+                    <div className="w-14 h-20 flex items-center justify-center text-[10px]" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", color: "var(--text-muted)" }}>
+                      {item.title.slice(0, 3)}
+                    </div>
+                  )}
+                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
+                    <IconClose size={10} color="var(--text-primary)" />
                   </div>
-                )}
-                <div className="absolute -top-2 -right-2 w-7 h-7 flex items-center justify-center" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
-                  <IconClose size={12} color="var(--text-primary)" />
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+                </button>
+              );
+            }
+            return (
+              <div key={`empty-${i}`} className="w-14 h-20 flex-shrink-0 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", border: "1px dashed var(--border)" }}>
+                <span className="text-xs" style={{ color: "var(--text-muted)" }}>{i + 1}</span>
+              </div>
+            );
+          })}
+        </div>
 
         {/* Search */}
         <input
@@ -159,9 +167,9 @@ export default function OnboardingPage() {
               </button>
             </div>
             <div className="grid grid-cols-4 gap-2">
-              {suggestions.map((item, i) => {
+              {suggestions.slice(0, 12).map((item, i) => {
                 const isSelected = selected.some((s) => s.id === item.id);
-                const tall = i % 4 === 0 || i % 4 === 3;
+                const tall = false; // 균일 높이로 3로우 고정
                 return (
                   <button
                     key={item.id}
