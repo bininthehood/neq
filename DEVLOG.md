@@ -226,6 +226,7 @@ c0e84da feat: 필터별 맞춤 추천 (LLM에 직접 조건 전달)
 - Saved Detail도 동일한 제스처 바텀시트 적용
 
 **PWA 앱 경험**
+- 스플래시 스크린: 앱 진입 시 로고 + "오늘 뭐 볼까?" 1.4초 표시 → 페이드 전환
 - 앱 아이콘 생성 (512/192/180/32px, Warm Cinema 오렌지 N)
 - manifest 색상 수정 (#0C0A09)
 - apple-touch-icon, favicon 추가
@@ -233,6 +234,7 @@ c0e84da feat: 필터별 맞춤 추천 (LLM에 직접 조건 전달)
 
 ### 커밋 히스토리 (Day 3)
 ```
+9ee04e8 feat: 스플래시 스크린 — 앱 진입 시 로고/브랜드 1.4초 표시 후 페이드 전환
 c6fbb8b feat: PWA 설치 유도 배너 (iOS 안내 + Android 네이티브 설치)
 ddb0681 feat: UX 대규모 개선 — 캐러셀 스와이프 + 제스처 바텀시트 + 하트 토글
 ba5dedb fix: 온보딩 버튼 하단 고정 + 로딩 스피너 + OTT 앱 딥링크
