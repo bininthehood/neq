@@ -133,13 +133,16 @@ export default function DiscoverPage() {
 
       setIsAnimating(true);
       setSlideDir(direction);
+      // 카드가 빠지는 도중에 인덱스를 바꿔 다음 카드가 slide-in
       setTimeout(() => {
         setCurrentIndex(nextIdx);
-        setOffsetX(0);
         setSlideDir(null);
+        setOffsetX(0);
+      }, 150);
+      setTimeout(() => {
         setIsAnimating(false);
         setDetailOpen(false);
-      }, 250);
+      }, 300);
     },
     [currentIndex, filteredRecs.length, isAnimating]
   );
@@ -257,6 +260,14 @@ export default function DiscoverPage() {
   useEffect(() => {
     if (detailOpen) { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }
   }, [detailOpen]);
+
+  // 인접 카드 이미지 프리로드
+  useEffect(() => {
+    [currentIndex - 1, currentIndex + 1].forEach((i) => {
+      const r = filteredRecs[i];
+      if (r?.posterUrl) { const img = new Image(); img.src = r.posterUrl; }
+    });
+  }, [currentIndex, filteredRecs]);
 
   const getCardStyle = (): React.CSSProperties => {
     if (slideDir) {
@@ -431,7 +442,6 @@ export default function DiscoverPage() {
         onTouchEnd={onTouchEnd}
       >
         <div
-          key={`${filterType}-${filterOrigin}-${filterOTT}-${currentIndex}`}
           className="h-full overflow-hidden relative will-change-transform"
           style={{ ...getCardStyle(), borderRadius: "var(--radius-xl)" }}
         >

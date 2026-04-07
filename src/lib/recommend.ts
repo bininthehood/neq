@@ -109,27 +109,37 @@ ${feedbackPrompt}
     (Object.values(parsed).find((v: any) => Array.isArray(v)) as LLMRec[]) ??
     [];
 
+  // 1단계: 모든 추천을 병렬로 TMDB 검색
+  const searchResults = await Promise.all(
+    recs.map(async (rec) => {
+      let tmdb = await searchTMDB(rec.title, rec.type);
+      if (!tmdb) tmdb = await searchTMDB(rec.title_en, rec.type);
+      return { rec, tmdb };
+    })
+  );
+
+  // 2단계: 검색 성공한 것들을 병렬로 메타데이터 조회
+  const matched = searchResults.filter((r) => r.tmdb !== null);
+  const enriched = await Promise.all(
+    matched.map(async ({ rec, tmdb }) => {
+      const [{ providers, watchLink }, credits, details] = await Promise.all([
+        getKoreanProviders(tmdb!.id, rec.type),
+        getCredits(tmdb!.id, rec.type),
+        getDetails(tmdb!.id, rec.type),
+      ]);
+      return { rec, tmdb: tmdb!, providers, watchLink, credits, details };
+    })
+  );
+
+  // 3단계: 필터링 + 결과 조립
   const results: Recommendation[] = [];
-
-  for (const rec of recs) {
-    let tmdb = await searchTMDB(rec.title, rec.type);
-    if (!tmdb) tmdb = await searchTMDB(rec.title_en, rec.type);
-    if (!tmdb) continue;
-
-    const [{ providers, watchLink }, credits, details] = await Promise.all([
-      getKoreanProviders(tmdb.id, rec.type),
-      getCredits(tmdb.id, rec.type),
-      getDetails(tmdb.id, rec.type),
-    ]);
+  for (const { rec, tmdb, providers, watchLink, credits, details } of enriched) {
     if (providers.length === 0) continue;
 
     const originCountry = details.country.length > 0 ? details.country : ((tmdb as any).origin_country ?? []);
-
-    // 서버 측 origin 필터 검증 (LLM이 잘못 추천한 경우 방어)
     if (filter.origin === "kr" && !originCountry.includes("KR")) continue;
     if (filter.origin === "foreign" && originCountry.includes("KR")) continue;
 
-    // TMDB 공식 한글 제목 사용 (LLM 제목 오표기 교정)
     const officialTitle = (tmdb as any).title ?? (tmdb as any).name ?? rec.title;
 
     results.push({
