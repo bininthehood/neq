@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecommendations } from "@/lib/recommend";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
+  // Rate limit: IP당 분당 5회
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const { allowed, remaining } = checkRateLimit(ip);
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: "요청이 너무 많습니다. 1분 후 다시 시도해주세요." },
+      {
+        status: 429,
+        headers: { "Retry-After": "60", "X-RateLimit-Remaining": "0" },
+      }
+    );
+  }
+
   const { favorites } = await req.json();
 
   if (!Array.isArray(favorites) || favorites.length < 3) {
@@ -13,7 +28,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const recommendations = await getRecommendations(favorites);
-    return NextResponse.json({ recommendations });
+    return NextResponse.json({ recommendations }, {
+      headers: { "X-RateLimit-Remaining": String(remaining) },
+    });
   } catch (error) {
     console.error("Recommendation error:", error);
     return NextResponse.json(
