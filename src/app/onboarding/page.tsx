@@ -11,7 +11,6 @@ interface SearchResult {
   year: string;
 }
 
-// 초기 폴백용 (API 로딩 전 표시)
 const FALLBACK_SUGGESTIONS: SearchResult[] = [
   { id: 496243, title: "기생충", posterUrl: "https://image.tmdb.org/t/p/w200/jjHccoFjbqlfr4VGLVLT7yek0Xn.jpg", year: "2019" },
   { id: 278, title: "쇼생크 탈출", posterUrl: "https://image.tmdb.org/t/p/w200/oAt6OtpwYCdJI76AVtVKW1eorYx.jpg", year: "1994" },
@@ -37,10 +36,7 @@ export default function OnboardingPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 첫 로드 시 트렌딩 목록 가져오기
-  useEffect(() => {
-    fetchTrending();
-  }, []);
+  useEffect(() => { fetchTrending(); }, []);
 
   const fetchTrending = async () => {
     setLoadingSuggestions(true);
@@ -48,17 +44,12 @@ export default function OnboardingPage() {
       const res = await fetch("/api/trending");
       const data = await res.json();
       if (data.length > 0) setSuggestions(data);
-    } catch {
-      // 실패하면 폴백 유지
-    }
+    } catch { /* fallback */ }
     setLoadingSuggestions(false);
   };
 
   const search = useCallback(async (q: string) => {
-    if (q.length < 1) {
-      setResults([]);
-      return;
-    }
+    if (q.length < 1) { setResults([]); return; }
     setSearching(true);
     const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
     const data = await res.json();
@@ -89,44 +80,41 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-5 py-8">
+      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold">🐱 Neko</h1>
-        <p className="text-zinc-400 mt-2">
+        <h1 className="font-display text-3xl font-bold" style={{ color: "var(--accent)" }}>
+          Neko
+        </h1>
+        <p className="mt-2" style={{ color: "var(--text-secondary)" }}>
           좋아하는 작품을 {selected.length < 3 ? "3-5개" : "더"} 골라주세요
         </p>
         <div className="flex gap-1 mt-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 rounded-full transition-colors ${
-                i < selected.length ? "bg-green-500" : "bg-zinc-800"
-              }`}
+              className="h-1 flex-1 transition-colors"
+              style={{
+                background: i < selected.length ? "var(--accent)" : "var(--border)",
+                borderRadius: "var(--radius-full)",
+              }}
             />
           ))}
         </div>
       </div>
 
-      {/* 선택된 작품 */}
+      {/* Selected items */}
       {selected.length > 0 && (
         <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
           {selected.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => toggleSelect(item)}
-              className="flex-shrink-0 relative"
-            >
+            <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
               {item.posterUrl ? (
-                <img
-                  src={item.posterUrl}
-                  alt={item.title}
-                  className="w-16 h-24 object-cover rounded-lg"
-                />
+                <img src={item.posterUrl} alt={item.title} className="w-16 h-24 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
               ) : (
-                <div className="w-16 h-24 bg-zinc-800 rounded-lg flex items-center justify-center text-xs text-zinc-500">
+                <div className="w-16 h-24 flex items-center justify-center text-xs" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", color: "var(--text-muted)" }}>
                   {item.title.slice(0, 4)}
                 </div>
               )}
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center text-xs">
+              <div className="absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center text-xs" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
                 ✕
               </div>
             </button>
@@ -134,31 +122,38 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      {/* 검색 */}
+      {/* Search */}
       <input
         type="text"
         value={query}
         onChange={(e) => handleInput(e.target.value)}
         placeholder="영화나 시리즈 제목을 검색하세요"
-        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+        className="w-full px-4 py-3 focus:outline-none transition-colors"
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          color: "var(--text-primary)",
+        }}
         autoFocus
       />
 
-      {/* 검색 결과 또는 추천 작품 */}
+      {/* Results / Suggestions */}
       <div className="mt-3 flex-1 overflow-y-auto">
         {searching && (
-          <div className="text-center text-zinc-500 py-4">검색 중...</div>
+          <div className="text-center py-4" style={{ color: "var(--text-muted)" }}>검색 중...</div>
         )}
 
-        {/* 추천 작품 그리드 (검색 전) */}
+        {/* Suggestion grid */}
         {showSuggestions && (
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
-              <p className="text-xs text-zinc-500">이런 작품은 어떠세요?</p>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>이런 작품은 어떠세요?</p>
               <button
                 onClick={fetchTrending}
                 disabled={loadingSuggestions}
-                className="text-xs text-zinc-500 hover:text-green-400 transition-colors disabled:opacity-30"
+                className="text-xs transition-colors disabled:opacity-30"
+                style={{ color: "var(--text-muted)" }}
               >
                 {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
               </button>
@@ -170,24 +165,29 @@ export default function OnboardingPage() {
                   <button
                     key={item.id}
                     onClick={() => toggleSelect(item)}
-                    className={`relative rounded-lg overflow-hidden transition-all ${
-                      isSelected ? "ring-2 ring-green-500 scale-95" : "active:scale-95"
-                    }`}
+                    className="relative overflow-hidden transition-all active:scale-95"
+                    style={{
+                      borderRadius: "var(--radius-md)",
+                      outline: isSelected ? "2px solid var(--accent)" : "none",
+                      outlineOffset: "-2px",
+                    }}
                   >
                     {item.posterUrl ? (
-                      <img
-                        src={item.posterUrl}
-                        alt={item.title}
-                        className="w-full aspect-[2/3] object-cover"
-                      />
+                      <img src={item.posterUrl} alt={item.title} className="w-full aspect-[2/3] object-cover" />
                     ) : (
-                      <div className="w-full aspect-[2/3] bg-zinc-800" />
+                      <div className="w-full aspect-[2/3]" style={{ background: "var(--surface)" }} />
                     )}
-                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
+                    <div
+                      className="absolute bottom-0 left-0 right-0 p-1.5"
+                      style={{ background: "linear-gradient(transparent, rgba(12,10,9,0.85))" }}
+                    >
                       <div className="text-[10px] font-medium truncate">{item.title}</div>
                     </div>
                     {isSelected && (
-                      <div className="absolute top-1 right-1 w-5 h-5 bg-green-500 rounded-full flex items-center justify-center text-xs text-black font-bold">
+                      <div
+                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-xs font-bold"
+                        style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
+                      >
                         ✓
                       </div>
                     )}
@@ -198,49 +198,48 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* 검색 결과 리스트 */}
+        {/* Search results */}
         {results.map((item) => {
           const isSelected = selected.some((s) => s.id === item.id);
           return (
             <button
               key={item.id}
               onClick={() => toggleSelect(item)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl transition-colors ${
-                isSelected
-                  ? "bg-green-500/10 border border-green-500/30"
-                  : "hover:bg-zinc-900"
-              }`}
+              className="w-full flex items-center gap-3 p-3 transition-colors"
+              style={{
+                borderRadius: "var(--radius-lg)",
+                background: isSelected ? "var(--accent-dim)" : "transparent",
+                border: isSelected ? "1px solid rgba(232,123,53,0.3)" : "1px solid transparent",
+              }}
             >
               {item.posterUrl ? (
-                <img
-                  src={item.posterUrl}
-                  alt={item.title}
-                  className="w-12 h-18 object-cover rounded-lg flex-shrink-0"
-                />
+                <img src={item.posterUrl} alt={item.title} className="w-12 h-18 object-cover flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
               ) : (
-                <div className="w-12 h-18 bg-zinc-800 rounded-lg flex-shrink-0" />
+                <div className="w-12 h-18 flex-shrink-0" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)" }} />
               )}
               <div className="text-left flex-1 min-w-0">
                 <div className="font-medium truncate">{item.title}</div>
-                <div className="text-sm text-zinc-500">{item.year}</div>
+                <div className="text-sm" style={{ color: "var(--text-muted)" }}>{item.year}</div>
               </div>
               {isSelected && (
-                <div className="text-green-500 text-lg flex-shrink-0">✓</div>
+                <div className="text-lg flex-shrink-0" style={{ color: "var(--accent)" }}>✓</div>
               )}
             </button>
           );
         })}
       </div>
 
-      {/* 다음 버튼 */}
+      {/* Next button */}
       <button
         onClick={handleNext}
         disabled={selected.length < 3}
-        className={`mt-4 w-full py-4 rounded-xl text-lg font-semibold transition-all ${
-          selected.length >= 3
-            ? "bg-green-500 text-black active:scale-95"
-            : "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-        }`}
+        className="mt-4 w-full py-4 text-lg font-semibold transition-all active:scale-[0.98]"
+        style={{
+          background: selected.length >= 3 ? "var(--accent)" : "var(--surface)",
+          color: selected.length >= 3 ? "var(--bg)" : "var(--text-muted)",
+          borderRadius: "var(--radius-lg)",
+          cursor: selected.length >= 3 ? "pointer" : "not-allowed",
+        }}
       >
         {selected.length < 3
           ? `${3 - selected.length}개 더 선택해주세요`

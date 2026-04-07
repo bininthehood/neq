@@ -8,21 +8,22 @@ interface Props {
 
 export default function BottomNav({ active }: Props) {
   return (
-    <nav className="flex border-t border-zinc-800 pb-6 pt-2 shrink-0">
+    <nav
+      className="flex pb-6 pt-2 shrink-0"
+      style={{ borderTop: "1px solid var(--border)" }}
+    >
       <Link
         href="/discover"
-        className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs ${
-          active === "discover" ? "text-white" : "text-zinc-600"
-        }`}
+        className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors"
+        style={{ color: active === "discover" ? "var(--accent)" : "var(--text-muted)" }}
       >
         <span className="text-lg">◆</span>
         <span>Discover</span>
       </Link>
       <Link
         href="/saved"
-        className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-xs ${
-          active === "saved" ? "text-white" : "text-zinc-600"
-        }`}
+        className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors"
+        style={{ color: active === "saved" ? "var(--accent)" : "var(--text-muted)" }}
       >
         <span className="text-lg">♡</span>
         <span>Saved</span>
