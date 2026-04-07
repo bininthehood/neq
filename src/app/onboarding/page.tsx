@@ -82,7 +82,7 @@ export default function OnboardingPage() {
     <div className="flex-1 flex flex-col max-w-lg mx-auto w-full px-5 py-8">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="font-display text-3xl font-bold" style={{ color: "var(--accent)" }}>
+        <h1 className="font-display font-bold" style={{ color: "var(--accent)", fontSize: "36px" }}>
           Neko
         </h1>
         <p className="mt-2" style={{ color: "var(--text-secondary)" }}>
