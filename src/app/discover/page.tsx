@@ -39,10 +39,10 @@ export default function DiscoverPage() {
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterOTT, setFilterOTT] = useState<string>("all");
 
-  // 3D 원통 캐러셀
-  const [rotation, setRotation] = useState(0);       // 현재 회전 각도
-  const [dragRotation, setDragRotation] = useState(0); // 드래그 중 추가 회전
+  // 캐러셀 회전
+  const [rotation, setRotation] = useState(0);
   const [isSnapping, setIsSnapping] = useState(false);
+  const rotationAtDragStart = useRef(0);
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -126,7 +126,7 @@ export default function DiscoverPage() {
   // 원통 캐러셀 계산
   const cardCount = filteredRecs.length;
   const anglePerCard = cardCount > 0 ? 360 / cardCount : 0;
-  const totalRotation = rotation + dragRotation;
+  const totalRotation = rotation;
   const activeIndex = cardCount > 0
     ? ((Math.round(-totalRotation / anglePerCard) % cardCount) + cardCount) % cardCount
     : 0;
@@ -158,8 +158,9 @@ export default function DiscoverPage() {
       startY.current = e.touches[0].clientY;
       isDragging.current = true;
       directionLocked.current = null;
+      rotationAtDragStart.current = rotation;
     },
-    [detailOpen, isSnapping]
+    [detailOpen, isSnapping, rotation]
   );
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -173,9 +174,9 @@ export default function DiscoverPage() {
     }
     if (directionLocked.current === "horizontal") {
       e.preventDefault();
-      // 드래그 → 회전 각도로 변환 (화면 폭 = 1카드분 회전)
+      // 드래그 → 회전 각도로 직접 변환
       const dragAngle = (dx / window.innerWidth) * anglePerCard * 1.2;
-      setDragRotation(dragAngle);
+      setRotation(rotationAtDragStart.current + dragAngle);
     } else if (directionLocked.current === "vertical") {
       if (dy < 0) {
         e.preventDefault();
@@ -195,10 +196,18 @@ export default function DiscoverPage() {
     const dir = directionLocked.current;
     directionLocked.current = null;
     if (dir === "horizontal") {
-      // 가장 가까운 카드로 스냅
-      const totalAngle = rotation + dragRotation;
-      const snapped = Math.round(totalAngle / anglePerCard) * anglePerCard;
-      setDragRotation(0);
+      // 드래그 방향 감지 후 가장 가까운 카드로 스냅
+      const dragDelta = rotation - rotationAtDragStart.current;
+      let snapped: number;
+      if (Math.abs(dragDelta) > anglePerCard * 0.2) {
+        // 20% 이상 드래그 → 다음/이전 카드로 확정 이동
+        snapped = dragDelta > 0
+          ? Math.ceil(rotation / anglePerCard) * anglePerCard
+          : Math.floor(rotation / anglePerCard) * anglePerCard;
+      } else {
+        // 미세 드래그 → 원래 카드로 복귀
+        snapped = Math.round(rotationAtDragStart.current / anglePerCard) * anglePerCard;
+      }
       setRotation(snapped);
       setIsSnapping(true);
       setTimeout(() => setIsSnapping(false), 400);
@@ -210,7 +219,7 @@ export default function DiscoverPage() {
         refreshRecommendations().then(() => { setRefreshing(false); setPullY(0); });
       } else { setPullY(0); }
     }
-  }, [rotation, dragRotation, anglePerCard, detailY, pullY, detailOpen]);
+  }, [rotation, anglePerCard, detailY, pullY, detailOpen]);
 
   // Detail 드래그
   const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
@@ -410,9 +419,7 @@ export default function DiscoverPage() {
               if (offset > cardCount / 2) adjustedOffset = offset - cardCount;
               if (offset < -cardCount / 2) adjustedOffset = offset + cardCount;
             }
-            // 드래그 중 보간
-            const dragOffset = cardCount > 0 ? dragRotation / anglePerCard : 0;
-            const pos = adjustedOffset + dragOffset;
+            const pos = adjustedOffset;
 
             // 인접 3장만 렌더
             if (Math.abs(pos) > 1.5) return null;
