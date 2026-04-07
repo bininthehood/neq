@@ -23,6 +23,10 @@ export interface Recommendation {
   watchLink: string | null;
   director: string | null;
   cast: string[];
+  runtime: number | null;       // 분 단위 (영화) 또는 에피소드 평균
+  seasons: number | null;       // 시리즈 시즌 수
+  country: string[];            // 제작 국가 코드
+  backdrop: string | null;      // 스틸컷/배경 이미지
   originCountry?: string[];
 }
 

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { searchTMDB, getKoreanProviders, getCredits, posterUrl } from "./tmdb";
+import { searchTMDB, getKoreanProviders, getCredits, getDetails, posterUrl } from "./tmdb";
 import type { Recommendation } from "./types";
 
 const openai = new OpenAI();
@@ -18,6 +18,8 @@ export interface RecommendFilter {
 
 export interface WatchFeedback {
   loved: string[];   // 인생작이라고 한 작품들
+  good: string[];    // 재밌었다고 한 작품들
+  meh: string[];     // 그저 그랬다고 한 작품들
   dropped: string[]; // 포기한 작품들
 }
 
@@ -38,7 +40,13 @@ function buildFeedbackPrompt(feedback?: WatchFeedback): string {
   if (!feedback) return "";
   const parts: string[] = [];
   if (feedback.loved.length > 0) {
-    parts.push(`사용자가 최근 추천 중 인생작이라고 한 작품: ${feedback.loved.join(", ")}. 이 작품들과 비슷한 결의 작품을 더 추천하세요.`);
+    parts.push(`사용자가 인생작이라고 한 작품: ${feedback.loved.join(", ")}. 이 작품들과 비슷한 결의 작품을 적극적으로 추천하세요.`);
+  }
+  if (feedback.good.length > 0) {
+    parts.push(`사용자가 재밌게 본 작품: ${feedback.good.join(", ")}. 이런 방향도 좋아하니 참고하세요.`);
+  }
+  if (feedback.meh.length > 0) {
+    parts.push(`사용자가 그저 그랬다고 한 작품: ${feedback.meh.join(", ")}. 이런 류보다는 더 흥미로운 작품을 추천하세요.`);
   }
   if (feedback.dropped.length > 0) {
     parts.push(`사용자가 중간에 포기한 작품: ${feedback.dropped.join(", ")}. 이런 류의 작품은 피하세요.`);
@@ -108,20 +116,24 @@ ${feedbackPrompt}
     if (!tmdb) tmdb = await searchTMDB(rec.title_en, rec.type);
     if (!tmdb) continue;
 
-    const [{ providers, watchLink }, credits] = await Promise.all([
+    const [{ providers, watchLink }, credits, details] = await Promise.all([
       getKoreanProviders(tmdb.id, rec.type),
       getCredits(tmdb.id, rec.type),
+      getDetails(tmdb.id, rec.type),
     ]);
     if (providers.length === 0) continue;
 
-    const originCountry = (tmdb as any).origin_country ?? [];
+    const originCountry = details.country.length > 0 ? details.country : ((tmdb as any).origin_country ?? []);
 
     // 서버 측 origin 필터 검증 (LLM이 잘못 추천한 경우 방어)
     if (filter.origin === "kr" && !originCountry.includes("KR")) continue;
     if (filter.origin === "foreign" && originCountry.includes("KR")) continue;
 
+    // TMDB 공식 한글 제목 사용 (LLM 제목 오표기 교정)
+    const officialTitle = (tmdb as any).title ?? (tmdb as any).name ?? rec.title;
+
     results.push({
-      title: rec.title,
+      title: officialTitle,
       titleEn: rec.title_en,
       type: rec.type,
       reason: rec.reason,
@@ -134,6 +146,10 @@ ${feedbackPrompt}
       watchLink,
       director: credits.director,
       cast: credits.cast,
+      runtime: details.runtime,
+      seasons: details.seasons,
+      country: details.country,
+      backdrop: details.backdrop,
       originCountry,
     });
 

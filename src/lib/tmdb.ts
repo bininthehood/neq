@@ -21,7 +21,21 @@ export async function searchTMDB(
     `${BASE}/search/${mediaType}?api_key=${API_KEY}&query=${encodeURIComponent(title)}&language=en-US`
   );
   data = await res.json();
-  return data.results?.[0] ?? null;
+  if (data.results?.length > 0) {
+    const enResult = data.results[0];
+    // 영문으로 찾은 경우 한글 제목을 다시 가져옴
+    const krRes = await fetch(
+      `${BASE}/${mediaType}/${enResult.id}?api_key=${API_KEY}&language=ko-KR`
+    );
+    const krData = await krRes.json();
+    return {
+      ...enResult,
+      title: krData.title ?? krData.name ?? enResult.title ?? enResult.name,
+      name: krData.name ?? krData.title ?? enResult.name ?? enResult.title,
+      overview: krData.overview || enResult.overview,
+    };
+  }
+  return null;
 }
 
 export async function searchMulti(query: string): Promise<TMDBResult[]> {
@@ -71,6 +85,24 @@ export async function getKoreanProviders(
     });
   }
   return { providers, watchLink: kr.link ?? null };
+}
+
+export async function getDetails(
+  id: number,
+  type: "movie" | "series"
+): Promise<{ runtime: number | null; seasons: number | null; country: string[]; backdrop: string | null }> {
+  const mediaType = type === "series" ? "tv" : "movie";
+  const res = await fetch(
+    `${BASE}/${mediaType}/${id}?api_key=${API_KEY}&language=ko-KR`
+  );
+  const data = await res.json();
+
+  return {
+    runtime: type === "movie" ? (data.runtime ?? null) : (data.episode_run_time?.[0] ?? null),
+    seasons: type === "series" ? (data.number_of_seasons ?? null) : null,
+    country: data.production_countries?.map((c: any) => c.iso_3166_1) ?? data.origin_country ?? [],
+    backdrop: data.backdrop_path ? `https://image.tmdb.org/t/p/w780${data.backdrop_path}` : null,
+  };
 }
 
 export async function getCredits(
