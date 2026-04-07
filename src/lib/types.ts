@@ -28,3 +28,11 @@ export interface SavedItem {
   recommendation: Recommendation;
   savedAt: number;
 }
+
+export type WatchReaction = "loved" | "good" | "meh" | "dropped";
+
+export interface WatchReport {
+  tmdbId: number;
+  reaction: WatchReaction;
+  reportedAt: number;
+}

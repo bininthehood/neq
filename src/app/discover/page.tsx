@@ -9,6 +9,8 @@ import {
   clearAllRecommendations,
   addSaved,
   hasOnboarded,
+  getWatchReports,
+  getSaved,
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
@@ -65,10 +67,22 @@ export default function DiscoverPage() {
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
 
+    // 시청 피드백 수집
+    const reports = getWatchReports();
+    const savedItems = getSaved();
+    const feedback: { loved: string[]; dropped: string[] } = { loved: [], dropped: [] };
+    for (const r of reports) {
+      const item = savedItems.find((s) => s.recommendation.tmdbId === r.tmdbId);
+      if (!item) continue;
+      if (r.reaction === "loved") feedback.loved.push(item.recommendation.title);
+      else if (r.reaction === "dropped") feedback.dropped.push(item.recommendation.title);
+    }
+    const hasFeedback = feedback.loved.length > 0 || feedback.dropped.length > 0;
+
     const res = await fetch("/api/recommend", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favorites, filter }),
+      body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}) }),
     });
     const data = await res.json();
     const newRecs = data.recommendations ?? [];

@@ -16,6 +16,11 @@ export interface RecommendFilter {
   origin?: "kr" | "foreign"; // undefined = 둘 다
 }
 
+export interface WatchFeedback {
+  loved: string[];   // 인생작이라고 한 작품들
+  dropped: string[]; // 포기한 작품들
+}
+
 function buildFilterPrompt(filter: RecommendFilter): string {
   const parts: string[] = [];
 
@@ -29,11 +34,25 @@ function buildFilterPrompt(filter: RecommendFilter): string {
   return parts.join("\n");
 }
 
+function buildFeedbackPrompt(feedback?: WatchFeedback): string {
+  if (!feedback) return "";
+  const parts: string[] = [];
+  if (feedback.loved.length > 0) {
+    parts.push(`사용자가 최근 추천 중 인생작이라고 한 작품: ${feedback.loved.join(", ")}. 이 작품들과 비슷한 결의 작품을 더 추천하세요.`);
+  }
+  if (feedback.dropped.length > 0) {
+    parts.push(`사용자가 중간에 포기한 작품: ${feedback.dropped.join(", ")}. 이런 류의 작품은 피하세요.`);
+  }
+  return parts.join("\n");
+}
+
 export async function getRecommendations(
   favorites: string[],
-  filter: RecommendFilter = {}
+  filter: RecommendFilter = {},
+  feedback?: WatchFeedback
 ): Promise<Recommendation[]> {
   const filterPrompt = buildFilterPrompt(filter);
+  const feedbackPrompt = buildFeedbackPrompt(feedback);
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
@@ -52,6 +71,7 @@ export async function getRecommendations(
 - **15개를 추천하세요**
 
 ${filterPrompt}
+${feedbackPrompt}
 
 반드시 아래 정확한 JSON 형식으로 응답하세요:
 {"recommendations": [{"title": "한글 제목", "title_en": "English Title", "type": "movie 또는 series", "reason": "추천 이유"}, ...]}`,

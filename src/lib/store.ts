@@ -1,4 +1,4 @@
-import type { Recommendation, SavedItem } from "./types";
+import type { Recommendation, SavedItem, WatchReport, WatchReaction } from "./types";
 
 const FAVORITES_KEY = "neko_favorites";
 const SAVED_KEY = "neko_saved";
@@ -60,4 +60,38 @@ export function removeSaved(tmdbId: number) {
 export function hasOnboarded(): boolean {
   if (typeof window === "undefined") return false;
   return getFavorites().length >= 3;
+}
+
+// 시청 리포트
+const REPORTS_KEY = "neko_watch_reports";
+
+export function getWatchReports(): WatchReport[] {
+  if (typeof window === "undefined") return [];
+  return JSON.parse(localStorage.getItem(REPORTS_KEY) ?? "[]");
+}
+
+export function getWatchReport(tmdbId: number): WatchReport | undefined {
+  return getWatchReports().find((r) => r.tmdbId === tmdbId);
+}
+
+export function addWatchReport(tmdbId: number, reaction: WatchReaction) {
+  const reports = getWatchReports().filter((r) => r.tmdbId !== tmdbId);
+  reports.push({ tmdbId, reaction, reportedAt: Date.now() });
+  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+}
+
+export function removeWatchReport(tmdbId: number) {
+  const reports = getWatchReports().filter((r) => r.tmdbId !== tmdbId);
+  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+}
+
+export function getWatchStats() {
+  const reports = getWatchReports();
+  return {
+    total: reports.length,
+    loved: reports.filter((r) => r.reaction === "loved").length,
+    good: reports.filter((r) => r.reaction === "good").length,
+    meh: reports.filter((r) => r.reaction === "meh").length,
+    dropped: reports.filter((r) => r.reaction === "dropped").length,
+  };
 }
