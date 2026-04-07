@@ -452,13 +452,13 @@ export default function DiscoverPage() {
               <IconUndo size={16} color="var(--text-muted)" />
             </button>
           )}
-          <button onClick={() => goNext("left")} disabled={isAnimating} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+          <button onClick={() => goNext("left")} disabled={isAnimating} aria-label="패스" className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
             <IconPass size={22} color="var(--text-secondary)" />
           </button>
-          <button onClick={() => setShowDetail(!showDetail)} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+          <button onClick={() => setShowDetail(!showDetail)} aria-label="상세보기" className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
             <IconInfo size={22} color="var(--text-secondary)" />
           </button>
-          <button onClick={() => goNext("right")} disabled={isAnimating} className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-full)" }}>
+          <button onClick={() => goNext("right")} disabled={isAnimating} aria-label="저장" className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border)", borderRadius: "var(--radius-full)" }}>
             <IconSave size={22} color="var(--accent)" />
           </button>
         </div>
