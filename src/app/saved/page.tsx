@@ -303,7 +303,7 @@ export default function SavedPage() {
                 {!report && !isReporting && (
                   <button
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(tmdbId); }}
-                    className="absolute top-1.5 left-1.5 px-2 py-1 text-[11px] font-medium active:scale-90 transition-transform"
+                    className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
                     style={{
                       background: "var(--bg-overlay)",
                       backdropFilter: "blur(4px)",
@@ -319,7 +319,7 @@ export default function SavedPage() {
                 {report && !isReporting && (
                   <button
                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(tmdbId); }}
-                    className="absolute top-1.5 left-1.5 px-2 py-1 text-[11px] font-medium active:scale-90 transition-transform"
+                    className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
                     style={{
                       background: "var(--bg-overlay)",
                       backdropFilter: "blur(4px)",
@@ -361,7 +361,7 @@ export default function SavedPage() {
                     ))}
                     <button
                       onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(null); }}
-                      className="mt-1 text-[11px] py-1 active:scale-95 transition-transform"
+                      className="mt-1 text-[11px] min-h-[44px] px-4 flex items-center active:scale-95 transition-transform"
                       style={{ color: "var(--text-muted)" }}
                     >
                       닫기
@@ -372,7 +372,7 @@ export default function SavedPage() {
                 {/* Remove button */}
                 <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(tmdbId); }}
-                  className="absolute top-1.5 right-1.5 w-6 h-6 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                  className="absolute top-1.5 right-1.5 w-8 h-8 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
                 >
                   <IconClose size={12} />
