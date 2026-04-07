@@ -203,7 +203,10 @@ export default function DiscoverPage() {
             {currentIndex + 1}/{filteredRecs.length}
           </span>
           <button
-            onClick={() => { localStorage.clear(); router.replace("/onboarding"); }}
+            onClick={() => {
+              ["neko_favorites", "neko_saved", "neko_recommendations"].forEach((k) => localStorage.removeItem(k));
+              router.replace("/onboarding");
+            }}
             className="text-xs transition-colors"
             style={{ color: "var(--text-muted)" }}
           >

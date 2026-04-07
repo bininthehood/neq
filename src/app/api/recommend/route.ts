@@ -11,6 +11,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const recommendations = await getRecommendations(favorites);
-  return NextResponse.json({ recommendations });
+  try {
+    const recommendations = await getRecommendations(favorites);
+    return NextResponse.json({ recommendations });
+  } catch (error) {
+    console.error("Recommendation error:", error);
+    return NextResponse.json(
+      { error: "추천 생성에 실패했습니다. 다시 시도해주세요.", recommendations: [] },
+      { status: 500 }
+    );
+  }
 }

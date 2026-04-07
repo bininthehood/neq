@@ -46,7 +46,13 @@ export async function getRecommendations(
   const content = response.choices[0].message.content;
   if (!content) return [];
 
-  const parsed = JSON.parse(content);
+  let parsed: any;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    console.error("LLM returned invalid JSON:", content.slice(0, 200));
+    return [];
+  }
   const recs: LLMRec[] =
     parsed.recommendations ??
     parsed.results ??
