@@ -106,8 +106,62 @@ dddaa25 style: Warm Cinema 디자인 시스템 코드 적용
 1bc12e8 docs: Day 1 개발 일지 추가
 ```
 
+### 미해결 / 다음 할 일 (Day 2 기준)
+- [ ] "어제 추천받은 거 봤어?" 셀프 리포트 기능
+- [ ] Vercel GitHub 자동 배포 연동 해결
+
+---
+
+## 2026-04-07 (Day 2 연장)
+
+### 진행 요약
+UX 고도화 3건. 사용자 경험의 근본적 문제 해결.
+
+### 사용자 피드백 → 수정
+
+**1. 아이콘이 밋밋하다**
+- 기존: 이모지(👋💚ℹ️↩) 버튼
+- 변경: 커스텀 SVG 아이콘 컴포넌트 (`src/components/Icons.tsx`)
+- Pass(X), Save(하트), Info(i), Undo(되돌리기), Close, Refresh 6종
+- 스와이프 오버레이도 SVG 아이콘으로 교체
+
+**2. Detail 접근이 부자연스럽다**
+- 기존: 위로 스와이프 → Detail (발견이 어려움)
+- 변경: **카드 탭** → Detail 열기. 훨씬 직관적.
+- "탭하여 상세보기" 힌트 카드 중앙에 표시 (첫 3장만)
+- 키보드: Enter로도 Detail 열기
+
+**3. 국내/해외 필터가 작동하지 않는 느낌**
+- **근본 원인:** 10개 랜덤 추천에서 클라이언트 필터링 → 국내 0개 빈번
+- **해결:** 필터 변경 시 LLM에 직접 조건 전달
+  - "국내 시리즈" 탭 → 프롬프트에 "한국 시리즈만 추천하세요" 포함
+  - 서버 측 origin 이중 검증 (LLM이 잘못 추천한 경우 방어)
+  - 필터 조합별 localStorage 캐시 (재탐색 불필요)
+  - `clearAllRecommendations()`로 재설정 시 전체 캐시 삭제
+- **빈 상태 UX:** "국내 작품을 찾지 못했어요" + "필터 초기화" / "다시 시도" 버튼
+
+### 기술 변경 사항
+- `src/components/Icons.tsx` — 6종 SVG 아이콘 컴포넌트 신규
+- `src/lib/recommend.ts` — `RecommendFilter` 인터페이스, `buildFilterPrompt()` 함수 추가
+- `src/app/api/recommend/route.ts` — `filter` 파라미터 수신
+- `src/lib/store.ts` — 필터별 캐시 (`neko_recs_{type}_{origin}`), `clearAllRecommendations()`
+- `src/app/discover/page.tsx` — 전면 리팩토링 (클라이언트 필터링 제거, 필터별 API 호출)
+
+### 커밋 히스토리 (Day 2 연장)
+```
+c0e84da feat: 필터별 맞춤 추천 (LLM에 직접 조건 전달)
+88beaaa feat: SVG 아이콘 + 카드 탭 Detail + 필터 빈 상태 처리
+24f3c10 docs: Day 2 개발 일지 추가
+```
+
+### 아키텍처 메모 (추후 참고)
+- **필터 → LLM 프롬프트 주입 패턴:** `buildFilterPrompt()`가 필터 조건을 한국어 프롬프트로 변환. 서버 측에서 TMDB `origin_country`로 이중 검증. LLM이 조건을 무시해도 서버에서 걸러냄.
+- **캐시 전략:** `neko_recs_movie_kr` 같은 키로 필터 조합별 캐시. 재설정 시 `RECS_FILTERED_PREFIX`로 시작하는 키 전부 삭제.
+- **레이트 리밋:** 인메모리 Map 기반. Vercel serverless라 인스턴스 간 공유 안 됨. 심각한 남용 방지 수준. 프로덕션에서는 Upstash Redis 권장.
+
 ### 미해결 / 다음 할 일
 - [ ] "어제 추천받은 거 봤어?" 셀프 리포트 기능
-- [ ] Vercel 배포 (`bunx vercel --prod`)
-- [ ] 더 많은 사용자 피드백 수집
 - [ ] Vercel GitHub 자동 배포 연동 해결
+- [ ] Saved 화면 고도화 (OTT별 그룹핑? 시청 완료 표시?)
+- [ ] 추천 품질 개선 (사용자 스와이프 데이터 반영)
+- [ ] Obsidian 체크리스트 업데이트
