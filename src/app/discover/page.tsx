@@ -96,25 +96,39 @@ export default function DiscoverPage() {
   const filtered = filterOTT === "all" ? recs : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
   const current = filtered[topIdx];
 
-  // 맨 앞 카드를 치우기
-  const dismissCard = useCallback((dirX: number) => {
-    if (swiping || topIdx >= filtered.length - 1) return;
+  // 다음 카드 (왼쪽으로 스와이프)
+  const nextCard = useCallback(() => {
+    if (swiping) return;
+    if (topIdx >= filtered.length - 1) {
+      // 마지막 카드 → 처음으로 순환
+      setSwiping(true);
+      setDragX(-500); setDragY(-80);
+      setTimeout(() => {
+        setTopIdx(0);
+        setDragX(0); setDragY(0); setSwiping(false);
+        scrollRef.current?.scrollTo({ top: 0 });
+      }, 280);
+      return;
+    }
     setSwiping(true);
-    // exit 방향으로 날리기
-    setDragX(dirX > 0 ? 500 : -500);
-    setDragY(-80);
+    setDragX(-500); setDragY(-80);
     setTimeout(() => {
       setTopIdx((i) => i + 1);
-      setDragX(0); setDragY(0);
-      setSwiping(false);
+      setDragX(0); setDragY(0); setSwiping(false);
       scrollRef.current?.scrollTo({ top: 0 });
     }, 280);
   }, [swiping, topIdx, filtered.length]);
 
-  // 이전 카드로 (덱 되감기)
-  const undoCard = useCallback(() => {
+  // 이전 카드 (오른쪽으로 스와이프)
+  const prevCard = useCallback(() => {
     if (swiping || topIdx <= 0) return;
-    setTopIdx((i) => i - 1);
+    setSwiping(true);
+    setDragX(500); setDragY(-80);
+    setTimeout(() => {
+      setTopIdx((i) => i - 1);
+      setDragX(0); setDragY(0); setSwiping(false);
+      scrollRef.current?.scrollTo({ top: 0 });
+    }, 280);
   }, [swiping, topIdx]);
 
   // 터치 — 맨 앞 카드만 드래그
@@ -145,25 +159,27 @@ export default function DiscoverPage() {
   const onTouchEnd = useCallback(() => {
     if (!dragging.current || dirLock.current !== "h") { dragging.current = false; dirLock.current = null; return; }
     dragging.current = false; dirLock.current = null;
-    if (Math.abs(dragX) > 80) {
-      dismissCard(dragX);
+    if (dragX < -80) {
+      nextCard();
+    } else if (dragX > 80) {
+      prevCard();
     } else {
       // 스냅백
       setDragX(0); setDragY(0);
     }
-  }, [dragX, dismissCard]);
+  }, [dragX, nextCard, prevCard]);
 
   // 키보드
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") undoCard();
-      else if (e.key === "ArrowRight") dismissCard(1);
+      if (e.key === "ArrowLeft") prevCard();
+      else if (e.key === "ArrowRight") nextCard();
       else if (e.key === "ArrowUp") scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" });
       else if (e.key === "ArrowDown" || e.key === "Escape") scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [dismissCard, undoCard]);
+  }, [nextCard, prevCard]);
 
   // 전체 이미지 프리로드
   useEffect(() => {
