@@ -140,7 +140,9 @@ export default function DiscoverPage() {
 
   // 이전 카드 (키보드 ArrowRight) — 오버레이 애니메이션으로 처리
   const prevCard = useCallback(() => {
-    if (swiping || topIdx <= 0 || prevOverlayX !== null) return;
+    if (swiping || prevOverlayX !== null || filtered.length === 0) return;
+    // 첫 카드에서 이전 → 마지막 카드로 순환
+    if (topIdx <= 0) { setTopIdx(filtered.length - 1); return; }
     setSwiping(true);
     const w = typeof window !== "undefined" ? window.innerWidth : 400;
     setPrevOverlayX(-w);
@@ -154,7 +156,7 @@ export default function DiscoverPage() {
         scrollRef.current?.scrollTo({ top: 0 });
       }, 350);
     });
-  }, [swiping, topIdx, prevOverlayX]);
+  }, [swiping, topIdx, prevOverlayX, filtered.length]);
 
   // "봤어요?" — 이미 본 작품 피드백 기록 + 저장 + 다음 카드
   const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
@@ -213,12 +215,11 @@ export default function DiscoverPage() {
       e.preventDefault();
       if (!scrollLocked) setScrollLocked(true);
 
-      if (dx > 0 && topIdx > 0) {
+      if (dx > 0 && filtered.length > 1) {
         // 오른쪽 드래그 → 이전 카드 오버레이를 왼쪽에서 끌어옴
-        // 현재 카드는 움직이지 않음
         const screenW = window.innerWidth;
         setPrevOverlayX(Math.min(0, -screenW + dx));
-      } else {
+      } else if (dx <= 0) {
         // 왼쪽 드래그 → 현재 카드 밀기 (다음 카드)
         setPrevOverlayX(null);
         setDragX(dx);
@@ -228,7 +229,7 @@ export default function DiscoverPage() {
       e.preventDefault();
       setPullY(Math.min(80, dy * 0.5));
     }
-  }, [refreshing, scrollLocked, topIdx]);
+  }, [refreshing, scrollLocked, filtered.length]);
 
   const onTouchEnd = useCallback(() => {
     if (!dragging.current) return;
@@ -245,7 +246,7 @@ export default function DiscoverPage() {
           // 30% 이상 → 착지: 0으로 애니메이션 후 topIdx 전환
           setPrevOverlayX(0);
           setTimeout(() => {
-            setTopIdx((i) => i - 1);
+            setTopIdx((i) => i > 0 ? i - 1 : filtered.length - 1);
             setPrevOverlayX(null);
             scrollRef.current?.scrollTo({ top: 0 });
           }, 300);
@@ -431,12 +432,26 @@ export default function DiscoverPage() {
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
       <FilterChips />
-      <div className="flex-1 flex flex-col items-center justify-center gap-5">
-        <NekoSpinner size={48} />
-        <div className="text-center">
-          <h2 className="font-display text-lg">{filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}</h2>
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>잠시만 기다려주세요</p>
+      <div className="flex-1 flex items-center justify-center px-3">
+        {/* 스켈레톤 카드 */}
+        <div className="relative w-full h-full max-h-[75dvh] animate-pulse" style={{ borderRadius: "var(--radius-xl)", background: "var(--surface)" }}>
+          <div className="absolute top-4 left-4 w-14 h-6" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+          <div className="absolute top-4 right-4 w-16 h-6" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+          <div className="absolute bottom-0 left-0 right-0 p-5 space-y-2.5">
+            <div className="h-6 w-3/5" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+            <div className="h-3 w-2/5" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-sm)" }} />
+            <div className="h-4 w-4/5" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-sm)" }} />
+            <div className="flex gap-1.5 pt-1">
+              <div className="w-8 h-8" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+              <div className="w-8 h-8" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+            </div>
+          </div>
         </div>
+      </div>
+      <div className="px-4 pb-2 shrink-0">
+        <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>
+          {filterLabel ? `${filterLabel} 추천 생성 중...` : "취향을 분석하고 있어요..."}
+        </p>
       </div>
       <BottomNav active="discover" />
     </div>
@@ -549,39 +564,45 @@ export default function DiscoverPage() {
 
                     {/* "봤어요?" 오버레이 */}
                     {showWatched && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 z-20 animate-fade-in"
-                        style={{ background: "var(--bg-overlay-dense)", backdropFilter: "blur(12px)", borderRadius: "var(--radius-xl)" }}>
-                        <div className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>이미 봤어요?</div>
-                        <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>시청 경험을 알려주시면 추천에 반영돼요</div>
-                        {([
-                          { key: "loved" as WatchReaction, label: "인생작이었어", color: "var(--accent)", bg: "var(--accent-dim)" },
-                          { key: "good" as WatchReaction, label: "재밌게 봤어", color: "var(--text-secondary)", bg: "var(--surface-raised)" },
-                          { key: "meh" as WatchReaction, label: "그저 그랬어", color: "var(--text-muted)", bg: "var(--surface)" },
-                          { key: "dropped" as WatchReaction, label: "중간에 포기", color: "var(--danger)", bg: "var(--danger-dim)" },
-                        ]).map((r) => (
+                      <div className="absolute inset-0 flex flex-col items-end justify-end p-5 gap-2 z-20 animate-fade-in"
+                        style={{ background: "linear-gradient(transparent 20%, var(--bg) 60%)", borderRadius: "var(--radius-xl)" }}>
+                        <div className="w-full mb-1">
+                          <div className="font-display text-lg font-bold">본 적 있나요?</div>
+                          <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>알려주시면 더 좋은 추천을 드려요</div>
+                        </div>
+                        <div className="w-full flex flex-wrap gap-2">
+                          {([
+                            { key: "loved" as WatchReaction, label: "인생작" },
+                            { key: "good" as WatchReaction, label: "괜찮았어" },
+                            { key: "meh" as WatchReaction, label: "별로였어" },
+                            { key: "dropped" as WatchReaction, label: "안 맞았어" },
+                          ]).map((r) => (
+                            <button
+                              key={r.key}
+                              onClick={(e) => { e.stopPropagation(); handleWatchedReaction(r.key); }}
+                              className="px-4 py-2 text-sm font-medium active:scale-95 transition-transform"
+                              style={{ background: "var(--surface)", color: "var(--text-secondary)", borderRadius: "var(--radius-full)", border: "1px solid var(--border)" }}
+                            >
+                              {r.label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="w-full flex gap-2 mt-1">
                           <button
-                            key={r.key}
-                            onClick={(e) => { e.stopPropagation(); handleWatchedReaction(r.key); }}
-                            className="w-36 py-2.5 text-sm font-medium active:scale-95 transition-transform"
-                            style={{ background: r.bg, color: r.color, borderRadius: "var(--radius-md)" }}
+                            onClick={(e) => { e.stopPropagation(); handleWatchedSkip(); }}
+                            className="flex-1 py-2 text-xs active:scale-95 transition-transform"
+                            style={{ color: "var(--text-muted)" }}
                           >
-                            {r.label}
+                            안 봤어요
                           </button>
-                        ))}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleWatchedSkip(); }}
-                          className="mt-1 px-4 py-2 text-xs active:scale-95 transition-transform"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          안 봤어요, 건너뛰기
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setShowWatched(false); }}
-                          className="text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          취소
-                        </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setShowWatched(false); }}
+                            className="flex-1 py-2 text-xs active:scale-95 transition-transform"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            닫기
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -591,8 +612,9 @@ export default function DiscoverPage() {
           })}
 
           {/* 이전 카드 오버레이 — 오른쪽 스와이프 시 왼쪽에서 덮어씌움 */}
-          {prevOverlayX !== null && topIdx > 0 && (() => {
-            const prev = filtered[topIdx - 1];
+          {prevOverlayX !== null && filtered.length > 1 && (() => {
+            const prevIdx = topIdx > 0 ? topIdx - 1 : filtered.length - 1;
+            const prev = filtered[prevIdx];
             if (!prev) return null;
             const isDragging = dragging.current;
             return (
