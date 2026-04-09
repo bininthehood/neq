@@ -24,8 +24,8 @@ export default function Home() {
 
   return (
     <div
-      className="flex-1 flex flex-col items-center justify-center gap-4 transition-opacity duration-400"
-      style={{ opacity: fadeOut ? 0 : 1, background: "var(--bg)" }}
+      className="flex-1 flex flex-col items-center justify-center gap-4 transition-opacity duration-400 bg-background"
+      style={{ opacity: fadeOut ? 0 : 1 }}
     >
       <div
         className="transition-all duration-700 ease-out"
@@ -44,8 +44,8 @@ export default function Home() {
           transitionDelay: "150ms",
         }}
       >
-        <span className="font-display text-3xl font-bold" style={{ color: "var(--accent)" }}>Neko</span>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>오늘 뭐 볼까?</p>
+        <span className="font-display text-3xl font-bold text-accent">Neko</span>
+        <p className="text-sm text-muted">오늘 뭐 볼까?</p>
       </div>
     </div>
   );

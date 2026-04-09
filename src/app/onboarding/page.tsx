@@ -83,28 +83,27 @@ export default function OnboardingPage() {
   // Step 0: 앱 소개
   if (step === 0) return (
     <div className="h-dvh flex flex-col items-center justify-center px-8 max-w-lg mx-auto">
-      <h1 className="font-display text-4xl font-bold" style={{ color: "var(--accent)" }}>Neko</h1>
-      <p className="text-center mt-3 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+      <h1 className="font-display text-4xl font-bold text-accent">Neko</h1>
+      <p className="text-center mt-3 leading-relaxed text-secondary">
         당신의 취향을 발견하세요.
       </p>
       <div className="mt-10 space-y-3 w-full max-w-[280px]">
-        <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
+        <div className="flex items-center gap-3 px-4 py-3 bg-surface rounded-lg">
           <IconClapper size={20} color="var(--accent)" />
-          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>좋아하는 작품 3개만 골라주세요</span>
+          <span className="text-sm text-secondary">좋아하는 작품 3개만 골라주세요</span>
         </div>
-        <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
+        <div className="flex items-center gap-3 px-4 py-3 bg-surface rounded-lg">
           <IconDiamond size={20} color="var(--accent)" />
-          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>취향에 맞는 숨겨진 명작을 찾아드려요</span>
+          <span className="text-sm text-secondary">취향에 맞는 숨겨진 명작을 찾아드려요</span>
         </div>
-        <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
+        <div className="flex items-center gap-3 px-4 py-3 bg-surface rounded-lg">
           <IconSwipe size={20} color="var(--accent)" />
-          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>스와이프하며 마음에 드는 작품 저장</span>
+          <span className="text-sm text-secondary">스와이프하며 마음에 드는 작품 저장</span>
         </div>
       </div>
       <button
         onClick={() => setStep(1)}
-        className="mt-10 w-full max-w-[280px] py-4 text-lg font-semibold active:scale-[0.98] transition-transform"
-        style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-lg)" }}
+        className="mt-10 w-full max-w-[280px] py-4 text-lg font-semibold active:scale-[0.98] transition-transform bg-accent text-background rounded-lg"
       >
         시작하기
       </button>
@@ -116,20 +115,19 @@ export default function OnboardingPage() {
     <div className="h-dvh flex flex-col max-w-lg mx-auto w-full">
       {/* Fixed header */}
       <div className="shrink-0 px-5 pt-8 pb-3">
-        <h1 className="font-display font-bold" style={{ color: "var(--accent)", fontSize: "36px" }}>
+        <h1 className="font-display font-bold text-accent" style={{ fontSize: "36px" }}>
           Neko
         </h1>
-        <p className="mt-2" style={{ color: "var(--text-secondary)" }}>
+        <p className="mt-2 text-secondary">
           좋아하는 작품을 {selected.length < 3 ? "3-5개" : "더"} 골라주세요
         </p>
         <div className="flex gap-1 mt-4">
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="h-1 flex-1 transition-colors"
+              className="h-1 flex-1 transition-colors rounded-full"
               style={{
                 background: i < selected.length ? "var(--accent)" : "var(--border)",
-                borderRadius: "var(--radius-full)",
               }}
             />
           ))}
@@ -143,21 +141,21 @@ export default function OnboardingPage() {
               return (
                 <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
                   {item.posterUrl ? (
-                    <img src={item.posterUrl} alt={item.title} className="w-14 h-20 object-cover" style={{ borderRadius: "var(--radius-md)" }} />
+                    <img src={item.posterUrl} alt={item.title} className="w-14 h-20 object-cover rounded-md" />
                   ) : (
-                    <div className="w-14 h-20 flex items-center justify-center text-[10px]" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", color: "var(--text-muted)" }}>
+                    <div className="w-14 h-20 flex items-center justify-center text-[10px] bg-surface rounded-md text-muted">
                       {item.title.slice(0, 3)}
                     </div>
                   )}
-                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center" style={{ background: "var(--danger)", borderRadius: "var(--radius-full)" }}>
+                  <div className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center bg-danger rounded-full">
                     <IconClose size={10} color="var(--text-primary)" />
                   </div>
                 </button>
               );
             }
             return (
-              <div key={`empty-${i}`} className="w-14 h-20 flex-shrink-0 flex items-center justify-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)", border: "1px dashed var(--border)" }}>
-                <span className="text-lg" style={{ color: "var(--text-muted)" }}>+</span>
+              <div key={`empty-${i}`} className="w-14 h-20 flex-shrink-0 flex items-center justify-center bg-surface rounded-md" style={{ border: "1px dashed var(--border)" }}>
+                <span className="text-lg text-muted">+</span>
               </div>
             );
           })}
@@ -169,32 +167,25 @@ export default function OnboardingPage() {
           value={query}
           onChange={(e) => handleInput(e.target.value)}
           placeholder="영화나 시리즈 제목을 검색하세요"
-          className="w-full px-4 py-3 mt-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            color: "var(--text-primary)",
-          }}
+          className="w-full px-4 py-3 mt-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
         />
       </div>
 
       {/* Scrollable content area */}
       <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-24">
         {searching && (
-          <div className="text-center py-4" style={{ color: "var(--text-muted)" }}>검색 중...</div>
+          <div className="text-center py-4 text-muted">검색 중...</div>
         )}
 
         {/* Suggestion grid */}
         {showSuggestions && (
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>이런 작품은 어떠세요?</p>
+              <p className="text-xs text-muted">이런 작품은 어떠세요?</p>
               <button
                 onClick={fetchTrending}
                 disabled={loadingSuggestions}
-                className="text-xs transition-colors disabled:opacity-30 min-h-[44px] flex items-center py-2 px-3"
-                style={{ color: "var(--text-muted)" }}
+                className="text-xs transition-colors disabled:opacity-30 min-h-[44px] flex items-center py-2 px-3 text-muted"
               >
                 {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
               </button>
@@ -207,9 +198,8 @@ export default function OnboardingPage() {
                   <button
                     key={item.id}
                     onClick={() => toggleSelect(item)}
-                    className="relative overflow-hidden transition-all active:scale-95"
+                    className="relative overflow-hidden transition-all active:scale-95 rounded-lg"
                     style={{
-                      borderRadius: "var(--radius-lg)",
                       outline: isSelected ? "2px solid var(--accent)" : "none",
                       outlineOffset: "-2px",
                       aspectRatio: tall ? "2/3.5" : "2/3",
@@ -218,7 +208,7 @@ export default function OnboardingPage() {
                     {item.posterUrl ? (
                       <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full" style={{ background: "var(--surface)" }} />
+                      <div className="w-full h-full bg-surface" />
                     )}
                     <div
                       className="absolute bottom-0 left-0 right-0 p-1.5"
@@ -228,8 +218,7 @@ export default function OnboardingPage() {
                     </div>
                     {isSelected && (
                       <div
-                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center"
-                        style={{ background: "var(--accent)", borderRadius: "var(--radius-full)" }}
+                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-accent rounded-full"
                       >
                         <IconCheck size={12} color="var(--bg)" />
                       </div>
@@ -248,24 +237,23 @@ export default function OnboardingPage() {
             <button
               key={item.id}
               onClick={() => toggleSelect(item)}
-              className="w-full flex items-center gap-3 p-3 transition-colors"
+              className="w-full flex items-center gap-3 p-3 transition-colors rounded-lg"
               style={{
-                borderRadius: "var(--radius-lg)",
                 background: isSelected ? "var(--accent-dim)" : "transparent",
                 border: isSelected ? "1px solid var(--accent-border)" : "1px solid transparent",
               }}
             >
               {item.posterUrl ? (
-                <img src={item.posterUrl} alt={item.title} className="w-12 h-18 object-cover flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
+                <img src={item.posterUrl} alt={item.title} className="w-12 h-18 object-cover flex-shrink-0 rounded-md" />
               ) : (
-                <div className="w-12 h-18 flex-shrink-0" style={{ background: "var(--surface)", borderRadius: "var(--radius-md)" }} />
+                <div className="w-12 h-18 flex-shrink-0 bg-surface rounded-md" />
               )}
               <div className="text-left flex-1 min-w-0">
                 <div className="font-medium truncate">{item.title}</div>
-                <div className="text-sm" style={{ color: "var(--text-muted)" }}>{item.year}</div>
+                <div className="text-sm text-muted">{item.year}</div>
               </div>
               {isSelected && (
-                <div className="flex-shrink-0" style={{ color: "var(--accent)" }}>
+                <div className="flex-shrink-0 text-accent">
                   <IconCheck size={18} />
                 </div>
               )}
@@ -279,11 +267,10 @@ export default function OnboardingPage() {
         <button
           onClick={handleNext}
           disabled={selected.length < 3}
-          className="w-full py-4 text-lg font-semibold transition-all active:scale-[0.98]"
+          className="w-full py-4 text-lg font-semibold transition-all active:scale-[0.98] rounded-lg"
           style={{
             background: selected.length >= 3 ? "var(--accent)" : "var(--surface)",
             color: selected.length >= 3 ? "var(--bg)" : "var(--text-muted)",
-            borderRadius: "var(--radius-lg)",
             cursor: selected.length >= 3 ? "pointer" : "not-allowed",
           }}
         >

@@ -428,8 +428,8 @@ export default function DiscoverPage() {
       {openDropdown && (
         <>
           <div className="fixed inset-0 z-20" onClick={() => setOpenDropdown(null)} />
-          <div className="absolute left-4 right-4 z-30 p-2 flex flex-wrap gap-1.5 animate-fade-in"
-            style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+          <div className="absolute left-4 right-4 z-30 p-2 flex flex-wrap gap-1.5 animate-fade-in bg-surface rounded-lg border border-border"
+            style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
             {openDropdown === "type" && (["all", "movie", "series"] as const).map((t) => (
               <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setOpenDropdown(null); }}
                 className="px-3 py-2 text-xs whitespace-nowrap transition-colors active:scale-95"
@@ -462,7 +462,7 @@ export default function DiscoverPage() {
                     }}
                       className="px-3 py-2 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5 active:scale-95"
                       style={chipStyle(selected)}>
-                      <img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />
+                      <img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain rounded-sm" />
                       {ott}
                     </button>
                   );
@@ -477,26 +477,26 @@ export default function DiscoverPage() {
 
   if (!mounted || loading) return (
     <div className="h-dvh flex flex-col">
-      <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
+      <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg text-accent">Neko</span></div>
       <FilterChips />
       <div className="flex-1 flex items-center justify-center px-3">
         {/* 스켈레톤 카드 */}
-        <div className="relative w-full h-full max-h-[75dvh] animate-pulse" style={{ borderRadius: "var(--radius-xl)", background: "var(--surface)" }}>
-          <div className="absolute top-4 left-4 w-14 h-6" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
-          <div className="absolute top-4 right-4 w-16 h-6" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+        <div className="relative w-full h-full max-h-[75dvh] animate-pulse rounded-xl bg-surface">
+          <div className="absolute top-4 left-4 w-14 h-6 bg-surface-raised rounded-md" />
+          <div className="absolute top-4 right-4 w-16 h-6 bg-surface-raised rounded-md" />
           <div className="absolute bottom-0 left-0 right-0 p-5 space-y-2.5">
-            <div className="h-6 w-3/5" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
-            <div className="h-3 w-2/5" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-sm)" }} />
-            <div className="h-4 w-4/5" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-sm)" }} />
+            <div className="h-6 w-3/5 bg-surface-raised rounded-md" />
+            <div className="h-3 w-2/5 bg-surface-raised rounded-sm" />
+            <div className="h-4 w-4/5 bg-surface-raised rounded-sm" />
             <div className="flex gap-1.5 pt-1">
-              <div className="w-8 h-8" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
-              <div className="w-8 h-8" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }} />
+              <div className="w-8 h-8 bg-surface-raised rounded-md" />
+              <div className="w-8 h-8 bg-surface-raised rounded-md" />
             </div>
           </div>
         </div>
       </div>
       <div className="px-4 pb-2 shrink-0">
-        <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>
+        <p className="text-center text-xs py-2 text-muted">
           {filterLabel ? `${filterLabel} 추천 생성 중...` : "취향을 분석하고 있어요..."}
         </p>
       </div>
@@ -506,7 +506,7 @@ export default function DiscoverPage() {
 
   if (loadError) return (
     <div className="h-dvh flex flex-col">
-      <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
+      <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg text-accent">Neko</span></div>
       <FilterChips />
       <div className="flex-1 flex flex-col px-8 justify-center">
         <div className="space-y-5">
@@ -514,7 +514,7 @@ export default function DiscoverPage() {
           <div>
             <p className="font-display text-lg font-semibold">{loadError}</p>
           </div>
-          <button onClick={() => loadRecs(filterType, filterOrigin)} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
+          <button onClick={() => loadRecs(filterType, filterOrigin)} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform bg-accent text-background rounded-full">
             <IconRefresh size={14} /> 다시 시도
           </button>
         </div>
@@ -527,14 +527,14 @@ export default function DiscoverPage() {
     const hasF = filterType !== "all" || filterOrigin !== "all" || filterOTTs.size > 0;
     return (
       <div className="h-dvh flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center" style={{ color: "var(--text-muted)" }}>재설정</button></div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg text-accent">Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center text-muted">재설정</button></div>
         <FilterChips />
         <div className="flex-1 flex flex-col px-8 justify-center"><div className="space-y-5">
           <IconFilm size={36} color="var(--text-muted)" />
-          <div><p className="font-display text-lg font-semibold">{hasF ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p><p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasF ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p></div>
+          <div><p className="font-display text-lg font-semibold">{hasF ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p><p className="text-sm mt-1.5 text-secondary">{hasF ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p></div>
           <div className="flex gap-3">
-            {hasF && <button onClick={() => { handleFilterChange("all", "all"); setFilterOTTs(new Set()); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>}
-            <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}><IconRefresh size={14} /> 다시 시도</button>
+            {hasF && <button onClick={() => { handleFilterChange("all", "all"); setFilterOTTs(new Set()); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform bg-surface border border-border rounded-full">필터 초기화</button>}
+            <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform bg-accent text-background rounded-full"><IconRefresh size={14} /> 다시 시도</button>
           </div>
         </div></div>
         <BottomNav active="discover" />
@@ -548,10 +548,10 @@ export default function DiscoverPage() {
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
+        <span className="font-display text-lg text-accent">Neko</span>
         <div className="flex items-center gap-3">
-          <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>{topIdx + 1}/{filtered.length}</span>
-          <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center" style={{ color: "var(--text-muted)" }}>재설정</button>
+          <span className="font-data text-sm text-muted">{topIdx + 1}/{filtered.length}</span>
+          <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center text-muted">재설정</button>
         </div>
       </div>
       <FilterChips />
@@ -586,19 +586,18 @@ export default function DiscoverPage() {
             const rot = isTop ? dragX * 0.06 : 0;
 
             return (
-              <div key={rec.tmdbId} className="absolute overflow-hidden will-change-transform"
+              <div key={rec.tmdbId} className="absolute overflow-hidden will-change-transform rounded-xl"
                 style={{
                   top: 0, bottom: "8px", left: "12px", right: "12px",
                   transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rot}deg) scale(${scaleVal})`,
                   transition: isTop && dragging.current ? "none" : (isTop ? "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)" : "transform 0.3s ease-out"),
-                  borderRadius: "var(--radius-xl)",
                   zIndex: 10 - depth,
                 }}>
                 {rec.posterUrl ? (
                   <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-                    <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                  <div className="absolute inset-0 flex items-center justify-center bg-surface">
+                    <span className="font-display text-5xl text-muted">N</span>
                   </div>
                 )}
                 {isTop && (
@@ -611,10 +610,10 @@ export default function DiscoverPage() {
                         if (dx < 5 && !swiping) handleCardTap();
                       }}
                     />
-                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                      <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
+                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10 bg-overlay rounded-md">
+                      <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold text-accent">{rec.rating.toFixed(1)}</span>
                     </div>
-                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm z-10" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm z-10 bg-overlay rounded-md">
                       {rec.type === "series" ? "시리즈" : "영화"}
                     </div>
                     <div
@@ -626,22 +625,22 @@ export default function DiscoverPage() {
                       }}
                     >
                       <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
-                      {metaInfo(rec) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>}
-                      <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
+                      {metaInfo(rec) && <p className="text-xs mt-1 text-muted">{metaInfo(rec)}</p>}
+                      <p className="text-sm mt-1 text-secondary">{rec.reason}</p>
                       <div className="flex gap-1.5 mt-3 items-center">
                         {rec.providers.slice(0, 4).map((p) => (
-                          <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                          <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain rounded-md bg-surface" />
                         ))}
                       </div>
                     </div>
 
                     {/* "봤어요?" 오버레이 */}
                     {showWatched && (
-                      <div className="absolute inset-0 flex flex-col items-end justify-end p-5 gap-2 z-20 animate-fade-in"
-                        style={{ background: "linear-gradient(transparent 20%, var(--bg) 60%)", borderRadius: "var(--radius-xl)" }}>
+                      <div className="absolute inset-0 flex flex-col items-end justify-end p-5 gap-2 z-20 animate-fade-in rounded-xl"
+                        style={{ background: "linear-gradient(transparent 20%, var(--bg) 60%)" }}>
                         <div className="w-full mb-1">
                           <div className="font-display text-lg font-bold">본 적 있나요?</div>
-                          <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>알려주시면 더 좋은 추천을 드려요</div>
+                          <div className="text-xs mt-0.5 text-muted">알려주시면 더 좋은 추천을 드려요</div>
                         </div>
                         <div className="w-full flex flex-wrap gap-2">
                           {([
@@ -653,8 +652,7 @@ export default function DiscoverPage() {
                             <button
                               key={r.key}
                               onClick={(e) => { e.stopPropagation(); handleWatchedReaction(r.key); }}
-                              className="px-4 py-2 text-sm font-medium active:scale-95 transition-transform"
-                              style={{ background: "var(--surface)", color: "var(--text-secondary)", borderRadius: "var(--radius-full)", border: "1px solid var(--border)" }}
+                              className="px-4 py-2 text-sm font-medium active:scale-95 transition-transform bg-surface text-secondary rounded-full border border-border"
                             >
                               {r.label}
                             </button>
@@ -663,15 +661,13 @@ export default function DiscoverPage() {
                         <div className="w-full flex gap-2 mt-1">
                           <button
                             onClick={(e) => { e.stopPropagation(); handleWatchedSkip(); }}
-                            className="flex-1 py-2 text-xs active:scale-95 transition-transform"
-                            style={{ color: "var(--text-muted)" }}
+                            className="flex-1 py-2 text-xs active:scale-95 transition-transform text-muted"
                           >
                             안 봤어요
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); setShowWatched(false); }}
-                            className="flex-1 py-2 text-xs active:scale-95 transition-transform"
-                            style={{ color: "var(--text-muted)" }}
+                            className="flex-1 py-2 text-xs active:scale-95 transition-transform text-muted"
                           >
                             닫기
                           </button>
@@ -691,35 +687,34 @@ export default function DiscoverPage() {
             if (!prev) return null;
             const isDragging = dragging.current;
             return (
-              <div className="absolute overflow-hidden will-change-transform"
+              <div className="absolute overflow-hidden will-change-transform rounded-xl"
                 style={{
                   top: 0, bottom: "8px", left: "12px", right: "12px",
                   transform: `translateX(${prevOverlayX}px)`,
                   transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
-                  borderRadius: "var(--radius-xl)",
                   zIndex: 20,
                   boxShadow: "8px 0 32px rgba(0,0,0,0.5)",
                 }}>
                 {prev.posterUrl ? (
                   <img src={prev.posterUrl} alt={prev.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
-                    <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                  <div className="absolute inset-0 flex items-center justify-center bg-surface">
+                    <span className="font-display text-5xl text-muted">N</span>
                   </div>
                 )}
-                <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
-                  <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{prev.rating.toFixed(1)}</span>
+                <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 bg-overlay rounded-md">
+                  <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold text-accent">{prev.rating.toFixed(1)}</span>
                 </div>
-                <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm bg-overlay rounded-md">
                   {prev.type === "series" ? "시리즈" : "영화"}
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
                   <h2 className="font-display text-2xl font-bold">{prev.title}</h2>
-                  {metaInfo(prev) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(prev)}</p>}
-                  <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{prev.reason}</p>
+                  {metaInfo(prev) && <p className="text-xs mt-1 text-muted">{metaInfo(prev)}</p>}
+                  <p className="text-sm mt-1 text-secondary">{prev.reason}</p>
                   <div className="flex gap-1.5 mt-3 items-center">
                     {prev.providers.slice(0, 4).map((p) => (
-                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain rounded-md bg-surface" />
                     ))}
                   </div>
                 </div>
@@ -738,10 +733,10 @@ export default function DiscoverPage() {
             ))}
           </div>
           <div className="flex gap-2">
-            <button onClick={() => current && handleShare(current)} aria-label="공유" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+            <button onClick={() => current && handleShare(current)} aria-label="공유" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform bg-surface border border-border rounded-full">
               <IconShare size={18} color="var(--text-secondary)" />
             </button>
-            <button onClick={openDetail} aria-label="상세보기" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>
+            <button onClick={openDetail} aria-label="상세보기" className="w-12 h-12 flex items-center justify-center active:scale-90 transition-transform bg-surface border border-border rounded-full">
               <IconDetail size={18} color="var(--text-secondary)" />
             </button>
             <button onClick={() => {
@@ -761,30 +756,29 @@ export default function DiscoverPage() {
       {/* 스와이프 튜토리얼 오버레이 */}
       {showTutorial && (
         <div
-          className="fixed inset-0 z-40 flex items-center justify-center animate-fade-in"
-          style={{ background: "var(--bg-overlay-dense)" }}
+          className="fixed inset-0 z-40 flex items-center justify-center animate-fade-in bg-overlay-dense"
           onClick={dismissTutorial}
         >
           <div className="flex flex-col items-start gap-6 px-8 max-w-[320px]">
             <div className="flex gap-10 w-full">
               <div className="flex flex-col items-center gap-1.5">
-                <div className="text-[1.75rem]" style={{ color: "var(--text-primary)" }}>&larr;</div>
-                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>패스</span>
+                <div className="text-[1.75rem] text-foreground">&larr;</div>
+                <span className="text-xs font-medium text-secondary">패스</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
-                <div className="text-[1.75rem]" style={{ color: "var(--text-primary)" }}>&rarr;</div>
-                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>이전 카드</span>
+                <div className="text-[1.75rem] text-foreground">&rarr;</div>
+                <span className="text-xs font-medium text-secondary">이전 카드</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
-                <div className="text-[1.75rem]" style={{ color: "var(--text-primary)" }}>&darr;</div>
-                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>새로고침</span>
+                <div className="text-[1.75rem] text-foreground">&darr;</div>
+                <span className="text-xs font-medium text-secondary">새로고침</span>
               </div>
             </div>
             <div>
-              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>카드를 탭하면 "봤어요?" 기록</p>
-              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>하단 정보 영역을 탭하면 상세보기</p>
+              <p className="text-sm text-secondary">카드를 탭하면 "봤어요?" 기록</p>
+              <p className="text-sm mt-1 text-secondary">하단 정보 영역을 탭하면 상세보기</p>
             </div>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>아무 곳이나 탭하면 닫힘</p>
+            <p className="text-xs text-muted">아무 곳이나 탭하면 닫힘</p>
           </div>
         </div>
       )}
@@ -794,12 +788,11 @@ export default function DiscoverPage() {
         <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ touchAction: "none" }} onClick={closeDetail}
           onTouchMove={(e) => e.stopPropagation()}>
           {/* 배경 딤 */}
-          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
+          <div className="absolute inset-0 bg-overlay-heavy" style={{ opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
           {/* 시트 */}
           <div
-            className="relative w-full max-w-[480px] max-h-[90dvh] flex flex-col"
+            className="relative w-full max-w-[480px] max-h-[90dvh] flex flex-col bg-background"
             style={{
-              background: "var(--bg)",
               borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
               transform: `translateY(${detailY}%)`,
               transition: detailAnimating ? "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)" : "none",
@@ -808,8 +801,8 @@ export default function DiscoverPage() {
           >
             {/* 핸들바 */}
             <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
-              <div className="flex-1 flex justify-center"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
-              <button className="w-11 h-11 flex items-center justify-center flex-shrink-0 -mr-1" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
+              <div className="flex-1 flex justify-center"><div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} /></div>
+              <button className="w-11 h-11 flex items-center justify-center flex-shrink-0 -mr-1 bg-surface rounded-full" onClick={closeDetail}>
                 <IconClose size={16} color="var(--text-secondary)" />
               </button>
             </div>
@@ -823,35 +816,35 @@ export default function DiscoverPage() {
               onTouchEnd={onDetailTouchEnd}
             >
               <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
-              <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
+              <p className="text-sm mt-0.5 text-muted">{current.titleEn} · {metaInfo(current)}</p>
               <div className="flex items-center gap-1.5 mt-2">
                 <IconStar size={13} color="var(--accent)" />
-                <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{current.rating.toFixed(1)}</span>
+                <span className="font-data text-sm font-semibold text-accent">{current.rating.toFixed(1)}</span>
               </div>
-              {current.backdrop && <img src={current.backdrop} alt="" className="w-full h-40 object-cover mt-4" style={{ borderRadius: "var(--radius-md)" }} />}
-              <div className="mt-4"><div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>{current.reason}</div></div>
+              {current.backdrop && <img src={current.backdrop} alt="" className="w-full h-40 object-cover mt-4 rounded-md" />}
+              <div className="mt-4"><div className="px-3 py-2 text-sm bg-accent-dim rounded-md">{current.reason}</div></div>
               {(current.director || current.cast?.length > 0) && (
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
-                  {current.director && <div><span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span><span className="text-sm">{current.director}</span></div>}
-                  {current.cast?.length > 0 && <div><span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>}
+                  {current.director && <div><span className="text-xs text-muted">감독 </span><span className="text-sm">{current.director}</span></div>}
+                  {current.cast?.length > 0 && <div><span className="text-xs text-muted">출연 </span><span className="text-sm">{current.cast.join(", ")}</span></div>}
                 </div>
               )}
               {current.overview && (
                 <div className="mt-4">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
-                  <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{current.overview}</p>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">줄거리</h3>
+                  <p className="text-sm leading-relaxed text-secondary">{current.overview}</p>
                 </div>
               )}
               <div className="mt-5">
-                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">시청 가능</h3>
                 <div className="flex flex-col gap-2">
                   {current.providers.map((p) => {
                     const u = getOTTLink(p.name, current.title);
                     return (
-                      <a key={p.name} href={u ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform" style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}>
-                        <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
+                      <a key={p.name} href={u ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md">
+                        <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0 rounded-sm bg-surface" />
                         <span className="flex-1">{p.name}</span>
-                        <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
+                        <span className="text-xs text-accent">열기</span>
                       </a>
                     );
                   })}
@@ -860,11 +853,10 @@ export default function DiscoverPage() {
               {/* 공유 */}
               <button
                 onClick={() => handleShare(current)}
-                className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
+                className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform bg-surface border border-border rounded-lg"
               >
                 <IconShare size={16} color="var(--text-secondary)" />
-                <span style={{ color: "var(--text-secondary)" }}>이 작품 공유하기</span>
+                <span className="text-secondary">이 작품 공유하기</span>
               </button>
             </div>
           </div>

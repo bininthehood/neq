@@ -30,8 +30,8 @@ function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
   return (
     <span
-      className="px-2 py-0.5 text-[11px] font-semibold"
-      style={{ color: r.color, background: r.bg, borderRadius: "var(--radius-sm)" }}
+      className="px-2 py-0.5 text-[11px] font-semibold rounded-sm"
+      style={{ color: r.color, background: r.bg }}
     >
       {r.label}
     </span>
@@ -71,15 +71,15 @@ function PosterCard({
       onClick={() => onOpen(item)}
     >
       {item.recommendation.posterUrl ? (
-        <img src={item.recommendation.posterUrl} alt={item.recommendation.title} loading="lazy" className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+        <img src={item.recommendation.posterUrl} alt={item.recommendation.title} loading="lazy" className="w-full h-full object-cover rounded-lg" />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
+        <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center bg-surface rounded-lg text-muted">
           {item.recommendation.title}
         </div>
       )}
 
       {report && !isReporting && (
-        <div className="absolute inset-0 pointer-events-none" style={{ background: "var(--bg-overlay-light)", borderRadius: "var(--radius-lg)" }} />
+        <div className="absolute inset-0 pointer-events-none bg-overlay-light rounded-lg" />
       )}
 
       <div
@@ -88,10 +88,10 @@ function PosterCard({
       >
         <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
         <div className="flex items-center gap-2">
-          <span className="font-data text-[11px] flex items-center gap-0.5" style={{ color: "var(--text-muted)" }}><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
+          <span className="font-data text-[11px] flex items-center gap-0.5 text-muted"><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
           {report && <ReactionLabel reaction={report} />}
           {!report && item.recommendation.providers.slice(0, 2).map((p) => (
-            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />
+            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain rounded-sm" />
           ))}
         </div>
       </div>
@@ -99,8 +99,8 @@ function PosterCard({
       {!report && !isReporting && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStartReport(tmdbId); }}
-          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
-          style={{ background: "var(--bg-overlay)", backdropFilter: "blur(4px)", borderRadius: "var(--radius-full)", color: "var(--text-secondary)" }}
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform bg-overlay rounded-full text-secondary"
+          style={{ backdropFilter: "blur(4px)" }}
         >
           봤어요?
         </button>
@@ -109,8 +109,8 @@ function PosterCard({
       {report && !isReporting && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUndoReport(tmdbId); }}
-          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
-          style={{ background: "var(--bg-overlay)", backdropFilter: "blur(4px)", borderRadius: "var(--radius-full)", color: REACTIONS.find((x) => x.key === report)?.color }}
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform bg-overlay rounded-full"
+          style={{ backdropFilter: "blur(4px)", color: REACTIONS.find((x) => x.key === report)?.color }}
           title="리포트 취소"
         >
           <IconCheck size={11} /> 시청
@@ -119,24 +119,23 @@ function PosterCard({
 
       {isReporting && (
         <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-2 animate-fade-in z-10"
-          style={{ background: "var(--bg-overlay-dense)", backdropFilter: "blur(8px)", borderRadius: "var(--radius-lg)" }}
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2 animate-fade-in z-10 bg-overlay-dense rounded-lg"
+          style={{ backdropFilter: "blur(8px)" }}
         >
-          <div className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>어땠어요?</div>
+          <div className="text-xs font-semibold mb-1 text-muted">어땠어요?</div>
           {REACTIONS.map((r) => (
             <button
               key={r.key}
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
-              className="w-28 py-2 text-xs font-medium active:scale-95 transition-transform"
-              style={{ background: r.bg, color: r.color, borderRadius: "var(--radius-md)" }}
+              className="w-28 py-2 text-xs font-medium active:scale-95 transition-transform rounded-md"
+              style={{ background: r.bg, color: r.color }}
             >
               {r.label}
             </button>
           ))}
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
-            className="mt-1 text-[11px] min-h-[44px] px-4 flex items-center active:scale-95 transition-transform"
-            style={{ color: "var(--text-muted)" }}
+            className="mt-1 text-[11px] min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted"
           >
             닫기
           </button>
@@ -147,8 +146,8 @@ function PosterCard({
         {report && onArchiveToggle && (
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
-            className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-            style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)", color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
+            className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full"
+            style={{ color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
             title={isArchived ? "복원" : "아카이브"}
           >
             {isArchived ? "↩" : "✓"}
@@ -156,8 +155,7 @@ function PosterCard({
         )}
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
-          className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-          style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
+          className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full"
         >
           <IconClose size={12} />
         </button>
@@ -332,23 +330,21 @@ export default function SavedPage() {
         {saved.length > 0 && (
           <div className="mt-2">
             <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              <p className="text-xs text-muted">
                 저장 {saved.length}편{watchedCount > 0 && ` · 시청 ${watchedCount}편`}
               </p>
               {unwatchedCount > 0 && (
-                <p className="text-xs font-medium" style={{ color: "var(--accent)" }}>
+                <p className="text-xs font-medium text-accent">
                   {unwatchedCount}편 남음
                 </p>
               )}
             </div>
             {watchedCount > 0 && (
-              <div className="h-1 overflow-hidden" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}>
+              <div className="h-1 overflow-hidden bg-surface rounded-full">
                 <div
-                  className="h-full transition-all duration-500"
+                  className="h-full transition-all duration-500 bg-accent rounded-full"
                   style={{
                     width: `${(watchedCount / saved.length) * 100}%`,
-                    background: "var(--accent)",
-                    borderRadius: "var(--radius-full)",
                   }}
                 />
               </div>
@@ -356,7 +352,7 @@ export default function SavedPage() {
           </div>
         )}
         {!saved.length && (
-          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+          <p className="text-sm mt-1 text-muted">
             저장한 작품이 여기에 모여요
           </p>
         )}
@@ -387,37 +383,36 @@ export default function SavedPage() {
       {stats.total > 0 && (
         <div className="mx-5 mt-2 mb-3">
           <div
-            className="p-3 flex items-center gap-3"
-            style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}
+            className="p-3 flex items-center gap-3 bg-surface rounded-lg"
           >
             <div className="flex-1">
-              <div className="text-xs font-semibold" style={{ color: "var(--text-muted)" }}>
+              <div className="text-xs font-semibold text-muted">
                 시청 리포트
               </div>
               <div className="flex gap-3 mt-1.5">
                 {stats.loved > 0 && (
-                  <span className="text-xs" style={{ color: "var(--accent)" }}>
+                  <span className="text-xs text-accent">
                     인생작 {stats.loved}
                   </span>
                 )}
                 {stats.good > 0 && (
-                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                  <span className="text-xs text-secondary">
                     재밌었어 {stats.good}
                   </span>
                 )}
                 {stats.meh > 0 && (
-                  <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                  <span className="text-xs text-muted">
                     그저 그래 {stats.meh}
                   </span>
                 )}
                 {stats.dropped > 0 && (
-                  <span className="text-xs" style={{ color: "var(--danger)" }}>
+                  <span className="text-xs text-danger">
                     포기 {stats.dropped}
                   </span>
                 )}
               </div>
             </div>
-            <div className="font-data text-2xl font-bold" style={{ color: "var(--accent)" }}>
+            <div className="font-data text-2xl font-bold text-accent">
               {stats.total}
             </div>
           </div>
@@ -429,20 +424,18 @@ export default function SavedPage() {
         <div className="mx-5 mt-1 mb-4">
           <button
             onClick={handlePickTonight}
-            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform"
-            style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
+            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform bg-surface border border-border rounded-lg"
           >
             <div className="text-left">
               <div className="font-display font-semibold">오늘 뭐 볼까?</div>
-              <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+              <div className="text-xs mt-0.5 text-muted">
                 {unwatchedCount > 0
                   ? `안 본 ${unwatchedCount}편 중 하나를 골라드려요`
                   : "저장한 작품 중 하나를 골라드려요"}
               </div>
             </div>
             <div
-              className="px-4 py-2 text-sm font-semibold"
-              style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-md)" }}
+              className="px-4 py-2 text-sm font-semibold bg-accent text-background rounded-md"
             >
               고르기
             </div>
@@ -453,11 +446,11 @@ export default function SavedPage() {
       {/* Tonight pick */}
       {selected && (
         <div
-          className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform"
-          style={{ background: "var(--accent-dim)", border: "1px solid var(--accent-border-light)", borderRadius: "var(--radius-lg)" }}
+          className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform bg-accent-dim rounded-lg"
+          style={{ border: "1px solid var(--accent-border-light)" }}
           onClick={() => { if (selected) openDetailFor(selected); }}
         >
-          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--accent)" }}>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-accent">
             오늘의 선택
           </div>
           <div className="flex gap-3">
@@ -465,18 +458,17 @@ export default function SavedPage() {
               <img
                 src={selected.recommendation.posterUrl}
                 alt={selected.recommendation.title}
-                className="w-16 h-24 object-cover flex-shrink-0"
-                style={{ borderRadius: "var(--radius-md)" }}
+                className="w-16 h-24 object-cover flex-shrink-0 rounded-md"
               />
             )}
             <div>
               <div className="font-display font-bold text-lg">{selected.recommendation.title}</div>
-              <div className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
+              <div className="text-sm mt-1 text-secondary">
                 {selected.recommendation.reason}
               </div>
               <div className="flex gap-1 mt-2">
                 {selected.recommendation.providers.slice(0, 3).map((p) => (
-                  <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-6 h-6 object-contain" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
+                  <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-6 h-6 object-contain rounded-sm bg-surface" />
                 ))}
               </div>
             </div>
@@ -487,15 +479,15 @@ export default function SavedPage() {
       {/* Poster grid — 스크롤 영역 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
       {saved.length === 0 ? (
-        <div className="flex-1 flex flex-col justify-center px-8" style={{ color: "var(--text-muted)" }}>
+        <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconHeart size={32} />
-          <p className="mt-4 font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>아직 저장한 작품이 없어요</p>
+          <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 저장한 작품이 없어요</p>
           <p className="text-sm mt-1.5">Discover에서 하트를 누르면 여기에 모여요</p>
         </div>
       ) : filteredSaved.length === 0 ? (
-        <div className="flex-1 flex flex-col justify-center px-8" style={{ color: "var(--text-muted)" }}>
+        <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
-          <p className="mt-4 font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          <p className="mt-4 font-display text-lg font-semibold text-foreground">
             {viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
           </p>
           <p className="text-sm mt-1.5">
@@ -512,11 +504,10 @@ export default function SavedPage() {
                 <img
                   src={getOTTIcon(ottName) ?? ""}
                   alt={ottName}
-                  className="w-5 h-5 object-contain"
-                  style={{ borderRadius: "var(--radius-sm)" }}
+                  className="w-5 h-5 object-contain rounded-sm"
                 />
                 <span className="text-sm font-semibold">{ottName}</span>
-                <span className="text-xs font-data" style={{ color: "var(--text-muted)" }}>{items.length}</span>
+                <span className="text-xs font-data text-muted">{items.length}</span>
               </div>
               <div className="grid grid-cols-2 gap-3 px-5 auto-rows-min">
                 {items.map((item, i) => (
@@ -570,9 +561,8 @@ export default function SavedPage() {
         >
           <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
           <div
-            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8"
+            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8 bg-background"
             style={{
-              background: "var(--bg)",
               borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
               transform: `translateY(${detailY}%)`,
               transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
@@ -585,12 +575,11 @@ export default function SavedPage() {
           >
             {/* Handle bar */}
             <div className="flex justify-center mb-4">
-              <div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} />
+              <div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} />
             </div>
 
             <button
-              className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center"
-              style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
+              className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center bg-surface rounded-full"
               onClick={closeDetail}
             >
               <IconClose size={16} color="var(--text-secondary)" />
@@ -598,7 +587,7 @@ export default function SavedPage() {
 
             {/* 스틸컷 */}
             {detailItem.recommendation.backdrop && (
-              <img src={detailItem.recommendation.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1" style={{ borderRadius: "var(--radius-md)" }} />
+              <img src={detailItem.recommendation.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1 rounded-md" />
             )}
 
             {/* Poster + Title */}
@@ -607,16 +596,15 @@ export default function SavedPage() {
                 <img
                   src={detailItem.recommendation.posterUrl}
                   alt={detailItem.recommendation.title}
-                  className="w-24 h-36 object-cover flex-shrink-0"
-                  style={{ borderRadius: "var(--radius-md)" }}
+                  className="w-24 h-36 object-cover flex-shrink-0 rounded-md"
                 />
               )}
               <div className="flex-1 min-w-0 pt-1">
                 <h2 className="font-display text-xl font-bold">{detailItem.recommendation.title}</h2>
-                <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
+                <p className="text-sm mt-0.5 text-muted">
                   {detailItem.recommendation.titleEn}
                 </p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                <p className="text-xs mt-0.5 text-muted">
                   {[
                     detailItem.recommendation.country?.join("/"),
                     detailItem.recommendation.date?.slice(0, 4),
@@ -626,7 +614,7 @@ export default function SavedPage() {
                 </p>
                 <div className="flex items-center gap-1.5 mt-2">
                   <IconStar size={13} color="var(--accent)" />
-                  <span className="font-data text-sm font-semibold" style={{ color: "var(--accent)" }}>{detailItem.recommendation.rating.toFixed(1)}</span>
+                  <span className="font-data text-sm font-semibold text-accent">{detailItem.recommendation.rating.toFixed(1)}</span>
                 </div>
                 {reports[detailItem.recommendation.tmdbId] && (
                   <div className="mt-2">
@@ -638,7 +626,7 @@ export default function SavedPage() {
 
             {/* Reason */}
             <div className="mt-5">
-              <div className="px-3 py-2 text-sm" style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-md)" }}>
+              <div className="px-3 py-2 text-sm bg-accent-dim rounded-md">
                 {detailItem.recommendation.reason}
               </div>
             </div>
@@ -648,13 +636,13 @@ export default function SavedPage() {
               <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
                 {detailItem.recommendation.director && (
                   <div>
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>감독 </span>
+                    <span className="text-xs text-muted">감독 </span>
                     <span className="text-sm">{detailItem.recommendation.director}</span>
                   </div>
                 )}
                 {detailItem.recommendation.cast?.length > 0 && (
                   <div>
-                    <span className="text-xs" style={{ color: "var(--text-muted)" }}>출연 </span>
+                    <span className="text-xs text-muted">출연 </span>
                     <span className="text-sm">{detailItem.recommendation.cast.join(", ")}</span>
                   </div>
                 )}
@@ -664,14 +652,14 @@ export default function SavedPage() {
             {/* Overview */}
             {detailItem.recommendation.overview && (
               <div className="mt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>줄거리</h3>
-                <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>{detailItem.recommendation.overview}</p>
+                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">줄거리</h3>
+                <p className="text-sm leading-relaxed text-secondary">{detailItem.recommendation.overview}</p>
               </div>
             )}
 
             {/* OTT links */}
             <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ color: "var(--text-muted)" }}>시청 가능</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">시청 가능</h3>
               <div className="flex flex-col gap-2">
                 {detailItem.recommendation.providers.map((p) => {
                   const ottUrl = getOTTLink(p.name, detailItem.recommendation.title);
@@ -681,12 +669,11 @@ export default function SavedPage() {
                       href={ottUrl ?? detailItem.recommendation.watchLink ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform"
-                      style={{ background: "var(--surface-raised)", borderRadius: "var(--radius-md)" }}
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md"
                     >
-                      <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0" style={{ borderRadius: "var(--radius-sm)", background: "var(--surface)" }} />
+                      <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0 rounded-sm bg-surface" />
                       <span className="flex-1">{p.name}</span>
-                      <span className="text-xs" style={{ color: "var(--accent)" }}>열기</span>
+                      <span className="text-xs text-accent">열기</span>
                     </a>
                   );
                 })}
@@ -705,11 +692,10 @@ export default function SavedPage() {
                   await navigator.clipboard.writeText(body);
                 }
               }}
-              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
+              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform bg-surface border border-border rounded-lg"
             >
               <IconShare size={16} color="var(--text-secondary)" />
-              <span style={{ color: "var(--text-secondary)" }}>이 작품 공유하기</span>
+              <span className="text-secondary">이 작품 공유하기</span>
             </button>
           </div>
         </div>

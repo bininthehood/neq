@@ -54,31 +54,27 @@ export default function InstallBanner() {
 
   return (
     <div
-      className="fixed bottom-20 left-4 right-4 z-40 p-4 flex items-start gap-3 animate-fade-in max-w-[480px] mx-auto"
+      className="fixed bottom-20 left-4 right-4 z-40 p-4 flex items-start gap-3 animate-fade-in max-w-[480px] mx-auto bg-surface border border-border rounded-lg"
       style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-        borderRadius: "var(--radius-lg)",
         boxShadow: "0 8px 32px rgba(12,10,9,0.6)",
       }}
     >
-      <img src="/icon-192.png" alt="Neko" className="w-12 h-12 flex-shrink-0" style={{ borderRadius: "var(--radius-md)" }} />
+      <img src="/icon-192.png" alt="Neko" className="w-12 h-12 flex-shrink-0 rounded-md" />
       <div className="flex-1 min-w-0">
         <div className="font-display font-bold text-sm">Neko 앱으로 열기</div>
         {platform === "ios" ? (
-          <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-            하단 <span style={{ color: "var(--text-primary)" }}>공유(↑)</span> 버튼 → <span style={{ color: "var(--text-primary)" }}>홈 화면에 추가</span>
+          <p className="text-xs mt-1 text-secondary">
+            하단 <span className="text-foreground">공유(↑)</span> 버튼 → <span className="text-foreground">홈 화면에 추가</span>
           </p>
         ) : (
-          <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+          <p className="text-xs mt-1 text-secondary">
             홈 화면에 추가하면 앱처럼 사용할 수 있어요
           </p>
         )}
         {platform === "android" && deferredPrompt.current && (
           <button
             onClick={handleInstall}
-            className="mt-2 px-4 py-1.5 text-xs font-semibold active:scale-95 transition-transform"
-            style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}
+            className="mt-2 px-4 py-1.5 text-xs font-semibold active:scale-95 transition-transform bg-accent text-background rounded-full"
           >
             설치하기
           </button>
@@ -86,8 +82,7 @@ export default function InstallBanner() {
       </div>
       <button
         onClick={handleDismiss}
-        className="flex-shrink-0 w-11 h-11 flex items-center justify-center"
-        style={{ color: "var(--text-muted)" }}
+        className="flex-shrink-0 w-11 h-11 flex items-center justify-center text-muted"
       >
         <IconClose size={14} />
       </button>

@@ -40,24 +40,20 @@ export default function Reminder() {
       style={{ paddingTop: "env(safe-area-inset-top, 12px)" }}
     >
       <div
-        className="max-w-lg mx-auto flex items-center gap-3 px-4 py-3"
+        className="max-w-lg mx-auto flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-lg"
         style={{
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)",
           boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
         }}
       >
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium">저장한 작품 {unwatchedCount}편, 봤어요?</p>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+          <p className="text-xs mt-0.5 text-muted">
             시청 기록을 남기면 추천이 더 정확해져요
           </p>
         </div>
         <button
           onClick={dismiss}
-          className="w-11 h-11 flex items-center justify-center flex-shrink-0"
-          style={{ borderRadius: "var(--radius-full)" }}
+          className="w-11 h-11 flex items-center justify-center flex-shrink-0 rounded-full"
         >
           <IconClose size={14} color="var(--text-muted)" />
         </button>
