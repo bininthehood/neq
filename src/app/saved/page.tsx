@@ -8,6 +8,9 @@ import {
   addWatchReport,
   removeWatchReport,
   getWatchStats,
+  getArchivedIds,
+  archiveItem,
+  unarchiveItem,
 } from "@/lib/store";
 import type { SavedItem, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
@@ -21,7 +24,7 @@ const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string 
   { key: "dropped", label: "포기했어", color: "var(--danger)", bg: "var(--danger-dim)" },
 ];
 
-type ViewFilter = "all" | "unwatched" | "watched";
+type ViewFilter = "all" | "unwatched" | "watched" | "archived";
 
 function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
@@ -43,19 +46,21 @@ function ottGroupKey(item: SavedItem): string {
 }
 
 function PosterCard({
-  item, index, report, isReporting,
-  onOpen, onReport, onUndoReport, onRemove, onStartReport, onCancelReport,
+  item, index, report, isReporting, isArchived,
+  onOpen, onReport, onUndoReport, onRemove, onStartReport, onCancelReport, onArchiveToggle,
 }: {
   item: SavedItem;
   index: number;
   report: WatchReaction | undefined;
   isReporting: boolean;
+  isArchived?: boolean;
   onOpen: (item: SavedItem) => void;
   onReport: (tmdbId: number, reaction: WatchReaction) => void;
   onUndoReport: (tmdbId: number) => void;
   onRemove: (tmdbId: number) => void;
   onStartReport: (tmdbId: number) => void;
   onCancelReport: () => void;
+  onArchiveToggle?: (tmdbId: number) => void;
 }) {
   const tmdbId = item.recommendation.tmdbId;
 
@@ -138,13 +143,25 @@ function PosterCard({
         </div>
       )}
 
-      <button
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
-        className="absolute top-1.5 right-1.5 w-8 h-8 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-        style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
-      >
-        <IconClose size={12} />
-      </button>
+      <div className="absolute top-1.5 right-1.5 flex gap-1">
+        {report && onArchiveToggle && (
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
+            className="w-8 h-8 flex items-center justify-center text-[10px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)", color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
+            title={isArchived ? "복원" : "아카이브"}
+          >
+            {isArchived ? "↩" : "✓"}
+          </button>
+        )}
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
+          className="w-8 h-8 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+          style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
+        >
+          <IconClose size={12} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -162,6 +179,7 @@ export default function SavedPage() {
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [groupByOTT, setGroupByOTT] = useState(false);
+  const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
 
   const refreshData = () => {
     setSaved(getSaved());
@@ -172,19 +190,23 @@ export default function SavedPage() {
     }
     setReports(allReports);
     setStats(getWatchStats());
+    setArchivedIds(new Set(getArchivedIds()));
   };
 
   useEffect(() => { refreshData(); }, []);
 
-  // 필터링된 목록: 안 본 작품 먼저, 시청 완료는 뒤로
   const filteredSaved = useMemo(() => {
     let items = [...saved];
+    if (viewFilter === "archived") {
+      return items.filter((s) => archivedIds.has(s.recommendation.tmdbId));
+    }
+    // 아카이브된 작품은 기본적으로 숨김
+    items = items.filter((s) => !archivedIds.has(s.recommendation.tmdbId));
     if (viewFilter === "unwatched") {
       items = items.filter((s) => !reports[s.recommendation.tmdbId]);
     } else if (viewFilter === "watched") {
       items = items.filter((s) => !!reports[s.recommendation.tmdbId]);
     } else {
-      // "전체"에서도 안 본 작품 먼저
       items.sort((a, b) => {
         const aWatched = reports[a.recommendation.tmdbId] ? 1 : 0;
         const bWatched = reports[b.recommendation.tmdbId] ? 1 : 0;
@@ -192,7 +214,7 @@ export default function SavedPage() {
       });
     }
     return items;
-  }, [saved, reports, viewFilter]);
+  }, [saved, reports, viewFilter, archivedIds]);
 
   // OTT별 그룹핑
   const ottGroups = useMemo(() => {
@@ -273,13 +295,16 @@ export default function SavedPage() {
     setSelected(pool[Math.floor(Math.random() * pool.length)]);
   };
 
-  const watchedCount = Object.keys(reports).length;
-  const unwatchedCount = saved.length - watchedCount;
+  const archivedCount = archivedIds.size;
+  const activeItems = saved.filter((s) => !archivedIds.has(s.recommendation.tmdbId));
+  const watchedCount = activeItems.filter((s) => reports[s.recommendation.tmdbId]).length;
+  const unwatchedCount = activeItems.length - watchedCount;
 
   const VIEW_FILTERS: { key: ViewFilter; label: string; count: number }[] = [
-    { key: "all", label: "전체", count: saved.length },
+    { key: "all", label: "전체", count: activeItems.length },
     { key: "unwatched", label: "안 본 작품", count: unwatchedCount },
     { key: "watched", label: "시청 완료", count: watchedCount },
+    ...(archivedCount > 0 ? [{ key: "archived" as ViewFilter, label: "아카이브", count: archivedCount }] : []),
   ];
 
   return (
@@ -506,6 +531,8 @@ export default function SavedPage() {
                     onRemove={handleRemove}
                     onStartReport={setReportingId}
                     onCancelReport={() => setReportingId(null)}
+                    isArchived={archivedIds.has(item.recommendation.tmdbId)}
+                    onArchiveToggle={(id) => { if (archivedIds.has(id)) { unarchiveItem(id); } else { archiveItem(id); } refreshData(); }}
                   />
                 ))}
               </div>

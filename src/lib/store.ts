@@ -96,6 +96,27 @@ export function getWatchStats() {
   };
 }
 
+// 아카이브 (시청 완료 후 숨긴 작품)
+const ARCHIVE_KEY = "neko_archived";
+
+export function getArchivedIds(): number[] {
+  if (typeof window === "undefined") return [];
+  return JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]");
+}
+
+export function archiveItem(tmdbId: number) {
+  const ids = getArchivedIds();
+  if (!ids.includes(tmdbId)) {
+    ids.push(tmdbId);
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
+  }
+}
+
+export function unarchiveItem(tmdbId: number) {
+  const ids = getArchivedIds().filter((id) => id !== tmdbId);
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
+}
+
 // 지나간 작품 (스와이프로 넘긴 제목들) — 재추천 방지
 const SEEN_KEY = "neko_seen_titles";
 const MAX_SEEN = 200; // 최대 저장 수
