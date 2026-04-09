@@ -1,5 +1,13 @@
 import type { Recommendation, SavedItem, WatchReport, WatchReaction } from "./types";
 
+function safeParse<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
 const FAVORITES_KEY = "neko_favorites";
 const SAVED_KEY = "neko_saved";
 const RECS_KEY = "neko_recommendations";
@@ -8,7 +16,7 @@ const RECS_FILTERED_PREFIX = "neko_recs_";
 // 온보딩에서 선택한 좋아하는 작품
 export function getFavorites(): string[] {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(FAVORITES_KEY) ?? "[]");
+  return safeParse<string[]>(FAVORITES_KEY, []);
 }
 
 export function setFavorites(titles: string[]) {
@@ -23,7 +31,7 @@ function filterKey(filterType: string, filterOrigin: string): string {
 export function getRecommendations(ft = "all", fo = "all"): Recommendation[] {
   if (typeof window === "undefined") return [];
   const key = ft === "all" && fo === "all" ? RECS_KEY : filterKey(ft, fo);
-  return JSON.parse(localStorage.getItem(key) ?? "[]");
+  return safeParse<Recommendation[]>(key, []);
 }
 
 export function setRecommendations(recs: Recommendation[], ft = "all", fo = "all") {
@@ -42,7 +50,7 @@ export function clearAllRecommendations() {
 // 저장한 작품
 export function getSaved(): SavedItem[] {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(SAVED_KEY) ?? "[]");
+  return safeParse<SavedItem[]>(SAVED_KEY, []);
 }
 
 export function addSaved(rec: Recommendation) {
@@ -67,7 +75,7 @@ const REPORTS_KEY = "neko_watch_reports";
 
 export function getWatchReports(): WatchReport[] {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(REPORTS_KEY) ?? "[]");
+  return safeParse<WatchReport[]>(REPORTS_KEY, []);
 }
 
 export function getWatchReport(tmdbId: number): WatchReport | undefined {
@@ -101,7 +109,7 @@ const ARCHIVE_KEY = "neko_archived";
 
 export function getArchivedIds(): number[] {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(ARCHIVE_KEY) ?? "[]");
+  return safeParse<number[]>(ARCHIVE_KEY, []);
 }
 
 export function archiveItem(tmdbId: number) {
@@ -130,7 +138,7 @@ export interface RecHistoryEntry {
 
 export function getRecHistory(): RecHistoryEntry[] {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+  return safeParse<RecHistoryEntry[]>(HISTORY_KEY, []);
 }
 
 export function addRecHistory(recs: { title: string; tmdbId: number; posterUrl: string | null }[]) {
@@ -150,7 +158,7 @@ const MAX_SEEN = 200; // 최대 저장 수
 
 export function getSeenTitles(): string[] {
   if (typeof window === "undefined") return [];
-  return JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]");
+  return safeParse<string[]>(SEEN_KEY, []);
 }
 
 export function addSeenTitles(titles: string[]) {
