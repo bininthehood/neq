@@ -74,7 +74,7 @@ export function useRecommendations() {
       if (!res.ok) {
         const err = await res.json().catch(() => null);
         setLoadError(
-          err?.error ?? "추천을 못 가져왔어. 잠시 후 다시 해볼게.",
+          err?.error ?? "추천을 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
         );
         setLoading(false);
         return;
@@ -102,7 +102,7 @@ export function useRecommendations() {
         setLoading(false);
         return;
       }
-      setLoadError("인터넷 연결 좀 확인해줘.");
+      setLoadError("네트워크 연결을 확인해주세요.");
       setLoading(false);
     }
   };

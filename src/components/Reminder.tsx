@@ -46,9 +46,9 @@ export default function Reminder() {
         }}
       >
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium">{unwatchedCount}편이나 쌓였는데, 좀 봤어?</p>
+          <p className="text-sm font-medium">저장한 작품 {unwatchedCount}편, 봤어요?</p>
           <p className="text-xs mt-0.5 text-muted">
-            시청 기록 남기면 추천이 더 정확해져
+            시청 기록을 남기면 추천이 더 정확해져요
           </p>
         </div>
         <button

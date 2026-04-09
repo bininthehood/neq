@@ -86,7 +86,7 @@ export default function OnboardingPage() {
     <div className="h-dvh flex flex-col items-center justify-center px-8 max-w-lg mx-auto">
       <h1 className="font-display font-bold text-accent" style={{ fontSize: "3rem" }}>Neko</h1>
       <p className="text-center mt-4 text-lg leading-relaxed text-secondary">
-        3개만 골라봐, 나머지는 내가 찾을게
+        3개만 골라주세요, 나머지는 제가 찾을게요
       </p>
       <button
         onClick={() => setStep(1)}
@@ -106,7 +106,7 @@ export default function OnboardingPage() {
           Neko
         </h1>
         <p className="mt-2 text-secondary">
-          마음에 드는 작품 {selected.length < 3 ? "3-5개" : "더"} 골라봐
+          마음에 드는 작품 {selected.length < 3 ? "3-5개" : "더"} 골라주세요
         </p>
         <div className="flex gap-1 mt-4">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -168,7 +168,7 @@ export default function OnboardingPage() {
         {showSuggestions && (
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
-              <p className="text-xs text-muted">이런 건 어때?</p>
+              <p className="text-xs text-muted">이런 작품은 어때요?</p>
               <button
                 onClick={fetchTrending}
                 disabled={loadingSuggestions}
@@ -264,8 +264,8 @@ export default function OnboardingPage() {
           }}
         >
           {selected.length < 3
-            ? `${3 - selected.length}개만 더 골라봐`
-            : `${selected.length}개 골랐어, 출발`}
+            ? `${3 - selected.length}개만 더 골라주세요`
+            : `${selected.length}개 선택 완료, 시작할게요`}
         </button>
       </div>
     </div>

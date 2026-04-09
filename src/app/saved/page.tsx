@@ -375,10 +375,10 @@ export default function SavedPage() {
     const hour = new Date().getHours();
     const isLateNight = hour >= 22 || hour < 6;
     const isWeekend = [0, 6].includes(new Date().getDay());
-    if (isLateNight) return "짧은 영화 위주로 골라줄게";
-    if (isWeekend) return "주말이니까 시리즈도 좋지";
-    if (unwatchedCount > 0) return `안 본 ${unwatchedCount}편 중에서 하나 뽑아줄게`;
-    return "저장한 작품 중에서 하나 뽑아줄게";
+    if (isLateNight) return "짧은 영화 위주로 골라드릴게요";
+    if (isWeekend) return "주말이니까 시리즈도 좋아요";
+    if (unwatchedCount > 0) return `안 본 ${unwatchedCount}편 중 하나를 골라드릴게요`;
+    return "저장한 작품 중에서 하나 골라드릴게요";
   })();
 
   const VIEW_FILTERS: { key: ViewFilter; label: string; count: number }[] = [
@@ -437,7 +437,7 @@ export default function SavedPage() {
         )}
         {!saved.length && (
           <p className="text-sm mt-1 text-muted">
-            저장한 작품이 여기 모여
+            저장한 작품이 여기에 모여요
           </p>
         )}
       </div>
@@ -571,8 +571,8 @@ export default function SavedPage() {
         <div className="pb-4">
           {history.length === 0 ? (
             <div className="flex-1 flex flex-col justify-center px-8 py-12 text-muted">
-              <p className="font-display text-lg font-semibold text-foreground">아직 추천 기록이 없어</p>
-              <p className="text-sm mt-1.5">Discover에서 스와이프하면 여기 쌓여</p>
+              <p className="font-display text-lg font-semibold text-foreground">아직 추천 기록이 없어요</p>
+              <p className="text-sm mt-1.5">Discover에서 스와이프하면 여기 쌓여요</p>
             </div>
           ) : (
             historyGroups.map((group) => (
@@ -637,17 +637,17 @@ export default function SavedPage() {
       ) : saved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconHeart size={32} />
-          <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 아무것도 없어</p>
-          <p className="text-sm mt-1.5">Discover에서 마음에 드는 작품을 저장해봐</p>
+          <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 저장한 작품이 없어요</p>
+          <p className="text-sm mt-1.5">Discover에서 마음에 드는 작품을 저장해보세요</p>
         </div>
       ) : filteredSaved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">
-            {viewFilter === "unwatched" ? "전부 다 봤네!" : "아직 시청 기록이 없어"}
+            {viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
           </p>
           <p className="text-sm mt-1.5">
-            {viewFilter === "unwatched" ? "Discover에서 새로운 작품 찾으러 가자" : "포스터의 '봤어요?' 버튼으로 기록해봐"}
+            {viewFilter === "unwatched" ? "Discover에서 새로운 작품을 찾아보세요" : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
           </p>
         </div>
       ) : groupByOTT && ottGroups ? (

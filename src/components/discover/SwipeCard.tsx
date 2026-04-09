@@ -174,10 +174,10 @@ export default function SwipeCard({
         >
           <div className="w-full mb-1">
             <div className="font-display text-lg font-bold">
-              이거 봤어?
+              본 적 있나요?
             </div>
             <div className="text-xs mt-0.5 text-muted">
-              알려주면 추천이 더 정확해져
+              알려주시면 더 좋은 추천을 드릴게요
             </div>
           </div>
           <div className="w-full flex flex-wrap gap-2">

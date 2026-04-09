@@ -45,7 +45,7 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
       </div>
       <div className="px-4 pb-2 shrink-0">
         <p className="text-center text-xs py-2 text-muted">
-          {filterLabel ? `${filterLabel} 추천 찾는 중...` : "취향 파악 중, 잠깐만..."}
+          {filterLabel ? `${filterLabel} 추천 찾는 중...` : "취향을 분석하고 있어요..."}
         </p>
       </div>
       <BottomNav active="discover" />
@@ -115,10 +115,10 @@ export function EmptyScreen({
           <IconFilm size={36} color="var(--text-muted)" />
           <div>
             <p className="font-display text-lg font-semibold">
-              {hasFilter ? "이 조건으론 결과가 없어" : "추천을 만들지 못했어"}
+              {hasFilter ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}
             </p>
             <p className="text-sm mt-1.5 text-secondary">
-              {hasFilter ? "다른 필터로 다시 해볼까?" : "잠시 후 다시 해보자"}
+              {hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해주세요"}
             </p>
           </div>
           <div className="flex gap-3">
