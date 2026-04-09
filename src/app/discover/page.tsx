@@ -551,7 +551,14 @@ export default function DiscoverPage() {
                     <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm z-10" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
                       {rec.type === "series" ? "시리즈" : "영화"}
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-5 pt-24 z-10" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                    <div
+                      className="absolute bottom-0 left-0 right-0 p-5 pt-24 z-10 cursor-pointer"
+                      style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}
+                      onPointerUp={(e) => {
+                        e.stopPropagation();
+                        if (Math.abs(dragX) < 5 && !swiping) openDetail();
+                      }}
+                    >
                       <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
                       {metaInfo(rec) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>}
                       <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
