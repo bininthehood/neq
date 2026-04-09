@@ -95,3 +95,22 @@ export function getWatchStats() {
     dropped: reports.filter((r) => r.reaction === "dropped").length,
   };
 }
+
+// 지나간 작품 (스와이프로 넘긴 제목들) — 재추천 방지
+const SEEN_KEY = "neko_seen_titles";
+const MAX_SEEN = 200; // 최대 저장 수
+
+export function getSeenTitles(): string[] {
+  if (typeof window === "undefined") return [];
+  return JSON.parse(localStorage.getItem(SEEN_KEY) ?? "[]");
+}
+
+export function addSeenTitles(titles: string[]) {
+  const seen = getSeenTitles();
+  const updated = [...new Set([...seen, ...titles])].slice(-MAX_SEEN);
+  localStorage.setItem(SEEN_KEY, JSON.stringify(updated));
+}
+
+export function clearSeenTitles() {
+  localStorage.removeItem(SEEN_KEY);
+}

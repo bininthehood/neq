@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   getSaved,
   removeSaved,
@@ -21,6 +21,8 @@ const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string 
   { key: "dropped", label: "포기했어", color: "var(--danger)", bg: "var(--danger-dim)" },
 ];
 
+type ViewFilter = "all" | "unwatched" | "watched";
+
 function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
   return (
@@ -30,6 +32,120 @@ function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
     >
       {r.label}
     </span>
+  );
+}
+
+/** OTT 이름에서 그룹 키 추출 */
+function ottGroupKey(item: SavedItem): string {
+  const providers = item.recommendation.providers;
+  if (!providers || providers.length === 0) return "기타";
+  return providers[0].name;
+}
+
+function PosterCard({
+  item, index, report, isReporting,
+  onOpen, onReport, onUndoReport, onRemove, onStartReport, onCancelReport,
+}: {
+  item: SavedItem;
+  index: number;
+  report: WatchReaction | undefined;
+  isReporting: boolean;
+  onOpen: (item: SavedItem) => void;
+  onReport: (tmdbId: number, reaction: WatchReaction) => void;
+  onUndoReport: (tmdbId: number) => void;
+  onRemove: (tmdbId: number) => void;
+  onStartReport: (tmdbId: number) => void;
+  onCancelReport: () => void;
+}) {
+  const tmdbId = item.recommendation.tmdbId;
+
+  return (
+    <div
+      className="relative group cursor-pointer"
+      style={{ height: index % 3 === 0 ? "240px" : "200px" }}
+      onClick={() => onOpen(item)}
+    >
+      {item.recommendation.posterUrl ? (
+        <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
+          {item.recommendation.title}
+        </div>
+      )}
+
+      {report && !isReporting && (
+        <div className="absolute inset-0 pointer-events-none" style={{ background: "var(--bg-overlay-light)", borderRadius: "var(--radius-lg)" }} />
+      )}
+
+      <div
+        className="absolute bottom-0 left-0 right-0 p-2 pointer-events-none"
+        style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}
+      >
+        <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
+        <div className="flex items-center gap-2">
+          <span className="font-data text-[11px] flex items-center gap-0.5" style={{ color: "var(--text-muted)" }}><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
+          {report && <ReactionLabel reaction={report} />}
+          {!report && item.recommendation.providers.slice(0, 2).map((p) => (
+            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />
+          ))}
+        </div>
+      </div>
+
+      {!report && !isReporting && (
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStartReport(tmdbId); }}
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
+          style={{ background: "var(--bg-overlay)", backdropFilter: "blur(4px)", borderRadius: "var(--radius-full)", color: "var(--text-secondary)" }}
+        >
+          봤어요?
+        </button>
+      )}
+
+      {report && !isReporting && (
+        <button
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUndoReport(tmdbId); }}
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
+          style={{ background: "var(--bg-overlay)", backdropFilter: "blur(4px)", borderRadius: "var(--radius-full)", color: REACTIONS.find((x) => x.key === report)?.color }}
+          title="리포트 취소"
+        >
+          <IconCheck size={11} /> 시청
+        </button>
+      )}
+
+      {isReporting && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center gap-2 animate-fade-in z-10"
+          style={{ background: "var(--bg-overlay-dense)", backdropFilter: "blur(8px)", borderRadius: "var(--radius-lg)" }}
+        >
+          <div className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>어땠어요?</div>
+          {REACTIONS.map((r) => (
+            <button
+              key={r.key}
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
+              className="w-28 py-2 text-xs font-medium active:scale-95 transition-transform"
+              style={{ background: r.bg, color: r.color, borderRadius: "var(--radius-md)" }}
+            >
+              {r.label}
+            </button>
+          ))}
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
+            className="mt-1 text-[11px] min-h-[44px] px-4 flex items-center active:scale-95 transition-transform"
+            style={{ color: "var(--text-muted)" }}
+          >
+            닫기
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
+        className="absolute top-1.5 right-1.5 w-8 h-8 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+        style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
+      >
+        <IconClose size={12} />
+      </button>
+    </div>
   );
 }
 
@@ -44,6 +160,8 @@ export default function SavedPage() {
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
+  const [groupByOTT, setGroupByOTT] = useState(false);
 
   const refreshData = () => {
     setSaved(getSaved());
@@ -57,6 +175,37 @@ export default function SavedPage() {
   };
 
   useEffect(() => { refreshData(); }, []);
+
+  // 필터링된 목록: 안 본 작품 먼저, 시청 완료는 뒤로
+  const filteredSaved = useMemo(() => {
+    let items = [...saved];
+    if (viewFilter === "unwatched") {
+      items = items.filter((s) => !reports[s.recommendation.tmdbId]);
+    } else if (viewFilter === "watched") {
+      items = items.filter((s) => !!reports[s.recommendation.tmdbId]);
+    } else {
+      // "전체"에서도 안 본 작품 먼저
+      items.sort((a, b) => {
+        const aWatched = reports[a.recommendation.tmdbId] ? 1 : 0;
+        const bWatched = reports[b.recommendation.tmdbId] ? 1 : 0;
+        return aWatched - bWatched;
+      });
+    }
+    return items;
+  }, [saved, reports, viewFilter]);
+
+  // OTT별 그룹핑
+  const ottGroups = useMemo(() => {
+    if (!groupByOTT) return null;
+    const groups: Record<string, SavedItem[]> = {};
+    for (const item of filteredSaved) {
+      const key = ottGroupKey(item);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(item);
+    }
+    // 작품 수 많은 OTT 먼저
+    return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
+  }, [filteredSaved, groupByOTT]);
 
   const handleRemove = (tmdbId: number) => {
     removeSaved(tmdbId);
@@ -127,15 +276,87 @@ export default function SavedPage() {
   const watchedCount = Object.keys(reports).length;
   const unwatchedCount = saved.length - watchedCount;
 
+  const VIEW_FILTERS: { key: ViewFilter; label: string; count: number }[] = [
+    { key: "all", label: "전체", count: saved.length },
+    { key: "unwatched", label: "안 본 작품", count: unwatchedCount },
+    { key: "watched", label: "시청 완료", count: watchedCount },
+  ];
+
   return (
     <div className="flex-1 flex flex-col">
       {/* Header */}
       <div className="px-5 pt-6 pb-2">
-        <h1 className="font-display text-2xl font-bold">Saved</h1>
-        <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
-          저장 {saved.length}편{watchedCount > 0 && ` · 시청 ${watchedCount}편`}
-        </p>
+        <div className="flex items-center justify-between">
+          <h1 className="font-display text-2xl font-bold">Saved</h1>
+          {saved.length > 0 && (
+            <button
+              onClick={() => setGroupByOTT(!groupByOTT)}
+              className="px-3 py-1.5 text-[11px] font-medium active:scale-95 transition-transform"
+              style={{
+                background: groupByOTT ? "var(--accent-dim)" : "var(--surface)",
+                color: groupByOTT ? "var(--accent)" : "var(--text-muted)",
+                borderRadius: "var(--radius-full)",
+                border: groupByOTT ? "1px solid var(--accent-border-light)" : "1px solid var(--border)",
+              }}
+            >
+              OTT별 보기
+            </button>
+          )}
+        </div>
+        {/* Progress bar — 안 본 작품 진행률 */}
+        {saved.length > 0 && (
+          <div className="mt-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                저장 {saved.length}편{watchedCount > 0 && ` · 시청 ${watchedCount}편`}
+              </p>
+              {unwatchedCount > 0 && (
+                <p className="text-xs font-medium" style={{ color: "var(--accent)" }}>
+                  {unwatchedCount}편 남음
+                </p>
+              )}
+            </div>
+            {watchedCount > 0 && (
+              <div className="h-1 overflow-hidden" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}>
+                <div
+                  className="h-full transition-all duration-500"
+                  style={{
+                    width: `${(watchedCount / saved.length) * 100}%`,
+                    background: "var(--accent)",
+                    borderRadius: "var(--radius-full)",
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        {!saved.length && (
+          <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>
+            저장한 작품이 여기에 모여요
+          </p>
+        )}
       </div>
+
+      {/* Filter tabs */}
+      {saved.length > 0 && (
+        <div className="flex gap-2 px-5 mt-2 mb-1 overflow-x-auto">
+          {VIEW_FILTERS.map((f) => (
+            <button
+              key={f.key}
+              onClick={() => setViewFilter(f.key)}
+              className="px-3 py-1.5 text-xs font-medium whitespace-nowrap active:scale-95 transition-all min-h-[36px]"
+              style={{
+                background: viewFilter === f.key ? "var(--accent-dim)" : "var(--surface)",
+                color: viewFilter === f.key ? "var(--accent)" : "var(--text-secondary)",
+                borderRadius: "var(--radius-full)",
+                border: viewFilter === f.key ? "1px solid var(--accent-border-light)" : "1px solid transparent",
+              }}
+            >
+              {f.label} {f.count > 0 && <span className="font-data">{f.count}</span>}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Watch Stats */}
       {stats.total > 0 && (
@@ -243,143 +464,71 @@ export default function SavedPage() {
         <div className="flex-1 flex flex-col justify-center px-8" style={{ color: "var(--text-muted)" }}>
           <IconHeart size={32} />
           <p className="mt-4 font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>아직 저장한 작품이 없어요</p>
-          <p className="text-sm mt-1.5">Discover에서 오른쪽으로 스와이프하면 여기에 모여요</p>
+          <p className="text-sm mt-1.5">Discover에서 하트를 누르면 여기에 모여요</p>
+        </div>
+      ) : filteredSaved.length === 0 ? (
+        <div className="flex-1 flex flex-col items-start justify-center px-8" style={{ color: "var(--text-muted)" }}>
+          <p className="font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+            {viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
+          </p>
+          <p className="text-sm mt-1.5">
+            {viewFilter === "unwatched" ? "Discover에서 새로운 작품을 찾아보세요" : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
+          </p>
+        </div>
+      ) : groupByOTT && ottGroups ? (
+        /* OTT 그룹핑 뷰 */
+        <div className="flex-1 pb-4 overflow-y-auto">
+          {ottGroups.map(([ottName, items]) => (
+            <div key={ottName} className="mb-5">
+              {/* OTT 섹션 헤더 */}
+              <div className="flex items-center gap-2 px-5 mb-2">
+                <img
+                  src={getOTTIcon(ottName) ?? ""}
+                  alt={ottName}
+                  className="w-5 h-5 object-contain"
+                  style={{ borderRadius: "var(--radius-sm)" }}
+                />
+                <span className="text-sm font-semibold">{ottName}</span>
+                <span className="text-xs font-data" style={{ color: "var(--text-muted)" }}>{items.length}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 px-5 auto-rows-min">
+                {items.map((item, i) => (
+                  <PosterCard
+                    key={item.recommendation.tmdbId}
+                    item={item}
+                    index={i}
+                    report={reports[item.recommendation.tmdbId]}
+                    isReporting={reportingId === item.recommendation.tmdbId}
+                    onOpen={openDetailFor}
+                    onReport={handleReport}
+                    onUndoReport={handleUndoReport}
+                    onRemove={handleRemove}
+                    onStartReport={setReportingId}
+                    onCancelReport={() => setReportingId(null)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : (
+        /* 기본 그리드 뷰 */
         <div className="grid grid-cols-2 gap-3 px-5 pb-4 flex-1 auto-rows-min">
-          {saved.map((item, i) => {
-            const tmdbId = item.recommendation.tmdbId;
-            const report = reports[tmdbId];
-            const isReporting = reportingId === tmdbId;
-
-            return (
-              <div
-                key={tmdbId}
-                className="relative group cursor-pointer"
-                style={{ height: i % 3 === 0 ? "240px" : "200px" }}
-                onClick={() => openDetailFor(item)}
-              >
-                {/* Poster */}
-                {item.recommendation.posterUrl ? (
-                  <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
-                    {item.recommendation.title}
-                  </div>
-                )}
-
-                {/* Watched overlay — 시청 완료 시 반투명 오버레이 */}
-                {report && !isReporting && (
-                  <div
-                    className="absolute inset-0 flex items-end justify-center pointer-events-none"
-                    style={{ borderRadius: "var(--radius-lg)" }}
-                  >
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        background: "var(--bg-overlay-light)",
-                        borderRadius: "var(--radius-lg)",
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* Bottom info */}
-                <div
-                  className="absolute bottom-0 left-0 right-0 p-2 pointer-events-none"
-                  style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))", borderRadius: "0 0 var(--radius-lg) var(--radius-lg)" }}
-                >
-                  <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-data text-[11px] flex items-center gap-0.5" style={{ color: "var(--text-muted)" }}><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
-                    {report && <ReactionLabel reaction={report} />}
-                    {!report && item.recommendation.providers.slice(0, 2).map((p) => (
-                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Report button — 시청 리포트 안 한 작품에만 표시 */}
-                {!report && !isReporting && (
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(tmdbId); }}
-                    className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
-                    style={{
-                      background: "var(--bg-overlay)",
-                      backdropFilter: "blur(4px)",
-                      borderRadius: "var(--radius-full)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    봤어요?
-                  </button>
-                )}
-
-                {/* Report badge — 시청 리포트 완료 시 */}
-                {report && !isReporting && (
-                  <button
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(tmdbId); }}
-                    className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform"
-                    style={{
-                      background: "var(--bg-overlay)",
-                      backdropFilter: "blur(4px)",
-                      borderRadius: "var(--radius-full)",
-                      color: REACTIONS.find((x) => x.key === report)?.color,
-                    }}
-                    title="리포트 취소"
-                  >
-                    <IconCheck size={11} /> 시청
-                  </button>
-                )}
-
-                {/* Inline reaction picker */}
-                {isReporting && (
-                  <div
-                    className="absolute inset-0 flex flex-col items-center justify-center gap-2 animate-fade-in z-10"
-                    style={{
-                      background: "var(--bg-overlay-dense)",
-                      backdropFilter: "blur(8px)",
-                      borderRadius: "var(--radius-lg)",
-                    }}
-                  >
-                    <div className="text-xs font-semibold mb-1" style={{ color: "var(--text-muted)" }}>
-                      어땠어요?
-                    </div>
-                    {REACTIONS.map((r) => (
-                      <button
-                        key={r.key}
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReport(tmdbId, r.key); }}
-                        className="w-28 py-2 text-xs font-medium active:scale-95 transition-transform"
-                        style={{
-                          background: r.bg,
-                          color: r.color,
-                          borderRadius: "var(--radius-md)",
-                        }}
-                      >
-                        {r.label}
-                      </button>
-                    ))}
-                    <button
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(null); }}
-                      className="mt-1 text-[11px] min-h-[44px] px-4 flex items-center active:scale-95 transition-transform"
-                      style={{ color: "var(--text-muted)" }}
-                    >
-                      닫기
-                    </button>
-                  </div>
-                )}
-
-                {/* Remove button */}
-                <button
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleRemove(tmdbId); }}
-                  className="absolute top-1.5 right-1.5 w-8 h-8 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
-                  style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
-                >
-                  <IconClose size={12} />
-                </button>
-              </div>
-            );
-          })}
+          {filteredSaved.map((item, i) => (
+            <PosterCard
+              key={item.recommendation.tmdbId}
+              item={item}
+              index={i}
+              report={reports[item.recommendation.tmdbId]}
+              isReporting={reportingId === item.recommendation.tmdbId}
+              onOpen={openDetailFor}
+              onReport={handleReport}
+              onUndoReport={handleUndoReport}
+              onRemove={handleRemove}
+              onStartReport={setReportingId}
+              onCancelReport={() => setReportingId(null)}
+            />
+          ))}
         </div>
       )}
 

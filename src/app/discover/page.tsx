@@ -37,6 +37,8 @@ export default function DiscoverPage() {
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
   const [swiping, setSwiping] = useState(false);
+  const [prevEntering, setPrevEntering] = useState(false);
+  const [prevDragging, setPrevDragging] = useState(false); // 이전 카드를 끌어오는 중
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollLocked, setScrollLocked] = useState(false);
@@ -44,6 +46,7 @@ export default function DiscoverPage() {
   const startY = useRef(0);
   const dragging = useRef(false);
   const dirLock = useRef<"h" | "v" | null>(null);
+  const prevSwitched = useRef(false); // 드래그 중 이미 prev로 전환했는지
 
   // 디테일 scroll-snap
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -122,16 +125,24 @@ export default function DiscoverPage() {
     }, 280);
   }, [swiping, topIdx, filtered.length]);
 
-  // 이전 카드 (오른쪽으로 스와이프)
+  // 이전 카드 (오른쪽으로 스와이프) — 이전 카드가 오른쪽에서 슬라이드인
   const prevCard = useCallback(() => {
     if (swiping || topIdx <= 0) return;
     setSwiping(true);
-    setDragX(500); setDragY(-80);
-    setTimeout(() => {
-      setTopIdx((i) => i - 1);
-      setDragX(0); setDragY(0); setSwiping(false);
-      scrollRef.current?.scrollTo({ top: 0 });
-    }, 280);
+    // 새 카드를 왼쪽 바깥에서 시작 → 중앙으로 스프링 진입
+    setDragX(-400); setDragY(-60);
+    setPrevEntering(true);
+    setTopIdx((i) => i - 1);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setPrevEntering(false);
+        setDragX(0); setDragY(0);
+        setTimeout(() => {
+          setSwiping(false);
+          scrollRef.current?.scrollTo({ top: 0 });
+        }, 300);
+      });
+    });
   }, [swiping, topIdx]);
 
   // 터치 — 맨 앞 카드만 드래그
@@ -141,6 +152,7 @@ export default function DiscoverPage() {
     startY.current = e.touches[0].clientY;
     dragging.current = true;
     dirLock.current = null;
+    prevSwitched.current = false;
   }, [swiping]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -155,25 +167,67 @@ export default function DiscoverPage() {
     if (dirLock.current === "h") {
       e.preventDefault();
       if (!scrollLocked) setScrollLocked(true);
-      setDragX(dx);
-      setDragY(Math.abs(dx) * -0.15);
+
+      if (dx > 20 && !prevSwitched.current && topIdx > 0) {
+        // 오른쪽 드래그 시작 → 즉시 topIdx 감소, 이전 카드를 손가락으로 끌어옴
+        prevSwitched.current = true;
+        setPrevDragging(true);
+        setPrevEntering(true);
+        setTopIdx((i) => i - 1);
+        // 새 카드의 시작 위치: 화면 왼쪽 바깥
+        const screenW = window.innerWidth;
+        startX.current = e.touches[0].clientX + screenW; // offset 보정
+        setDragX(-screenW + dx);
+        setDragY(Math.abs(-screenW + dx) * -0.05);
+        requestAnimationFrame(() => setPrevEntering(false));
+      } else if (prevSwitched.current) {
+        // 이전 카드를 끌어오는 중 → 새 top 카드가 손가락 따라옴
+        const screenW = window.innerWidth;
+        const newDx = Math.min(0, dx - screenW + (e.touches[0].clientX - (startX.current - screenW)));
+        setDragX(e.touches[0].clientX - startX.current);
+        setDragY(Math.abs(e.touches[0].clientX - startX.current) * -0.05);
+      } else {
+        // 왼쪽 드래그 → 현재 카드 밀기 (다음 카드)
+        setDragX(dx);
+        setDragY(Math.abs(dx) * -0.15);
+      }
     } else if (dirLock.current === "v" && dy > 0 && !refreshing) {
-      // 아래로 당기기 → pull-to-refresh
       e.preventDefault();
       setPullY(Math.min(80, dy * 0.5));
     }
-  }, [refreshing, scrollLocked]);
+  }, [refreshing, scrollLocked, topIdx]);
 
   const onTouchEnd = useCallback(() => {
     if (!dragging.current) return;
     dragging.current = false;
     const dir = dirLock.current;
+    const wasPrevDrag = prevSwitched.current;
     dirLock.current = null;
+    prevSwitched.current = false;
     if (dir === "h") {
       setScrollLocked(false);
-      if (dragX < -80) nextCard();
-      else if (dragX > 80) prevCard();
-      else { setDragX(0); setDragY(0); }
+      if (wasPrevDrag) {
+        // 이전 카드 끌어오기 완료/취소
+        setPrevDragging(false);
+        if (dragX > -120) {
+          // 충분히 끌어옴 → 제자리에 착지
+          setSwiping(true);
+          setDragX(0); setDragY(0);
+          setTimeout(() => { setSwiping(false); scrollRef.current?.scrollTo({ top: 0 }); }, 300);
+        } else {
+          // 덜 끌어옴 → 원복 (topIdx 다시 증가)
+          setSwiping(true);
+          setDragX(-500); setDragY(-40);
+          setTimeout(() => {
+            setTopIdx((i) => i + 1);
+            setDragX(0); setDragY(0); setSwiping(false);
+          }, 250);
+        }
+      } else if (dragX < -80) {
+        nextCard();
+      } else {
+        setDragX(0); setDragY(0);
+      }
     } else if (dir === "v") {
       if (pullY > 50) {
         setRefreshing(true); setPullY(40);
@@ -189,8 +243,8 @@ export default function DiscoverPage() {
   // 키보드
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") prevCard();
-      else if (e.key === "ArrowRight") nextCard();
+      if (e.key === "ArrowLeft") nextCard();
+      else if (e.key === "ArrowRight") prevCard();
       else if (e.key === "ArrowUp") scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" });
       else if (e.key === "ArrowDown" || e.key === "Escape") scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
     };
@@ -325,7 +379,7 @@ export default function DiscoverPage() {
                 style={{
                   top: 0, bottom: "8px", left: "12px", right: "12px",
                   transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rot}deg) scale(${scaleVal})`,
-                  transition: isTop && !dragging.current ? "transform 0.3s ease-out" : (isTop ? "none" : "transform 0.3s ease-out"),
+                  transition: prevEntering ? "none" : (isTop && (dragging.current || prevDragging) ? "none" : (isTop && !dragging.current ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : (isTop ? "none" : "transform 0.3s ease-out"))),
                   borderRadius: "var(--radius-xl)",
                   zIndex: 10 - depth,
                 }}>

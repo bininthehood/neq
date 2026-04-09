@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getFavorites, setFavorites, clearAllRecommendations } from "@/lib/store";
+import { getFavorites, setFavorites, clearAllRecommendations, clearSeenTitles } from "@/lib/store";
 import { IconClose, IconCheck } from "@/components/Icons";
 
 interface SearchResult {
@@ -63,6 +63,7 @@ export default function ResetPage() {
   const handleReset = () => {
     setFavorites(selected.map((s) => s.title));
     clearAllRecommendations();
+    clearSeenTitles();
     router.replace("/discover");
   };
 

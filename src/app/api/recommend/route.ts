@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { favorites, filter, feedback } = await req.json();
+  const { favorites, filter, feedback, exclude } = await req.json();
 
   if (!Array.isArray(favorites) || favorites.length < 3) {
     return NextResponse.json(
@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const recommendations = await getRecommendations(favorites, filter ?? {}, feedback);
+    const recommendations = await getRecommendations(favorites, filter ?? {}, feedback, exclude);
     return NextResponse.json({ recommendations }, {
       headers: { "X-RateLimit-Remaining": String(remaining) },
     });

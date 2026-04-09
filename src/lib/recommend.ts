@@ -57,26 +57,32 @@ function buildFeedbackPrompt(feedback?: WatchFeedback): string {
 export async function getRecommendations(
   favorites: string[],
   filter: RecommendFilter = {},
-  feedback?: WatchFeedback
+  feedback?: WatchFeedback,
+  exclude?: string[]
 ): Promise<Recommendation[]> {
   const filterPrompt = buildFilterPrompt(filter);
   const feedbackPrompt = buildFeedbackPrompt(feedback);
+  const excludePrompt = exclude && exclude.length > 0
+    ? `\n절대 추천하지 말 작품 (이미 본 작품들): ${exclude.slice(0, 50).join(", ")}`
+    : "";
 
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       {
         role: "system",
-        content: `당신은 영화/시리즈 추천 전문가입니다.
-사용자가 좋아하는 작품 목록을 주면, 그 취향을 분석하고 비슷한 결이면서도 뻔하지 않은 작품을 추천합니다.
+        content: `당신은 영화/시리즈 큐레이터입니다. 넷플릭스 알고리즘이 절대 추천하지 않을, 하지만 이 사용자가 좋아할 작품을 찾아주세요.
 
 규칙:
 - 사용자의 입력 작품 및 그 리메이크/속편은 절대 추천하지 마세요
-- 누구나 아는 초유명작(예: 어벤져스, 타이타닉, 해리 포터)은 제외
+- 누구나 아는 초유명작(어벤져스, 타이타닉, 해리 포터 등)은 제외
 - 한국에서 OTT로 볼 수 있는 작품 위주
-- 대중적이지 않지만 숨겨진 명작을 우선적으로 추천하세요
-- 각 추천에 대해 왜 이 사용자에게 맞는지 한 줄 이유를 포함
+- **장르 다양성**: 최소 3개 이상의 다른 장르에서 골고루 추천하세요. 한 장르에 편중 금지.
+- **시대 다양성**: 최근작(2020년 이후)과 클래식(2010년 이전)을 섞어주세요
+- **발굴 우선**: 대중적이지 않지만 숨겨진 명작을 70% 이상 포함
+- 각 추천에 대해 왜 이 사용자의 취향에 맞는지 구체적인 한 줄 이유를 포함
 - **15개를 추천하세요**
+${excludePrompt}
 
 ${filterPrompt}
 ${feedbackPrompt}
@@ -90,7 +96,7 @@ ${feedbackPrompt}
       },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.9,
+    temperature: 0.85,
   });
 
   const content = response.choices[0].message.content;

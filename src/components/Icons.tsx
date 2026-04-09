@@ -123,3 +123,38 @@ export function IconFilm({ size = 40, color = "currentColor", className }: IconP
     </svg>
   );
 }
+
+/** 필름 릴 스피너 — Warm Cinema 브랜드 스피너 */
+export function NekoSpinner({ size = 40, className }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={`animate-spin-slow ${className ?? ""}`}>
+      {/* 외부 링 */}
+      <circle cx="24" cy="24" r="22" stroke="var(--border)" strokeWidth="2" />
+      <circle cx="24" cy="24" r="22" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="34.5 103.5" />
+      {/* 필름 릴 구멍들 */}
+      <circle cx="24" cy="24" r="4" fill="var(--accent)" opacity="0.3" />
+      <circle cx="24" cy="12" r="2.5" fill="var(--accent)" opacity="0.7" />
+      <circle cx="34.4" cy="18" r="2.5" fill="var(--accent)" opacity="0.5" />
+      <circle cx="34.4" cy="30" r="2.5" fill="var(--accent)" opacity="0.35" />
+      <circle cx="24" cy="36" r="2.5" fill="var(--accent)" opacity="0.2" />
+      <circle cx="13.6" cy="30" r="2.5" fill="var(--accent)" opacity="0.15" />
+      <circle cx="13.6" cy="18" r="2.5" fill="var(--accent)" opacity="0.1" />
+    </svg>
+  );
+}
+
+/** Neko 로고 마크 — N 기반 미니멀 마크 */
+export function NekoLogo({ size = 48, className }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
+      <rect x="2" y="2" width="44" height="44" rx="12" fill="var(--surface)" />
+      <path
+        d="M14 34V14l10 14.5L34 14v20"
+        stroke="var(--accent)"
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
