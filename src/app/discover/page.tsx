@@ -197,14 +197,14 @@ export default function DiscoverPage() {
               }}
             >
               <div
-                className="absolute inset-x-0 top-0 flex flex-col items-center justify-center gap-2 py-8"
+                className="absolute inset-x-0 top-0 flex flex-col items-center justify-center gap-1.5 py-3"
                 style={{
-                  height: `${Math.min(100, swipe.dragY * 1.5)}%`,
+                  height: `${Math.min(18, swipe.dragY * 0.4)}%`,
                   background: "var(--bg-overlay-solid)",
                   transition: swipe.dragging.current ? "none" : "height 0.25s cubic-bezier(0.25, 1, 0.5, 1)",
                 }}
               >
-                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="3 6 5 6 21 6" />
                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                   <path d="M10 11v6" /><path d="M14 11v6" />
