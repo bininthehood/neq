@@ -54,8 +54,12 @@ export default function DiscoverPage() {
     setShowWatched(false);
     const cur = filtered[topIdx];
     if (cur) addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
-    const atEnd = topIdx >= filtered.length - 1;
-    // Auto-load more recommendations when nearing the end
+    // 마지막 카드 → 더 로드 (순환하지 않음)
+    if (topIdx >= filtered.length - 1) {
+      if (!rec.loadingMore) rec.loadMoreRecs();
+      return;
+    }
+    // 남은 카드 3개 이하면 미리 로드
     if (topIdx >= filtered.length - 3 && !rec.loadingMore) {
       rec.loadMoreRecs();
     }
@@ -64,7 +68,7 @@ export default function DiscoverPage() {
     swipe.setDragY(0);
     const t = setTimeout(() => {
       swipe.timersRef.current.delete(t);
-      setTopIdx(atEnd ? 0 : (i) => i + 1);
+      setTopIdx((i) => i + 1);
       swipe.setDragX(0); swipe.setDragY(0); swipe.setSwiping(false);
       swipe.scrollRef.current?.scrollTo({ top: 0 });
     }, 280);
@@ -177,10 +181,7 @@ export default function DiscoverPage() {
     <div className="h-dvh flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="font-display text-lg text-accent">Neko</span>
-        <div className="flex items-center gap-3">
-          <span className="font-data text-sm text-muted">{topIdx + 1}/{filtered.length}</span>
-          <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center text-muted">재설정</button>
-        </div>
+        <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center text-muted">재설정</button>
       </div>
       <FilterChips {...chipsProps} />
 
@@ -228,7 +229,7 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      <ActionBar current={current} topIdx={topIdx} filtered={filtered} isSaved={isSaved}
+      <ActionBar current={current} isSaved={isSaved}
         onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave} />
       <BottomNav active="discover" />
 

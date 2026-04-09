@@ -57,8 +57,8 @@ export function useSwipeGesture({
         e.preventDefault();
         if (!scrollLocked) setScrollLocked(true);
 
-        if (dx > 0 && filteredLength > 1) {
-          // right drag -> prev card overlay from left
+        if (dx > 0 && filteredLength > 1 && topIdx > 0) {
+          // right drag -> prev card overlay from left (첫 카드에서는 차단)
           const screenW = window.innerWidth;
           setPrevOverlayX(Math.min(0, -screenW + dx));
         } else if (dx <= 0) {
@@ -121,10 +121,7 @@ export function useSwipeGesture({
   // prevCard via keyboard/button - overlay animation
   const prevCard = useCallback(() => {
     if (swiping || prevOverlayX !== null || filteredLength === 0) return;
-    if (topIdx <= 0) {
-      setTopIdx(filteredLength - 1);
-      return;
-    }
+    if (topIdx <= 0) return; // 첫 카드에서는 이전으로 갈 수 없음
     setSwiping(true);
     const w = typeof window !== "undefined" ? window.innerWidth : 400;
     setPrevOverlayX(-w);
