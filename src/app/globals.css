@@ -53,15 +53,60 @@
   --radius-full: 9999px;
 
   /* Typography */
-  --font-display: 'Fraunces', Georgia, serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
   --font-body: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
-  --font-data: 'Outfit', sans-serif;
+  --font-data: var(--font-outfit), sans-serif;
 }
 
 @theme inline {
+  /* Colors */
   --color-background: var(--bg);
   --color-foreground: var(--text-primary);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-border: var(--border);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-dim: var(--accent-dim);
+  --color-accent-border: var(--accent-border);
+  --color-accent-border-light: var(--accent-border-light);
+  --color-danger: var(--danger);
+  --color-danger-dim: var(--danger-dim);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-success: var(--success);
+  --color-success-dim: var(--success-dim);
+
+  /* Overlays */
+  --color-overlay-light: var(--bg-overlay-light);
+  --color-overlay: var(--bg-overlay);
+  --color-overlay-heavy: var(--bg-overlay-heavy);
+  --color-overlay-dense: var(--bg-overlay-dense);
+  --color-overlay-solid: var(--bg-overlay-solid);
+
+  /* Border radius — DESIGN.md overrides (Tailwind v4 defaults don't match) */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Typography — DESIGN.md scale */
+  --text-xs: 0.6875rem;    /* 11px */
+  --text-sm: 0.8125rem;    /* 13px */
+  --text-base: 0.9375rem;  /* 15px */
+  --text-lg: 1.125rem;     /* 18px */
+  --text-xl: 1.375rem;     /* 22px */
+  --text-2xl: 1.75rem;     /* 28px */
+  --text-3xl: 2.25rem;     /* 36px */
+  --text-display: 3rem;    /* 48px */
+
+  /* Fonts */
   --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-data: var(--font-data);
 }
 
 html, body {
