@@ -34,7 +34,7 @@ export default function DiscoverPage() {
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
-  const [filterOTT, setFilterOTT] = useState<string>("all");
+  const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
 
   // 부채꼴 덱 — 맨 앞 카드의 드래그 오프셋
   const [dragX, setDragX] = useState(0);
@@ -100,8 +100,7 @@ export default function DiscoverPage() {
   };
 
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
-    setFilterType(t); setFilterOrigin(o); setFilterOTT("all");
-    scrollRef.current?.scrollTo({ top: 0 });
+    setFilterType(t); setFilterOrigin(o); setFilterOTTs(new Set());
     loadRecs(t, o);
   };
 
@@ -110,7 +109,7 @@ export default function DiscoverPage() {
     await loadRecs(filterType, filterOrigin);
   };
 
-  const filtered = filterOTT === "all" ? recs : recs.filter((r) => r.providers.some((p) => p.name === filterOTT));
+  const filtered = filterOTTs.size === 0 ? recs : recs.filter((r) => r.providers.some((p) => filterOTTs.has(p.name)));
   const current = filtered[topIdx];
 
   // 다음 카드 (왼쪽으로 스와이프)
@@ -340,56 +339,89 @@ export default function DiscoverPage() {
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
-  const [expandedFilter, setExpandedFilter] = useState<"type" | "origin" | null>(null);
+  const [openDropdown, setOpenDropdown] = useState<"type" | "origin" | "ott" | null>(null);
 
   const TYPE_LABELS: Record<FilterType, string> = { all: "전체", movie: "영화", series: "시리즈" };
   const ORIGIN_LABELS: Record<FilterOrigin, string> = { all: "전체", kr: "국내", foreign: "해외" };
+  const availableOTTs = OTT_OPTIONS.filter((ott) => recs.some((r) => r.providers.some((p) => p.name === ott)));
+  const ottLabel = filterOTTs.size === 0 ? "OTT" : filterOTTs.size === 1 ? [...filterOTTs][0] : `OTT ${filterOTTs.size}개`;
+
+  const chipStyle = (active: boolean) => ({
+    background: active ? "var(--accent)" : "var(--surface)",
+    color: active ? "var(--bg)" : "var(--text-secondary)",
+    borderRadius: "var(--radius-full)",
+    border: active ? "none" : "1px solid var(--border)",
+  });
 
   const FilterChips = () => (
-    <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
-      {/* 타입 필터 — 접기/펼치기 */}
-      {expandedFilter === "type" ? (
-        (["all", "movie", "series"] as const).map((t) => (
-          <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setExpandedFilter(null); }} disabled={loading}
-            className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 animate-fade-in"
-            style={{ background: filterType === t ? "var(--accent)" : "var(--surface)", color: filterType === t ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType === t ? "none" : "1px solid var(--border)" }}>
-            {TYPE_LABELS[t]}
-          </button>
-        ))
-      ) : (
-        <button onClick={() => setExpandedFilter("type")} disabled={loading}
-          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1"
-          style={{ background: filterType !== "all" ? "var(--accent)" : "var(--surface)", color: filterType !== "all" ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType !== "all" ? "none" : "1px solid var(--border)" }}>
+    <div className="shrink-0 relative">
+      {/* 칩 행 — 3개 고정 */}
+      <div className="flex gap-2 px-4 pb-2">
+        <button onClick={() => setOpenDropdown(openDropdown === "type" ? null : "type")} disabled={loading}
+          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          style={chipStyle(filterType !== "all")}>
           {TYPE_LABELS[filterType]} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
         </button>
-      )}
-      <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
-      {/* 국적 필터 — 접기/펼치기 */}
-      {expandedFilter === "origin" ? (
-        (["all", "kr", "foreign"] as const).map((o) => (
-          <button key={o} onClick={() => { handleFilterChange(filterType, o); setExpandedFilter(null); }} disabled={loading}
-            className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 animate-fade-in"
-            style={{ background: filterOrigin === o ? "var(--accent)" : "var(--surface)", color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin === o ? "none" : "1px solid var(--border)" }}>
-            {ORIGIN_LABELS[o]}
-          </button>
-        ))
-      ) : (
-        <button onClick={() => setExpandedFilter("origin")} disabled={loading}
-          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1"
-          style={{ background: filterOrigin !== "all" ? "var(--accent)" : "var(--surface)", color: filterOrigin !== "all" ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin !== "all" ? "none" : "1px solid var(--border)" }}>
+        <button onClick={() => setOpenDropdown(openDropdown === "origin" ? null : "origin")} disabled={loading}
+          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          style={chipStyle(filterOrigin !== "all")}>
           {ORIGIN_LABELS[filterOrigin]} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
         </button>
-      )}
-      {recs.length > 0 && (
+        {availableOTTs.length > 0 && (
+          <button onClick={() => setOpenDropdown(openDropdown === "ott" ? null : "ott")}
+            className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1 active:scale-95"
+            style={chipStyle(filterOTTs.size > 0)}>
+            {ottLabel} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
+          </button>
+        )}
+      </div>
+
+      {/* 드롭다운 패널 — 아래로 펼침 */}
+      {openDropdown && (
         <>
-          <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
-          {["all", ...OTT_OPTIONS.filter((ott) => recs.some((r) => r.providers.some((p) => p.name === ott)))].map((ott) => (
-            <button key={ott} onClick={() => { setFilterOTT(ott); setTopIdx(0); }}
-              className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5"
-              style={{ background: filterOTT === ott ? "var(--accent)" : "var(--surface)", color: filterOTT === ott ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOTT === ott ? "none" : "1px solid var(--border)" }}>
-              {ott === "all" ? "모든 OTT" : (<><img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />{ott}</>)}
-            </button>
-          ))}
+          <div className="fixed inset-0 z-20" onClick={() => setOpenDropdown(null)} />
+          <div className="absolute left-4 right-4 z-30 p-2 flex flex-wrap gap-1.5 animate-fade-in"
+            style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
+            {openDropdown === "type" && (["all", "movie", "series"] as const).map((t) => (
+              <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setOpenDropdown(null); }}
+                className="px-3 py-2 text-xs whitespace-nowrap transition-colors active:scale-95"
+                style={chipStyle(filterType === t)}>
+                {TYPE_LABELS[t]}
+              </button>
+            ))}
+            {openDropdown === "origin" && (["all", "kr", "foreign"] as const).map((o) => (
+              <button key={o} onClick={() => { handleFilterChange(filterType, o); setOpenDropdown(null); }}
+                className="px-3 py-2 text-xs whitespace-nowrap transition-colors active:scale-95"
+                style={chipStyle(filterOrigin === o)}>
+                {ORIGIN_LABELS[o]}
+              </button>
+            ))}
+            {openDropdown === "ott" && (
+              <>
+                <button onClick={() => { setFilterOTTs(new Set()); setTopIdx(0); setOpenDropdown(null); }}
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-colors active:scale-95"
+                  style={chipStyle(filterOTTs.size === 0)}>
+                  모든 OTT
+                </button>
+                {availableOTTs.map((ott) => {
+                  const selected = filterOTTs.has(ott);
+                  return (
+                    <button key={ott} onClick={() => {
+                      const next = new Set(filterOTTs);
+                      if (selected) next.delete(ott); else next.add(ott);
+                      setFilterOTTs(next);
+                      setTopIdx(0);
+                    }}
+                      className="px-3 py-2 text-xs whitespace-nowrap transition-colors flex items-center gap-1.5 active:scale-95"
+                      style={chipStyle(selected)}>
+                      <img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain" style={{ borderRadius: "var(--radius-sm)" }} />
+                      {ott}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -411,7 +443,7 @@ export default function DiscoverPage() {
   );
 
   if (filtered.length === 0) {
-    const hasF = filterType !== "all" || filterOrigin !== "all" || filterOTT !== "all";
+    const hasF = filterType !== "all" || filterOrigin !== "all" || filterOTTs.size > 0;
     return (
       <div className="h-dvh flex flex-col">
         <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button></div>
@@ -420,7 +452,7 @@ export default function DiscoverPage() {
           <IconFilm size={36} color="var(--text-muted)" />
           <div><p className="font-display text-lg font-semibold">{hasF ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}</p><p className="text-sm mt-1.5" style={{ color: "var(--text-secondary)" }}>{hasF ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해보세요"}</p></div>
           <div className="flex gap-3">
-            {hasF && <button onClick={() => { handleFilterChange("all", "all"); setFilterOTT("all"); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>}
+            {hasF && <button onClick={() => { handleFilterChange("all", "all"); setFilterOTTs(new Set()); }} className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-full)" }}>필터 초기화</button>}
             <button onClick={refreshRecommendations} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}><IconRefresh size={14} /> 다시 시도</button>
           </div>
         </div></div>
