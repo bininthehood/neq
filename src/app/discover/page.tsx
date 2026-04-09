@@ -72,7 +72,7 @@ export default function DiscoverPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, filtered.length, rec.loadingMore]);
 
-  const swipe = useSwipeGesture({ topIdx, filteredLength: filtered.length, nextCard, setTopIdx });
+  const swipe = useSwipeGesture({ topIdx, filteredLength: filtered.length, nextCard, setTopIdx, onSwipeDown: () => setShowWatched(true) });
 
   const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
     if (!current) return;
@@ -90,9 +90,16 @@ export default function DiscoverPage() {
   }, [current, nextCard]);
 
   const handleCardTap = useCallback(() => {
-    if (swipe.swiping) return;
-    setShowWatched((prev) => !prev);
-  }, [swipe.swiping]);
+    if (swipe.swiping || showWatched) return;
+    detail.openDetail();
+  }, [swipe.swiping, showWatched, detail.openDetail]);
+
+  const handleNotInterested = useCallback(() => {
+    if (!current) return;
+    addSeenTitles([current.title, current.titleEn].filter(Boolean));
+    setShowWatched(false);
+    nextCard();
+  }, [current, nextCard]);
 
   const handleShare = useCallback(async (r: Recommendation) => {
     const providers = r.providers.map((p) => p.name).join(", ");
@@ -186,6 +193,7 @@ export default function DiscoverPage() {
               dragX={swipe.dragX} dragY={swipe.dragY} isDragging={swipe.dragging.current} swiping={swipe.swiping}
               showWatched={stackIdx === deckCards.length - 1 && showWatched} onCardTap={handleCardTap}
               onWatchedReaction={handleWatchedReaction} onWatchedSkip={handleWatchedSkip}
+              onNotInterested={handleNotInterested}
               onCloseWatched={() => setShowWatched(false)} onOpenDetail={detail.openDetail} metaInfo={metaInfo(r)} />
           ))}
           {swipe.prevOverlayX !== null && filtered.length > 1 && (() => {

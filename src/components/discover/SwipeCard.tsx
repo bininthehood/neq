@@ -19,6 +19,7 @@ interface SwipeCardProps {
   onCardTap: () => void;
   onWatchedReaction: (reaction: WatchReaction) => void;
   onWatchedSkip: () => void;
+  onNotInterested: () => void;
   onCloseWatched: () => void;
   onOpenDetail: () => void;
   metaInfo: string;
@@ -36,6 +37,7 @@ export default function SwipeCard({
   onCardTap,
   onWatchedReaction,
   onWatchedSkip,
+  onNotInterested,
   onCloseWatched,
   onOpenDetail,
   metaInfo,
@@ -210,6 +212,15 @@ export default function SwipeCard({
               className="flex-1 py-2 text-xs active:scale-95 transition-transform text-muted"
             >
               안 봤어요
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onNotInterested();
+              }}
+              className="flex-1 py-2 text-xs active:scale-95 transition-transform text-danger"
+            >
+              관심 없어요
             </button>
             <button
               onClick={(e) => {

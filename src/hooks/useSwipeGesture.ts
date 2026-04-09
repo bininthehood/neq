@@ -8,6 +8,7 @@ interface UseSwipeGestureParams {
   filteredLength: number;
   nextCard: () => void;
   setTopIdx: React.Dispatch<React.SetStateAction<number>>;
+  onSwipeDown?: () => void;
 }
 
 export function useSwipeGesture({
@@ -15,6 +16,7 @@ export function useSwipeGesture({
   filteredLength,
   nextCard,
   setTopIdx,
+  onSwipeDown,
 }: UseSwipeGestureParams) {
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
@@ -65,8 +67,11 @@ export function useSwipeGesture({
           setDragX(dx);
           setDragY(0);
         }
+      } else if (dirLock.current === "v" && dy > 0) {
+        e.preventDefault();
+        // 아래 스와이프 진행도 추적
+        setDragY(Math.min(100, dy * 0.5));
       }
-      // vertical down swipe: no action (pull-to-refresh removed)
     },
     [scrollLocked, filteredLength],
   );
@@ -76,7 +81,13 @@ export function useSwipeGesture({
     dragging.current = false;
     const dir = dirLock.current;
     dirLock.current = null;
-    if (dir === "h") {
+    if (dir === "v") {
+      if (dragY > 40 && onSwipeDown) {
+        vibrate(10);
+        onSwipeDown();
+      }
+      setDragY(0);
+    } else if (dir === "h") {
       setScrollLocked(false);
       if (prevOverlayX !== null && prevOverlayX > -Infinity) {
         // prev card overlay judgment
@@ -104,9 +115,8 @@ export function useSwipeGesture({
         setDragY(0);
       }
     }
-    // vertical end: no action needed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragX, nextCard, prevOverlayX, filteredLength]);
+  }, [dragX, dragY, nextCard, prevOverlayX, filteredLength, onSwipeDown]);
 
   // prevCard via keyboard/button - overlay animation
   const prevCard = useCallback(() => {
