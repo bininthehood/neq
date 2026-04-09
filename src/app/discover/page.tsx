@@ -341,8 +341,8 @@ export default function DiscoverPage() {
 
   const [openDropdown, setOpenDropdown] = useState<"type" | "origin" | "ott" | null>(null);
 
-  const TYPE_LABELS: Record<FilterType, string> = { all: "전체", movie: "영화", series: "시리즈" };
-  const ORIGIN_LABELS: Record<FilterOrigin, string> = { all: "전체", kr: "국내", foreign: "해외" };
+  const TYPE_LABELS: Record<FilterType, string> = { all: "유형", movie: "영화", series: "시리즈" };
+  const ORIGIN_LABELS: Record<FilterOrigin, string> = { all: "국가", kr: "국내", foreign: "해외" };
   const availableOTTs = OTT_OPTIONS.filter((ott) => recs.some((r) => r.providers.some((p) => p.name === ott)));
   const ottLabel = filterOTTs.size === 0 ? "OTT" : filterOTTs.size === 1 ? [...filterOTTs][0] : `OTT ${filterOTTs.size}개`;
 
@@ -386,14 +386,14 @@ export default function DiscoverPage() {
               <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setOpenDropdown(null); }}
                 className="px-3 py-2 text-xs whitespace-nowrap transition-colors active:scale-95"
                 style={chipStyle(filterType === t)}>
-                {TYPE_LABELS[t]}
+                {t === "all" ? "전체" : TYPE_LABELS[t]}
               </button>
             ))}
             {openDropdown === "origin" && (["all", "kr", "foreign"] as const).map((o) => (
               <button key={o} onClick={() => { handleFilterChange(filterType, o); setOpenDropdown(null); }}
                 className="px-3 py-2 text-xs whitespace-nowrap transition-colors active:scale-95"
                 style={chipStyle(filterOrigin === o)}>
-                {ORIGIN_LABELS[o]}
+                {o === "all" ? "전체" : ORIGIN_LABELS[o]}
               </button>
             ))}
             {openDropdown === "ott" && (
