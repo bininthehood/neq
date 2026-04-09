@@ -30,7 +30,7 @@ function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
   return (
     <span
-      className="px-2 py-0.5 text-[11px] font-semibold rounded-sm"
+      className="px-2 py-0.5 text-xs font-semibold rounded-sm"
       style={{ color: r.color, background: r.bg }}
     >
       {r.label}
@@ -88,7 +88,7 @@ function PosterCard({
       >
         <div className="text-xs font-medium truncate">{item.recommendation.title}</div>
         <div className="flex items-center gap-2">
-          <span className="font-data text-[11px] flex items-center gap-0.5 text-muted"><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
+          <span className="font-data text-xs flex items-center gap-0.5 text-muted"><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
           {report && <ReactionLabel reaction={report} />}
           {!report && item.recommendation.providers.slice(0, 2).map((p) => (
             <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain rounded-sm" />
@@ -99,7 +99,7 @@ function PosterCard({
       {!report && !isReporting && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStartReport(tmdbId); }}
-          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform bg-overlay rounded-full text-secondary"
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full text-secondary"
           style={{ backdropFilter: "blur(4px)" }}
         >
           봤어요?
@@ -109,7 +109,7 @@ function PosterCard({
       {report && !isReporting && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUndoReport(tmdbId); }}
-          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-[11px] font-medium active:scale-90 transition-transform bg-overlay rounded-full"
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full"
           style={{ backdropFilter: "blur(4px)", color: REACTIONS.find((x) => x.key === report)?.color }}
           title="리포트 취소"
         >
@@ -135,7 +135,7 @@ function PosterCard({
           ))}
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
-            className="mt-1 text-[11px] min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted"
+            className="mt-1 text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted"
           >
             닫기
           </button>
@@ -314,7 +314,7 @@ export default function SavedPage() {
           {saved.length > 0 && (
             <button
               onClick={() => setGroupByOTT(!groupByOTT)}
-              className="px-3 py-1.5 text-[11px] font-medium active:scale-95 transition-transform"
+              className="px-3 py-1.5 text-xs font-medium active:scale-95 transition-transform"
               style={{
                 background: groupByOTT ? "var(--accent-dim)" : "var(--surface)",
                 color: groupByOTT ? "var(--accent)" : "var(--text-muted)",

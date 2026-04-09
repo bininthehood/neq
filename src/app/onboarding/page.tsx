@@ -143,7 +143,7 @@ export default function OnboardingPage() {
                   {item.posterUrl ? (
                     <img src={item.posterUrl} alt={item.title} className="w-14 h-20 object-cover rounded-md" />
                   ) : (
-                    <div className="w-14 h-20 flex items-center justify-center text-[10px] bg-surface rounded-md text-muted">
+                    <div className="w-14 h-20 flex items-center justify-center text-xs bg-surface rounded-md text-muted">
                       {item.title.slice(0, 3)}
                     </div>
                   )}
@@ -214,7 +214,7 @@ export default function OnboardingPage() {
                       className="absolute bottom-0 left-0 right-0 p-1.5"
                       style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))" }}
                     >
-                      <div className="text-[11px] font-medium truncate">{item.title}</div>
+                      <div className="text-xs font-medium truncate">{item.title}</div>
                     </div>
                     {isSelected && (
                       <div

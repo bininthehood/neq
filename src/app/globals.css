@@ -152,19 +152,10 @@ body::after {
   background-size: 128px 128px;
 }
 
-/* Utility classes */
-.font-display {
-  font-family: var(--font-display);
-}
+/* font-data needs tabular-nums which Tailwind's font-data utility doesn't include */
 .font-data {
   font-family: var(--font-data);
   font-variant-numeric: tabular-nums;
-}
-.text-secondary {
-  color: var(--text-secondary);
-}
-.text-muted {
-  color: var(--text-muted);
 }
 
 /* Card swipe animations */

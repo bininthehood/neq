@@ -169,7 +169,7 @@ export default function ResetPage() {
                     style={{ outline: isSelected ? "2px solid var(--accent)" : "none", outlineOffset: "-2px", aspectRatio: "2/3" }}>
                     {item.posterUrl ? <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-surface" />}
                     <div className="absolute bottom-0 left-0 right-0 p-1.5" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))" }}>
-                      <div className="text-[11px] font-medium truncate">{item.title}</div>
+                      <div className="text-xs font-medium truncate">{item.title}</div>
                     </div>
                     {isSelected && (
                       <div className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-accent rounded-full">
