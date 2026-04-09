@@ -52,7 +52,6 @@ export default function DiscoverPage() {
   // 디테일 scroll-snap
   const scrollRef = useRef<HTMLDivElement>(null);
   const [inDetail, setInDetail] = useState(false);
-  const detailTop = useRef(0); // 디테일 영역의 scrollTop 시작점
 
   useEffect(() => {
     setMounted(true);
@@ -237,18 +236,14 @@ export default function DiscoverPage() {
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
-  // 디테일 진입 감지 + 스크롤 클램핑
+  // 디테일 진입 감지 — scroll-snap을 끔
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     const onScroll = () => {
       const h = el.clientHeight;
-      if (!inDetail && el.scrollTop > h * 0.8) {
-        detailTop.current = h;
+      if (!inDetail && el.scrollTop > h * 0.5) {
         setInDetail(true);
-      }
-      if (inDetail && el.scrollTop < detailTop.current) {
-        el.scrollTop = detailTop.current;
       }
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -375,7 +370,7 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 min-h-0" style={{ overflowY: scrollLocked ? "hidden" : "auto", scrollSnapType: scrollLocked ? "none" : "y proximity", overscrollBehavior: "none" }}>
+      <div ref={scrollRef} className="flex-1 min-h-0" style={{ overflowY: scrollLocked ? "hidden" : "auto", scrollSnapType: (scrollLocked || inDetail) ? "none" : "y proximity", overscrollBehavior: "none" }}>
 
         {/* Snap 1: 카드 덱 */}
         <div className="relative px-3 pb-2" style={{ height: "100%", scrollSnapAlign: "start", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
