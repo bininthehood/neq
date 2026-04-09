@@ -2,6 +2,13 @@
 
 All notable changes to Neko will be documented in this file.
 
+## [0.1.1.0] - 2026-04-09
+
+### Fixed
+- localStorage 파싱 실패 시 앱 크래시 방지 — safeParse 래퍼로 모든 JSON.parse 호출 보호
+- 필터 빠르게 변경 시 이전 응답이 현재 상태를 덮어쓰는 race condition — AbortController로 stale fetch 취소
+- 컴포넌트 unmount 후 setTimeout이 state를 set하는 문제 — 타이머 ref 추적 + cleanup
+
 ## [0.1.0.0] - 2026-04-09
 
 ### Added
