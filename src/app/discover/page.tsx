@@ -188,23 +188,23 @@ export default function DiscoverPage() {
         <div className="relative px-3 pb-2"
           style={{ height: "100%" }}
           onTouchStart={swipe.onTouchStart} onTouchMove={swipe.onTouchMove} onTouchEnd={swipe.onTouchEnd}>
-          {/* 카드 뒤 삭제 아이콘 — 아래 스와이프 시 노출 */}
+          {/* 카드 뒤 아이콘 — 아래 스와이프 시 카드가 내려가면서 상단에 노출 */}
           {swipe.dragY > 0 && (
             <div
-              className="absolute inset-x-3 top-0 bottom-2 flex flex-col items-center justify-center gap-2 rounded-xl"
+              className="absolute left-0 right-0 flex flex-col items-center gap-2 pt-6"
               style={{
-                zIndex: 1,
-                opacity: Math.min(1, swipe.dragY / 60),
-                transform: `scale(${0.8 + Math.min(0.2, swipe.dragY / 200)})`,
-                transition: swipe.dragging.current ? "none" : "opacity 0.2s, transform 0.2s",
+                top: "12px",
+                zIndex: 9,
+                opacity: Math.min(1, swipe.dragY / 40),
+                transition: swipe.dragging.current ? "none" : "opacity 0.2s",
               }}
             >
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="3 6 5 6 21 6" />
                 <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
                 <path d="M10 11v6" /><path d="M14 11v6" />
               </svg>
-              <span className="text-sm text-muted">놓으면 선택할 수 있어요</span>
+              <span className="text-xs text-muted">놓으면 선택할 수 있어요</span>
             </div>
           )}
           {deckCards.map((r, stackIdx) => (
