@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Fraunces, Outfit } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import InstallBanner from "@/components/InstallBanner";
 import Reminder from "@/components/Reminder";
@@ -55,6 +56,7 @@ export default function RootLayout({
         <div className="h-dvh flex flex-col">{children}</div>
         <InstallBanner />
         <Reminder />
+        <Analytics />
       </body>
     </html>
   );
