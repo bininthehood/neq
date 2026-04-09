@@ -13,7 +13,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { favorites, filter, feedback, exclude } = await req.json();
+  const { favorites, filter, feedback, exclude: rawExclude } = await req.json();
+
+  // exclude 검증: 문자열 배열, 각 항목 50자 제한, 특수문자 제거
+  const exclude = Array.isArray(rawExclude)
+    ? rawExclude
+        .filter((x: unknown): x is string => typeof x === "string")
+        .map((s: string) => s.replace(/[^\p{L}\p{N}\s:,\-().!?]/gu, "").slice(0, 50))
+        .slice(0, 50)
+    : undefined;
 
   if (!Array.isArray(favorites) || favorites.length < 3) {
     return NextResponse.json(

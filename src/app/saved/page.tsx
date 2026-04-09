@@ -467,8 +467,9 @@ export default function SavedPage() {
           <p className="text-sm mt-1.5">Discover에서 하트를 누르면 여기에 모여요</p>
         </div>
       ) : filteredSaved.length === 0 ? (
-        <div className="flex-1 flex flex-col items-start justify-center px-8" style={{ color: "var(--text-muted)" }}>
-          <p className="font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+        <div className="flex-1 flex flex-col justify-center px-8" style={{ color: "var(--text-muted)" }}>
+          <IconCheck size={32} />
+          <p className="mt-4 font-display text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
             {viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
           </p>
           <p className="text-sm mt-1.5">

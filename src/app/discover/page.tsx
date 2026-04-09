@@ -12,10 +12,12 @@ import {
   hasOnboarded,
   getWatchReports,
   getSaved,
+  getSeenTitles,
+  addSeenTitles,
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
-import { IconSave, IconClose, IconRefresh, IconStar, IconFilm, IconDetail } from "@/components/Icons";
+import { IconSave, IconClose, IconRefresh, IconStar, IconFilm, IconDetail, NekoSpinner } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 type FilterType = "all" | "movie" | "series";
@@ -79,9 +81,12 @@ export default function DiscoverPage() {
       else if (r.reaction === "dropped") feedback.dropped.push(t);
     }
     const hasFeedback = feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length > 0;
+    const seenTitles = getSeenTitles();
+    const savedTitles = savedItems.map((s) => s.recommendation.title);
+    const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 50);
     const res = await fetch("/api/recommend", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}) }),
+      body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}), ...(exclude.length > 0 ? { exclude } : {}) }),
     });
     const data = await res.json();
     setRecommendations(data.recommendations ?? [], ft, fo);
@@ -105,6 +110,8 @@ export default function DiscoverPage() {
   // 다음 카드 (왼쪽으로 스와이프)
   const nextCard = useCallback(() => {
     if (swiping) return;
+    const cur = filtered[topIdx];
+    if (cur) addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     if (topIdx >= filtered.length - 1) {
       // 마지막 카드 → 처음으로 순환
       setSwiping(true);
@@ -182,8 +189,6 @@ export default function DiscoverPage() {
         requestAnimationFrame(() => setPrevEntering(false));
       } else if (prevSwitched.current) {
         // 이전 카드를 끌어오는 중 → 새 top 카드가 손가락 따라옴
-        const screenW = window.innerWidth;
-        const newDx = Math.min(0, dx - screenW + (e.touches[0].clientX - (startX.current - screenW)));
         setDragX(e.touches[0].clientX - startX.current);
         setDragY(Math.abs(e.touches[0].clientX - startX.current) * -0.05);
       } else {
@@ -306,7 +311,7 @@ export default function DiscoverPage() {
       <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
       <FilterChips />
       <div className="flex-1 flex flex-col items-center justify-center gap-5">
-        <div className="w-10 h-10 animate-spin" style={{ border: "3px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
+        <NekoSpinner size={48} />
         <div className="text-center">
           <h2 className="font-display text-lg">{filterLabel ? `${filterLabel} 추천 생성 중` : "취향을 분석하고 있어요"}</h2>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>잠시만 기다려주세요</p>
@@ -352,7 +357,11 @@ export default function DiscoverPage() {
       {/* Pull-to-refresh indicator */}
       {(pullY > 0 || refreshing) && (
         <div className="flex justify-center py-1 shrink-0" style={{ opacity: refreshing ? 1 : Math.min(1, pullY / 40) }}>
-          <div className={`w-6 h-6 ${refreshing ? "animate-spin" : ""}`} style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)", ...(!refreshing ? { transform: `rotate(${pullY * 4}deg)` } : {}) }} />
+          {refreshing ? (
+            <NekoSpinner size={24} />
+          ) : (
+            <div className="w-6 h-6" style={{ transform: `rotate(${pullY * 4}deg)`, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
+          )}
         </div>
       )}
 
