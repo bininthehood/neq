@@ -67,12 +67,15 @@ export default function DiscoverPage() {
     setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
   }, [router]);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
     const cached = getRecommendations(ft, fo);
-    if (cached.length > 0) { setRecs(cached); setTopIdx(0); setLoading(false); return; }
+    if (cached.length > 0) { setRecs(cached); setTopIdx(0); setLoading(false); setLoadError(null); return; }
     setLoading(true);
+    setLoadError(null);
     const favorites = getFavorites();
-    const filter: any = {};
+    const filter: Record<string, string> = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
     const reports = getWatchReports();
@@ -91,15 +94,26 @@ export default function DiscoverPage() {
     const seenTitles = getSeenTitles();
     const savedTitles = savedItems.map((s) => s.recommendation.title);
     const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 50);
-    const res = await fetch("/api/recommend", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}), ...(exclude.length > 0 ? { exclude } : {}) }),
-    });
-    const data = await res.json();
-    const newRecs = data.recommendations ?? [];
-    setRecommendations(newRecs, ft, fo);
-    setRecs(newRecs); setTopIdx(0); setLoading(false);
-    if (newRecs.length > 0) addRecHistory(newRecs.map((r: any) => ({ title: r.title, tmdbId: r.tmdbId, posterUrl: r.posterUrl })));
+    try {
+      const res = await fetch("/api/recommend", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}), ...(exclude.length > 0 ? { exclude } : {}) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        setLoadError(err?.error ?? "추천을 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+        setLoading(false);
+        return;
+      }
+      const data = await res.json();
+      const newRecs = data.recommendations ?? [];
+      setRecommendations(newRecs, ft, fo);
+      setRecs(newRecs); setTopIdx(0); setLoading(false);
+      if (newRecs.length > 0) addRecHistory(newRecs.map((r: Recommendation) => ({ title: r.title, tmdbId: r.tmdbId, posterUrl: r.posterUrl })));
+    } catch {
+      setLoadError("네트워크 연결을 확인해주세요.");
+      setLoading(false);
+    }
   };
 
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
@@ -124,7 +138,7 @@ export default function DiscoverPage() {
     if (topIdx >= filtered.length - 1) {
       // 마지막 카드 → 처음으로 순환
       setSwiping(true);
-      setDragX(-500); setDragY(-80);
+      setDragX(-500); setDragY(0);
       setTimeout(() => {
         setTopIdx(0);
         setDragX(0); setDragY(0); setSwiping(false);
@@ -133,7 +147,7 @@ export default function DiscoverPage() {
       return;
     }
     setSwiping(true);
-    setDragX(-500); setDragY(-80);
+    setDragX(-500); setDragY(0);
     setTimeout(() => {
       setTopIdx((i) => i + 1);
       setDragX(0); setDragY(0); setSwiping(false);
@@ -226,7 +240,7 @@ export default function DiscoverPage() {
         // 왼쪽 드래그 → 현재 카드 밀기 (다음 카드)
         setPrevOverlayX(null);
         setDragX(dx);
-        setDragY(Math.abs(dx) * -0.15);
+        setDragY(0);
       }
     } else if (dirLock.current === "v" && dy > 0 && !refreshing) {
       e.preventDefault();
@@ -343,6 +357,19 @@ export default function DiscoverPage() {
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
+  const [showTutorial, setShowTutorial] = useState(false);
+
+  useEffect(() => {
+    if (!mounted || loading) return;
+    const seen = localStorage.getItem("neko_tutorial_seen");
+    if (!seen && filtered.length > 0) setShowTutorial(true);
+  }, [mounted, loading, filtered.length]);
+
+  const dismissTutorial = () => {
+    setShowTutorial(false);
+    localStorage.setItem("neko_tutorial_seen", "1");
+  };
+
   const [openDropdown, setOpenDropdown] = useState<"type" | "origin" | "ott" | null>(null);
 
   const TYPE_LABELS: Record<FilterType, string> = { all: "유형", movie: "영화", series: "시리즈" };
@@ -455,6 +482,25 @@ export default function DiscoverPage() {
         <p className="text-center text-xs py-2" style={{ color: "var(--text-muted)" }}>
           {filterLabel ? `${filterLabel} 추천 생성 중...` : "취향을 분석하고 있어요..."}
         </p>
+      </div>
+      <BottomNav active="discover" />
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="h-dvh flex flex-col">
+      <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span></div>
+      <FilterChips />
+      <div className="flex-1 flex flex-col px-8 justify-center">
+        <div className="space-y-5">
+          <IconFilm size={36} color="var(--danger)" />
+          <div>
+            <p className="font-display text-lg font-semibold">{loadError}</p>
+          </div>
+          <button onClick={() => loadRecs(filterType, filterOrigin)} className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform" style={{ background: "var(--accent)", color: "var(--bg)", borderRadius: "var(--radius-full)" }}>
+            <IconRefresh size={14} /> 다시 시도
+          </button>
+        </div>
       </div>
       <BottomNav active="discover" />
     </div>
@@ -694,6 +740,37 @@ export default function DiscoverPage() {
         </div>
       </div>
       <BottomNav active="discover" />
+
+      {/* 스와이프 튜토리얼 오버레이 */}
+      {showTutorial && (
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center animate-fade-in"
+          style={{ background: "var(--bg-overlay-dense)" }}
+          onClick={dismissTutorial}
+        >
+          <div className="flex flex-col items-center gap-6 px-8 max-w-[320px]">
+            <div className="flex gap-10 justify-center">
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="text-2xl" style={{ color: "var(--text-primary)" }}>&larr;</div>
+                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Pass</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="text-2xl" style={{ color: "var(--text-primary)" }}>&rarr;</div>
+                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>이전 카드</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5">
+                <div className="text-2xl" style={{ color: "var(--text-primary)" }}>&darr;</div>
+                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>새로고침</span>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>카드를 탭하면 "봤어요?" 기록</p>
+              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>하단 정보 영역을 탭하면 상세보기</p>
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>아무 곳이나 탭하면 닫힘</p>
+          </div>
+        </div>
+      )}
 
       {/* 디테일 바텀시트 오버레이 */}
       {showDetail && current && (
