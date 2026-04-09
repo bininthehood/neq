@@ -340,23 +340,46 @@ export default function DiscoverPage() {
     filterType === "movie" ? "영화" : filterType === "series" ? "시리즈" : "",
   ].filter(Boolean).join(" ");
 
+  const [expandedFilter, setExpandedFilter] = useState<"type" | "origin" | null>(null);
+
+  const TYPE_LABELS: Record<FilterType, string> = { all: "전체", movie: "영화", series: "시리즈" };
+  const ORIGIN_LABELS: Record<FilterOrigin, string> = { all: "전체", kr: "국내", foreign: "해외" };
+
   const FilterChips = () => (
     <div className="flex gap-2 px-4 pb-2 shrink-0 overflow-x-auto">
-      {(["all", "movie", "series"] as const).map((t) => (
-        <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); }} disabled={loading}
-          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
-          style={{ background: filterType === t ? "var(--accent)" : "var(--surface)", color: filterType === t ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType === t ? "none" : "1px solid var(--border)" }}>
-          {t === "all" ? "전체" : t === "movie" ? "영화" : "시리즈"}
+      {/* 타입 필터 — 접기/펼치기 */}
+      {expandedFilter === "type" ? (
+        (["all", "movie", "series"] as const).map((t) => (
+          <button key={t} onClick={() => { handleFilterChange(t, filterOrigin); setExpandedFilter(null); }} disabled={loading}
+            className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 animate-fade-in"
+            style={{ background: filterType === t ? "var(--accent)" : "var(--surface)", color: filterType === t ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType === t ? "none" : "1px solid var(--border)" }}>
+            {TYPE_LABELS[t]}
+          </button>
+        ))
+      ) : (
+        <button onClick={() => setExpandedFilter("type")} disabled={loading}
+          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1"
+          style={{ background: filterType !== "all" ? "var(--accent)" : "var(--surface)", color: filterType !== "all" ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterType !== "all" ? "none" : "1px solid var(--border)" }}>
+          {TYPE_LABELS[filterType]} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
         </button>
-      ))}
+      )}
       <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
-      {(["all", "kr", "foreign"] as const).map((o) => (
-        <button key={o} onClick={() => { handleFilterChange(filterType, o); }} disabled={loading}
-          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50"
-          style={{ background: filterOrigin === o ? "var(--accent)" : "var(--surface)", color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin === o ? "none" : "1px solid var(--border)" }}>
-          {o === "all" ? "전체" : o === "kr" ? "국내" : "해외"}
+      {/* 국적 필터 — 접기/펼치기 */}
+      {expandedFilter === "origin" ? (
+        (["all", "kr", "foreign"] as const).map((o) => (
+          <button key={o} onClick={() => { handleFilterChange(filterType, o); setExpandedFilter(null); }} disabled={loading}
+            className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 animate-fade-in"
+            style={{ background: filterOrigin === o ? "var(--accent)" : "var(--surface)", color: filterOrigin === o ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin === o ? "none" : "1px solid var(--border)" }}>
+            {ORIGIN_LABELS[o]}
+          </button>
+        ))
+      ) : (
+        <button onClick={() => setExpandedFilter("origin")} disabled={loading}
+          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1"
+          style={{ background: filterOrigin !== "all" ? "var(--accent)" : "var(--surface)", color: filterOrigin !== "all" ? "var(--bg)" : "var(--text-secondary)", borderRadius: "var(--radius-full)", border: filterOrigin !== "all" ? "none" : "1px solid var(--border)" }}>
+          {ORIGIN_LABELS[filterOrigin]} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
         </button>
-      ))}
+      )}
       {recs.length > 0 && (
         <>
           <div style={{ width: 1, background: "var(--border)", margin: "4px 0" }} />
