@@ -41,6 +41,8 @@ export default function OnboardingPage() {
 
   useEffect(() => { fetchTrending(); }, []);
 
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
   const fetchTrending = async () => {
     setLoadingSuggestions(true);
     try {
@@ -49,6 +51,7 @@ export default function OnboardingPage() {
       if (data.length > 0) setSuggestions(data);
     } catch { /* fallback */ }
     setLoadingSuggestions(false);
+    scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const search = useCallback(async (q: string) => {
@@ -159,7 +162,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Scrollable content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-24">
+      <div ref={scrollAreaRef} className="flex-1 min-h-0 overflow-y-auto px-5 pb-24">
         {searching && (
           <div className="text-center py-4 text-muted">검색 중...</div>
         )}
