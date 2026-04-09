@@ -51,7 +51,7 @@ export default function OnboardingPage() {
       if (data.length > 0) setSuggestions(data);
     } catch { /* fallback */ }
     setLoadingSuggestions(false);
-    scrollAreaRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    scrollAreaRef.current?.scrollTo({ top: 0 });
   };
 
   const search = useCallback(async (q: string) => {
