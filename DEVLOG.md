@@ -390,9 +390,58 @@ Saved 화면 대규모 고도화 + 추천 품질 개선 + 스와이프 UX 전면
 - **seen 추적**: `neko_seen_titles` (string[], 최대 200). nextCard 시 title+titleEn 기록. API에서 최대 50개 전달. 재설정 시 클리어.
 - **OTT 그룹핑**: 첫 번째 provider 기준 그룹. 작품 수 내림차순 정렬. provider 없으면 "기타".
 
+### Day 5 후반 — 스와이프 리팩토링 + 구조 변경 + 신규 기능
+
+**이전 카드 오버레이 모델**
+- 기존: 드래그 중 topIdx 전환 → 끊김. 변경: 이전 카드를 별도 오버레이 레이어로 렌더.
+- prevOverlayX로 손가락 위치 1:1 추적. topIdx는 놓을 때만 변경.
+- 30% 임계값: 충분히 끌면 착지, 아니면 원복. boxShadow로 깊이감.
+
+**Detail 바텀시트 오버레이**
+- 기존: card-detail이 같은 scroll-snap 컨테이너 → 본문 스와이프 시 카드 복귀 문제.
+- 변경: detail을 fixed 바텀시트(z-50)로 분리. 카드와 완전히 독립된 레이어.
+- 핸들바 드래그(25% 임계값) / X버튼 / Escape로만 닫기 가능.
+- 본문 자체 overflow-y-auto. touch-action/overscrollBehavior로 뒤쪽 전파 차단.
+
+**화면 바운스 방지**
+- html/body에 position: fixed + overflow: hidden. iOS 고무밴드/Android overscroll 완전 차단.
+
+**카드 탭 → "봤어요?" 피드백**
+- 카드 탭(드래그 5px 미만) → 인라인 리액션 피커(인생작/재밌었어/그저그래/포기).
+- 리액션 선택 → Saved 저장 + watchReport 기록 + seen 추가 → 다음 카드.
+- "안 봤어요" → seen만 기록. 추천 알고리즘에 반영.
+
+**공유 기능**
+- Web Share API 지원 시 네이티브 공유 시트, 미지원 시 클립보드 복사.
+- Discover 하단 + 디테일 바텀시트 + Saved 디테일에 공유 버튼.
+- 공유 텍스트: 제목 + 추천 이유 + OTT 목록.
+
+**Saved 아카이브**
+- 시청 완료 작품에 아카이브 토글 버튼(✓). 기본 뷰에서 숨김.
+- "아카이브" 탭: 아카이브 작품이 있을 때만 표시. 복원(↩) 가능.
+
+**코드 리뷰 (/review)**
+- exclude 프롬프트 인젝션 방어 (타입 체크 + 50자 제한 + 특수문자 제거)
+- dead variable 제거, seen 추적 누락 복원, 빈 상태 아이콘 추가
+
+### 커밋 히스토리 (Day 5 후반)
+```
+05faffc feat: Saved 아카이브 — 시청 완료 작품 숨기기/복원
+e3d0011 feat: 공유 기능 — Web Share API + 클립보드 폴백
+5dbc684 feat: 카드 탭 → '봤어요?' 시청 피드백
+a31fe9c fix: 위아래 스와이프 시 화면 전체 바운스 방지
+ed38690 fix: Detail 바텀시트 뒤쪽 스크롤 전파 차단
+feeae26 refactor: Detail을 scroll-snap에서 분리, fixed 바텀시트 오버레이로 전환
+c2d3c69 refactor: 이전 카드 스와이프를 오버레이 모델로 전면 리팩토링
+ca696a6 fix: 코드 리뷰 4건 수정 — exclude 인젝션 방어
+```
+
+### 아키텍처 메모
+- **prevOverlay 패턴**: 오른쪽 드래그 dx>0 즉시 prevOverlayX 활성화. filtered[topIdx-1]을 z-20 오버레이로 렌더. 놓을 때만 topIdx 변경 또는 원복.
+- **바텀시트 패턴**: fixed inset-0 z-50 + translateY(detailY%). touchAction:none으로 뒤쪽 전파 차단. 본문은 touch-action:pan-y + overscroll-behavior:contain.
+- **"봤어요?" 패턴**: addSaved → addWatchReport → addSeenTitles → nextCard. 저장+피드백+제외가 하나의 동작.
+
 ### 미해결 / 다음 할 일
 - [ ] 한글 폰트 개선 (보류)
-- [ ] /review (코드 리뷰)
 - [ ] 추천 품질 A/B 비교 (프롬프트 변경 전후)
-- [ ] Saved에서 시청 완료 작품 아카이브/숨기기
-- [ ] 공유 기능 (추천 목록 공유)
+- [ ] 사용자 피드백 수집 및 반영
