@@ -71,7 +71,7 @@ function PosterCard({
       onClick={() => onOpen(item)}
     >
       {item.recommendation.posterUrl ? (
-        <img src={item.recommendation.posterUrl} alt={item.recommendation.title} className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
+        <img src={item.recommendation.posterUrl} alt={item.recommendation.title} loading="lazy" className="w-full h-full object-cover" style={{ borderRadius: "var(--radius-lg)" }} />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)", color: "var(--text-muted)" }}>
           {item.recommendation.title}

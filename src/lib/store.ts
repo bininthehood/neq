@@ -117,6 +117,33 @@ export function unarchiveItem(tmdbId: number) {
   localStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
 }
 
+// 추천 히스토리 — 과거 추천 기록
+const HISTORY_KEY = "neko_rec_history";
+const MAX_HISTORY = 100;
+
+export interface RecHistoryEntry {
+  title: string;
+  tmdbId: number;
+  posterUrl: string | null;
+  date: string; // ISO date
+}
+
+export function getRecHistory(): RecHistoryEntry[] {
+  if (typeof window === "undefined") return [];
+  return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+}
+
+export function addRecHistory(recs: { title: string; tmdbId: number; posterUrl: string | null }[]) {
+  const existing = getRecHistory();
+  const existingIds = new Set(existing.map((e) => e.tmdbId));
+  const date = new Date().toISOString().slice(0, 10);
+  const newEntries = recs
+    .filter((r) => !existingIds.has(r.tmdbId))
+    .map((r) => ({ ...r, date }));
+  const updated = [...newEntries, ...existing].slice(0, MAX_HISTORY);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+}
+
 // 지나간 작품 (스와이프로 넘긴 제목들) — 재추천 방지
 const SEEN_KEY = "neko_seen_titles";
 const MAX_SEEN = 200; // 최대 저장 수

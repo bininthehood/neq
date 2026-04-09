@@ -15,6 +15,7 @@ import {
   getSeenTitles,
   addSeenTitles,
   addWatchReport,
+  addRecHistory,
 } from "@/lib/store";
 import type { Recommendation, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
@@ -95,8 +96,10 @@ export default function DiscoverPage() {
       body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}), ...(exclude.length > 0 ? { exclude } : {}) }),
     });
     const data = await res.json();
-    setRecommendations(data.recommendations ?? [], ft, fo);
-    setRecs(data.recommendations ?? []); setTopIdx(0); setLoading(false);
+    const newRecs = data.recommendations ?? [];
+    setRecommendations(newRecs, ft, fo);
+    setRecs(newRecs); setTopIdx(0); setLoading(false);
+    if (newRecs.length > 0) addRecHistory(newRecs.map((r: any) => ({ title: r.title, tmdbId: r.tmdbId, posterUrl: r.posterUrl })));
   };
 
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
