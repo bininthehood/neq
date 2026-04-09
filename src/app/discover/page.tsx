@@ -13,7 +13,6 @@ import {
 import { vibrate } from "@/lib/haptics";
 import type { Recommendation, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
-import { NekoSpinner } from "@/components/Icons";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
 import { useRecommendations } from "@/hooks/useRecommendations";
@@ -56,6 +55,10 @@ export default function DiscoverPage() {
     const cur = filtered[topIdx];
     if (cur) addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     const atEnd = topIdx >= filtered.length - 1;
+    // Auto-load more recommendations when nearing the end
+    if (topIdx >= filtered.length - 3 && !rec.loadingMore) {
+      rec.loadMoreRecs();
+    }
     swipe.setSwiping(true);
     swipe.setDragX(-600);
     swipe.setDragY(0);
@@ -67,9 +70,9 @@ export default function DiscoverPage() {
     }, 280);
     swipe.timersRef.current.add(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topIdx, filtered.length]);
+  }, [topIdx, filtered.length, rec.loadingMore]);
 
-  const swipe = useSwipeGesture({ topIdx, filteredLength: filtered.length, nextCard, refreshRecommendations: rec.refreshRecommendations, setTopIdx });
+  const swipe = useSwipeGesture({ topIdx, filteredLength: filtered.length, nextCard, setTopIdx });
 
   const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
     if (!current) return;
@@ -87,9 +90,9 @@ export default function DiscoverPage() {
   }, [current, nextCard]);
 
   const handleCardTap = useCallback(() => {
-    if (swipe.swiping || showWatched) return;
-    setShowWatched(true);
-  }, [swipe.swiping, showWatched]);
+    if (swipe.swiping) return;
+    setShowWatched((prev) => !prev);
+  }, [swipe.swiping]);
 
   const handleShare = useCallback(async (r: Recommendation) => {
     const providers = r.providers.map((p) => p.name).join(", ");
@@ -174,17 +177,9 @@ export default function DiscoverPage() {
       </div>
       <FilterChips {...chipsProps} />
 
-      {(swipe.pullY > 0 || swipe.refreshing) && (
-        <div className="flex justify-center py-1 shrink-0" style={{ opacity: swipe.refreshing ? 1 : Math.min(1, swipe.pullY / 40) }}>
-          {swipe.refreshing ? <NekoSpinner size={24} /> : (
-            <div className="w-6 h-6" style={{ transform: `rotate(${swipe.pullY * 4}deg)`, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "var(--radius-full)" }} />
-          )}
-        </div>
-      )}
-
       <div ref={swipe.scrollRef} className="flex-1 min-h-0" style={{ overflowY: "hidden", overscrollBehavior: "none" }}>
         <div className="relative px-3 pb-2"
-          style={{ height: "100%", scrollSnapAlign: "start", transform: swipe.pullY > 0 ? `translateY(${swipe.pullY * 0.3}px)` : undefined, transition: swipe.pullY === 0 ? "transform 0.2s ease-out" : "none" }}
+          style={{ height: "100%" }}
           onTouchStart={swipe.onTouchStart} onTouchMove={swipe.onTouchMove} onTouchEnd={swipe.onTouchEnd}>
           {deckCards.map((r, stackIdx) => (
             <SwipeCard key={r.tmdbId} rec={r} isTop={stackIdx === deckCards.length - 1} depth={deckCards.length - 1 - stackIdx}
@@ -205,7 +200,7 @@ export default function DiscoverPage() {
       <BottomNav active="discover" />
 
       {showTutorial && <TutorialOverlay onDismiss={() => { setShowTutorial(false); localStorage.setItem("neko_tutorial_seen", "1"); }} />}
-      {current && <DetailSheet rec={current} showDetail={detail.showDetail} detailY={detail.detailY}
+      {current && detail.showDetail && <DetailSheet rec={current} showDetail={detail.showDetail} detailY={detail.detailY}
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}
         onDetailTouchStart={detail.onDetailTouchStart} onDetailTouchMove={detail.onDetailTouchMove}
         onDetailTouchEnd={detail.onDetailTouchEnd} onShare={handleShare} />}

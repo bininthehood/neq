@@ -7,7 +7,6 @@ interface UseSwipeGestureParams {
   topIdx: number;
   filteredLength: number;
   nextCard: () => void;
-  refreshRecommendations: () => Promise<void>;
   setTopIdx: React.Dispatch<React.SetStateAction<number>>;
 }
 
@@ -15,15 +14,12 @@ export function useSwipeGesture({
   topIdx,
   filteredLength,
   nextCard,
-  refreshRecommendations,
   setTopIdx,
 }: UseSwipeGestureParams) {
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
   const [swiping, setSwiping] = useState(false);
   const [prevOverlayX, setPrevOverlayX] = useState<number | null>(null);
-  const [pullY, setPullY] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
   const [scrollLocked, setScrollLocked] = useState(false);
 
   const startX = useRef(0);
@@ -69,12 +65,10 @@ export function useSwipeGesture({
           setDragX(dx);
           setDragY(0);
         }
-      } else if (dirLock.current === "v" && dy > 0 && !refreshing) {
-        e.preventDefault();
-        setPullY(Math.min(80, dy * 0.5));
       }
+      // vertical down swipe: no action (pull-to-refresh removed)
     },
-    [refreshing, scrollLocked, filteredLength],
+    [scrollLocked, filteredLength],
   );
 
   const onTouchEnd = useCallback(() => {
@@ -109,21 +103,10 @@ export function useSwipeGesture({
         setDragX(0);
         setDragY(0);
       }
-    } else if (dir === "v") {
-      if (pullY > 50) {
-        setRefreshing(true);
-        setPullY(40);
-        refreshRecommendations().then(() => {
-          setRefreshing(false);
-          setPullY(0);
-          setTopIdx(0);
-        });
-      } else {
-        setPullY(0);
-      }
     }
+    // vertical end: no action needed
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragX, pullY, nextCard, prevOverlayX, filteredLength]);
+  }, [dragX, nextCard, prevOverlayX, filteredLength]);
 
   // prevCard via keyboard/button - overlay animation
   const prevCard = useCallback(() => {
@@ -162,8 +145,6 @@ export function useSwipeGesture({
     setSwiping,
     prevOverlayX,
     setPrevOverlayX,
-    pullY,
-    refreshing,
     scrollLocked,
     scrollRef,
     timersRef,

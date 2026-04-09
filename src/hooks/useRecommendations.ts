@@ -17,6 +17,7 @@ export function useRecommendations() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
@@ -118,6 +119,49 @@ export function useRecommendations() {
     await loadRecs(filterType, filterOrigin);
   };
 
+  const loadMoreRecs = async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    const favorites = getFavorites();
+    const filter: Record<string, string> = {};
+    if (filterType !== "all") filter.type = filterType;
+    if (filterOrigin !== "all") filter.origin = filterOrigin;
+    const currentTitles = recs.map((r) => r.title);
+    const seenTitles = getSeenTitles();
+    const savedTitles = getSaved().map((s) => s.recommendation.title);
+    const exclude = [
+      ...new Set([...seenTitles, ...savedTitles, ...currentTitles]),
+    ].slice(0, 80);
+    try {
+      const res = await fetch("/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ favorites, filter, exclude }),
+      });
+      if (!res.ok) {
+        setLoadingMore(false);
+        return;
+      }
+      const data = await res.json();
+      const newRecs: Recommendation[] = data.recommendations ?? [];
+      if (newRecs.length > 0) {
+        setRecs((prev) => [...prev, ...newRecs]);
+        const all = [...recs, ...newRecs];
+        setRecommendations(all, filterType, filterOrigin);
+        addRecHistory(
+          newRecs.map((r) => ({
+            title: r.title,
+            tmdbId: r.tmdbId,
+            posterUrl: r.posterUrl,
+          })),
+        );
+      }
+    } catch {
+      // silent fail for load-more
+    }
+    setLoadingMore(false);
+  };
+
   const abortLoading = () => {
     abortRef.current?.abort();
   };
@@ -126,6 +170,7 @@ export function useRecommendations() {
     recs,
     loading,
     loadError,
+    loadingMore,
     filterType,
     filterOrigin,
     filterOTTs,
@@ -133,6 +178,7 @@ export function useRecommendations() {
     loadRecs,
     handleFilterChange,
     refreshRecommendations,
+    loadMoreRecs,
     abortLoading,
   };
 }
