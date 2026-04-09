@@ -185,11 +185,13 @@ export default function OnboardingPage() {
                   <button
                     key={item.id}
                     onClick={() => toggleSelect(item)}
-                    className="relative overflow-hidden transition-all active:scale-95 rounded-lg"
+                    className="relative overflow-hidden transition-all active:scale-95 rounded-lg animate-fade-in"
                     style={{
                       outline: isSelected ? "2px solid var(--accent)" : "none",
                       outlineOffset: "-2px",
                       aspectRatio: tall ? "2/3.5" : "2/3",
+                      animationDelay: `${i * 50}ms`,
+                      animationFillMode: "backwards",
                     }}
                   >
                     {item.posterUrl ? (

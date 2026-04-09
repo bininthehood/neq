@@ -340,16 +340,46 @@ export default function SavedPage() {
 
   const handlePickTonight = () => {
     if (saved.length === 0) return;
-    // 시청하지 않은 작품 중에서 골라줌
     const unwatched = saved.filter((s) => !reports[s.recommendation.tmdbId]);
     const pool = unwatched.length > 0 ? unwatched : saved;
-    setSelected(pool[Math.floor(Math.random() * pool.length)]);
+
+    const hour = new Date().getHours();
+    const isLateNight = hour >= 22 || hour < 6;
+    const isWeekend = [0, 6].includes(new Date().getDay());
+
+    // 가중치: 늦은 밤 → 짧은 영화 우선, 주말 → 시리즈 우선
+    const weighted = pool.map((item) => {
+      let weight = 1;
+      const rec = item.recommendation;
+      if (isLateNight && rec.type === "movie" && rec.runtime && rec.runtime < 120) weight += 2;
+      if (isWeekend && rec.type === "series") weight += 2;
+      if (!isLateNight && !isWeekend) weight = 1; // 평일 낮 = 균등
+      return { item, weight };
+    });
+
+    const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
+    let random = Math.random() * totalWeight;
+    for (const { item, weight } of weighted) {
+      random -= weight;
+      if (random <= 0) { setSelected(item); return; }
+    }
+    setSelected(pool[0]);
   };
 
   const archivedCount = archivedIds.size;
   const activeItems = saved.filter((s) => !archivedIds.has(s.recommendation.tmdbId));
   const watchedCount = activeItems.filter((s) => reports[s.recommendation.tmdbId]).length;
   const unwatchedCount = activeItems.length - watchedCount;
+
+  const pickSubtext = (() => {
+    const hour = new Date().getHours();
+    const isLateNight = hour >= 22 || hour < 6;
+    const isWeekend = [0, 6].includes(new Date().getDay());
+    if (isLateNight) return "짧은 영화 위주로 골라줄게";
+    if (isWeekend) return "주말이니까 시리즈도 좋지";
+    if (unwatchedCount > 0) return `안 본 ${unwatchedCount}편 중에서 하나 뽑아줄게`;
+    return "저장한 작품 중에서 하나 뽑아줄게";
+  })();
 
   const VIEW_FILTERS: { key: ViewFilter; label: string; count: number }[] = [
     { key: "all", label: "전체", count: activeItems.length },
@@ -483,9 +513,7 @@ export default function SavedPage() {
             <div className="text-left">
               <div className="font-display font-semibold">오늘 뭐 볼까?</div>
               <div className="text-xs mt-0.5 text-muted">
-                {unwatchedCount > 0
-                  ? `안 본 ${unwatchedCount}편 중에서 하나 뽑아줄게`
-                  : "저장한 작품 중에서 하나 뽑아줄게"}
+                {pickSubtext}
               </div>
             </div>
             <div

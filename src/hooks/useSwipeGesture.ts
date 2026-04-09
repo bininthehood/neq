@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { vibrate } from "@/lib/haptics";
 
 interface UseSwipeGestureParams {
   topIdx: number;
@@ -90,6 +91,7 @@ export function useSwipeGesture({
         if (progress > 0.3) {
           // 30%+ -> land: animate to 0, then switch topIdx
           setPrevOverlayX(0);
+          vibrate(10);
           setTimeout(() => {
             setTopIdx((i) => (i > 0 ? i - 1 : filteredLength - 1));
             setPrevOverlayX(null);
@@ -101,6 +103,7 @@ export function useSwipeGesture({
           setTimeout(() => setPrevOverlayX(null), 300);
         }
       } else if (dragX < -80) {
+        vibrate(10);
         nextCard();
       } else {
         setDragX(0);
@@ -134,6 +137,7 @@ export function useSwipeGesture({
     setPrevOverlayX(-w);
     requestAnimationFrame(() => {
       setPrevOverlayX(0);
+      vibrate(10);
       const t = setTimeout(() => {
         timersRef.current.delete(t);
         setTopIdx((i) => i - 1);

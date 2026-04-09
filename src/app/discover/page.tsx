@@ -10,6 +10,7 @@ import {
   addSeenTitles,
   addWatchReport,
 } from "@/lib/store";
+import { vibrate } from "@/lib/haptics";
 import type { Recommendation, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import { NekoSpinner } from "@/components/Icons";
@@ -56,7 +57,7 @@ export default function DiscoverPage() {
     if (cur) addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     const atEnd = topIdx >= filtered.length - 1;
     swipe.setSwiping(true);
-    swipe.setDragX(-500);
+    swipe.setDragX(-600);
     swipe.setDragY(0);
     const t = setTimeout(() => {
       swipe.timersRef.current.delete(t);
@@ -72,6 +73,7 @@ export default function DiscoverPage() {
 
   const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
     if (!current) return;
+    vibrate(10);
     addSaved(current); addWatchReport(current.tmdbId, reaction);
     addSeenTitles([current.title, current.titleEn].filter(Boolean));
     setSavedIds((s) => new Set(s).add(current.tmdbId));
@@ -90,13 +92,23 @@ export default function DiscoverPage() {
   }, [swipe.swiping, showWatched]);
 
   const handleShare = useCallback(async (r: Recommendation) => {
-    const body = `${r.title} — ${r.reason}\n${r.providers.map((p) => p.name).join(", ")}에서 볼 수 있어요\n\nNeko에서 발견`;
+    const providers = r.providers.map((p) => p.name).join(", ");
+    const body = [
+      `\uD83C\uDFAC ${r.title}`,
+      r.reason,
+      "",
+      providers ? `\uD83D\uDCFA ${providers}` : null,
+      `\u2B50 ${r.rating.toFixed(1)}`,
+      "",
+      "Neko \u2014 \uC624\uB298 \uBF50 \uBCFC\uAE4C?",
+    ].filter((line) => line !== null).join("\n");
     if (navigator.share) { try { await navigator.share({ title: r.title, text: body }); } catch {} }
     else { await navigator.clipboard.writeText(body); }
   }, []);
 
   const toggleSave = () => {
     if (!current) return;
+    vibrate(10);
     const id = current.tmdbId;
     if (savedIds.has(id)) { removeSaved(id); setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
     else { addSaved(current); setSavedIds((s) => new Set(s).add(id)); }

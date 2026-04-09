@@ -43,7 +43,9 @@ export default function SwipeCard({
   const yOffset = depth * 12;
   const tx = isTop ? dragX : 0;
   const ty = isTop ? dragY + yOffset : yOffset;
-  const rot = isTop ? dragX * 0.06 : 0;
+  const rot = isTop
+    ? Math.sign(dragX) * Math.min(Math.abs(dragX) * 0.06, 15)
+    : 0;
 
   return (
     <div
