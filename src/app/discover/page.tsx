@@ -14,8 +14,9 @@ import {
   getSaved,
   getSeenTitles,
   addSeenTitles,
+  addWatchReport,
 } from "@/lib/store";
-import type { Recommendation } from "@/lib/types";
+import type { Recommendation, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import { IconSave, IconClose, IconRefresh, IconStar, IconFilm, IconDetail, NekoSpinner } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
@@ -41,6 +42,7 @@ export default function DiscoverPage() {
   const [swiping, setSwiping] = useState(false);
   // 이전 카드 오버레이: 왼쪽에서 덮어씌우기
   const [prevOverlayX, setPrevOverlayX] = useState<number | null>(null); // null=비활성, -screenW~0
+  const [showWatched, setShowWatched] = useState(false); // "봤어요?" 피커
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollLocked, setScrollLocked] = useState(false);
@@ -113,6 +115,7 @@ export default function DiscoverPage() {
   // 다음 카드 (왼쪽으로 스와이프)
   const nextCard = useCallback(() => {
     if (swiping) return;
+    setShowWatched(false);
     const cur = filtered[topIdx];
     if (cur) addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     if (topIdx >= filtered.length - 1) {
@@ -152,6 +155,30 @@ export default function DiscoverPage() {
       }, 350);
     });
   }, [swiping, topIdx, prevOverlayX]);
+
+  // "봤어요?" — 이미 본 작품 피드백 기록 + 저장 + 다음 카드
+  const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
+    if (!current) return;
+    addSaved(current);
+    addWatchReport(current.tmdbId, reaction);
+    addSeenTitles([current.title, current.titleEn].filter(Boolean));
+    setSavedIds((s) => new Set(s).add(current.tmdbId));
+    setShowWatched(false);
+    nextCard();
+  }, [current, nextCard]);
+
+  // "봤어요?" — 저장 없이 건너뛰기
+  const handleWatchedSkip = useCallback(() => {
+    if (!current) return;
+    addSeenTitles([current.title, current.titleEn].filter(Boolean));
+    setShowWatched(false);
+    nextCard();
+  }, [current, nextCard]);
+
+  const handleCardTap = useCallback(() => {
+    if (swiping || showWatched) return;
+    setShowWatched(true);
+  }, [swiping, showWatched]);
 
   // 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
@@ -424,13 +451,21 @@ export default function DiscoverPage() {
                 )}
                 {isTop && (
                   <>
-                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                    {/* 탭 영역 — 드래그와 구분 */}
+                    <div className="absolute inset-0 z-[5]"
+                      onPointerUp={(e) => {
+                        // 드래그 없이 탭만 했을 때
+                        const dx = Math.abs(dragX);
+                        if (dx < 5 && !swiping) handleCardTap();
+                      }}
+                    />
+                    <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
                       <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{rec.rating.toFixed(1)}</span>
                     </div>
-                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                    <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm z-10" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
                       {rec.type === "series" ? "시리즈" : "영화"}
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                    <div className="absolute bottom-0 left-0 right-0 p-5 pt-24 z-10" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
                       <h2 className="font-display text-2xl font-bold">{rec.title}</h2>
                       {metaInfo(rec) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(rec)}</p>}
                       <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{rec.reason}</p>
@@ -440,6 +475,44 @@ export default function DiscoverPage() {
                         ))}
                       </div>
                     </div>
+
+                    {/* "봤어요?" 오버레이 */}
+                    {showWatched && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 z-20 animate-fade-in"
+                        style={{ background: "var(--bg-overlay-dense)", backdropFilter: "blur(12px)", borderRadius: "var(--radius-xl)" }}>
+                        <div className="text-sm font-semibold mb-1" style={{ color: "var(--text-primary)" }}>이미 봤어요?</div>
+                        <div className="text-xs mb-2" style={{ color: "var(--text-muted)" }}>시청 경험을 알려주시면 추천에 반영돼요</div>
+                        {([
+                          { key: "loved" as WatchReaction, label: "인생작이었어", color: "var(--accent)", bg: "var(--accent-dim)" },
+                          { key: "good" as WatchReaction, label: "재밌게 봤어", color: "var(--text-secondary)", bg: "var(--surface-raised)" },
+                          { key: "meh" as WatchReaction, label: "그저 그랬어", color: "var(--text-muted)", bg: "var(--surface)" },
+                          { key: "dropped" as WatchReaction, label: "중간에 포기", color: "var(--danger)", bg: "var(--danger-dim)" },
+                        ]).map((r) => (
+                          <button
+                            key={r.key}
+                            onClick={(e) => { e.stopPropagation(); handleWatchedReaction(r.key); }}
+                            className="w-36 py-2.5 text-sm font-medium active:scale-95 transition-transform"
+                            style={{ background: r.bg, color: r.color, borderRadius: "var(--radius-md)" }}
+                          >
+                            {r.label}
+                          </button>
+                        ))}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleWatchedSkip(); }}
+                          className="mt-1 px-4 py-2 text-xs active:scale-95 transition-transform"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          안 봤어요, 건너뛰기
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setShowWatched(false); }}
+                          className="text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          취소
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
