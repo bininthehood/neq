@@ -126,23 +126,33 @@ function PosterCard({
 
       {isReporting && (
         <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-2 animate-fade-in z-10 bg-overlay-dense rounded-lg"
-          style={{ backdropFilter: "blur(8px)" }}
+          className="absolute inset-0 flex flex-col items-center justify-center px-3 gap-3 animate-fade-in z-10 rounded-lg"
+          style={{ backdropFilter: "blur(8px)", background: "linear-gradient(var(--bg) 20%, var(--bg-overlay-heavy) 70%, transparent)" }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
         >
-          <div className="text-xs font-semibold mb-1 text-muted">어땠어요?</div>
-          {REACTIONS.map((r) => (
-            <button
-              key={r.key}
-              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
-              className="w-28 py-2 text-xs font-medium active:scale-95 transition-transform rounded-md"
-              style={{ background: r.bg, color: r.color }}
-            >
-              {r.label}
-            </button>
-          ))}
+          <div className="text-center">
+            <div className="font-display text-sm font-bold">본 적 있나요?</div>
+            <div className="text-xs mt-0.5 text-muted">알려주시면 더 좋은 추천을 드릴게요</div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {([
+              { key: "loved" as WatchReaction, label: "인생작" },
+              { key: "good" as WatchReaction, label: "괜찮았어" },
+              { key: "meh" as WatchReaction, label: "별로였어" },
+              { key: "dropped" as WatchReaction, label: "안 맞았어" },
+            ]).map((r) => (
+              <button
+                key={r.key}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
+                className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform bg-surface text-secondary rounded-full border border-border"
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
-            className="mt-1 text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted"
+            className="text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted"
           >
             닫기
           </button>
