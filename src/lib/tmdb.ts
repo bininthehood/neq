@@ -71,7 +71,6 @@ export async function getKoreanProviders(
 
   const raw: Array<{ provider_name: string; logo_path: string | null }> = [
     ...(kr.flatrate ?? []),
-    ...(kr.ads ?? []),
     ...(kr.rent ?? []),
     ...(kr.buy ?? []),
   ];

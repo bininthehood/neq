@@ -23,11 +23,7 @@ import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 type FilterType = "all" | "movie" | "series";
 type FilterOrigin = "all" | "kr" | "foreign";
-const OTT_OPTIONS = [
-  "Netflix", "Disney Plus", "Apple TV Plus", "Apple TV",
-  "Amazon Prime Video", "wavve", "TVING", "Coupang Play",
-  "Watcha", "Naver Store", "Google Play Movies",
-];
+const OTT_OPTIONS = ["Netflix", "Disney Plus", "Watcha", "wavve", "Coupang Play", "TVING", "Apple TV Plus"];
 
 export default function DiscoverPage() {
   const router = useRouter();
@@ -347,14 +343,7 @@ export default function DiscoverPage() {
 
   const TYPE_LABELS: Record<FilterType, string> = { all: "유형", movie: "영화", series: "시리즈" };
   const ORIGIN_LABELS: Record<FilterOrigin, string> = { all: "국가", kr: "국내", foreign: "해외" };
-  const availableOTTs = (() => {
-    const fromRecs = new Set<string>();
-    recs.forEach((r) => r.providers.forEach((p) => fromRecs.add(p.name)));
-    // OTT_OPTIONS 순서 우선, 나머지는 알파벳순 추가
-    const ordered = OTT_OPTIONS.filter((ott) => fromRecs.has(ott));
-    fromRecs.forEach((name) => { if (!ordered.includes(name)) ordered.push(name); });
-    return ordered;
-  })();
+  const availableOTTs = OTT_OPTIONS.filter((ott) => recs.some((r) => r.providers.some((p) => p.name === ott)));
   const ottLabel = filterOTTs.size === 0 ? "OTT" : filterOTTs.size === 1 ? [...filterOTTs][0] : `OTT ${filterOTTs.size}개`;
 
   const chipStyle = (active: boolean) => ({
