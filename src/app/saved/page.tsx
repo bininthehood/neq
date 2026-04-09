@@ -308,7 +308,7 @@ export default function SavedPage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
       {/* Header */}
       <div className="px-5 pt-6 pb-2">
         <div className="flex items-center justify-between">
@@ -484,7 +484,8 @@ export default function SavedPage() {
         </div>
       )}
 
-      {/* Poster grid */}
+      {/* Poster grid — 스크롤 영역 */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
       {saved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8" style={{ color: "var(--text-muted)" }}>
           <IconHeart size={32} />
@@ -541,7 +542,7 @@ export default function SavedPage() {
         </div>
       ) : (
         /* 기본 그리드 뷰 */
-        <div className="grid grid-cols-2 gap-3 px-5 pb-4 flex-1 auto-rows-min">
+        <div className="grid grid-cols-2 gap-3 px-5 pb-4 auto-rows-min">
           {filteredSaved.map((item, i) => (
             <PosterCard
               key={item.recommendation.tmdbId}
@@ -559,6 +560,7 @@ export default function SavedPage() {
           ))}
         </div>
       )}
+      </div>{/* 스크롤 영역 끝 */}
 
       {/* Detail bottom sheet — 제스처 기반 */}
       {detailItem && (
