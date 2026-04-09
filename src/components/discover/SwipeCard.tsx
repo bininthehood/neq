@@ -165,24 +165,25 @@ export default function SwipeCard({
         </div>
       )}
 
-      {/* "봤어요?" overlay */}
+      {/* "봤어요?" overlay — 상단에서 내려오는 방향 */}
       {isTop && showWatched && (
         <div
-          className="absolute inset-0 flex flex-col items-end justify-end p-5 gap-2 z-20 animate-fade-in rounded-xl"
+          className="absolute inset-0 flex flex-col items-center justify-start pt-16 px-5 gap-3 z-20 rounded-xl"
           style={{
             background:
-              "linear-gradient(transparent 20%, var(--bg) 60%)",
+              "linear-gradient(var(--bg) 30%, var(--bg-overlay-heavy) 70%, transparent)",
           }}
+          onClick={(e) => { e.stopPropagation(); onCloseWatched(); }}
         >
-          <div className="w-full mb-1">
+          <div className="text-center">
             <div className="font-display text-lg font-bold">
               본 적 있나요?
             </div>
-            <div className="text-xs mt-0.5 text-muted">
+            <div className="text-xs mt-1 text-muted">
               알려주시면 더 좋은 추천을 드릴게요
             </div>
           </div>
-          <div className="w-full flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-center gap-2 mt-2">
             {(
               [
                 { key: "loved" as WatchReaction, label: "인생작" },
@@ -197,19 +198,19 @@ export default function SwipeCard({
                   e.stopPropagation();
                   onWatchedReaction(r.key);
                 }}
-                className="px-4 py-2 text-sm font-medium active:scale-95 transition-transform bg-surface text-secondary rounded-full border border-border"
+                className="px-4 py-2.5 text-sm font-medium active:scale-95 transition-transform bg-surface text-secondary rounded-full border border-border"
               >
                 {r.label}
               </button>
             ))}
           </div>
-          <div className="w-full flex gap-2 mt-1">
+          <div className="flex gap-3 mt-1">
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onWatchedSkip();
               }}
-              className="flex-1 py-2 text-xs active:scale-95 transition-transform text-muted"
+              className="px-4 py-2 text-xs active:scale-95 transition-transform text-muted"
             >
               안 봤어요
             </button>
@@ -218,18 +219,9 @@ export default function SwipeCard({
                 e.stopPropagation();
                 onNotInterested();
               }}
-              className="flex-1 py-2 text-xs active:scale-95 transition-transform text-danger"
+              className="px-4 py-2 text-xs active:scale-95 transition-transform text-danger"
             >
               관심 없어요
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseWatched();
-              }}
-              className="flex-1 py-2 text-xs active:scale-95 transition-transform text-muted"
-            >
-              닫기
             </button>
           </div>
         </div>
