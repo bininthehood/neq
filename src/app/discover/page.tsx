@@ -39,8 +39,8 @@ export default function DiscoverPage() {
   const [dragX, setDragX] = useState(0);
   const [dragY, setDragY] = useState(0);
   const [swiping, setSwiping] = useState(false);
-  const [prevEntering, setPrevEntering] = useState(false);
-  const [prevDragging, setPrevDragging] = useState(false); // 이전 카드를 끌어오는 중
+  // 이전 카드 오버레이: 왼쪽에서 덮어씌우기
+  const [prevOverlayX, setPrevOverlayX] = useState<number | null>(null); // null=비활성, -screenW~0
   const [pullY, setPullY] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [scrollLocked, setScrollLocked] = useState(false);
@@ -48,7 +48,6 @@ export default function DiscoverPage() {
   const startY = useRef(0);
   const dragging = useRef(false);
   const dirLock = useRef<"h" | "v" | null>(null);
-  const prevSwitched = useRef(false); // 드래그 중 이미 prev로 전환했는지
 
   // 디테일 scroll-snap
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -132,34 +131,31 @@ export default function DiscoverPage() {
     }, 280);
   }, [swiping, topIdx, filtered.length]);
 
-  // 이전 카드 (오른쪽으로 스와이프) — 이전 카드가 오른쪽에서 슬라이드인
+  // 이전 카드 (키보드 ArrowRight) — 오버레이 애니메이션으로 처리
   const prevCard = useCallback(() => {
-    if (swiping || topIdx <= 0) return;
+    if (swiping || topIdx <= 0 || prevOverlayX !== null) return;
     setSwiping(true);
-    // 새 카드를 왼쪽 바깥에서 시작 → 중앙으로 스프링 진입
-    setDragX(-400); setDragY(-60);
-    setPrevEntering(true);
-    setTopIdx((i) => i - 1);
+    const w = typeof window !== "undefined" ? window.innerWidth : 400;
+    setPrevOverlayX(-w);
+    // 다음 프레임에서 0으로 애니메이션
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setPrevEntering(false);
-        setDragX(0); setDragY(0);
-        setTimeout(() => {
-          setSwiping(false);
-          scrollRef.current?.scrollTo({ top: 0 });
-        }, 300);
-      });
+      setPrevOverlayX(0);
+      setTimeout(() => {
+        setTopIdx((i) => i - 1);
+        setPrevOverlayX(null);
+        setSwiping(false);
+        scrollRef.current?.scrollTo({ top: 0 });
+      }, 350);
     });
-  }, [swiping, topIdx]);
+  }, [swiping, topIdx, prevOverlayX]);
 
-  // 터치 — 맨 앞 카드만 드래그
+  // 터치
   const onTouchStart = useCallback((e: React.TouchEvent) => {
     if (swiping) return;
     startX.current = e.touches[0].clientX;
     startY.current = e.touches[0].clientY;
     dragging.current = true;
     dirLock.current = null;
-    prevSwitched.current = false;
   }, [swiping]);
 
   const onTouchMove = useCallback((e: React.TouchEvent) => {
@@ -175,24 +171,14 @@ export default function DiscoverPage() {
       e.preventDefault();
       if (!scrollLocked) setScrollLocked(true);
 
-      if (dx > 20 && !prevSwitched.current && topIdx > 0) {
-        // 오른쪽 드래그 시작 → 즉시 topIdx 감소, 이전 카드를 손가락으로 끌어옴
-        prevSwitched.current = true;
-        setPrevDragging(true);
-        setPrevEntering(true);
-        setTopIdx((i) => i - 1);
-        // 새 카드의 시작 위치: 화면 왼쪽 바깥
+      if (dx > 0 && topIdx > 0) {
+        // 오른쪽 드래그 → 이전 카드 오버레이를 왼쪽에서 끌어옴
+        // 현재 카드는 움직이지 않음
         const screenW = window.innerWidth;
-        startX.current = e.touches[0].clientX + screenW; // offset 보정
-        setDragX(-screenW + dx);
-        setDragY(Math.abs(-screenW + dx) * -0.05);
-        requestAnimationFrame(() => setPrevEntering(false));
-      } else if (prevSwitched.current) {
-        // 이전 카드를 끌어오는 중 → 새 top 카드가 손가락 따라옴
-        setDragX(e.touches[0].clientX - startX.current);
-        setDragY(Math.abs(e.touches[0].clientX - startX.current) * -0.05);
+        setPrevOverlayX(Math.min(0, -screenW + dx));
       } else {
         // 왼쪽 드래그 → 현재 카드 밀기 (다음 카드)
+        setPrevOverlayX(null);
         setDragX(dx);
         setDragY(Math.abs(dx) * -0.15);
       }
@@ -206,27 +192,25 @@ export default function DiscoverPage() {
     if (!dragging.current) return;
     dragging.current = false;
     const dir = dirLock.current;
-    const wasPrevDrag = prevSwitched.current;
     dirLock.current = null;
-    prevSwitched.current = false;
     if (dir === "h") {
       setScrollLocked(false);
-      if (wasPrevDrag) {
-        // 이전 카드 끌어오기 완료/취소
-        setPrevDragging(false);
-        if (dragX > -120) {
-          // 충분히 끌어옴 → 제자리에 착지
-          setSwiping(true);
-          setDragX(0); setDragY(0);
-          setTimeout(() => { setSwiping(false); scrollRef.current?.scrollTo({ top: 0 }); }, 300);
-        } else {
-          // 덜 끌어옴 → 원복 (topIdx 다시 증가)
-          setSwiping(true);
-          setDragX(-500); setDragY(-40);
+      if (prevOverlayX !== null && prevOverlayX > -Infinity) {
+        // 이전 카드 오버레이 판정
+        const screenW = window.innerWidth;
+        const progress = 1 + prevOverlayX / screenW; // 0=시작, 1=도착
+        if (progress > 0.3) {
+          // 30% 이상 → 착지: 0으로 애니메이션 후 topIdx 전환
+          setPrevOverlayX(0);
           setTimeout(() => {
-            setTopIdx((i) => i + 1);
-            setDragX(0); setDragY(0); setSwiping(false);
-          }, 250);
+            setTopIdx((i) => i - 1);
+            setPrevOverlayX(null);
+            scrollRef.current?.scrollTo({ top: 0 });
+          }, 300);
+        } else {
+          // 덜 끌어옴 → 원복: -screenW로 애니메이션 후 제거
+          setPrevOverlayX(-screenW);
+          setTimeout(() => setPrevOverlayX(null), 300);
         }
       } else if (dragX < -80) {
         nextCard();
@@ -388,7 +372,7 @@ export default function DiscoverPage() {
                 style={{
                   top: 0, bottom: "8px", left: "12px", right: "12px",
                   transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rot}deg) scale(${scaleVal})`,
-                  transition: prevEntering ? "none" : (isTop && (dragging.current || prevDragging) ? "none" : (isTop && !dragging.current ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : (isTop ? "none" : "transform 0.3s ease-out"))),
+                  transition: isTop && dragging.current ? "none" : (isTop ? "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)" : "transform 0.3s ease-out"),
                   borderRadius: "var(--radius-xl)",
                   zIndex: 10 - depth,
                 }}>
@@ -422,13 +406,55 @@ export default function DiscoverPage() {
               </div>
             );
           })}
+
+          {/* 이전 카드 오버레이 — 오른쪽 스와이프 시 왼쪽에서 덮어씌움 */}
+          {prevOverlayX !== null && topIdx > 0 && (() => {
+            const prev = filtered[topIdx - 1];
+            if (!prev) return null;
+            const isDragging = dragging.current;
+            return (
+              <div className="absolute overflow-hidden will-change-transform"
+                style={{
+                  top: 0, bottom: "8px", left: "12px", right: "12px",
+                  transform: `translateX(${prevOverlayX}px)`,
+                  transition: isDragging ? "none" : "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                  borderRadius: "var(--radius-xl)",
+                  zIndex: 20,
+                  boxShadow: "8px 0 32px rgba(0,0,0,0.5)",
+                }}>
+                {prev.posterUrl ? (
+                  <img src={prev.posterUrl} alt={prev.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center" style={{ background: "var(--surface)" }}>
+                    <span className="font-display text-5xl" style={{ color: "var(--text-muted)" }}>N</span>
+                  </div>
+                )}
+                <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                  <IconStar size={13} color="var(--accent)" /><span className="font-data font-semibold" style={{ color: "var(--accent)" }}>{prev.rating.toFixed(1)}</span>
+                </div>
+                <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm" style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-md)" }}>
+                  {prev.type === "series" ? "시리즈" : "영화"}
+                </div>
+                <div className="absolute bottom-0 left-0 right-0 p-5 pt-24" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))" }}>
+                  <h2 className="font-display text-2xl font-bold">{prev.title}</h2>
+                  {metaInfo(prev) && <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>{metaInfo(prev)}</p>}
+                  <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>{prev.reason}</p>
+                  <div className="flex gap-1.5 mt-3 items-center">
+                    {prev.providers.slice(0, 4).map((p) => (
+                      <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain" style={{ borderRadius: "var(--radius-md)", background: "var(--surface)" }} />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Snap 2: 디테일 */}
         {current && (
-          <div className="px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
+          <div className="relative px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
             <div className="flex justify-center mb-3"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
-            <button className="absolute right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
+            <button className="absolute top-4 right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
               onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>
               <IconClose size={16} color="var(--text-secondary)" />
             </button>
