@@ -59,8 +59,8 @@ export default function DiscoverPage() {
       if (!rec.loadingMore) rec.loadMoreRecs();
       return;
     }
-    // 남은 카드 3개 이하면 미리 로드
-    if (topIdx >= filtered.length - 3 && !rec.loadingMore) {
+    // 남은 카드 6개 이하면 미리 로드 (빠른 스와이프 대비)
+    if (topIdx >= filtered.length - 6 && !rec.loadingMore) {
       rec.loadMoreRecs();
     }
     swipe.setSwiping(true);

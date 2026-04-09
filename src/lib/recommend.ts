@@ -183,7 +183,7 @@ ${feedbackPrompt}
       originCountry,
     });
 
-    if (results.length >= 8) break;
+    if (results.length >= 15) break;
   }
 
   return results;
