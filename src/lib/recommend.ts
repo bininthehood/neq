@@ -78,7 +78,7 @@ export async function getRecommendations(
 - 사용자의 입력 작품 및 그 리메이크/속편은 절대 추천하지 마세요
 - 누구나 아는 초유명작(어벤져스, 타이타닉, 해리 포터 등)은 제외
 - 한국에서 OTT로 볼 수 있는 작품 위주
-- **장르 다양성**: 최소 3개 이상의 다른 장르에서 골고루 추천하세요. 한 장르에 편중 금지.
+- **장르 다양성**: 최소 3개 이상의 다른 장르에서 골고루 추천하세요. 한 장르에 편중 금지. 동일 장르가 연속 3개 이상 나오면 안 됩니다.
 - **시대 다양성**: 최근작(2020년 이후)과 클래식(2010년 이전)을 섞어주세요
 - **발굴 우선**: 대중적이지 않지만 숨겨진 명작을 70% 이상 포함
 - **추천 이유(reason) 톤 가이드**:
@@ -87,7 +87,7 @@ export async function getRecommendations(
   - DO: "이거 보면 잠 못 잠", "배우 연기 미쳤음", "반전 세 번 나옴", "첫 회 끝나면 바로 다음 회 틀게 됨", "우울할 때 보면 치유됨", "중반부터 숨 못 쉼", "OST가 미침"
   - DON'T: "깊은 고찰이 매력적입니다", "감각적인 영상미가 인상적인", "장르의 경계를 초월하는", "독특한 세계관", "여운이 남는 수작"
   - 핵심: 왜 이 작품이 재밌는지 한마디로. 평론가 말고 덕후처럼.
-- **15개를 추천하세요**
+- **20개를 추천하세요**
 ${excludePrompt}
 
 ${filterPrompt}
@@ -102,7 +102,7 @@ ${feedbackPrompt}
       },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.85,
+    temperature: 0.9,
   });
 
   const content = response.choices[0].message.content;
@@ -175,7 +175,7 @@ ${feedbackPrompt}
       originCountry,
     });
 
-    if (results.length >= 10) break;
+    if (results.length >= 8) break;
   }
 
   return results;

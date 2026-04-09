@@ -11,7 +11,10 @@ import {
   getArchivedIds,
   archiveItem,
   unarchiveItem,
+  getRecHistory,
+  addSaved,
 } from "@/lib/store";
+import type { RecHistoryEntry } from "@/lib/store";
 import type { SavedItem, WatchReaction } from "@/lib/types";
 import Image from "next/image";
 import BottomNav from "@/components/BottomNav";
@@ -25,7 +28,7 @@ const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string 
   { key: "dropped", label: "포기했어", color: "var(--danger)", bg: "var(--danger-dim)" },
 ];
 
-type ViewFilter = "all" | "unwatched" | "watched" | "archived";
+type ViewFilter = "all" | "unwatched" | "watched" | "archived" | "history";
 
 function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
@@ -182,6 +185,7 @@ export default function SavedPage() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [groupByOTT, setGroupByOTT] = useState(false);
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
+  const [history, setHistory] = useState<RecHistoryEntry[]>([]);
 
   const refreshData = () => {
     setSaved(getSaved());
@@ -193,6 +197,7 @@ export default function SavedPage() {
     setReports(allReports);
     setStats(getWatchStats());
     setArchivedIds(new Set(getArchivedIds()));
+    setHistory(getRecHistory());
   };
 
   useEffect(() => { refreshData(); }, []);
@@ -230,6 +235,50 @@ export default function SavedPage() {
     // 작품 수 많은 OTT 먼저
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
   }, [filteredSaved, groupByOTT]);
+
+  // 히스토리 날짜별 그룹핑
+  const historyGroups = useMemo(() => {
+    if (viewFilter !== "history") return [];
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const groups: { label: string; items: RecHistoryEntry[] }[] = [
+      { label: "오늘", items: [] },
+      { label: "어제", items: [] },
+      { label: "이전", items: [] },
+    ];
+    for (const entry of history) {
+      if (entry.date === today) groups[0].items.push(entry);
+      else if (entry.date === yesterday) groups[1].items.push(entry);
+      else groups[2].items.push(entry);
+    }
+    return groups.filter((g) => g.items.length > 0);
+  }, [history, viewFilter]);
+
+  // saved에 있는 tmdbId Set
+  const savedIdSet = useMemo(() => new Set(saved.map((s) => s.recommendation.tmdbId)), [saved]);
+
+  const handleResave = (entry: RecHistoryEntry) => {
+    addSaved({
+      title: entry.title,
+      tmdbId: entry.tmdbId,
+      posterUrl: entry.posterUrl,
+      reason: "",
+      rating: 0,
+      providers: [],
+      type: "movie",
+      titleEn: "",
+      overview: "",
+      backdrop: null,
+      date: entry.date,
+      runtime: null,
+      seasons: null,
+      country: [],
+      director: null,
+      cast: [],
+      watchLink: null,
+    });
+    refreshData();
+  };
 
   const handleRemove = (tmdbId: number) => {
     removeSaved(tmdbId);
@@ -307,6 +356,7 @@ export default function SavedPage() {
     { key: "unwatched", label: "안 본 작품", count: unwatchedCount },
     { key: "watched", label: "시청 완료", count: watchedCount },
     ...(archivedCount > 0 ? [{ key: "archived" as ViewFilter, label: "아카이브", count: archivedCount }] : []),
+    { key: "history" as ViewFilter, label: "히스토리", count: history.length },
   ];
 
   return (
@@ -315,7 +365,7 @@ export default function SavedPage() {
       <div className="px-5 pt-6 pb-2">
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl font-bold">Saved</h1>
-          {saved.length > 0 && (
+          {saved.length > 0 && viewFilter !== "history" && (
             <button
               onClick={() => setGroupByOTT(!groupByOTT)}
               className="px-3 py-1.5 text-xs font-medium active:scale-95 transition-all duration-200 min-h-[44px]"
@@ -331,7 +381,7 @@ export default function SavedPage() {
           )}
         </div>
         {/* Progress bar — 안 본 작품 진행률 */}
-        {saved.length > 0 && (
+        {saved.length > 0 && viewFilter !== "history" && (
           <div className="mt-2">
             <div className="flex items-center justify-between mb-1.5">
               <p className="text-xs text-muted">
@@ -384,7 +434,7 @@ export default function SavedPage() {
       )}
 
       {/* Watch Stats */}
-      {stats.total > 0 && (
+      {stats.total > 0 && viewFilter !== "history" && (
         <div className="mx-5 mt-2 mb-3">
           <div
             className="p-3 flex items-center gap-3 bg-surface rounded-lg"
@@ -424,7 +474,7 @@ export default function SavedPage() {
       )}
 
       {/* Tonight banner */}
-      {saved.length > 0 && (
+      {saved.length > 0 && viewFilter !== "history" && (
         <div className="mx-5 mt-1 mb-4">
           <button
             onClick={handlePickTonight}
@@ -448,7 +498,7 @@ export default function SavedPage() {
       )}
 
       {/* Tonight pick */}
-      {selected && (
+      {selected && viewFilter !== "history" && (
         <div
           className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform bg-accent-dim rounded-lg"
           style={{ border: "1px solid var(--accent-border-light)" }}
@@ -488,7 +538,75 @@ export default function SavedPage() {
 
       {/* Poster grid — 스크롤 영역 */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-      {saved.length === 0 ? (
+      {viewFilter === "history" ? (
+        /* 히스토리 뷰 */
+        <div className="pb-4">
+          {history.length === 0 ? (
+            <div className="flex-1 flex flex-col justify-center px-8 py-12 text-muted">
+              <p className="font-display text-lg font-semibold text-foreground">아직 추천 기록이 없어</p>
+              <p className="text-sm mt-1.5">Discover에서 스와이프하면 여기 쌓여</p>
+            </div>
+          ) : (
+            historyGroups.map((group) => (
+              <div key={group.label} className="mb-5">
+                <div className="px-5 mb-2">
+                  <span className="text-xs font-medium text-muted">{group.label}</span>
+                </div>
+                <div className="flex gap-3 px-5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+                  {group.items.map((entry) => {
+                    const isSaved = savedIdSet.has(entry.tmdbId);
+                    const savedItem = isSaved ? saved.find((s) => s.recommendation.tmdbId === entry.tmdbId) : null;
+                    return (
+                      <div
+                        key={entry.tmdbId}
+                        className="flex-shrink-0 w-16 cursor-pointer"
+                        onClick={() => {
+                          if (savedItem) openDetailFor(savedItem);
+                        }}
+                      >
+                        <div className="relative w-16 h-24 overflow-hidden rounded-md">
+                          {entry.posterUrl ? (
+                            <Image
+                              src={entry.posterUrl}
+                              alt={entry.title}
+                              fill
+                              className="object-cover"
+                              sizes="64px"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-xs text-center bg-surface text-muted p-1">
+                              {entry.title.slice(0, 4)}
+                            </div>
+                          )}
+                          {isSaved && (
+                            <div className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full" style={{ background: "var(--accent-dim)" }}>
+                              <IconHeart size={8} />
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-xs mt-1 truncate">{entry.title}</p>
+                        {!isSaved && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleResave(entry); }}
+                            className="mt-1 w-full py-1 text-xs font-medium active:scale-95 transition-transform rounded-sm"
+                            style={{
+                              background: "var(--surface)",
+                              color: "var(--text-secondary)",
+                              border: "1px solid var(--border)",
+                            }}
+                          >
+                            저장
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : saved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconHeart size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 아무것도 없어</p>
