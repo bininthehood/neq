@@ -25,7 +25,7 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">Neko</span>
+        <span className="font-display text-lg text-accent">neq,</span>
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex items-center justify-center px-3">
@@ -62,7 +62,7 @@ export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">Neko</span>
+        <span className="font-display text-lg text-accent">neq,</span>
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex flex-col px-8 justify-center">
@@ -101,7 +101,7 @@ export function EmptyScreen({
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">Neko</span>
+        <span className="font-display text-lg text-accent">neq,</span>
         <button
           onClick={onReset}
           className="text-xs px-2 min-h-[44px] flex items-center text-muted"

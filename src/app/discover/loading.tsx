@@ -3,7 +3,7 @@ export default function DiscoverLoading() {
     <div className="h-dvh flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">Neko</span>
+        <span className="font-display text-lg text-accent">neq,</span>
         <div className="w-10 h-5 animate-pulse bg-surface-raised rounded-md" />
       </div>
 

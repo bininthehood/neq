@@ -25,7 +25,7 @@ All font choices, colors, spacing, and aesthetic direction are defined there.
 Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
-## 하네스: Neko OTT 추천 PWA
+## 하네스: neq OTT 추천 PWA
 
 **목표:** OTT 콘텐츠 발굴 PWA의 추천 엔진, UI/UX, 데이터 레이어를 에이전트 팀으로 개발·개선·검증
 
@@ -46,10 +46,10 @@ In QA mode, flag any code that doesn't match DESIGN.md.
 | tmdb-integration | TMDB API 통합 가이드 | content-manager |
 | component-build | 프론트엔드 구현 가이드 | frontend-builder |
 | mobile-qa | 모바일 QA 검증 가이드 | qa-tester |
-| neko-orchestrator | 팀 오케스트레이션 | 리더 (메인) |
+| neq-orchestrator | 팀 오케스트레이션 | 리더 (메인) |
 
 **실행 규칙:**
-- Neko 기능 구현/개선/QA 작업 요청 시 `neko-orchestrator` 스킬을 통해 에이전트 팀으로 처리
+- neq 기능 구현/개선/QA 작업 요청 시 `neq-orchestrator` 스킬을 통해 에이전트 팀으로 처리
 - 단순 질문/확인/코드 리뷰는 에이전트 팀 없이 직접 응답 가능
 - 모든 에이전트는 `model: "opus"` 사용
 - 중간 산출물: `_workspace/` 디렉토리
@@ -70,10 +70,10 @@ In QA mode, flag any code that doesn't match DESIGN.md.
     ├── tmdb-integration/SKILL.md
     ├── component-build/SKILL.md
     ├── mobile-qa/SKILL.md
-    └── neko-orchestrator/SKILL.md
+    └── neq-orchestrator/SKILL.md
 ```
 
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
-| 2026-04-07 | 초기 구성 | 전체 | Neko 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |
+| 2026-04-07 | 초기 구성 | 전체 | neq 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |

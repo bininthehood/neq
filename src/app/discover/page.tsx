@@ -114,7 +114,7 @@ export default function DiscoverPage() {
       providers ? `\uD83D\uDCFA ${providers}` : null,
       `\u2B50 ${r.rating.toFixed(1)}`,
       "",
-      "Neko \u2014 \uC624\uB298 \uBF50 \uBCFC\uAE4C?",
+      "neq, \u2014 \uC624\uB298 \uBF50 \uBCFC\uAE4C?",
     ].filter((line) => line !== null).join("\n");
     if (navigator.share) { try { await navigator.share({ title: r.title, text: body }); } catch {} }
     else { await navigator.clipboard.writeText(body); }
@@ -153,7 +153,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     if (!mounted || rec.loading) return;
-    if (!localStorage.getItem("neko_tutorial_seen") && filtered.length > 0) setShowTutorial(true);
+    if (!localStorage.getItem("neq_tutorial_seen") && filtered.length > 0) setShowTutorial(true);
   }, [mounted, rec.loading, filtered.length]);
 
   // --- shared props ---
@@ -180,7 +180,7 @@ export default function DiscoverPage() {
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">Neko</span>
+        <span className="font-display text-lg text-accent">neq,</span>
         <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center text-muted">재설정</button>
       </div>
       <FilterChips {...chipsProps} />
@@ -249,7 +249,7 @@ export default function DiscoverPage() {
           </div>
         </div>
       )}
-      {showTutorial && <TutorialOverlay onDismiss={() => { setShowTutorial(false); localStorage.setItem("neko_tutorial_seen", "1"); }} />}
+      {showTutorial && <TutorialOverlay onDismiss={() => { setShowTutorial(false); localStorage.setItem("neq_tutorial_seen", "1"); }} />}
       {current && detail.showDetail && <DetailSheet rec={current} showDetail={detail.showDetail} detailY={detail.detailY}
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}
         onDetailTouchStart={detail.onDetailTouchStart} onDetailTouchMove={detail.onDetailTouchMove}

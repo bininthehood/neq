@@ -87,7 +87,7 @@ export default function OnboardingPage() {
   // Step 0: 앱 소개
   if (step === 0) return (
     <div className="h-dvh flex flex-col items-center justify-center px-8 max-w-lg mx-auto">
-      <h1 className="font-display font-bold text-accent" style={{ fontSize: "3rem" }}>Neko</h1>
+      <h1 className="font-display font-bold text-accent" style={{ fontSize: "3rem" }}>neq,</h1>
       <p className="text-center mt-4 text-lg leading-relaxed text-secondary">
         3개만 골라주세요, 나머지는 제가 찾을게요
       </p>
@@ -106,7 +106,7 @@ export default function OnboardingPage() {
       {/* Fixed header */}
       <div className="shrink-0 px-5 pt-8 pb-3">
         <h1 className="font-display font-bold text-accent" style={{ fontSize: "36px" }}>
-          Neko
+          neq,
         </h1>
         <p className="mt-2 text-secondary">
           마음에 드는 작품 {selected.length < 3 ? "3-5개" : "더"} 골라주세요

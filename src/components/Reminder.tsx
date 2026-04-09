@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { getSaved, getWatchReports } from "@/lib/store";
 import { IconClose } from "./Icons";
 
-const REMINDER_KEY = "neko_last_reminder";
+const REMINDER_KEY = "neq_last_reminder";
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
 export default function Reminder() {

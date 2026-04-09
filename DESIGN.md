@@ -1,4 +1,4 @@
-# Design System — Neko
+# Design System — neq
 
 ## Product Context
 - **What this is:** OTT 콘텐츠 발굴/큐레이션 모바일 PWA

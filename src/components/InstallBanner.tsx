@@ -13,7 +13,7 @@ export default function InstallBanner() {
     // 이미 앱으로 실행 중이면 표시 안 함
     if (window.matchMedia("(display-mode: standalone)").matches) return;
     // 이미 닫았으면 표시 안 함 (24시간 동안)
-    const dismissed = localStorage.getItem("neko_install_dismissed");
+    const dismissed = localStorage.getItem("neq_install_dismissed");
     if (dismissed && Date.now() - Number(dismissed) < 24 * 60 * 60 * 1000) return;
 
     const ua = navigator.userAgent;
@@ -48,7 +48,7 @@ export default function InstallBanner() {
 
   const handleDismiss = () => {
     setShow(false);
-    localStorage.setItem("neko_install_dismissed", String(Date.now()));
+    localStorage.setItem("neq_install_dismissed", String(Date.now()));
   };
 
   if (!show) return null;
@@ -60,9 +60,9 @@ export default function InstallBanner() {
         boxShadow: "0 8px 32px rgba(12,10,9,0.6)",
       }}
     >
-      <Image src="/icon-192.png" alt="Neko" width={48} height={48} className="flex-shrink-0 rounded-md" unoptimized />
+      <Image src="/icon-192.png" alt="neq" width={48} height={48} className="flex-shrink-0 rounded-md" unoptimized />
       <div className="flex-1 min-w-0">
-        <div className="font-display font-bold text-sm">Neko 앱으로 열기</div>
+        <div className="font-display font-bold text-sm">neq, 앱으로 열기</div>
         {platform === "ios" ? (
           <p className="text-xs mt-1 text-secondary">
             하단 <span className="text-foreground">공유(↑)</span> 버튼 → <span className="text-foreground">홈 화면에 추가</span>

@@ -1,6 +1,6 @@
 {
-  "name": "Neko — 오늘 뭐 볼까?",
-  "short_name": "Neko",
+  "name": "neq, — 오늘 뭐 볼까?",
+  "short_name": "neq,",
   "description": "OTT 콘텐츠 발굴/큐레이션",
   "start_url": "/",
   "display": "standalone",

@@ -173,7 +173,7 @@ export function IconShare({ size = 20, color = "currentColor", className }: Icon
 }
 
 /** 필름 릴 스피너 — Warm Cinema 브랜드 스피너 */
-export function NekoSpinner({ size = 40, className }: { size?: number; className?: string }) {
+export function NeqSpinner({ size = 40, className }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={`animate-spin-slow ${className ?? ""}`}>
       {/* 외부 링 */}
@@ -191,8 +191,8 @@ export function NekoSpinner({ size = 40, className }: { size?: number; className
   );
 }
 
-/** Neko 로고 마크 — N 기반 미니멀 마크 */
-export function NekoLogo({ size = 48, className }: { size?: number; className?: string }) {
+/** neq 로고 마크 — N 기반 미니멀 마크 */
+export function NeqLogo({ size = 48, className }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
       <rect x="2" y="2" width="44" height="44" rx="12" fill="var(--surface)" />

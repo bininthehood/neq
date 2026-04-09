@@ -871,7 +871,7 @@ export default function SavedPage() {
                 const rec = detailItem!.recommendation;
                 const text = `${rec.title} — ${rec.reason}`;
                 const providers = rec.providers.map((p) => p.name).join(", ");
-                const body = `${text}\n${providers}에서 볼 수 있어요\n\nNeko에서 발견`;
+                const body = `${text}\n${providers}에서 볼 수 있어요\n\nneq에서 발견`;
                 if (navigator.share) {
                   try { await navigator.share({ title: rec.title, text: body }); } catch {}
                 } else {

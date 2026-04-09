@@ -18,13 +18,13 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "Neko — 오늘 뭐 볼까?",
+  title: "neq, — 오늘 뭐 볼까?",
   description: "OTT 전체에서 볼 만한 콘텐츠를 발굴하고 오늘 볼 작품을 고르세요",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Neko",
+    title: "neq",
   },
 };
 

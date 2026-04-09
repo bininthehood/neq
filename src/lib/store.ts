@@ -8,10 +8,10 @@ function safeParse<T>(key: string, fallback: T): T {
   }
 }
 
-const FAVORITES_KEY = "neko_favorites";
-const SAVED_KEY = "neko_saved";
-const RECS_KEY = "neko_recommendations";
-const RECS_FILTERED_PREFIX = "neko_recs_";
+const FAVORITES_KEY = "neq_favorites";
+const SAVED_KEY = "neq_saved";
+const RECS_KEY = "neq_recommendations";
+const RECS_FILTERED_PREFIX = "neq_recs_";
 
 // 온보딩에서 선택한 좋아하는 작품
 export function getFavorites(): string[] {
@@ -71,7 +71,7 @@ export function hasOnboarded(): boolean {
 }
 
 // 시청 리포트
-const REPORTS_KEY = "neko_watch_reports";
+const REPORTS_KEY = "neq_watch_reports";
 
 export function getWatchReports(): WatchReport[] {
   if (typeof window === "undefined") return [];
@@ -105,7 +105,7 @@ export function getWatchStats() {
 }
 
 // 아카이브 (시청 완료 후 숨긴 작품)
-const ARCHIVE_KEY = "neko_archived";
+const ARCHIVE_KEY = "neq_archived";
 
 export function getArchivedIds(): number[] {
   if (typeof window === "undefined") return [];
@@ -126,7 +126,7 @@ export function unarchiveItem(tmdbId: number) {
 }
 
 // 추천 히스토리 — 과거 추천 기록
-const HISTORY_KEY = "neko_rec_history";
+const HISTORY_KEY = "neq_rec_history";
 const MAX_HISTORY = 100;
 
 export interface RecHistoryEntry {
@@ -153,7 +153,7 @@ export function addRecHistory(recs: { title: string; tmdbId: number; posterUrl: 
 }
 
 // 지나간 작품 (스와이프로 넘긴 제목들) — 재추천 방지
-const SEEN_KEY = "neko_seen_titles";
+const SEEN_KEY = "neq_seen_titles";
 const MAX_SEEN = 200; // 최대 저장 수
 
 export function getSeenTitles(): string[] {
