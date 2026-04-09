@@ -57,6 +57,7 @@ export default function DiscoverPage() {
   const [detailAnimating, setDetailAnimating] = useState(false);
   const detailStartY = useRef(0);
   const detailDragging = useRef(false);
+  const detailBodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -286,21 +287,25 @@ export default function DiscoverPage() {
     setTimeout(() => { setShowDetail(false); setDetailAnimating(false); }, 300);
   }, []);
 
-  const onDetailHandleTouchStart = useCallback((e: React.TouchEvent) => {
+  const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
     detailStartY.current = e.touches[0].clientY;
-    detailDragging.current = true;
+    detailDragging.current = false;
   }, []);
 
-  const onDetailHandleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!detailDragging.current) return;
+  const onDetailTouchMove = useCallback((e: React.TouchEvent) => {
     const dy = e.touches[0].clientY - detailStartY.current;
-    if (dy > 0) {
+    const atTop = !detailBodyRef.current || detailBodyRef.current.scrollTop <= 0;
+    if (dy > 0 && atTop) {
+      // 최상단에서 아래로 드래그 → 시트 닫기 드래그
+      detailDragging.current = true;
+      e.preventDefault();
       setDetailAnimating(false);
       setDetailY(Math.min(100, (dy / window.innerHeight) * 120));
     }
   }, []);
 
-  const onDetailHandleTouchEnd = useCallback(() => {
+  const onDetailTouchEnd = useCallback(() => {
+    if (!detailDragging.current) return;
     detailDragging.current = false;
     if (detailY > 25) closeDetail();
     else { setDetailAnimating(true); setDetailY(0); }
@@ -620,20 +625,22 @@ export default function DiscoverPage() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* 핸들바 — 아래로 스와이프 시 닫힘 */}
-            <div
-              className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0 cursor-grab active:cursor-grabbing"
-              onTouchStart={onDetailHandleTouchStart}
-              onTouchMove={onDetailHandleTouchMove}
-              onTouchEnd={onDetailHandleTouchEnd}
-            >
+            {/* 핸들바 */}
+            <div className="px-5 pt-4 pb-2 flex items-center justify-between shrink-0">
               <div className="flex-1 flex justify-center"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
               <button className="w-11 h-11 flex items-center justify-center flex-shrink-0 -mr-1" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }} onClick={closeDetail}>
                 <IconClose size={16} color="var(--text-secondary)" />
               </button>
             </div>
-            {/* 본문 — 자체 스크롤 */}
-            <div className="flex-1 overflow-y-auto px-5 pb-8" style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}>
+            {/* 본문 — 최상단에서 스와이프 다운 시 닫힘 */}
+            <div
+              ref={detailBodyRef}
+              className="flex-1 overflow-y-auto px-5 pb-8"
+              style={{ overscrollBehavior: "contain" }}
+              onTouchStart={onDetailTouchStart}
+              onTouchMove={onDetailTouchMove}
+              onTouchEnd={onDetailTouchEnd}
+            >
               <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
               <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
               <div className="flex items-center gap-1.5 mt-2">
