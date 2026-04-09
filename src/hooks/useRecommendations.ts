@@ -93,6 +93,14 @@ export function useRecommendations() {
         );
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
+      // 오프라인 폴백: 캐시된 데이터가 있으면 사용
+      const offlineCached = getRecommendations(ft, fo);
+      if (offlineCached.length > 0) {
+        setRecs(offlineCached);
+        setLoadError(null);
+        setLoading(false);
+        return;
+      }
       setLoadError("인터넷 연결 좀 확인해줘.");
       setLoading(false);
     }
