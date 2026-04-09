@@ -124,6 +124,38 @@ export function IconFilm({ size = 40, color = "currentColor", className }: IconP
   );
 }
 
+// 온보딩 아이콘
+export function IconPopcorn({ size = 24, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M7 8v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8" />
+      <path d="M7.5 8a2.5 2.5 0 0 1 0-5A2.5 2.5 0 0 1 12 4.5 2.5 2.5 0 0 1 16.5 3a2.5 2.5 0 0 1 0 5" />
+      <line x1="12" y1="8" x2="12" y2="21" />
+    </svg>
+  );
+}
+
+export function IconDiamond({ size = 24, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M6 3h12l4 6-10 12L2 9z" />
+      <path d="M2 9h20" />
+      <path d="M10 3l-2 6 4 12 4-12-2-6" />
+    </svg>
+  );
+}
+
+export function IconSwipe({ size = 24, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M18 11V6a2 2 0 0 0-4 0" />
+      <path d="M14 10V4a2 2 0 0 0-4 0v7" />
+      <path d="M10 10.5V9a2 2 0 0 0-4 0v6" />
+      <path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2a8 8 0 0 1-6-2.7" />
+    </svg>
+  );
+}
+
 export function IconShare({ size = 20, color = "currentColor", className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>

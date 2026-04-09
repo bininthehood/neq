@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { setFavorites } from "@/lib/store";
-import { IconClose, IconCheck, NekoLogo } from "@/components/Icons";
+import { IconClose, IconCheck, IconPopcorn, IconDiamond, IconSwipe } from "@/components/Icons";
 
 interface SearchResult {
   id: number;
@@ -85,19 +85,21 @@ export default function OnboardingPage() {
     <div className="h-dvh flex flex-col items-center justify-center px-8 max-w-lg mx-auto">
       <h1 className="font-display text-4xl font-bold" style={{ color: "var(--accent)" }}>Neko</h1>
       <p className="text-center mt-3 leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-        알고리즘 밖의 작품을 발견하세요.
+        당신의 취향을 발견하세요.
       </p>
       <div className="mt-10 space-y-3 w-full max-w-[280px]">
-        {[
-          { num: "1", text: "좋아하는 작품 3개만 골라주세요" },
-          { num: "2", text: "취향에 맞는 숨겨진 명작을 찾아드려요" },
-          { num: "3", text: "스와이프하며 마음에 드는 작품 저장" },
-        ].map((item) => (
-          <div key={item.num} className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
-            <span className="font-data text-sm font-semibold w-5 text-center" style={{ color: "var(--accent)" }}>{item.num}</span>
-            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>{item.text}</span>
-          </div>
-        ))}
+        <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
+          <IconPopcorn size={20} color="var(--accent)" />
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>좋아하는 작품 3개만 골라주세요</span>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
+          <IconDiamond size={20} color="var(--accent)" />
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>취향에 맞는 숨겨진 명작을 찾아드려요</span>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
+          <IconSwipe size={20} color="var(--accent)" />
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>스와이프하며 마음에 드는 작품 저장</span>
+        </div>
       </div>
       <button
         onClick={() => setStep(1)}
