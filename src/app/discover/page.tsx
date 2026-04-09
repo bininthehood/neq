@@ -236,7 +236,15 @@ export default function DiscoverPage() {
       {/* 첫 카드 힌트 토스트 */}
       {swipe.firstCardHint && (
         <div className="fixed top-16 left-0 right-0 z-40 flex justify-center animate-fade-in">
-          <div className="px-4 py-2 text-sm rounded-full bg-surface border border-border text-secondary" style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
+          <div
+            className="px-4 py-2.5 text-sm rounded-lg flex items-center gap-2"
+            style={{
+              background: "var(--surface-raised)",
+              color: "var(--text-primary)",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+            }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)" }} />
             첫 번째 작품이에요
           </div>
         </div>

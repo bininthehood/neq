@@ -136,15 +136,16 @@ function PosterCard({
           </div>
           <div className="flex flex-wrap justify-center gap-1.5">
             {([
-              { key: "loved" as WatchReaction, label: "인생작" },
-              { key: "good" as WatchReaction, label: "괜찮았어" },
-              { key: "meh" as WatchReaction, label: "별로였어" },
-              { key: "dropped" as WatchReaction, label: "안 맞았어" },
+              { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)" },
+              { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" },
+              { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" },
+              { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none" },
             ]).map((r) => (
               <button
                 key={r.key}
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
-                className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform bg-surface text-secondary rounded-full border border-border"
+                className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform rounded-lg"
+                style={{ background: r.bg, color: r.color, border: r.border }}
               >
                 {r.label}
               </button>
@@ -408,12 +409,11 @@ export default function SavedPage() {
           {saved.length > 0 && viewFilter !== "history" && (
             <button
               onClick={() => setGroupByOTT(!groupByOTT)}
-              className="px-3 py-1.5 text-xs font-medium active:scale-95 transition-all duration-200 min-h-[44px]"
+              className="text-xs active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center"
               style={{
-                background: groupByOTT ? "var(--accent-dim)" : "transparent",
-                color: groupByOTT ? "var(--accent)" : "var(--accent)",
-                borderRadius: "var(--radius-full)",
-                border: "1px solid var(--accent-border)",
+                color: "var(--accent)",
+                textDecoration: groupByOTT ? "underline" : "none",
+                textUnderlineOffset: "3px",
               }}
             >
               OTT별 보기
@@ -434,9 +434,9 @@ export default function SavedPage() {
               )}
             </div>
             {watchedCount > 0 && (
-              <div className="h-1 overflow-hidden bg-surface rounded-full">
+              <div className="h-1 overflow-hidden bg-surface rounded-sm">
                 <div
-                  className="h-full transition-all duration-500 bg-accent rounded-full"
+                  className="h-full transition-all duration-500 bg-accent rounded-sm"
                   style={{
                     width: `${(watchedCount / saved.length) * 100}%`,
                   }}
@@ -454,20 +454,25 @@ export default function SavedPage() {
 
       {/* Filter tabs */}
       {saved.length > 0 && (
-        <div className="flex gap-2 px-5 mt-2 mb-1 overflow-x-auto">
+        <div className="flex gap-4 px-5 mt-2 mb-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           {VIEW_FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => setViewFilter(f.key)}
-              className="px-3 py-1.5 text-xs font-medium whitespace-nowrap active:scale-95 transition-all min-h-[44px]"
+              className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5"
               style={{
-                background: viewFilter === f.key ? "var(--accent-dim)" : "var(--surface)",
-                color: viewFilter === f.key ? "var(--accent)" : "var(--text-secondary)",
-                borderRadius: "var(--radius-full)",
-                border: viewFilter === f.key ? "1px solid var(--accent-border-light)" : "1px solid transparent",
+                background: "transparent",
+                color: viewFilter === f.key ? "var(--text-primary)" : "var(--text-muted)",
+                fontWeight: viewFilter === f.key ? 600 : 400,
+                borderBottom: viewFilter === f.key ? "2px solid var(--accent)" : "2px solid transparent",
               }}
             >
-              {f.label} {f.count > 0 && <span className="font-data">{f.count}</span>}
+              {f.label}
+              {f.count > 0 && (
+                <span className="font-data text-muted" style={{ fontSize: "10px" }}>
+                  {f.count}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -477,7 +482,8 @@ export default function SavedPage() {
       {stats.total > 0 && viewFilter !== "history" && (
         <div className="mx-5 mt-2 mb-3">
           <div
-            className="p-3 flex items-center gap-3 bg-surface rounded-lg"
+            className="p-3 flex items-center gap-3 rounded-lg"
+            style={{ background: "var(--surface)", boxShadow: "0 1px 6px rgba(0,0,0,0.15)" }}
           >
             <div className="flex-1">
               <div className="text-xs font-semibold text-muted">
@@ -518,7 +524,11 @@ export default function SavedPage() {
         <div className="mx-5 mt-1 mb-4">
           <button
             onClick={handlePickTonight}
-            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform bg-surface border border-border rounded-lg"
+            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform rounded-lg"
+            style={{
+              background: "var(--surface)",
+              boxShadow: "0 1px 8px rgba(0,0,0,0.2)",
+            }}
           >
             <div className="text-left">
               <div className="font-display font-semibold">오늘 뭐 볼까?</div>
@@ -526,11 +536,7 @@ export default function SavedPage() {
                 {pickSubtext}
               </div>
             </div>
-            <div
-              className="px-4 py-2 text-sm font-semibold bg-accent text-background rounded-md"
-            >
-              고르기
-            </div>
+            <span style={{ color: "var(--accent)", fontSize: "20px" }}>&#8594;</span>
           </button>
         </div>
       )}

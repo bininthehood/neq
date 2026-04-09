@@ -47,13 +47,14 @@ export default function FilterChips({
         : `OTT ${filterOTTs.size}개`;
 
   const chipStyle = (active: boolean, isOpen?: boolean) => ({
-    background: active ? "var(--accent)" : "var(--surface)",
-    color: active ? "var(--bg)" : "var(--text-secondary)",
-    borderRadius: "var(--radius-full)",
-    border: active
-      ? "1px solid var(--accent)"
-      : "1px solid var(--border)",
-    transform: isOpen ? "scale(1.05)" : "scale(1)",
+    background: "transparent",
+    color: active ? "var(--text-primary)" : "var(--text-secondary)",
+    borderRadius: 0,
+    border: "none",
+    borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
+    fontWeight: active ? 600 : 400,
+    transform: isOpen ? "scale(1.02)" : "scale(1)",
+    paddingBottom: "6px",
   });
 
   return (
@@ -69,7 +70,7 @@ export default function FilterChips({
           style={chipStyle(filterType !== "all", openDropdown === "type")}
         >
           {TYPE_LABELS[filterType]}{" "}
-          <span style={{ fontSize: 11, opacity: 0.6 }}>&#9662;</span>
+          <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
         </button>
         <button
           onClick={() =>
@@ -83,7 +84,7 @@ export default function FilterChips({
           )}
         >
           {ORIGIN_LABELS[filterOrigin]}{" "}
-          <span style={{ fontSize: 11, opacity: 0.6 }}>&#9662;</span>
+          <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
         </button>
         {availableOTTs.length > 0 && (
           <button
@@ -97,7 +98,7 @@ export default function FilterChips({
             )}
           >
             {ottLabel}{" "}
-            <span style={{ fontSize: 11, opacity: 0.6 }}>&#9662;</span>
+            <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
           </button>
         )}
       </div>
@@ -110,8 +111,8 @@ export default function FilterChips({
             onClick={() => setOpenDropdown(null)}
           />
           <div
-            className="absolute left-4 right-4 z-30 p-2 flex flex-wrap gap-1.5 animate-fade-in bg-surface rounded-lg border border-border"
-            style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+            className="absolute left-4 right-4 z-30 p-3 flex flex-wrap gap-2 animate-fade-in bg-surface-raised rounded-lg"
+            style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}
           >
             {openDropdown === "type" &&
               (["all", "movie", "series"] as const).map((t) => (
@@ -121,8 +122,12 @@ export default function FilterChips({
                     onFilterChange(t, filterOrigin);
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95"
-                  style={chipStyle(filterType === t)}
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  style={{
+                    background: filterType === t ? "var(--accent-dim)" : "transparent",
+                    color: filterType === t ? "var(--accent)" : "var(--text-secondary)",
+                    fontWeight: filterType === t ? 600 : 400,
+                  }}
                 >
                   {t === "all" ? "전체" : TYPE_LABELS[t]}
                 </button>
@@ -135,8 +140,12 @@ export default function FilterChips({
                     onFilterChange(filterType, o);
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95"
-                  style={chipStyle(filterOrigin === o)}
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  style={{
+                    background: filterOrigin === o ? "var(--accent-dim)" : "transparent",
+                    color: filterOrigin === o ? "var(--accent)" : "var(--text-secondary)",
+                    fontWeight: filterOrigin === o ? 600 : 400,
+                  }}
                 >
                   {o === "all" ? "전체" : ORIGIN_LABELS[o]}
                 </button>
@@ -149,8 +158,12 @@ export default function FilterChips({
                     onResetTopIdx();
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95"
-                  style={chipStyle(filterOTTs.size === 0)}
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  style={{
+                    background: filterOTTs.size === 0 ? "var(--accent-dim)" : "transparent",
+                    color: filterOTTs.size === 0 ? "var(--accent)" : "var(--text-secondary)",
+                    fontWeight: filterOTTs.size === 0 ? 600 : 400,
+                  }}
                 >
                   모든 OTT
                 </button>
@@ -166,8 +179,12 @@ export default function FilterChips({
                         onOTTChange(next);
                         onResetTopIdx();
                       }}
-                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95"
-                      style={chipStyle(selected)}
+                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg"
+                      style={{
+                        background: selected ? "var(--accent-dim)" : "transparent",
+                        color: selected ? "var(--accent)" : "var(--text-secondary)",
+                        fontWeight: selected ? 600 : 400,
+                      }}
                     >
                       {getOTTIcon(ott) && (
                         <NextImage

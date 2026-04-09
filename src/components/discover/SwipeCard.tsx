@@ -186,10 +186,10 @@ export default function SwipeCard({
           <div className="flex flex-wrap justify-center gap-2 mt-2">
             {(
               [
-                { key: "loved" as WatchReaction, label: "인생작" },
-                { key: "good" as WatchReaction, label: "괜찮았어" },
-                { key: "meh" as WatchReaction, label: "별로였어" },
-                { key: "dropped" as WatchReaction, label: "안 맞았어" },
+                { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)", px: "px-5" },
+                { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)", px: "px-4" },
+                { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)", px: "px-4" },
+                { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none", px: "px-4" },
               ] as const
             ).map((r) => (
               <button
@@ -198,7 +198,8 @@ export default function SwipeCard({
                   e.stopPropagation();
                   onWatchedReaction(r.key);
                 }}
-                className="px-4 py-2.5 text-sm font-medium active:scale-95 transition-transform bg-surface text-secondary rounded-full border border-border"
+                className={`${r.px} py-2.5 text-sm font-medium active:scale-95 transition-transform rounded-lg`}
+                style={{ background: r.bg, color: r.color, border: r.border }}
               >
                 {r.label}
               </button>
