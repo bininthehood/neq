@@ -51,6 +51,8 @@ export default function DiscoverPage() {
 
   // 디테일 scroll-snap
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [inDetail, setInDetail] = useState(false);
+  const detailTop = useRef(0); // 디테일 영역의 scrollTop 시작점
 
   useEffect(() => {
     setMounted(true);
@@ -229,17 +231,41 @@ export default function DiscoverPage() {
     }
   }, [dragX, pullY, nextCard, prevCard]);
 
+  // 카드로 돌아가기 (핸들바/X 버튼 전용)
+  const closeDetail = useCallback(() => {
+    setInDetail(false);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  // 디테일 진입 감지 + 스크롤 클램핑
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const h = el.clientHeight;
+      if (!inDetail && el.scrollTop > h * 0.8) {
+        detailTop.current = h;
+        setInDetail(true);
+      }
+      if (inDetail && el.scrollTop < detailTop.current) {
+        el.scrollTop = detailTop.current;
+      }
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [inDetail]);
+
   // 키보드
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") nextCard();
       else if (e.key === "ArrowRight") prevCard();
       else if (e.key === "ArrowUp") scrollRef.current?.scrollTo({ top: scrollRef.current.clientHeight, behavior: "smooth" });
-      else if (e.key === "ArrowDown" || e.key === "Escape") scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      else if (e.key === "ArrowDown" || e.key === "Escape") closeDetail();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [nextCard, prevCard]);
+  }, [nextCard, prevCard, closeDetail]);
 
   // 전체 이미지 프리로드
   useEffect(() => {
@@ -464,13 +490,13 @@ export default function DiscoverPage() {
                 const startY = Number(e.currentTarget.dataset.startY ?? 0);
                 const endY = e.changedTouches[0].clientY;
                 if (endY - startY > 40) {
-                  scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                  closeDetail();
                 }
               }}
             >
               <div className="flex-1 flex justify-center"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
               <button className="w-11 h-11 flex items-center justify-center flex-shrink-0 -mr-1" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
-                onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>
+                onClick={closeDetail}>
                 <IconClose size={16} color="var(--text-secondary)" />
               </button>
             </div>
