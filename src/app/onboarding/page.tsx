@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { setFavorites } from "@/lib/store";
-import { IconClose, IconCheck, IconClapper, IconDiamond, IconSwipe } from "@/components/Icons";
+import { IconClose, IconCheck } from "@/components/Icons";
 
 interface SearchResult {
   id: number;
@@ -83,27 +83,13 @@ export default function OnboardingPage() {
   // Step 0: 앱 소개
   if (step === 0) return (
     <div className="h-dvh flex flex-col items-center justify-center px-8 max-w-lg mx-auto">
-      <h1 className="font-display text-4xl font-bold text-accent">Neko</h1>
-      <p className="text-center mt-3 leading-relaxed text-secondary">
-        당신의 취향을 발견하세요.
+      <h1 className="font-display font-bold text-accent" style={{ fontSize: "3rem" }}>Neko</h1>
+      <p className="text-center mt-4 text-lg leading-relaxed text-secondary">
+        3개만 골라봐, 나머지는 내가 찾을게
       </p>
-      <div className="mt-10 space-y-3 w-full max-w-[280px]">
-        <div className="flex items-center gap-3 px-4 py-3 bg-surface rounded-lg">
-          <IconClapper size={20} color="var(--accent)" />
-          <span className="text-sm text-secondary">좋아하는 작품 3개만 골라주세요</span>
-        </div>
-        <div className="flex items-center gap-3 px-4 py-3 bg-surface rounded-lg">
-          <IconDiamond size={20} color="var(--accent)" />
-          <span className="text-sm text-secondary">취향에 맞는 숨겨진 명작을 찾아드려요</span>
-        </div>
-        <div className="flex items-center gap-3 px-4 py-3 bg-surface rounded-lg">
-          <IconSwipe size={20} color="var(--accent)" />
-          <span className="text-sm text-secondary">스와이프하며 마음에 드는 작품 저장</span>
-        </div>
-      </div>
       <button
         onClick={() => setStep(1)}
-        className="mt-10 w-full max-w-[280px] py-4 text-lg font-semibold active:scale-[0.98] transition-transform bg-accent text-background rounded-lg"
+        className="mt-12 w-full max-w-[280px] py-4 text-lg font-semibold active:scale-[0.98] transition-transform bg-accent text-background rounded-lg"
       >
         시작하기
       </button>
@@ -119,7 +105,7 @@ export default function OnboardingPage() {
           Neko
         </h1>
         <p className="mt-2 text-secondary">
-          좋아하는 작품을 {selected.length < 3 ? "3-5개" : "더"} 골라주세요
+          마음에 드는 작품 {selected.length < 3 ? "3-5개" : "더"} 골라봐
         </p>
         <div className="flex gap-1 mt-4">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -181,7 +167,7 @@ export default function OnboardingPage() {
         {showSuggestions && (
           <div>
             <div className="flex items-center justify-between mb-3 px-1">
-              <p className="text-xs text-muted">이런 작품은 어떠세요?</p>
+              <p className="text-xs text-muted">이런 건 어때?</p>
               <button
                 onClick={fetchTrending}
                 disabled={loadingSuggestions}
@@ -190,10 +176,10 @@ export default function OnboardingPage() {
                 {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
               </button>
             </div>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {suggestions.slice(0, 12).map((item, i) => {
                 const isSelected = selected.some((s) => s.id === item.id);
-                const tall = false; // 균일 높이로 3로우 고정
+                const tall = i % 3 === 1; // 비대칭 aspect-ratio (DESIGN.md)
                 return (
                   <button
                     key={item.id}
@@ -275,8 +261,8 @@ export default function OnboardingPage() {
           }}
         >
           {selected.length < 3
-            ? `${3 - selected.length}개 더 선택해주세요`
-            : `${selected.length}개 선택 완료 → 시작하기`}
+            ? `${3 - selected.length}개만 더 골라봐`
+            : `${selected.length}개 골랐어, 출발`}
         </button>
       </div>
     </div>

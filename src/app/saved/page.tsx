@@ -314,12 +314,12 @@ export default function SavedPage() {
           {saved.length > 0 && (
             <button
               onClick={() => setGroupByOTT(!groupByOTT)}
-              className="px-3 py-1.5 text-xs font-medium active:scale-95 transition-transform"
+              className="px-3 py-1.5 text-xs font-medium active:scale-95 transition-all duration-200 min-h-[44px]"
               style={{
-                background: groupByOTT ? "var(--accent-dim)" : "var(--surface)",
-                color: groupByOTT ? "var(--accent)" : "var(--text-muted)",
+                background: groupByOTT ? "var(--accent-dim)" : "transparent",
+                color: groupByOTT ? "var(--accent)" : "var(--accent)",
                 borderRadius: "var(--radius-full)",
-                border: groupByOTT ? "1px solid var(--accent-border-light)" : "1px solid var(--border)",
+                border: "1px solid var(--accent-border)",
               }}
             >
               OTT별 보기
@@ -353,7 +353,7 @@ export default function SavedPage() {
         )}
         {!saved.length && (
           <p className="text-sm mt-1 text-muted">
-            저장한 작품이 여기에 모여요
+            저장한 작품이 여기 모여
           </p>
         )}
       </div>
@@ -365,7 +365,7 @@ export default function SavedPage() {
             <button
               key={f.key}
               onClick={() => setViewFilter(f.key)}
-              className="px-3 py-1.5 text-xs font-medium whitespace-nowrap active:scale-95 transition-all min-h-[36px]"
+              className="px-3 py-1.5 text-xs font-medium whitespace-nowrap active:scale-95 transition-all min-h-[44px]"
               style={{
                 background: viewFilter === f.key ? "var(--accent-dim)" : "var(--surface)",
                 color: viewFilter === f.key ? "var(--accent)" : "var(--text-secondary)",
@@ -430,8 +430,8 @@ export default function SavedPage() {
               <div className="font-display font-semibold">오늘 뭐 볼까?</div>
               <div className="text-xs mt-0.5 text-muted">
                 {unwatchedCount > 0
-                  ? `안 본 ${unwatchedCount}편 중 하나를 골라드려요`
-                  : "저장한 작품 중 하나를 골라드려요"}
+                  ? `안 본 ${unwatchedCount}편 중에서 하나 뽑아줄게`
+                  : "저장한 작품 중에서 하나 뽑아줄게"}
               </div>
             </div>
             <div
@@ -481,17 +481,17 @@ export default function SavedPage() {
       {saved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconHeart size={32} />
-          <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 저장한 작품이 없어요</p>
-          <p className="text-sm mt-1.5">Discover에서 하트를 누르면 여기에 모여요</p>
+          <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 아무것도 없어</p>
+          <p className="text-sm mt-1.5">Discover에서 마음에 드는 작품을 저장해봐</p>
         </div>
       ) : filteredSaved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">
-            {viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
+            {viewFilter === "unwatched" ? "전부 다 봤네!" : "아직 시청 기록이 없어"}
           </p>
           <p className="text-sm mt-1.5">
-            {viewFilter === "unwatched" ? "Discover에서 새로운 작품을 찾아보세요" : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
+            {viewFilter === "unwatched" ? "Discover에서 새로운 작품 찾으러 가자" : "포스터의 '봤어요?' 버튼으로 기록해봐"}
           </p>
         </div>
       ) : groupByOTT && ottGroups ? (
@@ -692,10 +692,11 @@ export default function SavedPage() {
                   await navigator.clipboard.writeText(body);
                 }
               }}
-              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform bg-surface border border-border rounded-lg"
+              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-lg"
+              style={{ background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)" }}
             >
-              <IconShare size={16} color="var(--text-secondary)" />
-              <span className="text-secondary">이 작품 공유하기</span>
+              <IconShare size={16} color="var(--accent)" />
+              공유하기
             </button>
           </div>
         </div>
