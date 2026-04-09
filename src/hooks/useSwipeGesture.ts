@@ -19,6 +19,7 @@ export function useSwipeGesture({
   onSwipeDown,
 }: UseSwipeGestureParams) {
   const [dragX, setDragX] = useState(0);
+  const [firstCardHint, setFirstCardHint] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [swiping, setSwiping] = useState(false);
   const [prevOverlayX, setPrevOverlayX] = useState<number | null>(null);
@@ -57,8 +58,12 @@ export function useSwipeGesture({
         e.preventDefault();
         if (!scrollLocked) setScrollLocked(true);
 
-        if (dx > 0 && filteredLength > 1 && topIdx > 0) {
-          // right drag -> prev card overlay from left (첫 카드에서는 차단)
+        if (dx > 0 && topIdx === 0) {
+          // 첫 카드 → 저항감 있는 드래그 + 힌트
+          setDragX(dx * 0.15);
+          if (dx > 30 && !firstCardHint) setFirstCardHint(true);
+        } else if (dx > 0 && filteredLength > 1 && topIdx > 0) {
+          // right drag -> prev card overlay from left
           const screenW = window.innerWidth;
           setPrevOverlayX(Math.min(0, -screenW + dx));
         } else if (dx <= 0) {
@@ -81,6 +86,8 @@ export function useSwipeGesture({
     dragging.current = false;
     const dir = dirLock.current;
     dirLock.current = null;
+    // 첫 카드 힌트 자동 해제
+    if (firstCardHint) setTimeout(() => setFirstCardHint(false), 1500);
     if (dir === "v") {
       if (dragY > 40 && onSwipeDown) {
         vibrate(10);
@@ -159,6 +166,7 @@ export function useSwipeGesture({
     onTouchStart,
     onTouchMove,
     onTouchEnd,
+    firstCardHint,
     prevCard,
     clearTimers,
   };

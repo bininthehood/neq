@@ -233,6 +233,14 @@ export default function DiscoverPage() {
         onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave} />
       <BottomNav active="discover" />
 
+      {/* 첫 카드 힌트 토스트 */}
+      {swipe.firstCardHint && (
+        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center animate-fade-in">
+          <div className="px-4 py-2 text-sm rounded-full bg-surface border border-border text-secondary" style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
+            첫 번째 작품이에요
+          </div>
+        </div>
+      )}
       {showTutorial && <TutorialOverlay onDismiss={() => { setShowTutorial(false); localStorage.setItem("neko_tutorial_seen", "1"); }} />}
       {current && detail.showDetail && <DetailSheet rec={current} showDetail={detail.showDetail} detailY={detail.detailY}
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}
