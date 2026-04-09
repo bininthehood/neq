@@ -406,18 +406,18 @@ export default function DiscoverPage() {
       {/* 칩 행 — 3개 고정 */}
       <div className="flex gap-2 px-4 pb-2">
         <button onClick={() => setOpenDropdown(openDropdown === "type" ? null : "type")} disabled={loading}
-          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1 active:scale-95"
           style={chipStyle(filterType !== "all")}>
           {TYPE_LABELS[filterType]} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
         </button>
         <button onClick={() => setOpenDropdown(openDropdown === "origin" ? null : "origin")} disabled={loading}
-          className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-colors disabled:opacity-50 flex items-center gap-1 active:scale-95"
           style={chipStyle(filterOrigin !== "all")}>
           {ORIGIN_LABELS[filterOrigin]} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
         </button>
         {availableOTTs.length > 0 && (
           <button onClick={() => setOpenDropdown(openDropdown === "ott" ? null : "ott")}
-            className="px-3 py-2.5 text-xs whitespace-nowrap transition-colors flex items-center gap-1 active:scale-95"
+            className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-colors flex items-center gap-1 active:scale-95"
             style={chipStyle(filterOTTs.size > 0)}>
             {ottLabel} <span style={{ fontSize: 10, opacity: 0.6 }}>▾</span>
           </button>
@@ -527,7 +527,7 @@ export default function DiscoverPage() {
     const hasF = filterType !== "all" || filterOrigin !== "all" || filterOTTs.size > 0;
     return (
       <div className="h-dvh flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button></div>
+        <div className="flex items-center justify-between px-5 py-3 shrink-0"><span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span><button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center" style={{ color: "var(--text-muted)" }}>재설정</button></div>
         <FilterChips />
         <div className="flex-1 flex flex-col px-8 justify-center"><div className="space-y-5">
           <IconFilm size={36} color="var(--text-muted)" />
@@ -551,7 +551,7 @@ export default function DiscoverPage() {
         <span className="font-display text-lg" style={{ color: "var(--accent)" }}>Neko</span>
         <div className="flex items-center gap-3">
           <span className="font-data text-sm" style={{ color: "var(--text-muted)" }}>{topIdx + 1}/{filtered.length}</span>
-          <button onClick={() => router.push("/reset")} className="text-xs px-2 py-2" style={{ color: "var(--text-muted)" }}>재설정</button>
+          <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center" style={{ color: "var(--text-muted)" }}>재설정</button>
         </div>
       </div>
       <FilterChips />
