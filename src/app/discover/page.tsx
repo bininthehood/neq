@@ -151,6 +151,14 @@ export default function DiscoverPage() {
 
   useEffect(() => { filtered.forEach((r) => { if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; } }); }, [filtered]);
 
+  // 프리페치: 남은 카드 8장 이하일 때 다음 배치 자동 로드
+  useEffect(() => {
+    const remaining = filtered.length - topIdx;
+    if (remaining <= 8 && !rec.loading && !rec.loadingMore && filtered.length > 0) {
+      rec.loadMoreRecs();
+    }
+  }, [topIdx, filtered.length, rec.loading, rec.loadingMore]);
+
   useEffect(() => {
     if (!mounted || rec.loading) return;
     if (!localStorage.getItem("neq_tutorial_seen") && filtered.length > 0) setShowTutorial(true);
