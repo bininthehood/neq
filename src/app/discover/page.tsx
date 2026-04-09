@@ -349,7 +349,7 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 min-h-0" style={{ overflowY: scrollLocked ? "hidden" : "auto", scrollSnapType: scrollLocked ? "none" : "y mandatory", overscrollBehavior: "none" }}>
+      <div ref={scrollRef} className="flex-1 min-h-0" style={{ overflowY: scrollLocked ? "hidden" : "auto", scrollSnapType: scrollLocked ? "none" : "y proximity", overscrollBehavior: "none" }}>
 
         {/* Snap 1: 카드 덱 */}
         <div className="relative px-3 pb-2" style={{ height: "100%", scrollSnapAlign: "start", transform: pullY > 0 ? `translateY(${pullY * 0.3}px)` : undefined, transition: pullY === 0 ? "transform 0.2s ease-out" : "none" }}
@@ -452,13 +452,13 @@ export default function DiscoverPage() {
 
         {/* Snap 2: 디테일 */}
         {current && (
-          <div className="relative flex flex-col" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
-            {/* 핸들바 — 이 영역에서만 아래로 스와이프 시 닫힘 */}
+          <div className="relative px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
+            {/* 핸들바 — 아래로 스와이프 시 닫힘 */}
             <div
-              className="px-5 pt-4 pb-3 flex items-center justify-between cursor-grab active:cursor-grabbing"
+              className="sticky top-0 z-10 flex items-center justify-between pb-3 -mx-5 px-5"
+              style={{ background: "var(--bg)" }}
               onTouchStart={(e) => {
-                const el = e.currentTarget;
-                el.dataset.startY = String(e.touches[0].clientY);
+                e.currentTarget.dataset.startY = String(e.touches[0].clientY);
               }}
               onTouchEnd={(e) => {
                 const startY = Number(e.currentTarget.dataset.startY ?? 0);
@@ -474,8 +474,6 @@ export default function DiscoverPage() {
                 <IconClose size={16} color="var(--text-secondary)" />
               </button>
             </div>
-            {/* 디테일 본문 — 자체 스크롤, 상위 snap으로 전파 차단 */}
-            <div className="flex-1 overflow-y-auto px-5 pb-8" style={{ overscrollBehavior: "contain" }}>
             <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
             <div className="flex items-center gap-1.5 mt-2">
@@ -511,7 +509,6 @@ export default function DiscoverPage() {
                 })}
               </div>
             </div>
-            </div>{/* 본문 스크롤 컨테이너 닫기 */}
           </div>
         )}
       </div>
