@@ -56,7 +56,7 @@ export default function Reminder() {
         </div>
         <button
           onClick={dismiss}
-          className="w-8 h-8 flex items-center justify-center flex-shrink-0"
+          className="w-11 h-11 flex items-center justify-center flex-shrink-0"
           style={{ borderRadius: "var(--radius-full)" }}
         >
           <IconClose size={14} color="var(--text-muted)" />

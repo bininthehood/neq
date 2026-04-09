@@ -147,7 +147,7 @@ function PosterCard({
         {report && onArchiveToggle && (
           <button
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
-            className="w-8 h-8 flex items-center justify-center text-[10px] sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
             style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)", color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
             title={isArchived ? "복원" : "아카이브"}
           >
@@ -156,7 +156,7 @@ function PosterCard({
         )}
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
-          className="w-8 h-8 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+          className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
           style={{ background: "var(--bg-overlay)", borderRadius: "var(--radius-full)" }}
         >
           <IconClose size={12} />
