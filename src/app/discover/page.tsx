@@ -453,11 +453,13 @@ export default function DiscoverPage() {
         {/* Snap 2: 디테일 */}
         {current && (
           <div className="relative px-5 pt-4 pb-8" style={{ minHeight: "100%", scrollSnapAlign: "start", background: "var(--bg)" }}>
-            <div className="flex justify-center mb-3"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
-            <button className="absolute top-4 right-5 w-11 h-11 flex items-center justify-center z-10" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
-              onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>
-              <IconClose size={16} color="var(--text-secondary)" />
-            </button>
+            <div className="sticky top-0 z-10 flex items-center justify-between pb-3" style={{ background: "var(--bg)" }}>
+              <div className="flex-1 flex justify-center"><div className="w-10 h-1" style={{ background: "var(--border)", borderRadius: "var(--radius-full)" }} /></div>
+              <button className="w-11 h-11 flex items-center justify-center flex-shrink-0 -mr-1" style={{ background: "var(--surface)", borderRadius: "var(--radius-full)" }}
+                onClick={() => scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>
+                <IconClose size={16} color="var(--text-secondary)" />
+              </button>
+            </div>
             <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
             <div className="flex items-center gap-1.5 mt-2">
