@@ -11,7 +11,7 @@ import {
 } from "@/lib/store";
 import type { SavedItem, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
-import { IconStar, IconClose, IconCheck, IconHeart } from "@/components/Icons";
+import { IconStar, IconClose, IconCheck, IconHeart, IconShare } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 
 const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string }[] = [
@@ -663,6 +663,25 @@ export default function SavedPage() {
                 })}
               </div>
             </div>
+            {/* 공유 */}
+            <button
+              onClick={async () => {
+                const rec = detailItem!.recommendation;
+                const text = `${rec.title} — ${rec.reason}`;
+                const providers = rec.providers.map((p) => p.name).join(", ");
+                const body = `${text}\n${providers}에서 볼 수 있어요\n\nNeko에서 발견`;
+                if (navigator.share) {
+                  try { await navigator.share({ title: rec.title, text: body }); } catch {}
+                } else {
+                  await navigator.clipboard.writeText(body);
+                }
+              }}
+              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+              style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)" }}
+            >
+              <IconShare size={16} color="var(--text-secondary)" />
+              <span style={{ color: "var(--text-secondary)" }}>이 작품 공유하기</span>
+            </button>
           </div>
         </div>
       )}
