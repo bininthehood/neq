@@ -518,7 +518,8 @@ export default function DiscoverPage() {
 
       {/* 디테일 바텀시트 오버레이 */}
       {showDetail && current && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={closeDetail}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center" style={{ touchAction: "none" }} onClick={closeDetail}
+          onTouchMove={(e) => e.stopPropagation()}>
           {/* 배경 딤 */}
           <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
           {/* 시트 */}
@@ -545,7 +546,7 @@ export default function DiscoverPage() {
               </button>
             </div>
             {/* 본문 — 자체 스크롤 */}
-            <div className="flex-1 overflow-y-auto px-5 pb-8">
+            <div className="flex-1 overflow-y-auto px-5 pb-8" style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}>
               <h2 className="font-display text-xl font-bold pr-14">{current.title}</h2>
               <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>{current.titleEn} · {metaInfo(current)}</p>
               <div className="flex items-center gap-1.5 mt-2">
