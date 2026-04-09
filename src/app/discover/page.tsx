@@ -53,6 +53,7 @@ export default function DiscoverPage() {
   const dirLock = useRef<"h" | "v" | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const [showDetail, setShowDetail] = useState(false);
   const [detailY, setDetailY] = useState(100); // 0=열림, 100=닫힘
   const [detailAnimating, setDetailAnimating] = useState(false);
@@ -65,13 +66,21 @@ export default function DiscoverPage() {
     if (!hasOnboarded()) { router.replace("/onboarding"); return; }
     loadRecs("all", "all");
     setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
+    return () => {
+      timersRef.current.forEach(clearTimeout);
+      abortRef.current?.abort();
+    };
   }, [router]);
 
   const [loadError, setLoadError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
     const cached = getRecommendations(ft, fo);
     if (cached.length > 0) { setRecs(cached); setTopIdx(0); setLoading(false); setLoadError(null); return; }
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setLoading(true);
     setLoadError(null);
     const favorites = getFavorites();
@@ -98,6 +107,7 @@ export default function DiscoverPage() {
       const res = await fetch("/api/recommend", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ favorites, filter, ...(hasFeedback ? { feedback } : {}), ...(exclude.length > 0 ? { exclude } : {}) }),
+        signal: controller.signal,
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
@@ -110,7 +120,8 @@ export default function DiscoverPage() {
       setRecommendations(newRecs, ft, fo);
       setRecs(newRecs); setTopIdx(0); setLoading(false);
       if (newRecs.length > 0) addRecHistory(newRecs.map((r: Recommendation) => ({ title: r.title, tmdbId: r.tmdbId, posterUrl: r.posterUrl })));
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setLoadError("네트워크 연결을 확인해주세요.");
       setLoading(false);
     }
@@ -139,20 +150,24 @@ export default function DiscoverPage() {
       // 마지막 카드 → 처음으로 순환
       setSwiping(true);
       setDragX(-500); setDragY(0);
-      setTimeout(() => {
+      const t = setTimeout(() => {
+        timersRef.current.delete(t);
         setTopIdx(0);
         setDragX(0); setDragY(0); setSwiping(false);
         scrollRef.current?.scrollTo({ top: 0 });
       }, 280);
+      timersRef.current.add(t);
       return;
     }
     setSwiping(true);
     setDragX(-500); setDragY(0);
-    setTimeout(() => {
+    const t = setTimeout(() => {
+      timersRef.current.delete(t);
       setTopIdx((i) => i + 1);
       setDragX(0); setDragY(0); setSwiping(false);
       scrollRef.current?.scrollTo({ top: 0 });
     }, 280);
+    timersRef.current.add(t);
   }, [swiping, topIdx, filtered.length]);
 
   // 이전 카드 (키보드 ArrowRight) — 오버레이 애니메이션으로 처리
@@ -166,12 +181,14 @@ export default function DiscoverPage() {
     // 다음 프레임에서 0으로 애니메이션
     requestAnimationFrame(() => {
       setPrevOverlayX(0);
-      setTimeout(() => {
+      const t = setTimeout(() => {
+        timersRef.current.delete(t);
         setTopIdx((i) => i - 1);
         setPrevOverlayX(null);
         setSwiping(false);
         scrollRef.current?.scrollTo({ top: 0 });
       }, 350);
+      timersRef.current.add(t);
     });
   }, [swiping, topIdx, prevOverlayX, filtered.length]);
 
