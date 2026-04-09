@@ -46,7 +46,7 @@ export default function SwipeCard({
   const scaleVal = 1 - depth * 0.04;
   const yOffset = depth * 12;
   const tx = isTop ? dragX : 0;
-  const ty = isTop ? dragY + yOffset : yOffset;
+  const ty = yOffset; // 카드는 수직 이동하지 않음 — 아래 스와이프는 오버레이로 처리
   const rot = isTop
     ? Math.sign(dragX) * Math.min(Math.abs(dragX) * 0.06, 15)
     : 0;
