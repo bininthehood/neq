@@ -748,22 +748,22 @@ export default function DiscoverPage() {
           style={{ background: "var(--bg-overlay-dense)" }}
           onClick={dismissTutorial}
         >
-          <div className="flex flex-col items-center gap-6 px-8 max-w-[320px]">
-            <div className="flex gap-10 justify-center">
+          <div className="flex flex-col items-start gap-6 px-8 max-w-[320px]">
+            <div className="flex gap-10 w-full">
               <div className="flex flex-col items-center gap-1.5">
-                <div className="text-2xl" style={{ color: "var(--text-primary)" }}>&larr;</div>
-                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>Pass</span>
+                <div className="text-[1.75rem]" style={{ color: "var(--text-primary)" }}>&larr;</div>
+                <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>패스</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
-                <div className="text-2xl" style={{ color: "var(--text-primary)" }}>&rarr;</div>
+                <div className="text-[1.75rem]" style={{ color: "var(--text-primary)" }}>&rarr;</div>
                 <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>이전 카드</span>
               </div>
               <div className="flex flex-col items-center gap-1.5">
-                <div className="text-2xl" style={{ color: "var(--text-primary)" }}>&darr;</div>
+                <div className="text-[1.75rem]" style={{ color: "var(--text-primary)" }}>&darr;</div>
                 <span className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>새로고침</span>
               </div>
             </div>
-            <div className="text-center">
+            <div>
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>카드를 탭하면 "봤어요?" 기록</p>
               <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>하단 정보 영역을 탭하면 상세보기</p>
             </div>
