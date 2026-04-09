@@ -125,12 +125,18 @@ export function IconFilm({ size = 40, color = "currentColor", className }: IconP
 }
 
 // 온보딩 아이콘
-export function IconPopcorn({ size = 24, color = "currentColor", className }: IconProps) {
+export function IconClapper({ size = 24, color = "currentColor", className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M7 8v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V8" />
-      <path d="M7.5 8a2.5 2.5 0 0 1 0-5A2.5 2.5 0 0 1 12 4.5 2.5 2.5 0 0 1 16.5 3a2.5 2.5 0 0 1 0 5" />
-      <line x1="12" y1="8" x2="12" y2="21" />
+      {/* 보드 본체 */}
+      <rect x="2" y="10" width="20" height="12" rx="2" />
+      {/* 클래퍼 하단 (보드에 붙은 부분) */}
+      <path d="M2 10h20" />
+      {/* 클래퍼 상단 (열린 상태 — 비스듬히 올라감) */}
+      <path d="M2 10l3-7h14l3 7" />
+      {/* 슬레이트 줄무늬 */}
+      <line x1="7.5" y1="3.5" x2="9" y2="10" />
+      <line x1="13.5" y1="3.5" x2="15" y2="10" />
     </svg>
   );
 }

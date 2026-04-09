@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { setFavorites } from "@/lib/store";
-import { IconClose, IconCheck, IconPopcorn, IconDiamond, IconSwipe } from "@/components/Icons";
+import { IconClose, IconCheck, IconClapper, IconDiamond, IconSwipe } from "@/components/Icons";
 
 interface SearchResult {
   id: number;
@@ -89,7 +89,7 @@ export default function OnboardingPage() {
       </p>
       <div className="mt-10 space-y-3 w-full max-w-[280px]">
         <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
-          <IconPopcorn size={20} color="var(--accent)" />
+          <IconClapper size={20} color="var(--accent)" />
           <span className="text-sm" style={{ color: "var(--text-secondary)" }}>좋아하는 작품 3개만 골라주세요</span>
         </div>
         <div className="flex items-center gap-3 px-4 py-3" style={{ background: "var(--surface)", borderRadius: "var(--radius-lg)" }}>
