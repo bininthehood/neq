@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { setFavorites } from "@/lib/store";
 import { IconClose, IconCheck } from "@/components/Icons";
 
@@ -127,7 +128,7 @@ export default function OnboardingPage() {
               return (
                 <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
                   {item.posterUrl ? (
-                    <img src={item.posterUrl} alt={item.title} className="w-14 h-20 object-cover rounded-md" />
+                    <Image src={item.posterUrl} alt={item.title} width={56} height={80} className="object-cover rounded-md" sizes="56px" />
                   ) : (
                     <div className="w-14 h-20 flex items-center justify-center text-xs bg-surface rounded-md text-muted">
                       {item.title.slice(0, 3)}
@@ -192,7 +193,7 @@ export default function OnboardingPage() {
                     }}
                   >
                     {item.posterUrl ? (
-                      <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" />
+                      <Image src={item.posterUrl} alt={item.title} fill className="object-cover" sizes="(max-width: 480px) 33vw, 160px" />
                     ) : (
                       <div className="w-full h-full bg-surface" />
                     )}
@@ -230,7 +231,7 @@ export default function OnboardingPage() {
               }}
             >
               {item.posterUrl ? (
-                <img src={item.posterUrl} alt={item.title} className="w-12 h-18 object-cover flex-shrink-0 rounded-md" />
+                <Image src={item.posterUrl} alt={item.title} width={48} height={72} className="object-cover flex-shrink-0 rounded-md" sizes="48px" />
               ) : (
                 <div className="w-12 h-18 flex-shrink-0 bg-surface rounded-md" />
               )}

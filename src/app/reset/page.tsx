@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { getFavorites, setFavorites, clearAllRecommendations, clearSeenTitles } from "@/lib/store";
 import { IconClose, IconCheck } from "@/components/Icons";
 
@@ -131,7 +132,7 @@ export default function ResetPage() {
             {selected.map((item) => (
               <button key={item.id} onClick={() => toggleSelect(item)} className="flex-shrink-0 relative">
                 {item.posterUrl ? (
-                  <img src={item.posterUrl} alt={item.title} className="w-16 h-24 object-cover rounded-md" />
+                  <Image src={item.posterUrl} alt={item.title} width={64} height={96} className="object-cover rounded-md" sizes="64px" />
                 ) : (
                   <div className="w-16 h-24 flex items-center justify-center text-xs bg-surface rounded-md text-muted">{item.title.slice(0, 4)}</div>
                 )}
@@ -167,7 +168,7 @@ export default function ResetPage() {
                 return (
                   <button key={item.id} onClick={() => toggleSelect(item)} className="relative overflow-hidden transition-all active:scale-95 rounded-lg"
                     style={{ outline: isSelected ? "2px solid var(--accent)" : "none", outlineOffset: "-2px", aspectRatio: "2/3" }}>
-                    {item.posterUrl ? <img src={item.posterUrl} alt={item.title} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-surface" />}
+                    {item.posterUrl ? <Image src={item.posterUrl} alt={item.title} fill className="object-cover" sizes="(max-width: 480px) 25vw, 120px" /> : <div className="w-full h-full bg-surface" />}
                     <div className="absolute bottom-0 left-0 right-0 p-1.5" style={{ background: "linear-gradient(transparent, var(--bg-overlay-heavy))" }}>
                       <div className="text-xs font-medium truncate">{item.title}</div>
                     </div>
@@ -188,7 +189,7 @@ export default function ResetPage() {
           return (
             <button key={item.id} onClick={() => toggleSelect(item)} className="w-full flex items-center gap-3 p-3 transition-colors rounded-lg"
               style={{ background: isSelected ? "var(--accent-dim)" : "transparent", border: isSelected ? "1px solid var(--accent-border)" : "1px solid transparent" }}>
-              {item.posterUrl ? <img src={item.posterUrl} alt={item.title} className="w-12 h-18 object-cover flex-shrink-0 rounded-md" /> : <div className="w-12 h-18 flex-shrink-0 bg-surface rounded-md" />}
+              {item.posterUrl ? <Image src={item.posterUrl} alt={item.title} width={48} height={72} className="object-cover flex-shrink-0 rounded-md" sizes="48px" /> : <div className="w-12 h-18 flex-shrink-0 bg-surface rounded-md" />}
               <div className="text-left flex-1 min-w-0">
                 <div className="font-medium truncate">{item.title}</div>
                 <div className="text-sm text-muted">{item.year}</div>

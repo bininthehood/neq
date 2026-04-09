@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import NextImage from "next/image";
 import {
   getFavorites,
   getRecommendations,
@@ -463,7 +464,7 @@ export default function DiscoverPage() {
                     }}
                       className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95"
                       style={chipStyle(selected)}>
-                      <img src={getOTTIcon(ott) ?? ""} alt={ott} className="w-4 h-4 object-contain rounded-sm" />
+                      {getOTTIcon(ott) && <NextImage src={getOTTIcon(ott)!} alt={ott} width={16} height={16} className="object-contain rounded-sm" unoptimized />}
                       {ott}
                     </button>
                   );
@@ -595,7 +596,7 @@ export default function DiscoverPage() {
                   zIndex: 10 - depth,
                 }}>
                 {rec.posterUrl ? (
-                  <img src={rec.posterUrl} alt={rec.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                  <NextImage src={rec.posterUrl} alt={rec.title} fill className="object-cover" sizes="(max-width: 480px) 90vw, 400px" priority={isTop} />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-surface">
                     <span className="font-display text-5xl text-muted">N</span>
@@ -629,9 +630,12 @@ export default function DiscoverPage() {
                       <div className="flex items-center gap-2 mt-1.5">
                         {metaInfo(rec) && <span className="text-xs text-muted">{metaInfo(rec)}</span>}
                         <div className="flex gap-1 items-center">
-                          {rec.providers.slice(0, 4).map((p) => (
-                            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-6 h-6 object-contain rounded-sm" />
-                          ))}
+                          {rec.providers.slice(0, 4).map((p) => {
+                            const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
+                            return iconSrc ? (
+                              <NextImage key={p.name} src={iconSrc} alt={p.name} width={24} height={24} className="object-contain rounded-sm" unoptimized />
+                            ) : null;
+                          })}
                         </div>
                       </div>
                       <div className="mt-2 px-2.5 py-1.5 text-sm rounded-md text-secondary" style={{ background: "var(--accent-dim)" }}>
@@ -701,7 +705,7 @@ export default function DiscoverPage() {
                   boxShadow: "8px 0 32px rgba(0,0,0,0.5)",
                 }}>
                 {prev.posterUrl ? (
-                  <img src={prev.posterUrl} alt={prev.title} className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                  <NextImage src={prev.posterUrl} alt={prev.title} fill className="object-cover" sizes="(max-width: 480px) 90vw, 400px" />
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center bg-surface">
                     <span className="font-display text-5xl text-muted">N</span>
@@ -718,9 +722,12 @@ export default function DiscoverPage() {
                   <div className="flex items-center gap-2 mt-1.5">
                     {metaInfo(prev) && <span className="text-xs text-muted">{metaInfo(prev)}</span>}
                     <div className="flex gap-1 items-center">
-                      {prev.providers.slice(0, 4).map((p) => (
-                        <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-6 h-6 object-contain rounded-sm" />
-                      ))}
+                      {prev.providers.slice(0, 4).map((p) => {
+                        const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
+                        return iconSrc ? (
+                          <NextImage key={p.name} src={iconSrc} alt={p.name} width={24} height={24} className="object-contain rounded-sm" unoptimized />
+                        ) : null;
+                      })}
                     </div>
                   </div>
                   <div className="mt-2 px-2.5 py-1.5 text-sm rounded-md text-secondary" style={{ background: "var(--accent-dim)" }}>
@@ -830,7 +837,11 @@ export default function DiscoverPage() {
                 <IconStar size={13} color="var(--accent)" />
                 <span className="font-data text-sm font-semibold text-accent">{current.rating.toFixed(1)}</span>
               </div>
-              {current.backdrop && <img src={current.backdrop} alt="" className="w-full h-40 object-cover mt-4 rounded-md" />}
+              {current.backdrop && (
+                <div className="relative w-full h-40 mt-4 overflow-hidden rounded-md">
+                  <NextImage src={current.backdrop} alt="" fill className="object-cover" sizes="(max-width: 480px) 100vw, 480px" />
+                </div>
+              )}
               <div className="mt-4"><div className="px-3 py-2 text-sm bg-accent-dim rounded-md">{current.reason}</div></div>
               {(current.director || current.cast?.length > 0) && (
                 <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
@@ -851,7 +862,11 @@ export default function DiscoverPage() {
                     const u = getOTTLink(p.name, current.title);
                     return (
                       <a key={p.name} href={u ?? current.watchLink ?? "#"} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md">
-                        <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0 rounded-sm bg-surface" />
+                        {(getOTTIcon(p.name) ?? p.logoUrl) ? (
+                          <NextImage src={(getOTTIcon(p.name) ?? p.logoUrl)!} alt={p.name} width={32} height={32} className="object-contain flex-shrink-0 rounded-sm bg-surface" unoptimized />
+                        ) : (
+                          <div className="w-8 h-8 flex-shrink-0 rounded-sm bg-surface" />
+                        )}
                         <span className="flex-1">{p.name}</span>
                         <span className="text-xs text-accent">열기</span>
                       </a>

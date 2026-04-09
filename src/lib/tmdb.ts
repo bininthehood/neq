@@ -1,6 +1,6 @@
+import { TMDB_API_KEY as API_KEY } from "./env";
 import type { TMDBResult } from "./types";
 
-const API_KEY = process.env.TMDB_API_KEY!;
 const BASE = "https://api.themoviedb.org/3";
 
 export async function searchTMDB(

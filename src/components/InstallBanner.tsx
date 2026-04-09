@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { IconClose } from "./Icons";
 
 export default function InstallBanner() {
@@ -59,7 +60,7 @@ export default function InstallBanner() {
         boxShadow: "0 8px 32px rgba(12,10,9,0.6)",
       }}
     >
-      <img src="/icon-192.png" alt="Neko" className="w-12 h-12 flex-shrink-0 rounded-md" />
+      <Image src="/icon-192.png" alt="Neko" width={48} height={48} className="flex-shrink-0 rounded-md" unoptimized />
       <div className="flex-1 min-w-0">
         <div className="font-display font-bold text-sm">Neko 앱으로 열기</div>
         {platform === "ios" ? (

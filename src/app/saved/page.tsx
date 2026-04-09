@@ -13,6 +13,7 @@ import {
   unarchiveItem,
 } from "@/lib/store";
 import type { SavedItem, WatchReaction } from "@/lib/types";
+import Image from "next/image";
 import BottomNav from "@/components/BottomNav";
 import { IconStar, IconClose, IconCheck, IconHeart, IconShare } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
@@ -66,12 +67,12 @@ function PosterCard({
 
   return (
     <div
-      className="relative group cursor-pointer"
+      className="relative group cursor-pointer overflow-hidden"
       style={{ height: index % 3 === 0 ? "240px" : "200px" }}
       onClick={() => onOpen(item)}
     >
       {item.recommendation.posterUrl ? (
-        <img src={item.recommendation.posterUrl} alt={item.recommendation.title} loading="lazy" className="w-full h-full object-cover rounded-lg" />
+        <Image src={item.recommendation.posterUrl} alt={item.recommendation.title} fill className="object-cover rounded-lg" sizes="(max-width: 480px) 50vw, 200px" />
       ) : (
         <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center bg-surface rounded-lg text-muted">
           {item.recommendation.title}
@@ -90,9 +91,12 @@ function PosterCard({
         <div className="flex items-center gap-2">
           <span className="font-data text-xs flex items-center gap-0.5 text-muted"><IconStar size={10} />{item.recommendation.rating.toFixed(1)}</span>
           {report && <ReactionLabel reaction={report} />}
-          {!report && item.recommendation.providers.slice(0, 2).map((p) => (
-            <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-4 h-4 object-contain rounded-sm" />
-          ))}
+          {!report && item.recommendation.providers.slice(0, 2).map((p) => {
+            const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
+            return iconSrc ? (
+              <Image key={p.name} src={iconSrc} alt={p.name} width={16} height={16} className="object-contain rounded-sm" unoptimized />
+            ) : null;
+          })}
         </div>
       </div>
 
@@ -455,10 +459,13 @@ export default function SavedPage() {
           </div>
           <div className="flex gap-3">
             {selected.recommendation.posterUrl && (
-              <img
+              <Image
                 src={selected.recommendation.posterUrl}
                 alt={selected.recommendation.title}
-                className="w-16 h-24 object-cover flex-shrink-0 rounded-md"
+                width={64}
+                height={96}
+                className="object-cover flex-shrink-0 rounded-md"
+                sizes="64px"
               />
             )}
             <div>
@@ -467,9 +474,12 @@ export default function SavedPage() {
                 {selected.recommendation.reason}
               </div>
               <div className="flex gap-1 mt-2">
-                {selected.recommendation.providers.slice(0, 3).map((p) => (
-                  <img key={p.name} src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-6 h-6 object-contain rounded-sm bg-surface" />
-                ))}
+                {selected.recommendation.providers.slice(0, 3).map((p) => {
+                  const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
+                  return iconSrc ? (
+                    <Image key={p.name} src={iconSrc} alt={p.name} width={24} height={24} className="object-contain rounded-sm bg-surface" unoptimized />
+                  ) : null;
+                })}
               </div>
             </div>
           </div>
@@ -501,11 +511,16 @@ export default function SavedPage() {
             <div key={ottName} className="mb-5">
               {/* OTT 섹션 헤더 */}
               <div className="flex items-center gap-2 px-5 mb-2">
-                <img
-                  src={getOTTIcon(ottName) ?? ""}
-                  alt={ottName}
-                  className="w-5 h-5 object-contain rounded-sm"
-                />
+                {(getOTTIcon(ottName)) && (
+                  <Image
+                    src={getOTTIcon(ottName)!}
+                    alt={ottName}
+                    width={20}
+                    height={20}
+                    className="object-contain rounded-sm"
+                    unoptimized
+                  />
+                )}
                 <span className="text-sm font-semibold">{ottName}</span>
                 <span className="text-xs font-data text-muted">{items.length}</span>
               </div>
@@ -587,16 +602,21 @@ export default function SavedPage() {
 
             {/* 스틸컷 */}
             {detailItem.recommendation.backdrop && (
-              <img src={detailItem.recommendation.backdrop} alt="" className="w-full h-40 object-cover mb-4 -mt-1 rounded-md" />
+              <div className="relative w-full h-40 mb-4 -mt-1 overflow-hidden rounded-md">
+                <Image src={detailItem.recommendation.backdrop} alt="" fill className="object-cover" sizes="(max-width: 480px) 100vw, 480px" />
+              </div>
             )}
 
             {/* Poster + Title */}
             <div className="flex gap-4">
               {detailItem.recommendation.posterUrl && (
-                <img
+                <Image
                   src={detailItem.recommendation.posterUrl}
                   alt={detailItem.recommendation.title}
-                  className="w-24 h-36 object-cover flex-shrink-0 rounded-md"
+                  width={96}
+                  height={144}
+                  className="object-cover flex-shrink-0 rounded-md"
+                  sizes="96px"
                 />
               )}
               <div className="flex-1 min-w-0 pt-1">
@@ -671,7 +691,11 @@ export default function SavedPage() {
                       rel="noopener noreferrer"
                       className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md"
                     >
-                      <img src={getOTTIcon(p.name) ?? p.logoUrl ?? ""} alt={p.name} className="w-8 h-8 object-contain flex-shrink-0 rounded-sm bg-surface" />
+                      {(getOTTIcon(p.name) ?? p.logoUrl) ? (
+                        <Image src={(getOTTIcon(p.name) ?? p.logoUrl)!} alt={p.name} width={32} height={32} className="object-contain flex-shrink-0 rounded-sm bg-surface" unoptimized />
+                      ) : (
+                        <div className="w-8 h-8 flex-shrink-0 rounded-sm bg-surface" />
+                      )}
                       <span className="flex-1">{p.name}</span>
                       <span className="text-xs text-accent">열기</span>
                     </a>

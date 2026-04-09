@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import "./env"; // validate env vars at startup
 import { searchTMDB, getKoreanProviders, getCredits, getDetails, posterUrl } from "./tmdb";
 import type { Recommendation } from "./types";
 
