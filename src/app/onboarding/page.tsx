@@ -167,16 +167,7 @@ export default function OnboardingPage() {
         {/* Suggestion grid */}
         {showSuggestions && (
           <div>
-            <div className="flex items-center justify-between mb-3 px-1">
-              <p className="text-xs text-muted">이런 작품은 어때요?</p>
-              <button
-                onClick={fetchTrending}
-                disabled={loadingSuggestions}
-                className="text-xs transition-colors disabled:opacity-30 min-h-[44px] flex items-center py-2 px-3 text-muted"
-              >
-                {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
-              </button>
-            </div>
+            <p className="text-xs text-muted mb-3 px-1">이런 작품은 어때요?</p>
             <div className="grid grid-cols-3 gap-2">
               {suggestions.slice(0, 12).map((item, i) => {
                 const isSelected = selected.some((s) => s.id === item.id);
@@ -216,6 +207,13 @@ export default function OnboardingPage() {
                 );
               })}
             </div>
+            <button
+              onClick={fetchTrending}
+              disabled={loadingSuggestions}
+              className="w-full mt-4 py-3 text-sm font-medium transition-colors disabled:opacity-30 text-muted active:scale-[0.98]"
+            >
+              {loadingSuggestions ? "로딩..." : "↻ 다른 작품 보기"}
+            </button>
           </div>
         )}
 
