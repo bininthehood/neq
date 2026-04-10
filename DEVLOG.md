@@ -577,3 +577,118 @@ b807219 feat(design): M0 complete
 - [ ] 랜딩 페이지 (미설치 사용자용)
 - [ ] DB 연동 (사용자 리텐션 확인 후)
 - [ ] 카카오 로그인 (DB 연동 시)
+
+---
+
+## 2026-04-10 (Day 7)
+
+### 진행 요약
+프로필 탭 신설 (백엔드 전환 대비 설계), 측정 인프라 구축 (PostHog 통합), UX 디테일 보완.
+"만드는 것"에서 "측정해서 배우는 것"으로 포커스 이동.
+
+### 완료된 작업
+
+**프로필 탭 신설 (backend-ready 아키텍처)**
+- 계정 시스템은 시기상조라는 판단 — 대신 계정 없이도 의미 있는 프로필 탭 구축
+- 목표: 지금 localStorage로 시작하되, 나중에 백엔드 붙을 때 재작성 없이 마이그레이션 가능하게
+- `src/lib/device-id.ts`: 익명 UUID 생성 → 나중에 계정 linking key로 재사용
+- `src/lib/types.ts`: `UserDataExport` 스키마 정의 (미래 `/api/user/sync` 응답 스펙과 동일)
+- `src/lib/store.ts`: `exportUserData`, `importUserData`, `clearAllUserData` 함수
+- `src/app/profile/page.tsx`: 내 취향 / 시청 통계 / 설정 / 앱 정보
+- `BottomNav`: 2탭 → 3탭 (Discover / Saved / Profile)
+- 초반에 백업 내보내기/불러오기 UI도 넣었다가 제거 — "AI가 만든 기능" 느낌. 함수는 store.ts에 보존해서 향후 백엔드 sync에서 재사용.
+
+**UX 디테일 보완**
+- `handleCardTap`이 `showWatched`를 토글하던 것 → 상세 시트 열기로 변경
+- "본 적 있나요?" 오버레이는 아래로 스와이프(드롭다운 패턴)로 호출
+- 첫 카드에서 오른쪽 스와이프 차단 + "첫 번째 작품이에요" 토스트 표시
+- Discover 헤더에서 `1/N` 카운터 + 재설정 버튼 제거 (프로필 탭으로 이관)
+- Profile 페이지 `overflow-hidden` 구조 수정 — BottomNav가 스크롤에 말려 올라가던 버그
+
+**Anti-slop UI 개선 (2차)**
+- 사용자 피드백: "전반적으로 LLM이 만든 느낌"
+- 필터 칩: pill fill → 밑줄 탭 스타일 (텍스트 + border-bottom accent)
+- ActionBar: 동일 원형 3개 → 비대칭 (저장 버튼만 크게 xl, 나머지 icon-only)
+- 토스트: pill + border → rounded-lg + box-shadow + accent dot
+- 봤나요 리액션: 균일 pill 4개 → 감정별 tint (인생작=accent, 안 맞았어=danger)
+- Saved 필터 탭: pill → 밑줄 스타일로 통일
+- "OTT별 보기": pill 버튼 → 텍스트 링크
+- 전반적으로 border 최소화, shadow/배경색 차이로 구분
+
+**필터/무한스크롤 버그 수정**
+- OTT 필터로 남은 카드가 적어질 때 자동으로 loadMore 호출되지 않던 문제 → 프리페치 useEffect 추가
+- 중복 작품 많이 나오던 문제 → exclude 목록 50개 → 150개 확장 (프롬프트 + loadMoreRecs 모두)
+- Saved 다녀오면 첫 카드로 초기화되던 문제 → `topIdx`를 sessionStorage에 저장/복원
+- 필터 축소로 topIdx가 범위 밖이 되는 경우 clamp 처리
+
+**측정 인프라 구축 (PostHog)**
+- 배경: 성공 지표 (온보딩 완료율, 시청 리포트 전환율, 발견감 등)가 코드로는 정해졌지만 실제 측정 안 됨
+- 초기엔 Vercel Analytics custom events로 시도 → Hobby 플랜 미지원 확인 후 PostHog으로 전환
+- `src/lib/analytics.ts`: `track(event, props)` 헬퍼 + `NekoEvent` 타입 (22종 이벤트)
+- `src/components/PostHogProvider.tsx`: 클라이언트 초기화 + `deviceId`를 `distinct_id`로 identify
+- 22개 이벤트 인스트루먼테이션:
+  - 온보딩: `onboarding_started`, `favorite_added`, `completed`
+  - 추천: `recommendation_loaded`, `load_more`, `failed`
+  - 카드: `card_swiped`, `tapped`, `saved`, `unsaved`, `not_interested`
+  - 상세: `detail_opened` (source: card_tap | saved_tap)
+  - 리포트: `watch_report_submitted`
+  - OTT: `ott_link_clicked`
+  - 공유: `card_shared`
+  - 필터: `filter_changed`
+  - 프로필: `profile_viewed`, `data_reset`
+- React Strict Mode 이중 실행 버그 발견 → `trackedRef` 가드 패턴으로 수정
+  (profile_viewed가 6회 찍혔는데 실제 방문은 3회였음)
+
+**PostHog CLI 조회**
+- Personal API Key + Project ID 환경변수로 저장
+- curl + jq로 터미널에서 실시간 이벤트 조회 가능
+- 첫 실사용 데이터 확인: card_swiped 16, card_saved 5 → 저장율 31%
+
+**카피 피드백 반영**
+- 반말 톤 → 해요체로 복구 (~해요, ~세요, ~할게요)
+- AI slop 제거는 유지하되 격식 있는 존댓말 유지
+- 추천 이유 프롬프트도 해요체 톤으로 수정
+
+### 배운 점
+
+**"완벽한 기능"보다 "측정 가능한 배포"가 우선**
+- 기능 개선만 하다 보면 "이게 좋아졌을까?"를 감으로만 판단하게 됨
+- PostHog 붙이고 나니 처음으로 실제 저장율(31%)이 숫자로 보였음
+- 앞으로 모든 UX 이터레이션은 "이 숫자가 올라갔나"로 검증할 수 있게 됨
+
+**"AI가 만든 느낌"이 제품 차별화의 최대 적**
+- 균일한 rounded-full pill, 동일 크기 버튼, 균일 그리드 — AI가 디폴트로 내놓는 패턴
+- Anti-slop의 핵심은 "감정별 tint, 크기 불균일, border 최소화, 비대칭 배치"
+- 기능보다 디테일에서 수제 느낌이 나옴
+
+**백엔드 전환을 지금 설계해두면 마이그레이션이 공짜**
+- `device_id` + 스키마 버전 + export/import 포맷 = 나중 API 계약의 미리보기
+- store.ts 함수 인터페이스 유지 → 나중엔 sync→async 전환만으로 백엔드 연결
+- "지금은 localStorage, 나중엔 API"를 한 곳에서 분기 가능
+
+### 주요 커밋
+```
+44618f3 fix(analytics): React Strict Mode 이중 실행 방지 (ref guard 추가)
+4a1f42a feat(analytics): Vercel Analytics custom events → PostHog으로 교체
+373253d feat(analytics): 사용자 행동 이벤트 트래킹 인프라 추가
+ed50ab9 fix(profile): BottomNav를 맨 아래 고정
+cb2ccd0 refactor(profile): 데이터 백업 UI 제거, discover 헤더 재설정 버튼 제거
+e0548a7 feat(profile): add profile tab with backend-ready data layer
+a6593f0 fix(discover): exclude buffer 150, ott filter auto-reload, restore scroll position
+13e303e feat: 프리페치 — 남은 카드 8장 이하일 때 다음 배치 자동 로드
+b878368 fix: 추천 이유 길이 개선 — 글자 수 제한
+```
+
+### 현재 상태
+- PostHog에 첫 실사용 데이터 쌓이기 시작 (29개 커스텀 이벤트)
+- 저장율 31% (card_saved / card_swiped) — 기준선 확보
+- 추천 품질 추가 개선 방향을 이제 데이터로 정할 수 있음
+
+### 미해결 / 다음 할 일
+- [ ] 로고/브랜드 아이덴티티 확정
+- [ ] 커스텀 도메인 (DAU 30+ 전에)
+- [ ] PostHog Funnel 대시보드 구성 (온보딩 이탈, 저장→시청 리포트 전환)
+- [ ] Retention 측정 (1주일 데이터 모인 후)
+- [ ] 에러 모니터링 (Sentry 또는 자체 endpoint)
+- [ ] OpenAI 비용 알림 설정
+- [ ] 첫 외부 사용자 초대 (본인 네트워크 10명)
