@@ -1,23 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   getFavorites,
   getSaved,
   getWatchStats,
-  exportUserData,
-  importUserData,
   clearAllUserData,
-  type ImportResult,
 } from "@/lib/store";
 import { getDeviceId } from "@/lib/device-id";
 import BottomNav from "@/components/BottomNav";
-import {
-  IconDownload,
-  IconUpload,
-  IconClose,
-} from "@/components/Icons";
+import { IconClose } from "@/components/Icons";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -28,8 +21,6 @@ export default function ProfilePage() {
   const [deviceId, setDeviceId] = useState("");
   const [toast, setToast] = useState<{ kind: "ok" | "error"; msg: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const refresh = () => {
     setFavorites(getFavorites());
     setSavedCount(getSaved().length);
@@ -47,50 +38,6 @@ export default function ProfilePage() {
     const t = setTimeout(() => setToast(null), 2500);
     return () => clearTimeout(t);
   }, [toast]);
-
-  const handleExport = () => {
-    try {
-      const data = exportUserData();
-      const json = JSON.stringify(data, null, 2);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      const date = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `neq-backup-${date}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setToast({ kind: "ok", msg: "백업 파일이 저장됐어요" });
-    } catch {
-      setToast({ kind: "error", msg: "내보내기에 실패했어요" });
-    }
-  };
-
-  const handleImportClick = () => fileInputRef.current?.click();
-
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const json = JSON.parse(text);
-      const result: ImportResult = importUserData(json);
-      if (!result.ok) {
-        setToast({ kind: "error", msg: result.error ?? "가져오기에 실패했어요" });
-        return;
-      }
-      refresh();
-      const c = result.counts!;
-      setToast({
-        kind: "ok",
-        msg: `복원 완료: 저장 ${c.saved}편, 리포트 ${c.watchReports}편`,
-      });
-    } catch {
-      setToast({ kind: "error", msg: "파일을 읽지 못했어요" });
-    } finally {
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
-  };
 
   const handleReset = () => {
     clearAllUserData();
@@ -165,51 +112,22 @@ export default function ProfilePage() {
         )}
       </section>
 
-      {/* 데이터 관리 */}
+      {/* 설정 */}
       <section className="px-5 mb-6">
-        <h2 className="text-xs uppercase tracking-wider text-muted font-semibold mb-3">데이터</h2>
-        <div className="space-y-2">
-          <button
-            onClick={handleExport}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-surface rounded-lg active:scale-[0.98] transition-transform"
-          >
-            <IconDownload size={18} color="var(--text-secondary)" />
-            <div className="flex-1 text-left">
-              <div className="text-sm">백업 내보내기</div>
-              <div className="text-xs text-muted mt-0.5">저장 목록과 취향을 파일로 저장해요</div>
+        <h2 className="text-xs uppercase tracking-wider text-muted font-semibold mb-3">설정</h2>
+        <button
+          onClick={() => setConfirmReset(true)}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg active:scale-[0.98] transition-transform"
+          style={{ background: "var(--danger-dim)" }}
+        >
+          <IconClose size={18} color="var(--danger)" />
+          <div className="flex-1 text-left">
+            <div className="text-sm text-danger">모든 데이터 초기화</div>
+            <div className="text-xs mt-0.5" style={{ color: "var(--danger)", opacity: 0.7 }}>
+              저장한 작품, 시청 기록, 취향이 모두 사라져요
             </div>
-          </button>
-          <button
-            onClick={handleImportClick}
-            className="w-full flex items-center gap-3 px-4 py-3 bg-surface rounded-lg active:scale-[0.98] transition-transform"
-          >
-            <IconUpload size={18} color="var(--text-secondary)" />
-            <div className="flex-1 text-left">
-              <div className="text-sm">백업 불러오기</div>
-              <div className="text-xs text-muted mt-0.5">기존 백업 파일에서 복원해요</div>
-            </div>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="application/json,.json"
-            onChange={handleImportFile}
-            className="hidden"
-          />
-          <button
-            onClick={() => setConfirmReset(true)}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg active:scale-[0.98] transition-transform"
-            style={{ background: "var(--danger-dim)" }}
-          >
-            <IconClose size={18} color="var(--danger)" />
-            <div className="flex-1 text-left">
-              <div className="text-sm text-danger">모든 데이터 초기화</div>
-              <div className="text-xs mt-0.5" style={{ color: "var(--danger)", opacity: 0.7 }}>
-                저장한 작품, 시청 기록, 취향이 모두 사라져요
-              </div>
-            </div>
-          </button>
-        </div>
+          </div>
+        </button>
       </section>
 
       {/* About */}
