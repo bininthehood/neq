@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import InstallBanner from "@/components/InstallBanner";
 import Reminder from "@/components/Reminder";
+import PostHogProvider from "@/components/PostHogProvider";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -90,10 +91,12 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
       <body className="h-full">
-        <div className="h-dvh flex flex-col">{children}</div>
-        <InstallBanner />
-        <Reminder />
-        <Analytics />
+        <PostHogProvider>
+          <div className="h-dvh flex flex-col">{children}</div>
+          <InstallBanner />
+          <Reminder />
+          <Analytics />
+        </PostHogProvider>
       </body>
     </html>
   );

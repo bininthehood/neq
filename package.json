@@ -13,6 +13,7 @@
     "@vercel/analytics": "^2.0.1",
     "next": "16.2.2",
     "openai": "^6.33.0",
+    "posthog-js": "^1.367.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "serwist": "^9.5.7"

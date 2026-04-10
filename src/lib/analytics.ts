@@ -1,30 +1,21 @@
 "use client";
 
-import { track as vercelTrack } from "@vercel/analytics";
+import posthog from "posthog-js";
 
 /**
  * Neko 이벤트 트래킹 헬퍼.
  *
  * - 개발 환경: console.log로 표시
- * - 프로덕션: Vercel Analytics로 전송
+ * - 프로덕션: PostHog로 전송
  *
- * 나중에 PostHog/Amplitude 등으로 이관할 때 이 파일만 수정하면 됨.
+ * 나중에 백엔드나 다른 analytics 서비스로 이관할 때 이 파일만 수정하면 됨.
  *
- * 주의: Vercel Analytics의 custom event props는 string/number/boolean만 지원.
+ * 주의: PostHog는 property로 다양한 타입을 받지만 직렬화 가능한 값만 사용.
  */
 
 type EventProps = Record<string, string | number | boolean | null | undefined>;
 
 const isDev = process.env.NODE_ENV === "development";
-
-/** 세션 ID — 페이지 로드마다 새로 생성 */
-let sessionId: string | null = null;
-function getSessionId(): string {
-  if (typeof window === "undefined") return "";
-  if (sessionId) return sessionId;
-  sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  return sessionId;
-}
 
 function sanitize(props?: EventProps): Record<string, string | number | boolean | null> {
   if (!props) return {};
@@ -37,19 +28,21 @@ function sanitize(props?: EventProps): Record<string, string | number | boolean 
 }
 
 export function track(event: NekoEvent, props?: EventProps) {
-  const payload = {
-    ...sanitize(props),
-    sessionId: getSessionId(),
-  };
+  const payload = sanitize(props);
 
   if (isDev) {
     // 개발 환경: 보기 쉽게 로그
     console.log(`[track] ${event}`, payload);
   }
 
-  // 프로덕션/개발 모두 Vercel에 전송 (개발 환경은 어차피 /_vercel/insights가 없어서 무시됨)
+  // PostHog로 전송. 초기화 전에 호출되면 자동으로 queue에 쌓임.
   try {
-    vercelTrack(event, payload);
+    if (posthog.__loaded) {
+      posthog.capture(event, payload);
+    } else if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_POSTHOG_KEY) {
+      // posthog-js는 init 전 호출 시 queue로 처리하지만 안전하게 방어
+      posthog.capture(event, payload);
+    }
   } catch {
     // 실패해도 앱 동작에는 영향 없음
   }
