@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   getFavorites,
@@ -22,6 +22,8 @@ export default function ProfilePage() {
   const [deviceId, setDeviceId] = useState("");
   const [toast, setToast] = useState<{ kind: "ok" | "error"; msg: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const trackedRef = useRef(false);
+
   const refresh = () => {
     setFavorites(getFavorites());
     setSavedCount(getSaved().length);
@@ -30,6 +32,8 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
+    if (trackedRef.current) return;
+    trackedRef.current = true;
     track("profile_viewed");
     setMounted(true);
     refresh();

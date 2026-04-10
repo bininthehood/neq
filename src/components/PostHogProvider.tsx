@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import posthog from "posthog-js";
 import { getDeviceId } from "@/lib/device-id";
 
@@ -9,7 +9,12 @@ import { getDeviceId } from "@/lib/device-id";
  * 나중에 계정 시스템이 생기면 posthog.identify(userId)로 deviceId를 실제 사용자에 연결할 수 있음.
  */
 export default function PostHogProvider({ children }: { children: React.ReactNode }) {
+  const initedRef = useRef(false);
+
   useEffect(() => {
+    if (initedRef.current) return; // React Strict Mode 이중 실행 방지
+    initedRef.current = true;
+
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     if (!key) return; // 키가 없으면 초기화 안 함 (개발/테스트 환경)
 

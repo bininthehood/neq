@@ -39,8 +39,11 @@ export default function OnboardingPage() {
   const [suggestions, setSuggestions] = useState<SearchResult[]>(FALLBACK_SUGGESTIONS);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackedRef = useRef(false);
 
   useEffect(() => {
+    if (trackedRef.current) return;
+    trackedRef.current = true;
     track("onboarding_started");
     fetchTrending();
     // eslint-disable-next-line react-hooks/exhaustive-deps
