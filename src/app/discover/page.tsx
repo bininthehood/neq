@@ -304,8 +304,9 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      <ActionBar current={current} isSaved={isSaved}
-        onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave} />
+      <ActionBar current={current} isSaved={isSaved} canRewind={topIdx > 0}
+        onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
+        onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }} />
       <BottomNav active="discover" />
 
       {/* 첫 카드 힌트 토스트 */}
