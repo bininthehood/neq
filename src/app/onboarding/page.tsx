@@ -86,17 +86,47 @@ export default function OnboardingPage() {
 
   // Step 0: 앱 소개
   if (step === 0) return (
-    <div className="h-dvh flex flex-col items-center justify-center px-8 max-w-lg mx-auto">
-      <h1 className="font-display font-bold text-accent" style={{ fontSize: "3rem" }}>neq,</h1>
-      <p className="text-center mt-4 text-lg leading-relaxed text-secondary">
-        3개만 골라주세요, 나머지는 제가 찾을게요
-      </p>
-      <button
-        onClick={() => setStep(1)}
-        className="mt-12 w-full max-w-[280px] py-4 text-lg font-semibold active:scale-[0.98] transition-transform bg-accent text-background rounded-lg"
-      >
-        시작하기
-      </button>
+    <div className="h-dvh flex flex-col max-w-lg mx-auto w-full overflow-y-auto">
+      <div className="flex-1 flex flex-col items-center justify-center px-8 py-10">
+        <h1 className="font-display font-bold text-accent" style={{ fontSize: "3.5rem" }}>neq,</h1>
+        <p className="font-display italic text-xl mt-3 text-center text-foreground">
+          당신의 취향을 발견하세요
+        </p>
+        <p className="text-sm mt-2 text-center text-muted">
+          오늘 뭐 볼까? 고민은 이제 그만.
+        </p>
+
+        <div className="w-full max-w-[320px] mt-12 space-y-3">
+          <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
+            <span className="font-display text-xl text-accent shrink-0">1</span>
+            <div>
+              <div className="text-sm font-semibold">좋아하는 작품 3개</div>
+              <div className="text-xs mt-0.5 text-muted">당신의 취향을 알려주세요</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
+            <span className="font-display text-xl text-accent shrink-0">2</span>
+            <div>
+              <div className="text-sm font-semibold">숨겨진 명작 발견</div>
+              <div className="text-xs mt-0.5 text-muted">알고리즘 밖의 작품을 큐레이션해요</div>
+            </div>
+          </div>
+          <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
+            <span className="font-display text-xl text-accent shrink-0">3</span>
+            <div>
+              <div className="text-sm font-semibold">스와이프하며 저장</div>
+              <div className="text-xs mt-0.5 text-muted">마음에 들면 하트, 보기 싫으면 넘기기</div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setStep(1)}
+          className="mt-10 w-full max-w-[320px] py-4 text-base font-semibold active:scale-[0.98] transition-transform bg-accent text-background rounded-lg"
+        >
+          시작하기
+        </button>
+      </div>
     </div>
   );
 
