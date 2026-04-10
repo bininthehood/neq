@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { setFavorites } from "@/lib/store";
+import { setFavorites, setFavoritesMeta } from "@/lib/store";
 import { IconClose, IconCheck } from "@/components/Icons";
 
 interface SearchResult {
@@ -79,6 +79,7 @@ export default function OnboardingPage() {
 
   const handleNext = () => {
     setFavorites(selected.map((s) => s.title));
+    setFavoritesMeta(selected.map((s) => ({ id: s.id, title: s.title, posterUrl: s.posterUrl })));
     router.push("/discover");
   };
 

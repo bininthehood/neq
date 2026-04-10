@@ -9,6 +9,7 @@ import {
   getSaved,
   addSeenTitles,
   addWatchReport,
+  getFavoritesMeta,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
 import type { Recommendation, WatchReaction } from "@/lib/types";
@@ -23,6 +24,7 @@ import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialOverlay from "@/components/discover/TutorialOverlay";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
+import FirstLoadingScreen from "@/components/discover/FirstLoadingScreen";
 
 const metaInfo = (r: Recommendation) => [
   r.country?.length > 0 ? r.country.join("/") : null,
@@ -42,6 +44,8 @@ export default function DiscoverPage() {
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [showWatched, setShowWatched] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [isFirstLoad, setIsFirstLoad] = useState(false);
+  const [favoritesMeta, setFavoritesMeta] = useState<ReturnType<typeof getFavoritesMeta>>([]);
 
   const rec = useRecommendations();
   const detail = useDetailSheet();
@@ -136,11 +140,25 @@ export default function DiscoverPage() {
   useEffect(() => {
     setMounted(true);
     if (!hasOnboarded()) { router.replace("/onboarding"); return; }
+    // 첫 진입 감지: 플래그가 없고, 캐시된 추천도 없을 때만
+    const firstDone = localStorage.getItem("neq_first_discover_done");
+    if (!firstDone) {
+      setIsFirstLoad(true);
+      setFavoritesMeta(getFavoritesMeta());
+    }
     rec.loadRecs("all", "all");
     setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
     return () => { swipe.clearTimers(); rec.abortLoading(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  // 첫 로딩 완료 시 플래그 저장
+  useEffect(() => {
+    if (isFirstLoad && !rec.loading && filtered.length > 0) {
+      localStorage.setItem("neq_first_discover_done", "1");
+      setIsFirstLoad(false);
+    }
+  }, [isFirstLoad, rec.loading, filtered.length]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -193,7 +211,12 @@ export default function DiscoverPage() {
   ].filter(Boolean).join(" ");
 
   // --- status screens ---
-  if (!mounted || rec.loading) return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+  if (!mounted || rec.loading) {
+    if (isFirstLoad && favoritesMeta.length > 0) {
+      return <FirstLoadingScreen favorites={favoritesMeta} />;
+    }
+    return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+  }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterOTTs.size > 0;
@@ -204,9 +227,8 @@ export default function DiscoverPage() {
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 shrink-0">
+      <div className="flex items-center px-5 py-3 shrink-0">
         <span className="font-display text-lg text-accent">neq,</span>
-        <button onClick={() => router.push("/reset")} className="text-xs px-2 min-h-[44px] flex items-center text-muted">재설정</button>
       </div>
       <FilterChips {...chipsProps} />
 

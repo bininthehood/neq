@@ -17,9 +17,16 @@ function safeParse<T>(key: string, fallback: T): T {
 }
 
 const FAVORITES_KEY = "neq_favorites";
+const FAVORITES_META_KEY = "neq_favorites_meta";
 const SAVED_KEY = "neq_saved";
 const RECS_KEY = "neq_recommendations";
 const RECS_FILTERED_PREFIX = "neq_recs_";
+
+export interface FavoriteMeta {
+  id: number;
+  title: string;
+  posterUrl: string | null;
+}
 
 // 온보딩에서 선택한 좋아하는 작품
 export function getFavorites(): string[] {
@@ -29,6 +36,15 @@ export function getFavorites(): string[] {
 
 export function setFavorites(titles: string[]) {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(titles));
+}
+
+export function getFavoritesMeta(): FavoriteMeta[] {
+  if (typeof window === "undefined") return [];
+  return safeParse<FavoriteMeta[]>(FAVORITES_META_KEY, []);
+}
+
+export function setFavoritesMeta(items: FavoriteMeta[]) {
+  localStorage.setItem(FAVORITES_META_KEY, JSON.stringify(items));
 }
 
 // 추천 목록 — 필터별 캐시
