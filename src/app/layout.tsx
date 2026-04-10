@@ -17,14 +17,40 @@ const outfit = Outfit({
   display: "swap",
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://neko-ecru.vercel.app";
+
 export const metadata: Metadata = {
-  title: "neq, — 오늘 뭐 볼까?",
-  description: "OTT 전체에서 볼 만한 콘텐츠를 발굴하고 오늘 볼 작품을 고르세요",
+  metadataBase: new URL(siteUrl),
+  title: "neq, — 당신의 취향을 발견하세요",
+  description: "알고리즘 밖의 OTT 작품을 발견하세요. 좋아하는 작품 3개만 골라주면, 숨겨진 명작을 찾아드려요.",
+  keywords: ["OTT 추천", "영화 추천", "시리즈 추천", "넷플릭스 추천", "디즈니플러스", "웨이브", "티빙", "콘텐츠 큐레이션"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
     title: "neq",
+  },
+  openGraph: {
+    type: "website",
+    locale: "ko_KR",
+    url: siteUrl,
+    title: "neq, — 당신의 취향을 발견하세요",
+    description: "알고리즘 밖의 OTT 작품을 발견하세요. 좋아하는 작품 3개만 골라주면, 숨겨진 명작을 찾아드려요.",
+    siteName: "neq,",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "neq, — 당신의 취향을 발견하세요",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "neq, — 당신의 취향을 발견하세요",
+    description: "알고리즘 밖의 OTT 작품을 발견하세요.",
+    images: ["/og-image.png"],
   },
 };
 
