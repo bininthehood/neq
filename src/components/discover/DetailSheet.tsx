@@ -3,6 +3,7 @@
 import NextImage from "next/image";
 import type { Recommendation } from "@/lib/types";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
+import { track } from "@/lib/analytics";
 import {
   IconClose,
   IconStar,
@@ -165,6 +166,13 @@ export default function DetailSheet({
                     href={u ?? rec.watchLink ?? "#"}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() =>
+                      track("ott_link_clicked", {
+                        tmdb_id: rec.tmdbId,
+                        provider: p.name,
+                        title: rec.title,
+                      })
+                    }
                     className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md"
                   >
                     {(getOTTIcon(p.name) ?? p.logoUrl) ? (

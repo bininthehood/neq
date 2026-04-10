@@ -3,6 +3,7 @@
 import { useState } from "react";
 import NextImage from "next/image";
 import { getOTTIcon } from "@/lib/ott-links";
+import { track } from "@/lib/analytics";
 import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin } from "@/lib/discover-types";
 import {
@@ -119,6 +120,7 @@ export default function FilterChips({
                 <button
                   key={t}
                   onClick={() => {
+                    track("filter_changed", { kind: "type", value: t });
                     onFilterChange(t, filterOrigin);
                     setOpenDropdown(null);
                   }}
@@ -137,6 +139,7 @@ export default function FilterChips({
                 <button
                   key={o}
                   onClick={() => {
+                    track("filter_changed", { kind: "origin", value: o });
                     onFilterChange(filterType, o);
                     setOpenDropdown(null);
                   }}
@@ -173,6 +176,11 @@ export default function FilterChips({
                     <button
                       key={ott}
                       onClick={() => {
+                        track("filter_changed", {
+                          kind: "ott",
+                          value: ott,
+                          added: !selected,
+                        });
                         const next = new Set(filterOTTs);
                         if (selected) next.delete(ott);
                         else next.add(ott);

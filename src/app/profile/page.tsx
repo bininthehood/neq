@@ -9,6 +9,7 @@ import {
   clearAllUserData,
 } from "@/lib/store";
 import { getDeviceId } from "@/lib/device-id";
+import { track } from "@/lib/analytics";
 import BottomNav from "@/components/BottomNav";
 import { IconClose } from "@/components/Icons";
 
@@ -29,6 +30,7 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
+    track("profile_viewed");
     setMounted(true);
     refresh();
   }, []);
@@ -41,6 +43,7 @@ export default function ProfilePage() {
 
   const handleReset = () => {
     clearAllUserData();
+    track("data_reset");
     setConfirmReset(false);
     refresh();
     setToast({ kind: "ok", msg: "모든 데이터가 초기화됐어요" });

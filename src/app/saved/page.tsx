@@ -20,6 +20,7 @@ import Image from "next/image";
 import BottomNav from "@/components/BottomNav";
 import { IconStar, IconClose, IconCheck, IconHeart, IconShare } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
+import { track } from "@/lib/analytics";
 
 const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string }[] = [
   { key: "loved", label: "인생작", color: "var(--accent)", bg: "var(--accent-dim)" },
@@ -320,6 +321,10 @@ export default function SavedPage() {
   }, []);
 
   const openDetailFor = useCallback((item: SavedItem) => {
+    track("detail_opened", {
+      tmdb_id: item.recommendation.tmdbId,
+      source: "saved_tap",
+    });
     setDetailItem(item);
     setDetailY(100);
     requestAnimationFrame(() => snapDetail(0));

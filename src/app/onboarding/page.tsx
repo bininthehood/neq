@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { setFavorites, setFavoritesMeta } from "@/lib/store";
+import { track } from "@/lib/analytics";
 import { IconClose, IconCheck } from "@/components/Icons";
 
 interface SearchResult {
@@ -39,7 +40,11 @@ export default function OnboardingPage() {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { fetchTrending(); }, []);
+  useEffect(() => {
+    track("onboarding_started");
+    fetchTrending();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -73,11 +78,14 @@ export default function OnboardingPage() {
     if (selected.some((s) => s.id === item.id)) {
       setSelected(selected.filter((s) => s.id !== item.id));
     } else if (selected.length < 5) {
+      const newCount = selected.length + 1;
       setSelected([...selected, item]);
+      track("onboarding_favorite_added", { total: newCount });
     }
   };
 
   const handleNext = () => {
+    track("onboarding_completed", { favorites_count: selected.length });
     setFavorites(selected.map((s) => s.title));
     setFavoritesMeta(selected.map((s) => ({ id: s.id, title: s.title, posterUrl: s.posterUrl })));
     router.push("/discover");

@@ -12,6 +12,7 @@ import {
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin } from "@/lib/discover-types";
+import { track } from "@/lib/analytics";
 
 export function useRecommendations() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
@@ -77,6 +78,7 @@ export function useRecommendations() {
           err?.error ?? "추천을 불러오지 못했어요. 잠시 후 다시 시도해주세요.",
         );
         setLoading(false);
+        track("recommendation_failed", { reason: "http_error" });
         return;
       }
       const data = await res.json();
@@ -84,7 +86,12 @@ export function useRecommendations() {
       setRecommendations(newRecs, ft, fo);
       setRecs(newRecs);
       setLoading(false);
-      if (newRecs.length > 0)
+      if (newRecs.length > 0) {
+        track("recommendation_loaded", {
+          count: newRecs.length,
+          filter_type: ft,
+          filter_origin: fo,
+        });
         addRecHistory(
           newRecs.map((r: Recommendation) => ({
             title: r.title,
@@ -92,6 +99,7 @@ export function useRecommendations() {
             posterUrl: r.posterUrl,
           })),
         );
+      }
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
       // 오프라인 폴백: 캐시된 데이터가 있으면 사용
@@ -104,6 +112,7 @@ export function useRecommendations() {
       }
       setLoadError("네트워크 연결을 확인해주세요.");
       setLoading(false);
+      track("recommendation_failed", { reason: "network_error" });
     }
   };
 
@@ -148,6 +157,7 @@ export function useRecommendations() {
         setRecs((prev) => [...prev, ...newRecs]);
         const all = [...recs, ...newRecs];
         setRecommendations(all, filterType, filterOrigin);
+        track("recommendation_load_more", { count: newRecs.length });
         addRecHistory(
           newRecs.map((r) => ({
             title: r.title,

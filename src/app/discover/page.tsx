@@ -12,6 +12,7 @@ import {
   getFavoritesMeta,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
+import { track } from "@/lib/analytics";
 import type { Recommendation, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
@@ -61,7 +62,14 @@ export default function DiscoverPage() {
     if (swipe.swiping) return;
     setShowWatched(false);
     const cur = filtered[topIdx];
-    if (cur) addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
+    if (cur) {
+      track("card_swiped", {
+        direction: "left",
+        tmdb_id: cur.tmdbId,
+        title: cur.title,
+      });
+      addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
+    }
     // 마지막 카드 → 더 로드 (순환하지 않음)
     if (topIdx >= filtered.length - 1) {
       if (!rec.loadingMore) rec.loadMoreRecs();
@@ -88,6 +96,7 @@ export default function DiscoverPage() {
 
   const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
     if (!current) return;
+    track("watch_report_submitted", { reaction, tmdb_id: current.tmdbId });
     vibrate(10);
     addSaved(current); addWatchReport(current.tmdbId, reaction);
     addSeenTitles([current.title, current.titleEn].filter(Boolean));
@@ -103,11 +112,15 @@ export default function DiscoverPage() {
 
   const handleCardTap = useCallback(() => {
     if (swipe.swiping || showWatched) return;
+    if (current) {
+      track("detail_opened", { tmdb_id: current.tmdbId, source: "card_tap" });
+    }
     detail.openDetail();
-  }, [swipe.swiping, showWatched, detail.openDetail]);
+  }, [swipe.swiping, showWatched, detail.openDetail, current]);
 
   const handleNotInterested = useCallback(() => {
     if (!current) return;
+    track("card_not_interested", { tmdb_id: current.tmdbId });
     addSeenTitles([current.title, current.titleEn].filter(Boolean));
     setShowWatched(false);
     nextCard();
@@ -124,16 +137,30 @@ export default function DiscoverPage() {
       "",
       "neq, \u2014 \uC624\uB298 \uBF50 \uBCFC\uAE4C?",
     ].filter((line) => line !== null).join("\n");
-    if (navigator.share) { try { await navigator.share({ title: r.title, text: body }); } catch {} }
-    else { await navigator.clipboard.writeText(body); }
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: r.title, text: body });
+        track("card_shared", { tmdb_id: r.tmdbId, title: r.title });
+      } catch {}
+    } else {
+      await navigator.clipboard.writeText(body);
+      track("card_shared", { tmdb_id: r.tmdbId, title: r.title });
+    }
   }, []);
 
   const toggleSave = () => {
     if (!current) return;
     vibrate(10);
     const id = current.tmdbId;
-    if (savedIds.has(id)) { removeSaved(id); setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; }); }
-    else { addSaved(current); setSavedIds((s) => new Set(s).add(id)); }
+    if (savedIds.has(id)) {
+      track("card_unsaved", { tmdb_id: current.tmdbId });
+      removeSaved(id);
+      setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; });
+    } else {
+      track("card_saved", { tmdb_id: current.tmdbId, title: current.title });
+      addSaved(current);
+      setSavedIds((s) => new Set(s).add(id));
+    }
   };
 
   // --- effects ---
