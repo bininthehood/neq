@@ -13,10 +13,10 @@ export default function DiscoverError({
     <div className="flex-1 flex flex-col items-center justify-center px-8">
       <IconFilm size={40} color="var(--danger)" />
       <h1 className="font-display text-lg font-bold mt-4">
-        추천을 불러오다 문제가 생겼어
+        추천을 불러오다 문제가 생겼어요
       </h1>
       <p className="text-sm mt-2 text-center text-secondary">
-        네트워크 상태를 확인하고 다시 시도해봐.
+        네트워크 상태를 확인하고 다시 시도해주세요.
         {error.digest && (
           <span className="block text-xs mt-1 text-muted">
             {error.digest}

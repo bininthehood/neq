@@ -13,10 +13,10 @@ export default function GlobalError({
     <div className="h-dvh flex flex-col items-center justify-center px-8">
       <IconFilm size={48} color="var(--danger)" />
       <h1 className="font-display text-xl font-bold mt-5">
-        앗, 뭔가 잘못됐어
+        앗, 뭔가 잘못됐어요
       </h1>
       <p className="text-sm mt-2 text-center text-secondary">
-        예상치 못한 문제가 생겼어.
+        예상치 못한 문제가 생겼어요.
         {error.digest && (
           <span className="block text-xs mt-1 text-muted">
             {error.digest}
