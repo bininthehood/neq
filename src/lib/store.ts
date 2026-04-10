@@ -1,4 +1,12 @@
-import type { Recommendation, SavedItem, WatchReport, WatchReaction } from "./types";
+import type {
+  Recommendation,
+  SavedItem,
+  WatchReport,
+  WatchReaction,
+  UserDataExport,
+} from "./types";
+import { USER_DATA_SCHEMA_VERSION } from "./types";
+import { getDeviceId } from "./device-id";
 
 function safeParse<T>(key: string, fallback: T): T {
   try {
@@ -169,4 +177,105 @@ export function addSeenTitles(titles: string[]) {
 
 export function clearSeenTitles() {
   localStorage.removeItem(SEEN_KEY);
+}
+
+// ============================================================
+// 데이터 내보내기/가져오기 — 백엔드 sync API와 동일한 스키마
+// ============================================================
+
+export function exportUserData(): UserDataExport {
+  return {
+    version: USER_DATA_SCHEMA_VERSION,
+    deviceId: getDeviceId(),
+    exportedAt: Date.now(),
+    data: {
+      favorites: getFavorites(),
+      saved: getSaved(),
+      watchReports: getWatchReports(),
+      seenTitles: getSeenTitles(),
+      archived: getArchivedIds(),
+    },
+  };
+}
+
+export interface ImportResult {
+  ok: boolean;
+  error?: string;
+  counts?: {
+    favorites: number;
+    saved: number;
+    watchReports: number;
+    seenTitles: number;
+    archived: number;
+  };
+}
+
+/**
+ * JSON을 읽어 localStorage에 복원한다.
+ * - 버전 체크
+ * - 필수 필드 검증
+ * - 실패 시 현재 데이터 유지 (원자적 동작)
+ */
+export function importUserData(raw: unknown): ImportResult {
+  if (typeof window === "undefined") return { ok: false, error: "window unavailable" };
+
+  // 기본 구조 검증
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, error: "올바르지 않은 파일 형식이에요" };
+  }
+  const obj = raw as Record<string, unknown>;
+  if (typeof obj.version !== "number") {
+    return { ok: false, error: "버전 정보가 없어요" };
+  }
+  if (obj.version > USER_DATA_SCHEMA_VERSION) {
+    return { ok: false, error: "더 최신 버전의 데이터에요. 앱을 업데이트해주세요" };
+  }
+  const data = obj.data as Record<string, unknown> | undefined;
+  if (!data || typeof data !== "object") {
+    return { ok: false, error: "데이터 필드가 없어요" };
+  }
+
+  // 배열 검증 (없는 필드는 빈 배열로 처리)
+  const favorites = Array.isArray(data.favorites) ? (data.favorites as string[]) : [];
+  const saved = Array.isArray(data.saved) ? (data.saved as SavedItem[]) : [];
+  const watchReports = Array.isArray(data.watchReports) ? (data.watchReports as WatchReport[]) : [];
+  const seenTitles = Array.isArray(data.seenTitles) ? (data.seenTitles as string[]) : [];
+  const archived = Array.isArray(data.archived) ? (data.archived as number[]) : [];
+
+  // localStorage에 덮어쓰기
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+  localStorage.setItem(REPORTS_KEY, JSON.stringify(watchReports));
+  localStorage.setItem(SEEN_KEY, JSON.stringify(seenTitles));
+  localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archived));
+
+  return {
+    ok: true,
+    counts: {
+      favorites: favorites.length,
+      saved: saved.length,
+      watchReports: watchReports.length,
+      seenTitles: seenTitles.length,
+      archived: archived.length,
+    },
+  };
+}
+
+/** 모든 사용자 데이터 초기화 (디바이스 ID는 유지) */
+export function clearAllUserData() {
+  if (typeof window === "undefined") return;
+  const keysToRemove = [
+    FAVORITES_KEY,
+    SAVED_KEY,
+    REPORTS_KEY,
+    SEEN_KEY,
+    ARCHIVE_KEY,
+    HISTORY_KEY,
+    RECS_KEY,
+  ];
+  keysToRemove.forEach((k) => localStorage.removeItem(k));
+  // 필터별 캐시도 제거
+  Object.keys(localStorage)
+    .filter((k) => k.startsWith(RECS_FILTERED_PREFIX))
+    .forEach((k) => localStorage.removeItem(k));
 }

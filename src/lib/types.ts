@@ -42,3 +42,23 @@ export interface WatchReport {
   reaction: WatchReaction;
   reportedAt: number;
 }
+
+/**
+ * 사용자 데이터 내보내기/가져오기 포맷.
+ * 이 스키마는 향후 백엔드 API (`GET /api/user/data`, `POST /api/user/sync`)의
+ * 요청/응답 스펙으로 그대로 재사용된다.
+ */
+export interface UserDataExport {
+  version: number;          // 스키마 버전 (향후 마이그레이션용)
+  deviceId: string;         // 익명 사용자 식별자
+  exportedAt: number;       // 내보낸 시각 (timestamp)
+  data: {
+    favorites: string[];
+    saved: SavedItem[];
+    watchReports: WatchReport[];
+    seenTitles: string[];
+    archived: number[];
+  };
+}
+
+export const USER_DATA_SCHEMA_VERSION = 1;
