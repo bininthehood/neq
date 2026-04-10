@@ -64,7 +64,7 @@ export async function getRecommendations(
   const filterPrompt = buildFilterPrompt(filter);
   const feedbackPrompt = buildFeedbackPrompt(feedback);
   const excludePrompt = exclude && exclude.length > 0
-    ? `\n절대 추천하지 말 작품 (이미 본 작품들): ${exclude.slice(0, 50).join(", ")}`
+    ? `\n절대 추천하지 말 작품 (이미 본 작품들): ${exclude.slice(0, 150).join(", ")}`
     : "";
 
   const response = await openai.chat.completions.create({

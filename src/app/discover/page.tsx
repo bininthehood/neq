@@ -34,7 +34,11 @@ const metaInfo = (r: Recommendation) => [
 export default function DiscoverPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [topIdx, setTopIdx] = useState(0);
+  const [topIdx, setTopIdx] = useState(() => {
+    if (typeof window === "undefined") return 0;
+    const saved = sessionStorage.getItem("neq_top_idx");
+    return saved ? Number(saved) : 0;
+  });
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [showWatched, setShowWatched] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -151,7 +155,20 @@ export default function DiscoverPage() {
 
   useEffect(() => { filtered.forEach((r) => { if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; } }); }, [filtered]);
 
+  // topIdx를 sessionStorage에 저장 (Saved 페이지 왕복 시 복원용)
+  useEffect(() => {
+    if (mounted) sessionStorage.setItem("neq_top_idx", String(topIdx));
+  }, [topIdx, mounted]);
+
+  // filtered가 줄어들었을 때 topIdx 클램프 (OTT 필터 변경 등)
+  useEffect(() => {
+    if (filtered.length > 0 && topIdx >= filtered.length) {
+      setTopIdx(Math.max(0, filtered.length - 1));
+    }
+  }, [filtered.length, topIdx]);
+
   // 프리페치: 남은 카드 8장 이하일 때 다음 배치 자동 로드
+  // OTT 필터로 인해 부족한 경우도 커버
   useEffect(() => {
     const remaining = filtered.length - topIdx;
     if (remaining <= 8 && !rec.loading && !rec.loadingMore && filtered.length > 0) {

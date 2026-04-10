@@ -58,7 +58,7 @@ export function useRecommendations() {
     const hasFeedback = Object.values(feedback).some((a) => a.length > 0);
     const seenTitles = getSeenTitles();
     const savedTitles = savedItems.map((s) => s.recommendation.title);
-    const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 50);
+    const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 150);
     try {
       const res = await fetch("/api/recommend", {
         method: "POST",
@@ -131,7 +131,7 @@ export function useRecommendations() {
     const savedTitles = getSaved().map((s) => s.recommendation.title);
     const exclude = [
       ...new Set([...seenTitles, ...savedTitles, ...currentTitles]),
-    ].slice(0, 80);
+    ].slice(0, 150);
     try {
       const res = await fetch("/api/recommend", {
         method: "POST",
