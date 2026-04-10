@@ -119,7 +119,6 @@ export function useRecommendations() {
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
     setFilterType(t);
     setFilterOrigin(o);
-    setFilterOTTs(new Set());
     loadRecs(t, o);
   };
 
