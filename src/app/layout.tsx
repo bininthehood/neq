@@ -44,6 +44,12 @@ export const metadata: Metadata = {
         height: 630,
         alt: "neq, — 당신의 취향을 발견하세요",
       },
+      {
+        url: "/og-image-square.png",
+        width: 1200,
+        height: 1200,
+        alt: "neq, — 당신의 취향을 발견하세요",
+      },
     ],
   },
   twitter: {
