@@ -4,6 +4,7 @@ import NextImage from "next/image";
 import type { Recommendation } from "@/lib/types";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
+import { getPrimaryCountryName } from "@/lib/country-names";
 import {
   IconClose,
   IconStar,
@@ -25,7 +26,7 @@ interface DetailSheetProps {
 
 function metaInfo(r: Recommendation) {
   return [
-    r.country?.length > 0 ? r.country.join("/") : null,
+    getPrimaryCountryName(r.country),
     r.date ? r.date.slice(0, 4) : null,
     r.runtime ? `${r.runtime}분` : null,
     r.seasons ? `시즌 ${r.seasons}` : null,

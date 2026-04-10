@@ -13,6 +13,7 @@ import {
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
+import { getPrimaryCountryName } from "@/lib/country-names";
 import type { Recommendation, WatchReaction } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
@@ -28,7 +29,7 @@ import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/S
 import FirstLoadingScreen from "@/components/discover/FirstLoadingScreen";
 
 const metaInfo = (r: Recommendation) => [
-  r.country?.length > 0 ? r.country.join("/") : null,
+  getPrimaryCountryName(r.country),
   r.date ? r.date.slice(0, 4) : null,
   r.runtime ? `${r.runtime}분` : null,
   r.seasons ? `시즌 ${r.seasons}` : null,

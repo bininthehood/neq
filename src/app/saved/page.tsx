@@ -21,6 +21,7 @@ import BottomNav from "@/components/BottomNav";
 import { IconStar, IconClose, IconCheck, IconHeart, IconShare } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
+import { getPrimaryCountryName } from "@/lib/country-names";
 
 const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string }[] = [
   { key: "loved", label: "인생작", color: "var(--accent)", bg: "var(--accent-dim)" },
@@ -793,7 +794,7 @@ export default function SavedPage() {
                 </p>
                 <p className="text-xs mt-0.5 text-muted">
                   {[
-                    detailItem.recommendation.country?.join("/"),
+                    getPrimaryCountryName(detailItem.recommendation.country),
                     detailItem.recommendation.date?.slice(0, 4),
                     detailItem.recommendation.runtime ? `${detailItem.recommendation.runtime}분` : null,
                     detailItem.recommendation.seasons ? `시즌 ${detailItem.recommendation.seasons}` : null,
