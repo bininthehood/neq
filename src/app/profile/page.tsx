@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   getFavorites,
@@ -25,10 +25,15 @@ export default function ProfilePage() {
   const trackedRef = useRef(false);
 
   const refresh = () => {
+    // 즉시: 첫 페인트에 필요한 가벼운 데이터
     setFavorites(getFavorites());
-    setSavedCount(getSaved().length);
-    setStats(getWatchStats());
     setDeviceId(getDeviceId());
+
+    // 지연: 무거운 집계(시청 리포트 전체 순회)는 다음 프레임에
+    startTransition(() => {
+      setSavedCount(getSaved().length);
+      setStats(getWatchStats());
+    });
   };
 
   useEffect(() => {

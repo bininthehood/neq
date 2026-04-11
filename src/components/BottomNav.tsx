@@ -24,6 +24,7 @@ export default function BottomNav({ active }: Props) {
         <Link
           key={key}
           href={href}
+          prefetch={true}
           aria-label={aria}
           aria-current={active === key ? "page" : undefined}
           className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"

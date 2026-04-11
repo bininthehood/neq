@@ -199,7 +199,16 @@ export default function DiscoverPage() {
     return () => window.removeEventListener("keydown", h);
   }, [nextCard, swipe.prevCard, detail.openDetail, detail.closeDetail]);
 
-  useEffect(() => { filtered.forEach((r) => { if (r.posterUrl) { const img = new Image(); img.src = r.posterUrl; } }); }, [filtered]);
+  // 현재 topIdx 기준 다음 4장만 프리로드 (LCP/메인 스레드 보호)
+  useEffect(() => {
+    const preloadRange = filtered.slice(topIdx, topIdx + 4);
+    preloadRange.forEach((r) => {
+      if (r.posterUrl) {
+        const img = new window.Image();
+        img.src = r.posterUrl;
+      }
+    });
+  }, [filtered, topIdx]);
 
   // topIdx를 sessionStorage에 저장 (Saved 페이지 왕복 시 복원용)
   useEffect(() => {

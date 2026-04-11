@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   getSaved,
   removeSaved,
-  getWatchReport,
+  getWatchReports,
   addWatchReport,
   removeWatchReport,
   getWatchStats,
@@ -201,13 +201,16 @@ export default function SavedPage() {
   const [history, setHistory] = useState<RecHistoryEntry[]>([]);
 
   const refreshData = () => {
+    // 한 번만 읽고 Map으로 변환 (O(n))
     setSaved(getSaved());
-    const allReports: Record<number, WatchReaction> = {};
-    for (const s of getSaved()) {
-      const r = getWatchReport(s.recommendation.tmdbId);
-      if (r) allReports[s.recommendation.tmdbId] = r.reaction;
+
+    const reportsList = getWatchReports();
+    const reportsMap: Record<number, WatchReaction> = {};
+    for (const r of reportsList) {
+      reportsMap[r.tmdbId] = r.reaction;
     }
-    setReports(allReports);
+    setReports(reportsMap);
+
     setStats(getWatchStats());
     setArchivedIds(new Set(getArchivedIds()));
     setHistory(getRecHistory());
