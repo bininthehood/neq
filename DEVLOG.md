@@ -692,3 +692,57 @@ b878368 fix: 추천 이유 길이 개선 — 글자 수 제한
 - [ ] 에러 모니터링 (Sentry 또는 자체 endpoint)
 - [ ] OpenAI 비용 알림 설정
 - [ ] 첫 외부 사용자 초대 (본인 네트워크 10명)
+
+---
+
+## 2026-04-13 (Day 8)
+
+### 진행 요약
+Hybrid 추천 아키텍처 실동작 검증 + 버그 수정, Sentry 에러 모니터링 추가, 25개 시나리오 QA.
+배포 전 안정성 확보에 집중.
+
+### 완료된 작업
+
+**Hybrid 추천 아키텍처 검증 (A1)**
+- 실제 API 호출로 기본/필터/에러 케이스 테스트
+- 기본 추천: 20개 정상, 응답 warm 2.6초 ✅
+- 발견한 버그 3개 수정:
+  - 시리즈 필터 결과 0개 → movie+series 양쪽 /recommendations 호출
+  - reason 10-15자 → 프롬프트 강화로 26-33자
+  - 같은 제목 중복 → ID + title 이중 제거
+- enrichCandidates 50개 동시 → 10개 배치 + 25개 조기 종료
+
+**Sentry 에러 모니터링 (A2)**
+- @sentry/nextjs 설치 + client/server/edge 3개 설정
+- error.tsx에서 Sentry.captureException 자동 리포트
+- production에서만 활성화, 성능 10% 샘플링
+- DSN 미설정 시 무시됨 (안전)
+
+**엣지 케이스 QA (B1)**
+- qa-tester 에이전트로 25개 시나리오 검증
+- 24 PASS, 0 FAIL, 1 WARN
+- 수정된 FAIL 3개:
+  1. clearAllUserData()가 favorites_meta/튜토리얼 플래그 미정리
+  2. 온보딩 검색 fetch 실패 시 무한 "검색 중..." 로딩
+  3. DetailSheet에서 OTT providers 0개 시 빈 영역
+
+### 주요 커밋
+```
+7dcf6ea fix(qa): 엣지 케이스 QA — 3개 FAIL 수정, 25 시나리오 검증
+fc84220 feat(monitoring): Sentry 에러 모니터링 추가
+4ed1078 fix(rec): Hybrid 추천 검증 — 시리즈 필터 + reason 길이 + 중복 제거
+```
+
+### 현재 상태
+- 추천 아키텍처 검증 완료: warm 2.6초, 20개 정상 반환
+- 에러 모니터링 준비 완료 (Sentry DSN 연결만 남음)
+- 25개 엣지 케이스 중 24개 PASS
+- OpenAI 비용 알림 설정 미진행 (대시보드 직접 설정 필요)
+
+### 미해결 / 다음 할 일
+- [ ] 시리즈 필터 결과 부족 (5개, 목표 20개) — TMDB 구조적 한계, 보완 필요
+- [ ] cold start 16초 개선 (첫 호출 시)
+- [ ] Sentry DSN 발급 + 환경 변수 설정
+- [ ] OpenAI 비용 알림 $10/$30 설정
+- [ ] v0.3 로드맵 작성
+- [ ] 첫 외부 사용자 초대
