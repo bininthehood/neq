@@ -99,14 +99,17 @@ async function gatherCandidates(
   excludeIds: Set<number>,
   excludeTitles: Set<string>
 ): Promise<Candidate[]> {
+  // 각 취향 작품마다 movie + series 양쪽 /recommendations 호출
+  // (영화 ID로 tv 호출 시 빈 결과 → 안전하게 무시됨)
   const allRecs = await Promise.all(
-    matched.map((fav) => getTMDBRecommendations(fav.id, fav.type))
+    matched.flatMap((fav) => [
+      getTMDBRecommendations(fav.id, "movie"),
+      getTMDBRecommendations(fav.id, "series"),
+    ])
   );
 
   const freqMap = new Map<number, Candidate>();
-  for (let i = 0; i < allRecs.length; i++) {
-    const recs = allRecs[i];
-    const favType = matched[i].type;
+  for (const recs of allRecs) {
     for (const item of recs) {
       if (excludeIds.has(item.id)) continue;
       if (excludeTitles.has(item.title)) continue;
@@ -117,7 +120,7 @@ async function gatherCandidates(
       } else {
         freqMap.set(item.id, {
           id: item.id,
-          type: favType, // /recommendations는 같은 미디어 타입 반환
+          type: item.media_type === "tv" ? "series" : "movie",
           item,
           frequency: 1,
           score: item.vote_average || 1,
@@ -134,16 +137,26 @@ async function gatherCandidates(
 // ---------- Step 4: 메타데이터 풍부화 ----------
 
 async function enrichCandidates(candidates: Candidate[]): Promise<EnrichedCandidate[]> {
-  return Promise.all(
-    candidates.map(async (c) => {
-      const [{ providers, watchLink }, credits, details] = await Promise.all([
-        getKoreanProviders(c.id, c.type),
-        getCredits(c.id, c.type),
-        getDetails(c.id, c.type),
-      ]);
-      return { ...c, providers, watchLink, credits, details };
-    })
-  );
+  const results: EnrichedCandidate[] = [];
+  const BATCH = 10;
+  for (let i = 0; i < candidates.length; i += BATCH) {
+    const batch = candidates.slice(i, i + BATCH);
+    const enriched = await Promise.all(
+      batch.map(async (c) => {
+        const [{ providers, watchLink }, credits, details] = await Promise.all([
+          getKoreanProviders(c.id, c.type),
+          getCredits(c.id, c.type),
+          getDetails(c.id, c.type),
+        ]);
+        return { ...c, providers, watchLink, credits, details };
+      })
+    );
+    results.push(...enriched);
+    // 충분한 OTT 가용 결과가 모이면 조기 종료 (필터 후 25개 목표)
+    const withOTT = results.filter((r) => r.providers.length > 0);
+    if (withOTT.length >= 25) break;
+  }
+  return results;
 }
 
 // ---------- Step 5: 필터링 ----------
@@ -204,9 +217,17 @@ ${feedbackText}
 [작성 규칙]
 - 후보 중 20개 선택 (후보가 적으면 전부)
 - 장르 다양성: 같은 장르 연속 3개 금지
-- reason: 20~30자, 해요체 (~해요/~이에요)
-- 좋은 예: "중반부터 숨 못 쉬어요", "반전이 세 번 나와요", "인터스텔라 좋아했으면 필수"
-- 나쁜 예: "깊은 고찰이 매력적입니다" (격식체, 추상적)
+- reason: 반드시 20자 이상 30자 이하, 해요체 (~해요/~이에요)
+- 왜 이 사용자에게 맞는지 구체적으로 써야 함
+- 좋은 예 (20-30자, 반드시 이 길이를 따라하세요):
+  "중반부터 숨 못 쉬어요. 반전이 미쳤어요" (20자)
+  "기생충 좋아하면 꼭 봐야 해요. 사회풍자극" (22자)
+  "첫 회 끝나면 바로 다음 회 재생하게 돼요" (21자)
+  "실화 기반이라 몰입감 장난 아니에요. 꼭 보세요" (24자)
+- 나쁜 예 (너무 짧음, 절대 이러면 안 됨):
+  "심리적 깊이가 매력" (10자) ← 너무 짧음
+  "OST가 좋아요" (7자) ← 너무 짧음
+  "깊은 고찰이 매력적입니다" (격식체, 추상적) ← 격식체 금지
 
 [출력 형식 (JSON)]
 {"selected": [{"id": 숫자, "reason": "문구"}, ...]}`;
@@ -316,23 +337,25 @@ export async function getRecommendations(
   // Step 6
   const curated = await curateWithLLM(filtered, favorites, feedback);
 
-  // Step 7: 조립
+  // Step 7: 조립 (ID + title 기반 중복 제거)
   const results: Recommendation[] = [];
   const usedIds = new Set<number>();
+  const usedTitles = new Set<string>();
 
   for (const { id, reason } of curated) {
     if (results.length >= 20) break;
     const c = filtered.find((f) => f.id === id);
-    if (!c || usedIds.has(c.id)) continue;
+    if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
     results.push(buildRecommendationObject(c, reason));
     usedIds.add(c.id);
+    usedTitles.add(c.item.title);
   }
 
   // Fallback: LLM 실패/부족 시 상위 후보를 기본 reason으로 채움
   if (results.length < 20) {
     for (const c of filtered) {
       if (results.length >= 20) break;
-      if (usedIds.has(c.id)) continue;
+      if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
       results.push(
         buildRecommendationObject(c, "이 작품이 취향에 맞을 것 같아요")
       );
