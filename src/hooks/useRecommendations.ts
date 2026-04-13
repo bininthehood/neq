@@ -162,9 +162,14 @@ export function useRecommendations() {
       const data = await res.json();
       const newRecs: Recommendation[] = data.recommendations ?? [];
       if (newRecs.length > 0) {
-        setRecs((prev) => [...prev, ...newRecs]);
-        const all = [...recs, ...newRecs];
-        setRecommendations(all, filterType, filterOrigin);
+        setRecs((prev) => {
+          const existingIds = new Set(prev.map((r) => r.tmdbId));
+          const unique = newRecs.filter((r: Recommendation) => !existingIds.has(r.tmdbId));
+          if (unique.length === 0) return prev;
+          const merged = [...prev, ...unique];
+          setRecommendations(merged, filterType, filterOrigin);
+          return merged;
+        });
         track("recommendation_load_more", { count: newRecs.length });
         addRecHistory(
           newRecs.map((r) => ({

@@ -78,7 +78,7 @@ export function useSwipeGesture({
         setDragY(Math.min(100, dy * 0.5));
       }
     },
-    [scrollLocked, filteredLength],
+    [scrollLocked, filteredLength, topIdx, firstCardHint],
   );
 
   const onTouchEnd = useCallback(() => {
