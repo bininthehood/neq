@@ -200,6 +200,61 @@ export default function SavedPage() {
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
   const [history, setHistory] = useState<RecHistoryEntry[]>([]);
 
+  // --- Nudge: 저장 후 24시간+ 미시청 작품 개별 넛지 ---
+  const NUDGE_DISMISS_KEY = "neq_nudge_dismissed";
+  const [dismissedNudges, setDismissedNudges] = useState<Set<number>>(new Set());
+
+  const loadDismissedNudges = useCallback((): Set<number> => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = localStorage.getItem(NUDGE_DISMISS_KEY);
+      if (!raw) return new Set();
+      const parsed = JSON.parse(raw) as Array<{ id: number; until: number }>;
+      const now = Date.now();
+      const valid = parsed.filter((p) => p.until > now);
+      localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify(valid));
+      return new Set(valid.map((p) => p.id));
+    } catch {
+      return new Set();
+    }
+  }, []);
+
+  const nudgeItems = useMemo(() => {
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    return saved
+      .filter(
+        (s) =>
+          !reports[s.recommendation.tmdbId] &&
+          !archivedIds.has(s.recommendation.tmdbId) &&
+          now - s.savedAt > ONE_DAY &&
+          !dismissedNudges.has(s.recommendation.tmdbId)
+      )
+      .slice(0, 2);
+  }, [saved, reports, archivedIds, dismissedNudges]);
+
+  // Track nudge shown
+  useEffect(() => {
+    for (const item of nudgeItems) {
+      track("nudge_shown", { tmdb_id: item.recommendation.tmdbId });
+    }
+  }, [nudgeItems]);
+
+  const handleDismissNudge = useCallback((tmdbId: number) => {
+    track("nudge_dismissed", { tmdb_id: tmdbId });
+    try {
+      const raw = localStorage.getItem(NUDGE_DISMISS_KEY);
+      const parsed = raw
+        ? (JSON.parse(raw) as Array<{ id: number; until: number }>)
+        : [];
+      parsed.push({ id: tmdbId, until: Date.now() + 48 * 60 * 60 * 1000 });
+      localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify(parsed));
+    } catch {
+      // ignore
+    }
+    setDismissedNudges((prev) => new Set(prev).add(tmdbId));
+  }, []);
+
   const refreshData = () => {
     // 한 번만 읽고 Map으로 변환 (O(n))
     setSaved(getSaved());
@@ -216,7 +271,11 @@ export default function SavedPage() {
     setHistory(getRecHistory());
   };
 
-  useEffect(() => { refreshData(); }, []);
+  useEffect(() => {
+    refreshData();
+    setDismissedNudges(loadDismissedNudges());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const filteredSaved = useMemo(() => {
     let items = [...saved];
@@ -483,6 +542,63 @@ export default function SavedPage() {
                 </span>
               )}
             </button>
+          ))}
+        </div>
+      )}
+
+      {/* Individual nudge cards — 저장 후 24시간 이상, 미시청 작품 개별 넛지 */}
+      {nudgeItems.length > 0 && viewFilter !== "history" && (
+        <div className="mx-5 mb-3">
+          {nudgeItems.map((item) => (
+            <div
+              key={item.recommendation.tmdbId}
+              className="flex items-center gap-3 p-3 mb-2 rounded-lg"
+              style={{
+                background: "var(--surface)",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+              }}
+            >
+              {item.recommendation.posterUrl && (
+                <Image
+                  src={item.recommendation.posterUrl}
+                  alt={item.recommendation.title}
+                  width={40}
+                  height={60}
+                  className="rounded-md object-cover flex-shrink-0"
+                  sizes="40px"
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">
+                  {item.recommendation.title}
+                </div>
+                <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                  봤어요?
+                </div>
+              </div>
+              <div className="flex gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => {
+                    track("nudge_reported", { tmdb_id: item.recommendation.tmdbId });
+                    handleReport(item.recommendation.tmdbId, "good");
+                  }}
+                  className="px-2.5 py-1.5 text-xs rounded-lg active:scale-95 transition-transform"
+                  style={{
+                    background: "var(--accent-dim)",
+                    color: "var(--accent)",
+                  }}
+                >
+                  봤어요
+                </button>
+                <button
+                  onClick={() => handleDismissNudge(item.recommendation.tmdbId)}
+                  className="px-2 py-1.5 text-xs active:scale-95 transition-transform"
+                  style={{ color: "var(--text-muted)" }}
+                >
+                  나중에
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}

@@ -9,6 +9,7 @@ import {
   addSeenTitles,
   addWatchReport,
   getFavoritesMeta,
+  getWatchReports,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
@@ -48,6 +49,7 @@ export default function DiscoverPage() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(false);
   const [favoritesMeta, setFavoritesMeta] = useState<ReturnType<typeof getFavoritesMeta>>([]);
+  const [reentryNudge, setReentryNudge] = useState<string | null>(null);
 
   const rec = useRecommendations();
   const detail = useDetailSheet();
@@ -248,6 +250,33 @@ export default function DiscoverPage() {
     if (!localStorage.getItem("neq_tutorial_seen") && filtered.length > 0) setShowTutorial(true);
   }, [mounted, rec.loading, filtered.length]);
 
+  // 재진입 넛지: 어제 저장한 미시청 작품이 있으면 토스트 표시
+  useEffect(() => {
+    if (!mounted) return;
+    if (typeof sessionStorage === "undefined") return;
+    if (sessionStorage.getItem("neq_reentry_nudge_shown")) return;
+
+    const savedItems = getSaved();
+    const reportsList = getWatchReports();
+    const reportedIds = new Set(reportsList.map((r) => r.tmdbId));
+    const now = Date.now();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+
+    const candidate = savedItems.find(
+      (s) =>
+        !reportedIds.has(s.recommendation.tmdbId) &&
+        now - s.savedAt > ONE_DAY
+    );
+
+    if (candidate) {
+      setReentryNudge(candidate.recommendation.title);
+      sessionStorage.setItem("neq_reentry_nudge_shown", "1");
+      track("reentry_nudge_shown", { tmdb_id: candidate.recommendation.tmdbId });
+      const t = setTimeout(() => setReentryNudge(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [mounted]);
+
   // --- shared props ---
   const chipsProps = {
     filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterOTTs: rec.filterOTTs,
@@ -344,6 +373,29 @@ export default function DiscoverPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)" }} />
             첫 번째 작품이에요
+          </div>
+        </div>
+      )}
+      {/* 재진입 넛지 토스트 */}
+      {reentryNudge && (
+        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center animate-fade-in">
+          <div
+            className="px-4 py-2.5 text-sm rounded-lg flex items-center gap-2 cursor-pointer active:scale-[0.98] transition-transform"
+            style={{
+              background: "var(--surface-raised)",
+              color: "var(--text-primary)",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+            }}
+            onClick={() => {
+              router.push("/saved");
+              setReentryNudge(null);
+            }}
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+              style={{ background: "var(--accent)" }}
+            />
+            {reentryNudge} 봤어요?
           </div>
         </div>
       )}

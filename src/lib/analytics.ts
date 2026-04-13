@@ -87,4 +87,9 @@ export type NekoEvent =
   | "filter_changed"
   // 프로필
   | "profile_viewed"
-  | "data_reset";
+  | "data_reset"
+  // 넛지
+  | "nudge_shown"
+  | "nudge_reported"
+  | "nudge_dismissed"
+  | "reentry_nudge_shown";
