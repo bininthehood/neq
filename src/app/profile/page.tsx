@@ -56,7 +56,7 @@ export default function ProfilePage() {
     setConfirmReset(false);
     refresh();
     setToast({ kind: "ok", msg: "모든 데이터가 초기화됐어요" });
-    setTimeout(() => router.push("/onboarding"), 1500);
+    setTimeout(() => router.push("/discover"), 1500);
   };
 
   if (!mounted) return null;
