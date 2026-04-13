@@ -47,6 +47,7 @@ export default function DiscoverPage() {
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [showWatched, setShowWatched] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [immersive, setImmersive] = useState(false);
   const [isFirstLoad, setIsFirstLoad] = useState(false);
   const [favoritesMeta, setFavoritesMeta] = useState<ReturnType<typeof getFavoritesMeta>>([]);
   const [reentryNudge, setReentryNudge] = useState<string | null>(null);
@@ -77,6 +78,7 @@ export default function DiscoverPage() {
   const nextCard = useCallback(() => {
     if (swipe.swiping) return;
     setShowWatched(false);
+    setImmersive(false);
     const cur = filtered[topIdx];
     if (cur) {
       track("card_swiped", {
@@ -128,11 +130,8 @@ export default function DiscoverPage() {
 
   const handleCardTap = useCallback(() => {
     if (swipe.swiping || showWatched) return;
-    if (current) {
-      track("detail_opened", { tmdb_id: current.tmdbId, source: "card_tap" });
-    }
-    detail.openDetail();
-  }, [swipe.swiping, showWatched, detail.openDetail, current]);
+    setImmersive((prev) => !prev);
+  }, [swipe.swiping, showWatched]);
 
   const handleNotInterested = useCallback(() => {
     if (!current) return;
@@ -311,10 +310,13 @@ export default function DiscoverPage() {
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden">
-      <div className="flex items-center px-5 py-3 shrink-0">
+      <div className="flex items-center px-5 py-3 shrink-0 transition-all duration-300"
+        style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
         <span className="font-display text-lg text-accent">neq,</span>
       </div>
-      <FilterChips {...chipsProps} />
+      <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 60, overflow: "hidden" }}>
+        <FilterChips {...chipsProps} />
+      </div>
 
       <div ref={swipe.scrollRef} className="flex-1 min-h-0" style={{ overflowY: "hidden", overscrollBehavior: "none" }}>
         <div className="relative px-3 pb-2"
@@ -348,6 +350,7 @@ export default function DiscoverPage() {
           {deckCards.map((r, stackIdx) => (
             <SwipeCard key={r.tmdbId} rec={r} isTop={stackIdx === deckCards.length - 1} depth={deckCards.length - 1 - stackIdx}
               dragX={swipe.dragX} isDragging={swipe.dragging.current} swiping={swipe.swiping}
+              immersive={stackIdx === deckCards.length - 1 && immersive}
               showWatched={stackIdx === deckCards.length - 1 && showWatched} onCardTap={handleCardTap}
               onWatchedReaction={handleWatchedReaction} onWatchedSkip={handleWatchedSkip}
               onNotInterested={handleNotInterested}
@@ -360,19 +363,21 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      {/* 추가 로딩 인디케이터 — 마지막 카드 근처에서 더 가져오는 중 */}
-      {rec.loadingMore && (
+      {/* 추가 로딩 인디케이터 */}
+      {rec.loadingMore && !immersive && (
         <div className="flex items-center justify-center gap-2 py-2 shrink-0 animate-fade-in">
           <div className="w-4 h-4 animate-spin rounded-full" style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)" }} />
           <span className="text-xs text-muted">추천을 더 가져오고 있어요...</span>
         </div>
       )}
 
-      <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
-        onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
-        onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }}
-        onRefresh={() => { vibrate(10); setTopIdx(0); rec.refreshRecommendations(); }} />
-      <BottomNav active="discover" />
+      <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 80, overflow: "hidden" }}>
+        <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
+          onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
+          onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }}
+          onRefresh={() => { vibrate(10); setTopIdx(0); rec.refreshRecommendations(); }} />
+        <BottomNav active="discover" />
+      </div>
 
       {/* 첫 카드 힌트 토스트 */}
       {swipe.firstCardHint && (

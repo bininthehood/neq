@@ -15,6 +15,7 @@ interface SwipeCardProps {
   isDragging: boolean;
   swiping: boolean;
   showWatched: boolean;
+  immersive: boolean;
   onCardTap: () => void;
   onWatchedReaction: (reaction: WatchReaction) => void;
   onWatchedSkip: () => void;
@@ -26,6 +27,7 @@ interface SwipeCardProps {
 
 export default function SwipeCard({
   rec,
+  immersive,
   isTop,
   depth,
   dragX,
@@ -97,13 +99,13 @@ export default function SwipeCard({
         />
       )}
 
-      {/* Info overlay: render for depth 0 and 1, fade in when becoming top */}
+      {/* Info overlay: render for depth 0 and 1, fade in when becoming top, hide in immersive */}
       {depth <= 1 && (
         <div
           style={{
-            opacity: isTop ? 1 : 0,
-            transition: "opacity 0.2s ease-out",
-            pointerEvents: isTop ? "auto" : "none",
+            opacity: isTop && !immersive ? 1 : 0,
+            transition: "opacity 0.25s ease-out",
+            pointerEvents: isTop && !immersive ? "auto" : "none",
           }}
         >
           <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10 bg-overlay rounded-md">
