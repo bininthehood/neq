@@ -157,6 +157,43 @@ export interface TMDBSimilarItem {
   popularity?: number;
 }
 
+/**
+ * TMDB /discover — 장르 기반 작품 검색.
+ * 크로스타입 추천 보충용 (영화 취향 → 시리즈 발견, 그 반대도).
+ */
+export async function discoverByGenres(
+  genreIds: number[],
+  type: "movie" | "series",
+  page = 1
+): Promise<TMDBSimilarItem[]> {
+  if (genreIds.length === 0) return [];
+  const mediaType = type === "series" ? "tv" : "movie";
+  const genres = genreIds.slice(0, 5).join("|"); // OR 조건 (,는 AND → 결과 0개 됨)
+  try {
+    const res = await fetch(
+      `${BASE}/discover/${mediaType}?api_key=${API_KEY}&language=ko-KR&with_genres=${genres}&sort_by=vote_average.desc&vote_count.gte=100&page=${page}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results ?? []).map((r: Record<string, unknown>) => ({
+      id: r.id as number,
+      title: (r.title ?? r.name) as string,
+      original_title: r.original_title as string | undefined,
+      original_name: r.original_name as string | undefined,
+      media_type: mediaType as "movie" | "tv",
+      poster_path: (r.poster_path as string | null) ?? null,
+      vote_average: (r.vote_average as number) ?? 0,
+      overview: (r.overview as string) ?? "",
+      release_date: r.release_date as string | undefined,
+      first_air_date: r.first_air_date as string | undefined,
+      genre_ids: (r.genre_ids as number[]) ?? [],
+      popularity: r.popularity as number | undefined,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getTMDBRecommendations(
   tmdbId: number,
   type: "movie" | "series"

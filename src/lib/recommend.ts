@@ -342,9 +342,15 @@ export async function getRecommendations(
   feedback?: WatchFeedback,
   exclude?: string[]
 ): Promise<Recommendation[]> {
-  // Step 1
-  const matched = await matchFavoritesToTMDB(favorites);
-  if (matched.length === 0) return [];
+  // Step 1: favorites 매칭. 없으면 트렌딩 기반 시드.
+  let matched = await matchFavoritesToTMDB(favorites);
+
+  if (matched.length === 0) {
+    // 트렌딩 인기작을 시드로 사용 (다양한 장르에서 랜덤 선택)
+    const trendingSeeds = ["기생충", "인터스텔라", "이상한 변호사 우영우", "더 글로리", "라라랜드"];
+    matched = await matchFavoritesToTMDB(trendingSeeds);
+    if (matched.length === 0) return [];
+  }
 
   const matchedIdsSet = new Set(matched.map((m) => m.id));
   const excludeTitlesSet = new Set(exclude ?? []);
