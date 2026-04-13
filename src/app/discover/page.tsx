@@ -308,7 +308,7 @@ export default function DiscoverPage() {
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden">
+    <div className="h-dvh flex flex-col overflow-hidden relative">
       <div className="flex items-center px-5 py-3 shrink-0 transition-all duration-300"
         style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
         <span className="font-display text-lg text-accent">neq,</span>
@@ -362,11 +362,10 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      {/* 추가 로딩 인디케이터 */}
+      {/* 추가 로딩 인디케이터 — 카드 영역 하단에 플로팅 */}
       {rec.loadingMore && !immersive && (
-        <div className="flex items-center justify-center gap-2 py-2 shrink-0 animate-fade-in">
-          <div className="w-4 h-4 animate-spin rounded-full" style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)" }} />
-          <span className="text-xs text-muted">추천을 더 가져오고 있어요...</span>
+        <div className="absolute bottom-36 left-0 right-0 z-30 flex justify-center pointer-events-none animate-fade-in">
+          <div className="w-6 h-6 animate-spin rounded-full" style={{ border: "2px solid transparent", borderTopColor: "var(--accent)", opacity: 0.5 }} />
         </div>
       )}
 
