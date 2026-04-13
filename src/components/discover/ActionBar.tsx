@@ -1,6 +1,6 @@
 "use client";
 
-import { IconSave, IconDetail, IconShare, IconRewind } from "@/components/Icons";
+import { IconSave, IconDetail, IconShare, IconRewind, IconRefresh } from "@/components/Icons";
 
 interface ActionBarProps {
   isSaved: boolean;
@@ -9,6 +9,7 @@ interface ActionBarProps {
   onOpenDetail: () => void;
   onToggleSave: () => void;
   onRewind: () => void;
+  onRefresh: () => void;
 }
 
 export default function ActionBar({
@@ -18,6 +19,7 @@ export default function ActionBar({
   onOpenDetail,
   onToggleSave,
   onRewind,
+  onRefresh,
 }: ActionBarProps) {
   return (
     <div className="px-4 pb-2 shrink-0">
@@ -44,6 +46,13 @@ export default function ActionBar({
             className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
           >
             <IconDetail size={17} color="var(--text-muted)" />
+          </button>
+          <button
+            onClick={onRefresh}
+            aria-label="새로고침"
+            className="w-10 h-10 flex items-center justify-center active:scale-90 transition-transform"
+          >
+            <IconRefresh size={17} color="var(--text-muted)" />
           </button>
         </div>
         <button
