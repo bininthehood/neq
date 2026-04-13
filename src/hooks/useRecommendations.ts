@@ -18,7 +18,8 @@ export function useRecommendations() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [prefetching, setPrefetching] = useState(false); // 다음 배치 백그라운드 프리페치
+  const [prefetching, setPrefetching] = useState(false);
+  const prefetchingRef = useRef(false); // ref 기반 가드 (state보다 즉시 반영)
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterYear, setFilterYear] = useState<FilterYear>("all");
@@ -151,7 +152,8 @@ export function useRecommendations() {
 
   /** 다음 배치를 백그라운드로 프리페치 — 현재 recs 뒤에 추가 */
   const prefetchNextBatch = async () => {
-    if (prefetching || loading) return;
+    if (prefetchingRef.current || loading) return;
+    prefetchingRef.current = true;
     setPrefetching(true);
     try {
       const favorites = getFavorites();
@@ -170,7 +172,7 @@ export function useRecommendations() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ favorites, filter, exclude, excludeIds }),
       });
-      if (!res.ok) { setPrefetching(false); return; }
+      if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }
       const data = await res.json();
       const newRecs: Recommendation[] = data.recommendations ?? [];
       if (newRecs.length > 0) {
@@ -185,6 +187,7 @@ export function useRecommendations() {
         });
       }
     } catch { /* silent */ }
+    prefetchingRef.current = false;
     setPrefetching(false);
   };
 
