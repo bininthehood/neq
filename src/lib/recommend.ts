@@ -7,6 +7,7 @@ import {
   getDetails,
   posterUrl,
   getTMDBRecommendations,
+  getTrending,
   discoverByGenres,
   type TMDBSimilarItem,
 } from "./tmdb";
@@ -327,6 +328,65 @@ function buildRecommendationObject(
   };
 }
 
+// ---------- Cold Start ----------
+
+/** vote_average / media_type에 따라 reason을 다양하게 */
+function coldStartReason(item: TMDBSimilarItem): string {
+  if (item.vote_average >= 8.5) return "평점이 아주 높은 화제작이에요";
+  if (item.vote_average >= 8.0) return "평점 높고 지금 많이 보는 작품이에요";
+  if (item.media_type === "tv") return "요즘 많이 보는 시리즈예요";
+  return "이번 주 인기 작품이에요";
+}
+
+/**
+ * Cold start 빠른 경로: favorites 없을 때 TMDB trending API로 직접 반환.
+ * LLM 큐레이션 스킵 → ~3-5초 (기존 ~16초).
+ */
+async function getColdStartRecommendations(
+  filter: RecommendFilter,
+  exclude?: string[]
+): Promise<Recommendation[]> {
+  const excludeSet = new Set(exclude ?? []);
+
+  // Step 1: TMDB trending (~500ms)
+  const trending = await getTrending("week");
+
+  // Step 2: 타입 필터
+  const candidates = trending.filter((item) => {
+    if (excludeSet.has(item.title)) return false;
+    if (filter.type === "movie" && item.media_type !== "movie") return false;
+    if (filter.type === "series" && item.media_type !== "tv") return false;
+    return true;
+  });
+
+  // Step 3: enrichment (배치 10, 조기 종료)
+  const enriched = await enrichCandidates(
+    candidates.slice(0, 25).map((item) => ({
+      id: item.id,
+      type: (item.media_type === "tv" ? "series" : "movie") as "movie" | "series",
+      item,
+      frequency: 1,
+      score: item.vote_average || 1,
+    }))
+  );
+
+  // Step 4: OTT + origin 필터
+  const filtered = applyFilters(enriched, filter);
+
+  // Step 5: Recommendation 조립 (LLM 없이 기본 reason)
+  const results: Recommendation[] = [];
+  const usedTitles = new Set<string>();
+
+  for (const c of filtered) {
+    if (results.length >= 20) break;
+    if (usedTitles.has(c.item.title)) continue;
+    usedTitles.add(c.item.title);
+    results.push(buildRecommendationObject(c, coldStartReason(c.item)));
+  }
+
+  return results;
+}
+
 // ---------- Main ----------
 
 /**
@@ -334,6 +394,7 @@ function buildRecommendationObject(
  *   TMDB 검색 → TMDB /recommendations 병합·랭킹 → 메타 풍부화 →
  *   필터링 → LLM 큐레이션(1회, gpt-4o-mini) → 조립
  *
+ * Cold start (favorites 비어있음) → TMDB trending 빠른 경로 (LLM 스킵, ~3-5초).
  * 기존 매번 LLM 호출(gpt-4o) 방식 대비 ~10배 저렴, ~3배 빠름.
  */
 export async function getRecommendations(
@@ -342,15 +403,14 @@ export async function getRecommendations(
   feedback?: WatchFeedback,
   exclude?: string[]
 ): Promise<Recommendation[]> {
-  // Step 1: favorites 매칭. 없으면 트렌딩 기반 시드.
-  let matched = await matchFavoritesToTMDB(favorites);
-
-  if (matched.length === 0) {
-    // 트렌딩 인기작을 시드로 사용 (다양한 장르에서 랜덤 선택)
-    const trendingSeeds = ["기생충", "인터스텔라", "이상한 변호사 우영우", "더 글로리", "라라랜드"];
-    matched = await matchFavoritesToTMDB(trendingSeeds);
-    if (matched.length === 0) return [];
+  // Cold start: favorites 없으면 TMDB trending으로 빠르게 반환 (LLM 스킵)
+  if (favorites.length === 0) {
+    return getColdStartRecommendations(filter, exclude);
   }
+
+  // Step 1: favorites 매칭
+  const matched = await matchFavoritesToTMDB(favorites);
+  if (matched.length === 0) return [];
 
   const matchedIdsSet = new Set(matched.map((m) => m.id));
   const excludeTitlesSet = new Set(exclude ?? []);

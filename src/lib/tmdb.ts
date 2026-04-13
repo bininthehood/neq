@@ -194,6 +194,40 @@ export async function discoverByGenres(
   }
 }
 
+/**
+ * TMDB /trending — 이번 주 인기 작품 (movie + tv 혼합).
+ * Cold start (favorites 없음) 시 LLM 스킵하고 즉시 카드 반환용.
+ */
+export async function getTrending(
+  timeWindow: "day" | "week" = "week"
+): Promise<TMDBSimilarItem[]> {
+  try {
+    const res = await fetch(
+      `${BASE}/trending/all/${timeWindow}?api_key=${API_KEY}&language=ko-KR`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results ?? [])
+      .filter((r: Record<string, unknown>) => r.media_type === "movie" || r.media_type === "tv")
+      .map((r: Record<string, unknown>) => ({
+        id: r.id as number,
+        title: (r.title ?? r.name) as string,
+        original_title: r.original_title as string | undefined,
+        original_name: r.original_name as string | undefined,
+        media_type: r.media_type as "movie" | "tv",
+        poster_path: (r.poster_path as string | null) ?? null,
+        vote_average: (r.vote_average as number) ?? 0,
+        overview: (r.overview as string) ?? "",
+        release_date: r.release_date as string | undefined,
+        first_air_date: r.first_air_date as string | undefined,
+        genre_ids: (r.genre_ids as number[]) ?? [],
+        popularity: r.popularity as number | undefined,
+      }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getTMDBRecommendations(
   tmdbId: number,
   type: "movie" | "series"
