@@ -370,7 +370,7 @@ export default function DiscoverPage() {
         </div>
       )}
 
-      <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 80, overflow: "hidden" }}>
+      <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 200, overflow: "hidden" }}>
         <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
           onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
           onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }}
