@@ -40,9 +40,9 @@ export async function POST(req: NextRequest) {
         .slice(0, 150)
     : undefined;
 
-  if (!Array.isArray(favorites) || favorites.length < 3) {
+  if (!Array.isArray(favorites)) {
     return NextResponse.json(
-      { error: "최소 3개의 작품을 선택해주세요" },
+      { error: "잘못된 요청입니다" },
       { status: 400 }
     );
   }

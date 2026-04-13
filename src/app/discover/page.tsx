@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
-  hasOnboarded,
   addSaved,
   removeSaved,
   getSaved,
@@ -167,7 +166,6 @@ export default function DiscoverPage() {
   // --- effects ---
   useEffect(() => {
     setMounted(true);
-    if (!hasOnboarded()) { router.replace("/onboarding"); return; }
     // 첫 진입 감지: 플래그가 없고, 캐시된 추천도 없을 때만
     const firstDone = localStorage.getItem("neq_first_discover_done");
     if (!firstDone) {
