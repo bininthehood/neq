@@ -360,6 +360,14 @@ export default function DiscoverPage() {
         </div>
       </div>
 
+      {/* 추가 로딩 인디케이터 — 마지막 카드 근처에서 더 가져오는 중 */}
+      {rec.loadingMore && (
+        <div className="flex items-center justify-center gap-2 py-2 shrink-0 animate-fade-in">
+          <div className="w-4 h-4 animate-spin rounded-full" style={{ border: "2px solid var(--border)", borderTopColor: "var(--accent)" }} />
+          <span className="text-xs text-muted">추천을 더 가져오고 있어요...</span>
+        </div>
+      )}
+
       <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
         onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
         onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }}
