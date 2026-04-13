@@ -158,6 +158,9 @@ export default function DetailSheet({
             <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">
               시청 가능
             </h3>
+            {rec.providers.length === 0 ? (
+              <p className="text-sm text-muted py-2">현재 한국 OTT에서 제공 정보를 찾지 못했어요</p>
+            ) : (
             <div className="flex flex-col gap-2">
               {rec.providers.map((p) => {
                 const u = getOTTLink(p.name, rec.title);
@@ -194,6 +197,7 @@ export default function DetailSheet({
                 );
               })}
             </div>
+            )}
           </div>
           {/* share */}
           <button

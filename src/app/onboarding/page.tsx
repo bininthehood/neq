@@ -65,9 +65,14 @@ export default function OnboardingPage() {
   const search = useCallback(async (q: string) => {
     if (q.length < 1) { setResults([]); return; }
     setSearching(true);
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-    const data = await res.json();
-    setResults(data);
+    try {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) { setResults([]); setSearching(false); return; }
+      const data = await res.json();
+      setResults(Array.isArray(data) ? data : []);
+    } catch {
+      setResults([]);
+    }
     setSearching(false);
   }, []);
 

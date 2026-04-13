@@ -851,6 +851,9 @@ export default function SavedPage() {
             {/* OTT links */}
             <div className="mt-5">
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">시청 가능</h3>
+              {detailItem.recommendation.providers.length === 0 ? (
+                <p className="text-sm text-muted py-2">현재 한국 OTT에서 제공 정보를 찾지 못했어요</p>
+              ) : (
               <div className="flex flex-col gap-2">
                 {detailItem.recommendation.providers.map((p) => {
                   const ottUrl = getOTTLink(p.name, detailItem.recommendation.title);
@@ -873,6 +876,7 @@ export default function SavedPage() {
                   );
                 })}
               </div>
+              )}
             </div>
             {/* 공유 */}
             <button

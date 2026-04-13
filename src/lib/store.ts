@@ -282,16 +282,21 @@ export function clearAllUserData() {
   if (typeof window === "undefined") return;
   const keysToRemove = [
     FAVORITES_KEY,
+    FAVORITES_META_KEY,
     SAVED_KEY,
     REPORTS_KEY,
     SEEN_KEY,
     ARCHIVE_KEY,
     HISTORY_KEY,
     RECS_KEY,
+    "neq_first_discover_done",
+    "neq_tutorial_seen",
   ];
   keysToRemove.forEach((k) => localStorage.removeItem(k));
   // 필터별 캐시도 제거
   Object.keys(localStorage)
     .filter((k) => k.startsWith(RECS_FILTERED_PREFIX))
     .forEach((k) => localStorage.removeItem(k));
+  // sessionStorage도 정리
+  sessionStorage.removeItem("neq_top_idx");
 }

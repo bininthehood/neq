@@ -208,9 +208,33 @@ async function curateWithLLM(
 
   const feedbackText = buildFeedbackPrompt(feedback);
 
-  const systemPrompt = `당신은 OTT 큐레이터입니다. 아래 후보 중에서 사용자 취향에 맞는 20개를 골라 reason을 작성하세요.
+  // 피드백 누적량에 따라 큐레이션 모드 결정
+  const totalFeedback = feedback
+    ? feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length
+    : 0;
 
-[사용자 취향]
+  let modeGuide: string;
+  if (totalFeedback <= 5) {
+    modeGuide = `[큐레이션 모드: 탐색]
+이 사용자는 아직 탐색 초기입니다. 폭넓게 다양한 장르와 스타일의 작품을 추천하세요.
+유명하지만 숨겨진 면이 있는 작품, 장르 교차 작품, 예상 밖의 선택을 우선하세요.
+취향 기반 작품은 30% 이하로 제한하고, 70%는 새로운 발견 위주로 구성하세요.`;
+  } else if (totalFeedback <= 20) {
+    modeGuide = `[큐레이션 모드: 혼합]
+취향 데이터가 어느 정도 쌓였습니다. 취향에 맞는 작품 50% + 새로운 장르/스타일 탐색 50%로 균형 잡으세요.
+사용자가 좋아한 작품과 비슷한 결도 좋지만, 아직 안 접해본 장르도 반드시 포함하세요.`;
+  } else {
+    modeGuide = `[큐레이션 모드: 개인화]
+사용자의 취향 데이터가 풍부합니다. 취향을 깊이 반영하되, 반드시 30% 이상은 사용자가 아직 안 접해본 장르나 스타일로 구성하세요.
+"이런 것도 좋아할 수 있어요" 같은 의외의 추천이 반드시 포함되어야 합니다.
+필터 버블에 갇히지 않게 하세요.`;
+  }
+
+  const systemPrompt = `당신은 OTT 큐레이터입니다. 아래 후보 중에서 20개를 골라 reason을 작성하세요.
+
+${modeGuide}
+
+[사용자 취향 기반 (참고용)]
 좋아하는 작품: ${favorites.join(", ")}
 ${feedbackText}
 
