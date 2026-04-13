@@ -30,7 +30,14 @@ export function useRecommendations() {
     if (fy === "all") {
       const cached = getRecommendations(ft, fo);
       if (cached.length > 0) {
-        setRecs(cached);
+        // 캐시에 중복이 있을 수 있으므로 tmdbId 기반 dedup
+        const seen = new Set<number>();
+        const deduped = cached.filter((r) => {
+          if (seen.has(r.tmdbId)) return false;
+          seen.add(r.tmdbId);
+          return true;
+        });
+        setRecs(deduped);
         setLoading(false);
         setLoadError(null);
         return;
@@ -87,7 +94,14 @@ export function useRecommendations() {
         return;
       }
       const data = await res.json();
-      const newRecs = data.recommendations ?? [];
+      const rawRecs: Recommendation[] = data.recommendations ?? [];
+      // 서버 응답에서도 중복 방어 (tmdbId 기준)
+      const seenIds = new Set<number>();
+      const newRecs = rawRecs.filter((r) => {
+        if (seenIds.has(r.tmdbId)) return false;
+        seenIds.add(r.tmdbId);
+        return true;
+      });
       setRecommendations(newRecs, ft, fo);
       setRecs(newRecs);
       setLoading(false);
