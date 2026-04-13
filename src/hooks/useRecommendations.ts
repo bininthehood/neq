@@ -18,8 +18,7 @@ export function useRecommendations() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [exhausted, setExhausted] = useState(false); // 추천 풀 소진 여부
+  const [prefetching, setPrefetching] = useState(false); // 다음 배치 백그라운드 프리페치
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterYear, setFilterYear] = useState<FilterYear>("all");
@@ -142,85 +141,51 @@ export function useRecommendations() {
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
     setFilterType(t);
     setFilterOrigin(o);
-    setExhausted(false); // 새 필터 = 새 추천 풀
     loadRecs(t, o);
   };
 
   const refreshRecommendations = async () => {
-    setExhausted(false); // 새로고침 = 풀 리셋
     setRecommendations([], filterType, filterOrigin);
     await loadRecs(filterType, filterOrigin);
   };
 
-  const loadMoreRecs = async () => {
-    if (loadingMore || exhausted) return; // 소진됐으면 더 이상 호출 안 함
-    setLoadingMore(true);
-    const favorites = getFavorites();
-    const filter: Record<string, string> = {};
-    if (filterType !== "all") filter.type = filterType;
-    if (filterOrigin !== "all") filter.origin = filterOrigin;
-    if (filterYear !== "all") filter.year = filterYear;
-    const currentTitles = recs.map((r) => r.title);
-    const currentIds = recs.map((r) => r.tmdbId);
-    const seenTitles = getSeenTitles();
-    const savedTitles = getSaved().map((s) => s.recommendation.title);
-    const savedIds = getSaved().map((s) => s.recommendation.tmdbId);
-    const exclude = [
-      ...new Set([...seenTitles, ...savedTitles, ...currentTitles]),
-    ].slice(0, 150);
-    const excludeIds = [...new Set([...currentIds, ...savedIds])];
+  /** 다음 배치를 백그라운드로 프리페치 — 현재 recs 뒤에 추가 */
+  const prefetchNextBatch = async () => {
+    if (prefetching || loading) return;
+    setPrefetching(true);
     try {
+      const favorites = getFavorites();
+      const filter: Record<string, string> = {};
+      if (filterType !== "all") filter.type = filterType;
+      if (filterOrigin !== "all") filter.origin = filterOrigin;
+      if (filterYear !== "all") filter.year = filterYear;
+      const currentTitles = recs.map((r) => r.title);
+      const currentIds = recs.map((r) => r.tmdbId);
+      const exclude = [
+        ...new Set([...getSeenTitles(), ...getSaved().map((s) => s.recommendation.title), ...currentTitles]),
+      ].slice(0, 200);
+      const excludeIds = [...new Set([...currentIds, ...getSaved().map((s) => s.recommendation.tmdbId)])];
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ favorites, filter, exclude, excludeIds }),
       });
-      if (!res.ok) {
-        setLoadingMore(false);
-        return;
-      }
+      if (!res.ok) { setPrefetching(false); return; }
       const data = await res.json();
-      const rawRecs: Recommendation[] = data.recommendations ?? [];
-      // 서버 응답 자체 dedup
-      const seenNew = new Set<number>();
-      const newRecs = rawRecs.filter((r) => {
-        if (seenNew.has(r.tmdbId)) return false;
-        seenNew.add(r.tmdbId);
-        return true;
-      });
-
-      if (newRecs.length === 0) {
-        // 서버가 빈 배열 → 추천 풀 소진
-        setExhausted(true);
-      } else {
-        let addedCount = 0;
+      const newRecs: Recommendation[] = data.recommendations ?? [];
+      if (newRecs.length > 0) {
         setRecs((prev) => {
           const existingIds = new Set(prev.map((r) => r.tmdbId));
           const unique = newRecs.filter((r) => !existingIds.has(r.tmdbId));
-          addedCount = unique.length;
           if (unique.length === 0) return prev;
           const merged = [...prev, ...unique];
           setRecommendations(merged, filterType, filterOrigin);
+          track("recommendation_load_more", { count: unique.length });
           return merged;
         });
-        // 전부 중복이었으면 소진으로 판단
-        if (addedCount === 0) {
-          setExhausted(true);
-        } else {
-          track("recommendation_load_more", { count: addedCount });
-          addRecHistory(
-            newRecs.map((r) => ({
-              title: r.title,
-              tmdbId: r.tmdbId,
-              posterUrl: r.posterUrl,
-            })),
-          );
-        }
       }
-    } catch {
-      // silent fail for load-more
-    }
-    setLoadingMore(false);
+    } catch { /* silent */ }
+    setPrefetching(false);
   };
 
   const abortLoading = () => {
@@ -231,7 +196,7 @@ export function useRecommendations() {
     recs,
     loading,
     loadError,
-    loadingMore,
+    prefetching,
     filterType,
     filterOrigin,
     filterYear,
@@ -239,10 +204,9 @@ export function useRecommendations() {
     filterOTTs,
     setFilterOTTs,
     loadRecs,
-    exhausted,
     handleFilterChange,
     refreshRecommendations,
-    loadMoreRecs,
+    prefetchNextBatch,
     abortLoading,
   };
 }

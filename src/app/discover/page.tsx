@@ -87,20 +87,17 @@ export default function DiscoverPage() {
       });
       addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     }
-    // 마지막 카드 → 더 로드 또는 새 배치
+    // 마지막 카드 → 새 배치 (서버 refresh)
     if (topIdx >= filtered.length - 1) {
-      if (rec.exhausted && !rec.loading) {
-        // 풀 소진 → 랜덤 페이지로 완전히 새 배치 (스와이프로만 트리거, 자동 아님)
+      if (!rec.loading && !rec.prefetching) {
         rec.refreshRecommendations();
         setTopIdx(0);
-      } else if (!rec.loadingMore) {
-        rec.loadMoreRecs();
       }
       return;
     }
-    // 남은 카드 6개 이하면 미리 로드 (빠른 스와이프 대비)
-    if (topIdx >= filtered.length - 6 && !rec.loadingMore && !rec.exhausted) {
-      rec.loadMoreRecs();
+    // 남은 10개 이하 → 다음 배치 백그라운드 프리페치
+    if (topIdx >= filtered.length - 10 && !rec.prefetching) {
+      rec.prefetchNextBatch();
     }
     swipe.setSwiping(true);
     swipe.setDragX(-600);
@@ -113,7 +110,7 @@ export default function DiscoverPage() {
     }, 280);
     swipe.timersRef.current.add(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topIdx, filtered.length, rec.loadingMore]);
+  }, [topIdx, filtered.length, rec.prefetching]);
 
   const swipe = useSwipeGesture({ topIdx, filteredLength: filtered.length, nextCard, setTopIdx, onSwipeDown: () => setShowWatched(true) });
 
@@ -244,10 +241,10 @@ export default function DiscoverPage() {
   // OTT 필터로 인해 부족한 경우도 커버
   useEffect(() => {
     const remaining = filtered.length - topIdx;
-    if (remaining <= 8 && !rec.loading && !rec.loadingMore && !rec.exhausted && filtered.length > 0) {
-      rec.loadMoreRecs();
+    if (remaining <= 10 && !rec.loading && !rec.prefetching && filtered.length > 0) {
+      rec.prefetchNextBatch();
     }
-  }, [topIdx, filtered.length, rec.loading, rec.loadingMore]);
+  }, [topIdx, filtered.length, rec.loading, rec.prefetching]);
 
   useEffect(() => {
     if (!mounted || rec.loading) return;
@@ -352,8 +349,8 @@ export default function DiscoverPage() {
               </div>
             </div>
           )}
-          {/* 덱 뒤 스켈레톤 — loadMore 또는 exhausted(refresh 대기) 모두 표시 */}
-          {(rec.loadingMore || rec.exhausted || rec.loading) && (
+          {/* 덱 뒤 스켈레톤 — 프리페치 또는 로딩 중 표시 */}
+          {(rec.prefetching || rec.loading) && (
             <div
               className="absolute overflow-hidden rounded-xl animate-pulse"
               style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}
@@ -365,7 +362,6 @@ export default function DiscoverPage() {
               </div>
             </div>
           )}
-          {/* "모두 봤어요" 카드 제거 — exhausted 시 자동 refresh로 대체 */}
           {false && (
             <div />
           )}

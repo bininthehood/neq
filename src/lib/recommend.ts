@@ -136,10 +136,10 @@ async function gatherCandidates(
 
   const sorted = Array.from(freqMap.values())
     .sort((a, b) => b.score - a.score);
-  // 상위 20개는 유지하고, 나머지 30개는 셔플 → 매 호출마다 다른 조합
+  // 상위 20개는 유지하고, 나머지는 셔플 → 매 호출마다 다른 조합
   const top = sorted.slice(0, 20);
   const rest = sorted.slice(20).sort(() => Math.random() - 0.5);
-  return [...top, ...rest].slice(0, 50);
+  return [...top, ...rest].slice(0, 100);
 }
 
 // ---------- Step 4: 메타데이터 풍부화 ----------
@@ -160,9 +160,9 @@ async function enrichCandidates(candidates: Candidate[]): Promise<EnrichedCandid
       })
     );
     results.push(...enriched);
-    // 충분한 OTT 가용 결과가 모이면 조기 종료 (필터 후 25개 목표)
+    // 충분한 OTT 가용 결과가 모이면 조기 종료 (필터 후 60개 목표)
     const withOTT = results.filter((r) => r.providers.length > 0);
-    if (withOTT.length >= 25) break;
+    if (withOTT.length >= 60) break;
   }
   return results;
 }
@@ -352,6 +352,16 @@ function buildRecommendationObject(
   };
 }
 
+// ---------- 템플릿 reason (LLM 미선택 후보용) ----------
+
+function templateReason(c: EnrichedCandidate): string {
+  if (c.item.vote_average >= 8.5) return "평점이 아주 높은 작품이에요";
+  if (c.item.vote_average >= 8.0) return "평점 높고 입소문 난 작품이에요";
+  if (c.type === "series") return "한 번 시작하면 멈출 수 없는 시리즈예요";
+  if (c.item.vote_average >= 7.0) return "숨겨진 명작이에요";
+  return "취향에 맞을 것 같은 작품이에요";
+}
+
 // ---------- Cold Start ----------
 
 /** vote_average / media_type에 따라 reason을 다양하게 */
@@ -393,7 +403,7 @@ async function getColdStartRecommendations(
 
   // Step 3: enrichment (배치 10, 조기 종료)
   const enriched = await enrichCandidates(
-    candidates.slice(0, 25).map((item) => ({
+    candidates.slice(0, 60).map((item) => ({
       id: item.id,
       type: (item.media_type === "tv" ? "series" : "movie") as "movie" | "series",
       item,
@@ -410,7 +420,7 @@ async function getColdStartRecommendations(
   const usedTitles = new Set<string>();
 
   for (const c of filtered) {
-    if (results.length >= 20) break;
+    if (results.length >= 50) break;
     if (usedTitles.has(c.item.title)) continue;
     usedTitles.add(c.item.title);
     results.push(buildRecommendationObject(c, coldStartReason(c.item)));
@@ -459,7 +469,7 @@ export async function getRecommendations(
   const enriched = await enrichCandidates(candidates);
 
   // Step 5
-  let filtered = applyFilters(enriched, filter).slice(0, 25);
+  let filtered = applyFilters(enriched, filter).slice(0, 50);
 
   // Step 5.5: 크로스타입 보충 — 필터 적용 후 결과가 부족하면 discover로 보충
   // (예: 영화만 취향에 넣고 시리즈 필터 → TMDB /recommendations는 영화만 반환 → 시리즈 부족)
@@ -506,7 +516,7 @@ export async function getRecommendations(
       if (supplementCandidates.length > 0) {
         const supplementEnriched = await enrichCandidates(supplementCandidates);
         const supplementFiltered = applyFilters(supplementEnriched, filter);
-        filtered = [...filtered, ...supplementFiltered].slice(0, 25);
+        filtered = [...filtered, ...supplementFiltered].slice(0, 50);
       }
     }
   }
@@ -555,7 +565,7 @@ export async function getRecommendations(
       if (yearCandidates.length > 0) {
         const yearEnriched = await enrichCandidates(yearCandidates);
         const yearFiltered = applyFilters(yearEnriched, filter);
-        filtered = [...filtered, ...yearFiltered].slice(0, 25);
+        filtered = [...filtered, ...yearFiltered].slice(0, 50);
       }
     }
   }
@@ -565,11 +575,12 @@ export async function getRecommendations(
   // Step 6
   const curated = await curateWithLLM(filtered, favorites, feedback);
 
-  // Step 7: 조립 (ID + title 기반 중복 제거)
+  // Step 7: 조립 — LLM 선택 20개 + 나머지 30개 (템플릿 reason)
   const results: Recommendation[] = [];
   const usedIds = new Set<number>();
   const usedTitles = new Set<string>();
 
+  // Phase 1: LLM이 선택한 20개 (개인화 reason)
   for (const { id, reason } of curated) {
     if (results.length >= 20) break;
     const c = filtered.find((f) => f.id === id);
@@ -579,17 +590,14 @@ export async function getRecommendations(
     usedTitles.add(c.item.title);
   }
 
-  // Fallback: LLM 실패/부족 시 상위 후보를 기본 reason으로 채움
-  if (results.length < 20) {
-    for (const c of filtered) {
-      if (results.length >= 20) break;
-      if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
-      results.push(
-        buildRecommendationObject(c, "이 작품이 취향에 맞을 것 같아요")
-      );
-      usedIds.add(c.id);
-    }
+  // Phase 2: 나머지 후보에서 30개 추가 (템플릿 reason)
+  for (const c of filtered) {
+    if (results.length >= 50) break;
+    if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
+    results.push(buildRecommendationObject(c, templateReason(c)));
+    usedIds.add(c.id);
+    usedTitles.add(c.item.title);
   }
 
-  return results.slice(0, 20);
+  return results;
 }
