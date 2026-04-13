@@ -19,9 +19,10 @@ interface FilterChipsPassthrough {
 
 interface LoadingScreenProps extends FilterChipsPassthrough {
   filterLabel: string;
+  isColdStart?: boolean;
 }
 
-export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
+export function LoadingScreen({ filterLabel, isColdStart, ...chips }: LoadingScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
@@ -45,7 +46,11 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
       </div>
       <div className="px-4 pb-2 shrink-0">
         <p className="text-center text-xs py-2 text-muted">
-          {filterLabel ? `${filterLabel} 추천 찾는 중...` : "취향을 분석하고 있어요..."}
+          {isColdStart
+            ? "요즘 인기 작품을 가져오고 있어요..."
+            : filterLabel
+              ? `${filterLabel} 추천 찾는 중...`
+              : "취향을 분석하고 있어요..."}
         </p>
       </div>
       <BottomNav active="discover" />

@@ -250,7 +250,7 @@ export default function DiscoverPage() {
     if (isFirstLoad && favoritesMeta.length > 0) {
       return <FirstLoadingScreen favorites={favoritesMeta} />;
     }
-    return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+    return <LoadingScreen filterLabel={filterLabel} isColdStart={isFirstLoad && favoritesMeta.length === 0} {...chipsProps} />;
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
