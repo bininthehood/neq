@@ -1,7 +1,7 @@
 const requests = new Map<string, { count: number; resetAt: number }>();
 
-const WINDOW_MS = 120_000; // 2분
-const MAX_REQUESTS = 8; // IP당 2분간 8회
+const WINDOW_MS = 60_000; // 1분
+const MAX_REQUESTS = 20; // IP당 분당 20회 (필터 변경, loadMore, 새로고침 대응)
 
 export function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   const now = Date.now();
