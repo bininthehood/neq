@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import {
   getFavorites,
   getRecommendations,
@@ -15,7 +15,15 @@ import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types"
 import { track } from "@/lib/analytics";
 
 export function useRecommendations() {
-  const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [recs, _setRecs] = useState<Recommendation[]>([]);
+  const recsRef = useRef<Recommendation[]>([]); // stale closure 방지
+  const setRecs = (v: Recommendation[] | ((prev: Recommendation[]) => Recommendation[])) => {
+    _setRecs((prev) => {
+      const next = typeof v === "function" ? v(prev) : v;
+      recsRef.current = next;
+      return next;
+    });
+  };
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [prefetching, setPrefetching] = useState(false);
@@ -151,18 +159,24 @@ export function useRecommendations() {
   };
 
   /** 다음 배치를 백그라운드로 프리페치 — 현재 recs 뒤에 추가 */
+  const prefetchAbortRef = useRef<AbortController | null>(null);
   const prefetchNextBatch = async () => {
     if (prefetchingRef.current || loading) return;
     prefetchingRef.current = true;
     setPrefetching(true);
+    // 이전 prefetch 취소
+    prefetchAbortRef.current?.abort();
+    const controller = new AbortController();
+    prefetchAbortRef.current = controller;
     try {
       const favorites = getFavorites();
       const filter: Record<string, string> = {};
       if (filterType !== "all") filter.type = filterType;
       if (filterOrigin !== "all") filter.origin = filterOrigin;
       if (filterYear !== "all") filter.year = filterYear;
-      const currentTitles = recs.map((r) => r.title);
-      const currentIds = recs.map((r) => r.tmdbId);
+      const currentRecs = recsRef.current;
+      const currentTitles = currentRecs.map((r) => r.title);
+      const currentIds = currentRecs.map((r) => r.tmdbId);
       const exclude = [
         ...new Set([...getSeenTitles(), ...getSaved().map((s) => s.recommendation.title), ...currentTitles]),
       ].slice(0, 200);
@@ -171,6 +185,7 @@ export function useRecommendations() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ favorites, filter, exclude, excludeIds }),
+        signal: controller.signal,
       });
       if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }
       const data = await res.json();
@@ -186,13 +201,18 @@ export function useRecommendations() {
           return merged;
         });
       }
-    } catch { /* silent */ }
-    prefetchingRef.current = false;
-    setPrefetching(false);
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      /* silent */
+    } finally {
+      prefetchingRef.current = false;
+      setPrefetching(false);
+    }
   };
 
   const abortLoading = () => {
     abortRef.current?.abort();
+    prefetchAbortRef.current?.abort();
   };
 
   return {

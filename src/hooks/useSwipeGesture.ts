@@ -21,7 +21,15 @@ export function useSwipeGesture({
   const [dragX, setDragX] = useState(0);
   const [firstCardHint, setFirstCardHint] = useState(false);
   const [dragY, setDragY] = useState(0);
-  const [swiping, setSwiping] = useState(false);
+  const [swiping, _setSwiping] = useState(false);
+  const swipingRef = useRef(false); // stale closure 방지용 ref 미러
+  const setSwiping = useCallback((v: boolean | ((prev: boolean) => boolean)) => {
+    _setSwiping((prev) => {
+      const next = typeof v === "function" ? v(prev) : v;
+      swipingRef.current = next;
+      return next;
+    });
+  }, []);
   const [prevOverlayX, setPrevOverlayX] = useState<number | null>(null);
   const [scrollLocked, setScrollLocked] = useState(false);
 
@@ -151,6 +159,7 @@ export function useSwipeGesture({
     dragY,
     setDragY,
     swiping,
+    swipingRef,
     setSwiping,
     prevOverlayX,
     setPrevOverlayX,

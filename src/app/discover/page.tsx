@@ -76,7 +76,7 @@ export default function DiscoverPage() {
 
   // --- nextCard ---
   const nextCard = useCallback(() => {
-    if (swipe.swiping) return;
+    if (swipe.swipingRef.current) return;
     setShowWatched(false);
     const cur = filtered[topIdx];
     if (cur) {
