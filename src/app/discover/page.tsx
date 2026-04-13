@@ -78,7 +78,6 @@ export default function DiscoverPage() {
   const nextCard = useCallback(() => {
     if (swipe.swiping) return;
     setShowWatched(false);
-    setImmersive(false);
     const cur = filtered[topIdx];
     if (cur) {
       track("card_swiped", {
