@@ -11,7 +11,7 @@ import {
   addRecHistory,
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
-import type { FilterType, FilterOrigin } from "@/lib/discover-types";
+import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
 
 export function useRecommendations() {
@@ -21,6 +21,7 @@ export function useRecommendations() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
+  const [filterYear, setFilterYear] = useState<FilterYear>("all");
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
@@ -182,6 +183,8 @@ export function useRecommendations() {
     loadingMore,
     filterType,
     filterOrigin,
+    filterYear,
+    setFilterYear,
     filterOTTs,
     setFilterOTTs,
     loadRecs,

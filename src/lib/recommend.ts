@@ -11,13 +11,15 @@ import {
   discoverByGenres,
   type TMDBSimilarItem,
 } from "./tmdb";
+import { VARIETY_GENRE_IDS } from "./discover-types";
 import type { Recommendation } from "./types";
 
 const openai = new OpenAI();
 
 export interface RecommendFilter {
-  type?: "movie" | "series"; // undefined = 둘 다
+  type?: "movie" | "series" | "variety"; // variety = 예능 (TV + Reality/Talk 장르)
   origin?: "kr" | "foreign"; // undefined = 둘 다
+  year?: "recent" | "2010s" | "classic"; // undefined = 전체
 }
 
 export interface WatchFeedback {
@@ -176,10 +178,29 @@ function applyFilters(
     if (filter.type === "movie" && c.type !== "movie") return false;
     if (filter.type === "series" && c.type !== "series") return false;
 
+    // 예능(variety) 필터: TV이면서 genre_ids에 Reality(10764) 또는 Talk(10767) 포함
+    if (filter.type === "variety") {
+      if (c.type !== "series") return false;
+      const hasVarietyGenre = (c.item.genre_ids ?? []).some(
+        (gid) => VARIETY_GENRE_IDS.includes(gid),
+      );
+      if (!hasVarietyGenre) return false;
+    }
+
     // origin 필터 (production_countries 기준)
     const isKR = c.details.country.includes("KR");
     if (filter.origin === "kr" && !isKR) return false;
     if (filter.origin === "foreign" && isKR) return false;
+
+    // 년도 필터
+    if (filter.year) {
+      const dateStr = c.item.release_date ?? c.item.first_air_date ?? "";
+      const year = parseInt(dateStr.slice(0, 4));
+      if (isNaN(year)) return false;
+      if (filter.year === "recent" && year < 2020) return false;
+      if (filter.year === "2010s" && (year < 2010 || year > 2019)) return false;
+      if (filter.year === "classic" && year > 2009) return false;
+    }
 
     return true;
   });
@@ -356,6 +377,7 @@ async function getColdStartRecommendations(
     if (excludeSet.has(item.title)) return false;
     if (filter.type === "movie" && item.media_type !== "movie") return false;
     if (filter.type === "series" && item.media_type !== "tv") return false;
+    if (filter.type === "variety" && item.media_type !== "tv") return false;
     return true;
   });
 
@@ -427,21 +449,28 @@ export async function getRecommendations(
 
   // Step 5.5: 크로스타입 보충 — 필터 적용 후 결과가 부족하면 discover로 보충
   // (예: 영화만 취향에 넣고 시리즈 필터 → TMDB /recommendations는 영화만 반환 → 시리즈 부족)
-  if (filtered.length < 15 && (filter.type === "movie" || filter.type === "series")) {
-    // matched 작품들의 genre_ids를 빈도순으로 집계
-    const genreFreq = new Map<number, number>();
-    for (const fav of matched) {
-      for (const gid of fav.genreIds) {
-        genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
+  if (filtered.length < 15 && (filter.type === "movie" || filter.type === "series" || filter.type === "variety")) {
+    // variety: Reality/Talk 장르로 discover, 일반: matched 작품의 장르 빈도순
+    const discoverType: "movie" | "series" = filter.type === "variety" ? "series" : filter.type;
+    let topGenres: number[];
+
+    if (filter.type === "variety") {
+      topGenres = VARIETY_GENRE_IDS;
+    } else {
+      const genreFreq = new Map<number, number>();
+      for (const fav of matched) {
+        for (const gid of fav.genreIds) {
+          genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
+        }
       }
+      topGenres = Array.from(genreFreq.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([id]) => id);
     }
-    const topGenres = Array.from(genreFreq.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([id]) => id);
 
     if (topGenres.length > 0) {
-      const discoverResults = await discoverByGenres(topGenres, filter.type);
+      const discoverResults = await discoverByGenres(topGenres, discoverType);
       const existingIds = new Set(candidates.map((c) => c.id));
       const supplementCandidates: Candidate[] = discoverResults
         .filter(
@@ -453,7 +482,7 @@ export async function getRecommendations(
         .slice(0, 20)
         .map((item) => ({
           id: item.id,
-          type: filter.type!,
+          type: discoverType,
           item,
           frequency: 1,
           score: item.vote_average || 1,

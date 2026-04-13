@@ -14,6 +14,7 @@ import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
 import { getPrimaryCountryName } from "@/lib/country-names";
 import type { Recommendation, WatchReaction } from "@/lib/types";
+import type { FilterYear } from "@/lib/discover-types";
 import BottomNav from "@/components/BottomNav";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
@@ -51,9 +52,22 @@ export default function DiscoverPage() {
   const rec = useRecommendations();
   const detail = useDetailSheet();
 
-  const filtered = rec.filterOTTs.size === 0
+  let filtered = rec.filterOTTs.size === 0
     ? rec.recs
     : rec.recs.filter((r) => r.providers.some((p) => rec.filterOTTs.has(p.name)));
+
+  // 년도 클라이언트 필터
+  if (rec.filterYear !== "all") {
+    filtered = filtered.filter((r) => {
+      const year = parseInt((r.date ?? "").slice(0, 4));
+      if (isNaN(year)) return false;
+      if (rec.filterYear === "recent") return year >= 2020;
+      if (rec.filterYear === "2010s") return year >= 2010 && year <= 2019;
+      if (rec.filterYear === "classic") return year <= 2009;
+      return true;
+    });
+  }
+
   const current = filtered[topIdx];
   const isSaved = !!(current && savedIds.has(current.tmdbId));
 
@@ -236,13 +250,14 @@ export default function DiscoverPage() {
 
   // --- shared props ---
   const chipsProps = {
-    filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterOTTs: rec.filterOTTs,
+    filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterOTTs: rec.filterOTTs,
     recs: rec.recs, loading: rec.loading, onFilterChange: rec.handleFilterChange,
+    onYearChange: (y: FilterYear) => { rec.setFilterYear(y); setTopIdx(0); },
     onOTTChange: rec.setFilterOTTs, onResetTopIdx: () => setTopIdx(0),
   };
   const filterLabel = [
     rec.filterOrigin === "kr" ? "국내" : rec.filterOrigin === "foreign" ? "해외" : "",
-    rec.filterType === "movie" ? "영화" : rec.filterType === "series" ? "시리즈" : "",
+    rec.filterType === "movie" ? "영화" : rec.filterType === "series" ? "시리즈" : rec.filterType === "variety" ? "예능" : "",
   ].filter(Boolean).join(" ");
 
   // --- status screens ---
@@ -254,8 +269,8 @@ export default function DiscoverPage() {
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
-    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterOTTs.size > 0;
-    return <EmptyScreen hasFilter={hasF} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterOTTs(new Set()); }} onRefresh={rec.refreshRecommendations} onReset={() => router.push("/reset")} {...chipsProps} />;
+    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterOTTs.size > 0;
+    return <EmptyScreen hasFilter={hasF} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterOTTs(new Set()); }} onRefresh={rec.refreshRecommendations} onReset={() => router.push("/reset")} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();

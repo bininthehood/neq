@@ -5,20 +5,23 @@ import NextImage from "next/image";
 import { getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
 import type { Recommendation } from "@/lib/types";
-import type { FilterType, FilterOrigin } from "@/lib/discover-types";
+import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import {
   OTT_OPTIONS,
   TYPE_LABELS,
   ORIGIN_LABELS,
+  YEAR_LABELS,
 } from "@/lib/discover-types";
 
 interface FilterChipsProps {
   filterType: FilterType;
   filterOrigin: FilterOrigin;
+  filterYear: FilterYear;
   filterOTTs: Set<string>;
   recs: Recommendation[];
   loading: boolean;
   onFilterChange: (t: FilterType, o: FilterOrigin) => void;
+  onYearChange: (y: FilterYear) => void;
   onOTTChange: (otts: Set<string>) => void;
   onResetTopIdx: () => void;
 }
@@ -26,15 +29,17 @@ interface FilterChipsProps {
 export default function FilterChips({
   filterType,
   filterOrigin,
+  filterYear,
   filterOTTs,
   recs,
   loading,
   onFilterChange,
+  onYearChange,
   onOTTChange,
   onResetTopIdx,
 }: FilterChipsProps) {
   const [openDropdown, setOpenDropdown] = useState<
-    "type" | "origin" | "ott" | null
+    "type" | "origin" | "year" | "ott" | null
   >(null);
 
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
@@ -87,6 +92,20 @@ export default function FilterChips({
           {ORIGIN_LABELS[filterOrigin]}{" "}
           <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
         </button>
+        <button
+          onClick={() =>
+            setOpenDropdown(openDropdown === "year" ? null : "year")
+          }
+          disabled={loading}
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          style={chipStyle(
+            filterYear !== "all",
+            openDropdown === "year",
+          )}
+        >
+          {YEAR_LABELS[filterYear]}{" "}
+          <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
+        </button>
         {availableOTTs.length > 0 && (
           <button
             onClick={() =>
@@ -116,7 +135,7 @@ export default function FilterChips({
             style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}
           >
             {openDropdown === "type" &&
-              (["all", "movie", "series"] as const).map((t) => (
+              (["all", "movie", "series", "variety"] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => {
@@ -151,6 +170,26 @@ export default function FilterChips({
                   }}
                 >
                   {o === "all" ? "전체" : ORIGIN_LABELS[o]}
+                </button>
+              ))}
+            {openDropdown === "year" &&
+              (["all", "recent", "2010s", "classic"] as const).map((y) => (
+                <button
+                  key={y}
+                  onClick={() => {
+                    track("filter_changed", { kind: "year", value: y });
+                    onYearChange(y);
+                    onResetTopIdx();
+                    setOpenDropdown(null);
+                  }}
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  style={{
+                    background: filterYear === y ? "var(--accent-dim)" : "transparent",
+                    color: filterYear === y ? "var(--accent)" : "var(--text-secondary)",
+                    fontWeight: filterYear === y ? 600 : 400,
+                  }}
+                >
+                  {y === "all" ? "전체" : YEAR_LABELS[y]}
                 </button>
               ))}
             {openDropdown === "ott" && (

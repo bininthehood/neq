@@ -1,7 +1,7 @@
 "use client";
 
 import type { Recommendation } from "@/lib/types";
-import type { FilterType, FilterOrigin } from "@/lib/discover-types";
+import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import BottomNav from "@/components/BottomNav";
 import FilterChips from "@/components/discover/FilterChips";
 import { IconFilm, IconRefresh } from "@/components/Icons";
@@ -9,10 +9,12 @@ import { IconFilm, IconRefresh } from "@/components/Icons";
 interface FilterChipsPassthrough {
   filterType: FilterType;
   filterOrigin: FilterOrigin;
+  filterYear: FilterYear;
   filterOTTs: Set<string>;
   recs: Recommendation[];
   loading: boolean;
   onFilterChange: (t: FilterType, o: FilterOrigin) => void;
+  onYearChange: (y: FilterYear) => void;
   onOTTChange: (otts: Set<string>) => void;
   onResetTopIdx: () => void;
 }
