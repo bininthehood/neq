@@ -53,18 +53,19 @@ export default function SwipeCard({
 
   return (
     <div
-      className="absolute overflow-hidden will-change-transform rounded-xl"
+      className="absolute overflow-hidden will-change-transform"
       style={{
-        top: 0,
-        bottom: "8px",
-        left: "12px",
-        right: "12px",
+        top: immersive ? "-12px" : 0,
+        bottom: immersive ? "-8px" : "8px",
+        left: immersive ? "-12px" : "12px",
+        right: immersive ? "-12px" : "12px",
+        borderRadius: immersive ? 0 : "var(--radius-xl)",
         transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rot}deg) scale(${scaleVal})`,
         transition:
           isTop && isDragging
             ? "none"
             : isTop
-              ? "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)"
+              ? "transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), top 0.3s ease-out, bottom 0.3s ease-out, left 0.3s ease-out, right 0.3s ease-out, border-radius 0.3s ease-out"
               : "transform 0.3s ease-out",
         zIndex: 10 - depth,
       }}
