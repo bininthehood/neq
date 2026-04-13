@@ -25,13 +25,16 @@ export function useRecommendations() {
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
-  const loadRecs = async (ft: FilterType, fo: FilterOrigin) => {
-    const cached = getRecommendations(ft, fo);
-    if (cached.length > 0) {
-      setRecs(cached);
-      setLoading(false);
-      setLoadError(null);
-      return;
+  const loadRecs = async (ft: FilterType, fo: FilterOrigin, fy: FilterYear = "all") => {
+    // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로)
+    if (fy === "all") {
+      const cached = getRecommendations(ft, fo);
+      if (cached.length > 0) {
+        setRecs(cached);
+        setLoading(false);
+        setLoadError(null);
+        return;
+      }
     }
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -42,6 +45,7 @@ export function useRecommendations() {
     const filter: Record<string, string> = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
+    if (fy !== "all") filter.year = fy;
     const reports = getWatchReports();
     const savedItems = getSaved();
     const feedback: Record<string, string[]> = {
@@ -135,6 +139,7 @@ export function useRecommendations() {
     const filter: Record<string, string> = {};
     if (filterType !== "all") filter.type = filterType;
     if (filterOrigin !== "all") filter.origin = filterOrigin;
+    if (filterYear !== "all") filter.year = filterYear;
     const currentTitles = recs.map((r) => r.title);
     const seenTitles = getSeenTitles();
     const savedTitles = getSaved().map((s) => s.recommendation.title);

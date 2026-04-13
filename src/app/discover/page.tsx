@@ -281,7 +281,12 @@ export default function DiscoverPage() {
   const chipsProps = {
     filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterOTTs: rec.filterOTTs,
     recs: rec.recs, loading: rec.loading, onFilterChange: rec.handleFilterChange,
-    onYearChange: (y: FilterYear) => { rec.setFilterYear(y); setTopIdx(0); },
+    onYearChange: (y: FilterYear) => {
+      rec.setFilterYear(y);
+      setTopIdx(0);
+      // 년도 필터 변경 시 서버에서 해당 년도 작품을 가져오도록 새로 요청
+      if (y !== "all") rec.loadRecs(rec.filterType, rec.filterOrigin, y);
+    },
     onOTTChange: rec.setFilterOTTs, onResetTopIdx: () => setTopIdx(0),
   };
   const filterLabel = [

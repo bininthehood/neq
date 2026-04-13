@@ -521,7 +521,7 @@ export default function SavedPage() {
       </div>
 
       {/* Filter tabs */}
-      {saved.length > 0 && (
+      {(saved.length > 0 || history.length > 0) && (
         <div className="flex gap-4 px-5 mt-2 mb-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
           {VIEW_FILTERS.map((f) => (
             <button

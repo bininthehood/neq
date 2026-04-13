@@ -164,14 +164,19 @@ export interface TMDBSimilarItem {
 export async function discoverByGenres(
   genreIds: number[],
   type: "movie" | "series",
-  page = 1
+  page = 1,
+  dateRange?: { gte?: string; lte?: string }
 ): Promise<TMDBSimilarItem[]> {
   if (genreIds.length === 0) return [];
   const mediaType = type === "series" ? "tv" : "movie";
   const genres = genreIds.slice(0, 5).join("|"); // OR 조건 (,는 AND → 결과 0개 됨)
+  const dateField = mediaType === "tv" ? "first_air_date" : "release_date";
+  let dateParams = "";
+  if (dateRange?.gte) dateParams += `&${dateField}.gte=${dateRange.gte}`;
+  if (dateRange?.lte) dateParams += `&${dateField}.lte=${dateRange.lte}`;
   try {
     const res = await fetch(
-      `${BASE}/discover/${mediaType}?api_key=${API_KEY}&language=ko-KR&with_genres=${genres}&sort_by=vote_average.desc&vote_count.gte=100&page=${page}`
+      `${BASE}/discover/${mediaType}?api_key=${API_KEY}&language=ko-KR&with_genres=${genres}&sort_by=vote_average.desc&vote_count.gte=100&page=${page}${dateParams}`
     );
     if (!res.ok) return [];
     const data = await res.json();

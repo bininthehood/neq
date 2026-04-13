@@ -496,6 +496,54 @@ export async function getRecommendations(
     }
   }
 
+  // Step 5.6: 년도 보충 — 년도 필터 시 결과가 부족하면 discover로 보충
+  if (filtered.length < 15 && filter.year) {
+    const dateRange: { gte?: string; lte?: string } = {};
+    if (filter.year === "recent") dateRange.gte = "2020-01-01";
+    if (filter.year === "2010s") { dateRange.gte = "2010-01-01"; dateRange.lte = "2019-12-31"; }
+    if (filter.year === "classic") dateRange.lte = "2009-12-31";
+
+    // 취향 장르로 해당 년도 작품 검색
+    const genreFreq = new Map<number, number>();
+    for (const fav of matched) {
+      for (const gid of fav.genreIds) {
+        genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
+      }
+    }
+    const topGenres = Array.from(genreFreq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id);
+
+    if (topGenres.length > 0) {
+      const movieResults = await discoverByGenres(topGenres, "movie", 1, dateRange);
+      const tvResults = await discoverByGenres(topGenres, "series", 1, dateRange);
+      const yearResults = [...movieResults, ...tvResults];
+
+      const existingIds = new Set(filtered.map((c) => c.id));
+      const yearCandidates: Candidate[] = yearResults
+        .filter((item) =>
+          !existingIds.has(item.id) &&
+          !matchedIdsSet.has(item.id) &&
+          !excludeTitlesSet.has(item.title)
+        )
+        .slice(0, 20)
+        .map((item) => ({
+          id: item.id,
+          type: (item.media_type === "tv" ? "series" : "movie") as "movie" | "series",
+          item,
+          frequency: 1,
+          score: item.vote_average || 1,
+        }));
+
+      if (yearCandidates.length > 0) {
+        const yearEnriched = await enrichCandidates(yearCandidates);
+        const yearFiltered = applyFilters(yearEnriched, filter);
+        filtered = [...filtered, ...yearFiltered].slice(0, 25);
+      }
+    }
+  }
+
   if (filtered.length === 0) return [];
 
   // Step 6
