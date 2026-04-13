@@ -237,9 +237,9 @@ export default function DiscoverPage() {
     }
   }, [filtered.length, topIdx]);
 
-  // 프리페치: 남은 카드 8장 이하일 때 다음 배치 자동 로드
-  // OTT 필터로 인해 부족한 경우도 커버
+  // 프리페치: 남은 카드 10장 이하 + 스와이프 시작한 이후에만
   useEffect(() => {
+    if (topIdx === 0) return; // 첫 로드 직후 프리페치 방지
     const remaining = filtered.length - topIdx;
     if (remaining <= 10 && !rec.loading && !rec.prefetching && filtered.length > 0) {
       rec.prefetchNextBatch();
