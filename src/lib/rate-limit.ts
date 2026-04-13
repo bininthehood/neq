@@ -1,7 +1,7 @@
 const requests = new Map<string, { count: number; resetAt: number }>();
 
 const WINDOW_MS = 60_000; // 1분
-const MAX_REQUESTS = 20; // IP당 분당 20회 (필터 변경, loadMore, 새로고침 대응)
+const MAX_REQUESTS = 60; // IP당 분당 60회 (대량 배치 구조, 비용 방어는 OpenAI 월 한도)
 
 export function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   const now = Date.now();
