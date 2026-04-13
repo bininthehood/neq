@@ -134,9 +134,12 @@ async function gatherCandidates(
     }
   }
 
-  return Array.from(freqMap.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 50);
+  const sorted = Array.from(freqMap.values())
+    .sort((a, b) => b.score - a.score);
+  // 상위 20개는 유지하고, 나머지 30개는 셔플 → 매 호출마다 다른 조합
+  const top = sorted.slice(0, 20);
+  const rest = sorted.slice(20).sort(() => Math.random() - 0.5);
+  return [...top, ...rest].slice(0, 50);
 }
 
 // ---------- Step 4: 메타데이터 풍부화 ----------
@@ -369,8 +372,15 @@ async function getColdStartRecommendations(
 ): Promise<Recommendation[]> {
   const excludeSet = new Set(exclude ?? []);
 
-  // Step 1: TMDB trending (~500ms)
-  const trending = await getTrending("week");
+  // Step 1: TMDB trending — 랜덤 페이지 2개를 섞어서 다양성 확보
+  const page1 = Math.ceil(Math.random() * 5);
+  const page2 = page1 === 1 ? 2 : 1;
+  const [t1, t2] = await Promise.all([
+    getTrending("week", page1),
+    getTrending("day", page2),
+  ]);
+  // 셔플해서 매번 다른 순서
+  const trending = [...t1, ...t2].sort(() => Math.random() - 0.5);
 
   // Step 2: 타입 필터
   const candidates = trending.filter((item) => {
@@ -474,7 +484,8 @@ export async function getRecommendations(
     }
 
     if (topGenres.length > 0) {
-      const discoverResults = await discoverByGenres(topGenres, discoverType);
+      const randomPage = Math.ceil(Math.random() * 3);
+      const discoverResults = await discoverByGenres(topGenres, discoverType, randomPage);
       const existingIds = new Set(candidates.map((c) => c.id));
       const supplementCandidates: Candidate[] = discoverResults
         .filter(
@@ -520,8 +531,9 @@ export async function getRecommendations(
       .map(([id]) => id);
 
     if (topGenres.length > 0) {
-      const movieResults = await discoverByGenres(topGenres, "movie", 1, dateRange);
-      const tvResults = await discoverByGenres(topGenres, "series", 1, dateRange);
+      const yearPage = Math.ceil(Math.random() * 3);
+      const movieResults = await discoverByGenres(topGenres, "movie", yearPage, dateRange);
+      const tvResults = await discoverByGenres(topGenres, "series", yearPage, dateRange);
       const yearResults = [...movieResults, ...tvResults];
 
       const existingIds = new Set(filtered.map((c) => c.id));

@@ -204,11 +204,12 @@ export async function discoverByGenres(
  * Cold start (favorites 없음) 시 LLM 스킵하고 즉시 카드 반환용.
  */
 export async function getTrending(
-  timeWindow: "day" | "week" = "week"
+  timeWindow: "day" | "week" = "week",
+  page = 1
 ): Promise<TMDBSimilarItem[]> {
   try {
     const res = await fetch(
-      `${BASE}/trending/all/${timeWindow}?api_key=${API_KEY}&language=ko-KR`
+      `${BASE}/trending/all/${timeWindow}?api_key=${API_KEY}&language=ko-KR&page=${page}`
     );
     if (!res.ok) return [];
     const data = await res.json();
