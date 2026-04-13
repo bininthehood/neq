@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { vibrate } from "@/lib/haptics";
 
 interface UseSwipeGestureParams {
@@ -43,50 +43,38 @@ export function useSwipeGesture({
     [swiping],
   );
 
-  // onTouchMove를 ref에 저장 — useEffect에서 { passive: false }로 등록하기 위해
-  const touchMoveHandler = useRef<(e: TouchEvent) => void>(() => {});
-  touchMoveHandler.current = (e: TouchEvent) => {
-    if (!dragging.current) return;
-    const dx = e.touches[0].clientX - startX.current;
-    const dy = e.touches[0].clientY - startY.current;
-    if (!dirLock.current) {
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10)
-        dirLock.current = "h";
-      else if (Math.abs(dy) > 10) dirLock.current = "v";
-      else return;
-    }
-    if (dirLock.current === "h") {
-      e.preventDefault(); // passive: false로 등록했으므로 작동
-      if (!scrollLocked) setScrollLocked(true);
-
-      if (dx > 0 && topIdx === 0) {
-        setDragX(dx * 0.15);
-        if (dx > 30 && !firstCardHint) setFirstCardHint(true);
-      } else if (dx > 0 && filteredLength > 1 && topIdx > 0) {
-        const screenW = window.innerWidth;
-        setPrevOverlayX(Math.min(0, -screenW + dx));
-      } else if (dx <= 0) {
-        setPrevOverlayX(null);
-        setDragX(dx);
-        setDragY(0);
+  const onTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!dragging.current) return;
+      const dx = e.touches[0].clientX - startX.current;
+      const dy = e.touches[0].clientY - startY.current;
+      if (!dirLock.current) {
+        if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10)
+          dirLock.current = "h";
+        else if (Math.abs(dy) > 10) dirLock.current = "v";
+        else return;
       }
-    } else if (dirLock.current === "v" && dy > 0) {
-      e.preventDefault();
-      setDragY(Math.min(100, dy * 0.5));
-    }
-  };
+      if (dirLock.current === "h") {
+        // preventDefault 제거 — 부모 div에 touch-action: none으로 처리
+        if (!scrollLocked) setScrollLocked(true);
 
-  // scrollRef 요소에 passive: false로 touchmove 등록
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const handler = (e: TouchEvent) => touchMoveHandler.current(e);
-    el.addEventListener("touchmove", handler, { passive: false });
-    return () => el.removeEventListener("touchmove", handler);
-  }, []);
-
-  // onTouchMove는 이제 noop — JSX에서 제거해야 함 (하지만 호환성 위해 빈 함수 유지)
-  const onTouchMove = useCallback(() => {}, []);
+        if (dx > 0 && topIdx === 0) {
+          setDragX(dx * 0.15);
+          if (dx > 30 && !firstCardHint) setFirstCardHint(true);
+        } else if (dx > 0 && filteredLength > 1 && topIdx > 0) {
+          const screenW = window.innerWidth;
+          setPrevOverlayX(Math.min(0, -screenW + dx));
+        } else if (dx <= 0) {
+          setPrevOverlayX(null);
+          setDragX(dx);
+          setDragY(0);
+        }
+      } else if (dirLock.current === "v" && dy > 0) {
+        setDragY(Math.min(100, dy * 0.5));
+      }
+    },
+    [scrollLocked, filteredLength, topIdx, firstCardHint],
+  );
 
   const onTouchEnd = useCallback(() => {
     if (!dragging.current) return;

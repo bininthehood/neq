@@ -322,7 +322,7 @@ export default function DiscoverPage() {
 
       <div ref={swipe.scrollRef} className="flex-1 min-h-0" style={{ overflowY: "hidden", overscrollBehavior: "none" }}>
         <div className="relative px-3 pb-2"
-          style={{ height: "100%" }}
+          style={{ height: "100%", touchAction: "none" }}
           onTouchStart={swipe.onTouchStart} onTouchMove={swipe.onTouchMove} onTouchEnd={swipe.onTouchEnd}>
           {/* 아래 스와이프 오버레이 — 위에서 내려오는 커튼 */}
           {swipe.dragY > 0 && (
