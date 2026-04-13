@@ -12,7 +12,6 @@ interface SwipeCardProps {
   isTop: boolean;
   depth: number;
   dragX: number;
-  dragY: number;
   isDragging: boolean;
   swiping: boolean;
   showWatched: boolean;
@@ -30,7 +29,6 @@ export default function SwipeCard({
   isTop,
   depth,
   dragX,
-  dragY,
   isDragging,
   swiping,
   showWatched,

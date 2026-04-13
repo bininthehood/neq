@@ -1,10 +1,8 @@
 "use client";
 
-import type { Recommendation } from "@/lib/types";
 import { IconSave, IconDetail, IconShare, IconRewind } from "@/components/Icons";
 
 interface ActionBarProps {
-  current: Recommendation | undefined;
   isSaved: boolean;
   canRewind: boolean;
   onShare: () => void;
@@ -14,7 +12,6 @@ interface ActionBarProps {
 }
 
 export default function ActionBar({
-  current,
   isSaved,
   canRewind,
   onShare,

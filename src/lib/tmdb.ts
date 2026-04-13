@@ -44,9 +44,9 @@ export async function searchMulti(query: string): Promise<TMDBResult[]> {
   );
   const data = await res.json();
   return (data.results ?? [])
-    .filter((r: any) => r.media_type === "movie" || r.media_type === "tv")
+    .filter((r: TMDBResult & { media_type?: string }) => r.media_type === "movie" || r.media_type === "tv")
     .slice(0, 6)
-    .map((r: any) => ({
+    .map((r: TMDBResult) => ({
       ...r,
       title: r.title ?? r.name,
     }));
@@ -100,7 +100,7 @@ export async function getDetails(
   return {
     runtime: type === "movie" ? (data.runtime ?? null) : (data.episode_run_time?.[0] ?? null),
     seasons: type === "series" ? (data.number_of_seasons ?? null) : null,
-    country: data.production_countries?.map((c: any) => c.iso_3166_1) ?? data.origin_country ?? [],
+    country: data.production_countries?.map((c: { iso_3166_1: string }) => c.iso_3166_1) ?? data.origin_country ?? [],
     backdrop: data.backdrop_path ? `https://image.tmdb.org/t/p/w780${data.backdrop_path}` : null,
   };
 }
@@ -115,14 +115,17 @@ export async function getCredits(
   );
   const data = await res.json();
 
+  interface CrewMember { name: string; job?: string; department?: string }
+  interface CastMember { name: string }
+
   const director =
-    (data.crew ?? []).find((c: any) => c.job === "Director")?.name ??
-    (data.crew ?? []).find((c: any) => c.department === "Directing")?.name ??
+    (data.crew ?? []).find((c: CrewMember) => c.job === "Director")?.name ??
+    (data.crew ?? []).find((c: CrewMember) => c.department === "Directing")?.name ??
     null;
 
   const cast = (data.cast ?? [])
     .slice(0, 4)
-    .map((c: any) => c.name as string);
+    .map((c: CastMember) => c.name);
 
   return { director, cast };
 }

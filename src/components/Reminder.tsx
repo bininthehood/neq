@@ -1,31 +1,30 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { getSaved, getWatchReports } from "@/lib/store";
 import { IconClose } from "./Icons";
 
 const REMINDER_KEY = "neq_last_reminder";
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
+function computeReminder(): { show: boolean; count: number } {
+  if (typeof window === "undefined") return { show: false, count: 0 };
+  const lastShown = Number(localStorage.getItem(REMINDER_KEY) ?? "0");
+  if (Date.now() - lastShown < ONE_DAY) return { show: false, count: 0 };
+  const saved = getSaved();
+  const reports = getWatchReports();
+  const reportedIds = new Set(reports.map((r) => r.tmdbId));
+  const unwatched = saved.filter((s) => !reportedIds.has(s.recommendation.tmdbId));
+  return unwatched.length > 0 && saved.length >= 3
+    ? { show: true, count: unwatched.length }
+    : { show: false, count: 0 };
+}
+
 export default function Reminder() {
-  const [show, setShow] = useState(false);
-  const [unwatchedCount, setUnwatchedCount] = useState(0);
-
-  useEffect(() => {
-    const lastShown = Number(localStorage.getItem(REMINDER_KEY) ?? "0");
-    const now = Date.now();
-    if (now - lastShown < ONE_DAY) return;
-
-    const saved = getSaved();
-    const reports = getWatchReports();
-    const reportedIds = new Set(reports.map((r) => r.tmdbId));
-    const unwatched = saved.filter((s) => !reportedIds.has(s.recommendation.tmdbId));
-
-    if (unwatched.length > 0 && saved.length >= 3) {
-      setUnwatchedCount(unwatched.length);
-      setShow(true);
-    }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const initial = useMemo(() => computeReminder(), []);
+  const [show, setShow] = useState(initial.show);
+  const unwatchedCount = initial.count;
 
   const dismiss = () => {
     setShow(false);

@@ -7,29 +7,28 @@ import { IconClose } from "./Icons";
 export default function InstallBanner() {
   const [show, setShow] = useState(false);
   const [platform, setPlatform] = useState<"ios" | "android" | null>(null);
-  const deferredPrompt = useRef<any>(null);
+  const [canInstall, setCanInstall] = useState(false);
+  const deferredPrompt = useRef<Event | null>(null);
 
   useEffect(() => {
-    // 이미 앱으로 실행 중이면 표시 안 함
     if (window.matchMedia("(display-mode: standalone)").matches) return;
-    // 이미 닫았으면 표시 안 함 (24시간 동안)
     const dismissed = localStorage.getItem("neq_install_dismissed");
     if (dismissed && Date.now() - Number(dismissed) < 24 * 60 * 60 * 1000) return;
 
     const ua = navigator.userAgent;
-    if (/iPhone|iPad|iPod/.test(ua) && !("standalone" in navigator && (navigator as any).standalone)) {
+    const nav = navigator as Navigator & { standalone?: boolean };
+    if (/iPhone|iPad|iPod/.test(ua) && !nav.standalone) {
       setPlatform("ios");
       setShow(true);
     } else if (/Android/.test(ua)) {
       setPlatform("android");
-      // Android: beforeinstallprompt 이벤트 대기
       const handler = (e: Event) => {
         e.preventDefault();
         deferredPrompt.current = e;
+        setCanInstall(true);
         setShow(true);
       };
       window.addEventListener("beforeinstallprompt", handler);
-      // 이벤트가 안 오더라도 3초 후 표시
       const timer = setTimeout(() => setShow(true), 3000);
       return () => {
         window.removeEventListener("beforeinstallprompt", handler);
@@ -40,10 +39,10 @@ export default function InstallBanner() {
 
   const handleInstall = async () => {
     if (platform === "android" && deferredPrompt.current) {
-      deferredPrompt.current.prompt();
+      const prompt = deferredPrompt.current as Event & { prompt: () => Promise<void> };
+      await prompt.prompt();
       deferredPrompt.current = null;
     }
-    // iOS는 안내만 표시 (네이티브 설치 API 없음)
   };
 
   const handleDismiss = () => {
@@ -72,7 +71,7 @@ export default function InstallBanner() {
             홈 화면에 추가하면 앱처럼 사용할 수 있어요
           </p>
         )}
-        {platform === "android" && deferredPrompt.current && (
+        {platform === "android" && canInstall && (
           <button
             onClick={handleInstall}
             className="mt-2 px-4 py-1.5 text-xs font-semibold active:scale-95 transition-transform bg-accent text-background rounded-full"

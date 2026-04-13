@@ -300,7 +300,7 @@ export default function DiscoverPage() {
           )}
           {deckCards.map((r, stackIdx) => (
             <SwipeCard key={r.tmdbId} rec={r} isTop={stackIdx === deckCards.length - 1} depth={deckCards.length - 1 - stackIdx}
-              dragX={swipe.dragX} dragY={swipe.dragY} isDragging={swipe.dragging.current} swiping={swipe.swiping}
+              dragX={swipe.dragX} isDragging={swipe.dragging.current} swiping={swipe.swiping}
               showWatched={stackIdx === deckCards.length - 1 && showWatched} onCardTap={handleCardTap}
               onWatchedReaction={handleWatchedReaction} onWatchedSkip={handleWatchedSkip}
               onNotInterested={handleNotInterested}
@@ -313,7 +313,7 @@ export default function DiscoverPage() {
         </div>
       </div>
 
-      <ActionBar current={current} isSaved={isSaved} canRewind={topIdx > 0}
+      <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
         onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
         onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }} />
       <BottomNav active="discover" />
