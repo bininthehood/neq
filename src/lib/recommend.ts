@@ -7,6 +7,7 @@ import {
   getDetails,
   posterUrl,
   getTMDBRecommendations,
+  discoverByGenres,
   type TMDBSimilarItem,
 } from "./tmdb";
 import type { Recommendation } from "./types";
@@ -50,6 +51,7 @@ interface MatchedFavorite {
   id: number;
   type: "movie" | "series";
   title: string;
+  genreIds: number[];
 }
 
 /** 병합/랭킹 후 후보 */
@@ -86,7 +88,7 @@ async function matchFavoritesToTMDB(favorites: string[]): Promise<MatchedFavorit
         type = "series";
       }
       if (!result) return null;
-      return { id: result.id, type, title };
+      return { id: result.id, type, title, genreIds: result.genre_ids ?? [] };
     })
   );
   return results.filter((r): r is MatchedFavorite => r !== null);
@@ -355,7 +357,50 @@ export async function getRecommendations(
   const enriched = await enrichCandidates(candidates);
 
   // Step 5
-  const filtered = applyFilters(enriched, filter).slice(0, 25);
+  let filtered = applyFilters(enriched, filter).slice(0, 25);
+
+  // Step 5.5: 크로스타입 보충 — 필터 적용 후 결과가 부족하면 discover로 보충
+  // (예: 영화만 취향에 넣고 시리즈 필터 → TMDB /recommendations는 영화만 반환 → 시리즈 부족)
+  if (filtered.length < 15 && (filter.type === "movie" || filter.type === "series")) {
+    // matched 작품들의 genre_ids를 빈도순으로 집계
+    const genreFreq = new Map<number, number>();
+    for (const fav of matched) {
+      for (const gid of fav.genreIds) {
+        genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
+      }
+    }
+    const topGenres = Array.from(genreFreq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id);
+
+    if (topGenres.length > 0) {
+      const discoverResults = await discoverByGenres(topGenres, filter.type);
+      const existingIds = new Set(candidates.map((c) => c.id));
+      const supplementCandidates: Candidate[] = discoverResults
+        .filter(
+          (item) =>
+            !existingIds.has(item.id) &&
+            !matchedIdsSet.has(item.id) &&
+            !excludeTitlesSet.has(item.title)
+        )
+        .slice(0, 20)
+        .map((item) => ({
+          id: item.id,
+          type: filter.type!,
+          item,
+          frequency: 1,
+          score: item.vote_average || 1,
+        }));
+
+      if (supplementCandidates.length > 0) {
+        const supplementEnriched = await enrichCandidates(supplementCandidates);
+        const supplementFiltered = applyFilters(supplementEnriched, filter);
+        filtered = [...filtered, ...supplementFiltered].slice(0, 25);
+      }
+    }
+  }
+
   if (filtered.length === 0) return [];
 
   // Step 6
