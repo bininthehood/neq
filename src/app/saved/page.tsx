@@ -557,8 +557,16 @@ export default function SavedPage() {
           style={{ border: "1px solid var(--accent-border-light)" }}
           onClick={() => { if (selected) openDetailFor(selected); }}
         >
-          <div className="text-xs font-semibold uppercase tracking-wider mb-2 text-accent">
-            오늘의 선택
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-xs font-semibold uppercase tracking-wider text-accent">
+              오늘의 선택
+            </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setSelected(null); }}
+              className="w-8 h-8 flex items-center justify-center active:scale-90 transition-transform -mr-1"
+            >
+              <IconClose size={14} color="var(--text-muted)" />
+            </button>
           </div>
           <div className="flex gap-3">
             {selected.recommendation.posterUrl && (
