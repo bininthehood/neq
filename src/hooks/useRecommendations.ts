@@ -30,7 +30,7 @@ export function useRecommendations() {
     // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로)
     if (fy === "all") {
       const cached = getRecommendations(ft, fo);
-      if (cached.length > 0) {
+      if (cached.length >= 5) {
         // 캐시에 중복이 있을 수 있으므로 tmdbId 기반 dedup
         const seen = new Set<number>();
         const deduped = cached.filter((r) => {
@@ -38,10 +38,13 @@ export function useRecommendations() {
           seen.add(r.tmdbId);
           return true;
         });
-        setRecs(deduped);
-        setLoading(false);
-        setLoadError(null);
-        return;
+        if (deduped.length >= 5) {
+          setRecs(deduped);
+          setLoading(false);
+          setLoadError(null);
+          return;
+        }
+        // 캐시가 너무 적으면 서버에서 새로 로드
       }
     }
     abortRef.current?.abort();
