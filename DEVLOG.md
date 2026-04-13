@@ -825,3 +825,106 @@ fc84220 feat(monitoring): Sentry 에러 모니터링 추가
 - [ ] 평일 저녁 8시 발송
 - [ ] 1주일 후 PostHog 데이터 리뷰
 - [ ] 1:1 피드백 수집 ("뭐가 별로였어?")
+
+---
+
+## 2026-04-13 (Day 8 continued — 오후)
+
+### 진행 요약
+v0.3 기술 작업(M6-M8) + 추천 아키텍처 근본 리팩토링 + 전체 점검.
+하루에 36개 커밋. 가장 큰 변경은 "loadMore 제거 + 대량 배치 캐시" 리팩토링.
+
+### 완료된 작업
+
+**v0.3 디자인 문서 (/office-hours)**
+- 스타트업 모드, Approach B(리텐션 + 사용자 확보) 승인
+- M6-M9 마일스톤 정의
+
+**M6: Cold Start 16초 → 4초**
+- TMDB trending API 직접 반환 (LLM 스킵, $0)
+- cold start 전용 로딩 메시지
+
+**M7: 년도별 필터 + 예능 카테고리**
+- 년도: 2020~ / 2010년대 / ~2009 (클라이언트+서버 하이브리드)
+- 예능: TMDB Reality(10764) + Talk(10767) 장르 기반
+- 별점순 정렬은 의도적 제외 (다양성 파괴 위험)
+- 크로스타입/년도 보충 로직 추가 (TMDB discover API)
+
+**M8: 시청 리포트 넛지 UX**
+- Saved 페이지: 24시간+ 미시청 작품 개별 넛지 카드 (최대 2개)
+- Discover 재진입: "[작품명] 봤어요?" 토스트 (세션당 1회)
+- 4개 analytics 이벤트 추가
+
+**추천 아키텍처 근본 리팩토링 (가장 큰 변경)**
+- 업계 표준 비교 분석 (인스타/넷플릭스/틴더 vs neq)
+- loadMore 함수 완전 제거 (모든 버그의 근원이었음)
+- 서버: 50개 대량 배치 반환 (LLM 20개 + 템플릿 30개)
+- 클라이언트: prefetchNextBatch로 교체 (남은 10개에서 트리거)
+- TMDB 랜덤 페이지 + 결과 셔플 (매번 다른 추천)
+- 코드 32줄 순감 (-96, +64)
+
+**UX 개선**
+- immersive 모드: 탭 → 포스터만 풀스크린, UI 전부 숨김
+- 스켈레톤 카드: 덱 뒤에 로딩 중 표시
+- ActionBar에 새로고침 버튼 추가
+- 데이터 초기화 → /discover로 이동 (onboarding 대신)
+- touch-action: none으로 passive event listener 해결
+
+**버그 수정 (12건)**
+1. 시리즈 필터 0개 → 크로스타입 보충으로 20개
+2. reason 너무 짧음 → 프롬프트 강화 (26-33자)
+3. 같은 제목 중복 → ID + title 이중 제거
+4. 무한 loadMore 루프 → exhausted 상태 + 자동 refresh
+5. 중복 카드 (duplicate key) → 3중 tmdbId 방어
+6. 캐시 1개 상태 멈춤 → 최소 5개 이상 체크
+7. 초기화 시 같은 작품 → 랜덤 페이지 + 셔플
+8. passive event listener → touch-action: none
+9. 프리페치 429 → topIdx===0 가드
+10. prefetch 연쇄 호출 → ref 기반 가드
+11. stale closure 3건 → swipingRef + recsRef + prefetchAbortRef
+12. rate limit → 60/분으로 완화
+
+**전체 점검 (4단계)**
+1. Health: TS 0 에러, 빌드 성공
+2. Code Review: 3 FAIL 수정 (stale closure, race condition)
+3. QA 엣지 케이스: 20 PASS, 0 FAIL
+4. Playwright E2E: 5개 흐름 정상, 콘솔 에러 0개
+
+### 배운 점
+
+**loadMore는 아키텍처 실수였다**
+- dedup, 무한 루프, stale closure, race condition — 모든 버그가 loadMore에서 시작
+- "조금씩 가져오는" 패턴은 stateless 서버 + 클라이언트 캐시 조합에서 본질적으로 취약
+- 대량 배치(50개) + 클라이언트 페이지네이션이 훨씬 단순하고 안정적
+- 업계(인스타, 넷플릭스)는 사전 계산 + 서버 상태로 이 문제를 근본 해결
+
+**실사용 테스트가 최고의 QA**
+- 코드 리뷰로 못 잡는 버그: "1시간 스와이프하면 같은 카드만 나옴"
+- 이런 건 "시간 + 반복"에서만 나타남
+- 10명 사용자 테스트가 왜 중요한지 다시 확인
+
+### 주요 커밋 (36개 중 핵심)
+```
+09d8c56 fix: 코드 리뷰 FAIL 3건 — stale closure + race condition 수정
+6b1b2db fix: prefetch 연쇄 호출 방지 — ref 기반 가드 추가
+abd9951 refactor(rec): 대량 캐시 + 클라이언트 페이지네이션 — loadMore 제거
+70ab69e fix(critical): 무한 loadMore 루프 — 추천 풀 소진 감지
+d51f6be feat(retention): 시청 리포트 넛지 UX
+0d5e16b feat(filter): 년도별 필터 + 예능 카테고리 추가
+cafe1cf perf(rec): Cold start 16초 → 4초
+ba356f3 feat(rec): 크로스타입 추천 보충 — 시리즈 필터 5개 → 20개
+fc84220 feat(monitoring): Sentry 에러 모니터링 추가
+```
+
+### 현재 상태
+- v0.3 기술 작업 M6-M8 완료
+- 추천 아키텍처: 대량 배치 50개 + prefetch (loadMore 제거)
+- 전체 점검 통과: TS 0, QA 20/20, E2E 5/5, 콘솔 에러 0
+- M9(사용자 10명 확보)만 남음
+
+### 다음 할 일
+- [ ] Sentry DSN 발급 + 환경 변수 설정
+- [ ] OpenAI 비용 알림 $10/$30 설정
+- [ ] 10명 연락처 리스트 + 카톡 메시지 발송
+- [ ] 1주일 데이터 후 PostHog Funnel 리뷰
+- [ ] WARN 항목 중 year "all" 복귀 시 데이터 편향 이슈 해결
