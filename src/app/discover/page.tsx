@@ -87,9 +87,15 @@ export default function DiscoverPage() {
       });
       addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     }
-    // 마지막 카드 → 더 로드 (순환하지 않음, 소진 시 스킵)
+    // 마지막 카드 → 더 로드 또는 새 배치
     if (topIdx >= filtered.length - 1) {
-      if (!rec.loadingMore && !rec.exhausted) rec.loadMoreRecs();
+      if (rec.exhausted && !rec.loading) {
+        // 풀 소진 → 랜덤 페이지로 완전히 새 배치 (스와이프로만 트리거, 자동 아님)
+        rec.refreshRecommendations();
+        setTopIdx(0);
+      } else if (!rec.loadingMore) {
+        rec.loadMoreRecs();
+      }
       return;
     }
     // 남은 카드 6개 이하면 미리 로드 (빠른 스와이프 대비)
@@ -346,8 +352,8 @@ export default function DiscoverPage() {
               </div>
             </div>
           )}
-          {/* 덱 뒤 상태 카드 */}
-          {rec.loadingMore && !rec.exhausted && (
+          {/* 덱 뒤 스켈레톤 — loadMore 또는 exhausted(refresh 대기) 모두 표시 */}
+          {(rec.loadingMore || rec.exhausted || rec.loading) && (
             <div
               className="absolute overflow-hidden rounded-xl animate-pulse"
               style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}
@@ -359,19 +365,9 @@ export default function DiscoverPage() {
               </div>
             </div>
           )}
-          {rec.exhausted && (
-            <div
-              className="absolute overflow-hidden rounded-xl flex flex-col items-center justify-center"
-              style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}
-            >
-              <p className="text-sm text-muted text-center px-8">추천 가능한 작품을 모두 봤어요</p>
-              <button
-                onClick={() => { rec.refreshRecommendations(); setTopIdx(0); }}
-                className="mt-3 px-4 py-2 text-xs text-accent active:scale-95"
-              >
-                새로운 추천 받기
-              </button>
-            </div>
+          {/* "모두 봤어요" 카드 제거 — exhausted 시 자동 refresh로 대체 */}
+          {false && (
+            <div />
           )}
           {deckCards.map((r, stackIdx) => (
             <SwipeCard key={r.tmdbId} rec={r} isTop={stackIdx === deckCards.length - 1} depth={deckCards.length - 1 - stackIdx}
