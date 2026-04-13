@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { favorites, filter, feedback, exclude: rawExclude } = await req.json();
+  const { favorites, filter, feedback, exclude: rawExclude, excludeIds: rawExcludeIds } = await req.json();
 
   // exclude 검증: 문자열 배열, 각 항목 50자 제한, 특수문자 제거, 최대 150개
   const exclude = Array.isArray(rawExclude)
@@ -38,6 +38,11 @@ export async function POST(req: NextRequest) {
         .filter((x: unknown): x is string => typeof x === "string")
         .map((s: string) => s.replace(/[^\p{L}\p{N}\s:,\-().!?]/gu, "").slice(0, 50))
         .slice(0, 150)
+    : undefined;
+
+  // excludeIds 검증: 숫자 배열, 최대 300개
+  const excludeIds = Array.isArray(rawExcludeIds)
+    ? rawExcludeIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 300)
     : undefined;
 
   if (!Array.isArray(favorites)) {
@@ -48,7 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const recommendations = await getRecommendations(favorites, filter ?? {}, feedback, exclude);
+    const recommendations = await getRecommendations(favorites, filter ?? {}, feedback, exclude, excludeIds);
     return NextResponse.json({ recommendations }, {
       headers: { "X-RateLimit-Remaining": String(remaining) },
     });

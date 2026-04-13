@@ -141,16 +141,19 @@ export function useRecommendations() {
     if (filterOrigin !== "all") filter.origin = filterOrigin;
     if (filterYear !== "all") filter.year = filterYear;
     const currentTitles = recs.map((r) => r.title);
+    const currentIds = recs.map((r) => r.tmdbId);
     const seenTitles = getSeenTitles();
     const savedTitles = getSaved().map((s) => s.recommendation.title);
+    const savedIds = getSaved().map((s) => s.recommendation.tmdbId);
     const exclude = [
       ...new Set([...seenTitles, ...savedTitles, ...currentTitles]),
     ].slice(0, 150);
+    const excludeIds = [...new Set([...currentIds, ...savedIds])];
     try {
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ favorites, filter, exclude }),
+        body: JSON.stringify({ favorites, filter, exclude, excludeIds }),
       });
       if (!res.ok) {
         setLoadingMore(false);

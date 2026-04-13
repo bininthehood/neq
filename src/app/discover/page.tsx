@@ -346,6 +346,23 @@ export default function DiscoverPage() {
               </div>
             </div>
           )}
+          {/* 로딩 스켈레톤 카드 — 덱 맨 뒤에 위치 */}
+          {rec.loadingMore && (
+            <div
+              className="absolute overflow-hidden rounded-xl animate-pulse"
+              style={{
+                top: 0, bottom: "8px", left: "12px", right: "12px",
+                zIndex: 1,
+                background: "var(--surface)",
+              }}
+            >
+              <div className="absolute bottom-0 left-0 right-0 p-5 space-y-2.5">
+                <div className="h-6 w-3/5 bg-surface-raised rounded-md" />
+                <div className="h-3 w-2/5 bg-surface-raised rounded-sm" />
+                <div className="h-4 w-4/5 bg-surface-raised rounded-sm" />
+              </div>
+            </div>
+          )}
           {deckCards.map((r, stackIdx) => (
             <SwipeCard key={r.tmdbId} rec={r} isTop={stackIdx === deckCards.length - 1} depth={deckCards.length - 1 - stackIdx}
               dragX={swipe.dragX} isDragging={swipe.dragging.current} swiping={swipe.swiping}
@@ -361,13 +378,6 @@ export default function DiscoverPage() {
           })()}
         </div>
       </div>
-
-      {/* 추가 로딩 인디케이터 — 카드 영역 하단에 플로팅 */}
-      {rec.loadingMore && !immersive && (
-        <div className="absolute bottom-36 left-0 right-0 z-30 flex justify-center pointer-events-none animate-fade-in">
-          <div className="w-6 h-6 animate-spin rounded-full" style={{ border: "2px solid transparent", borderTopColor: "var(--accent)", opacity: 0.5 }} />
-        </div>
-      )}
 
       <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 200, overflow: "hidden" }}>
         <ActionBar isSaved={isSaved} canRewind={topIdx > 0}

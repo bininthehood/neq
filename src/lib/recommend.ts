@@ -423,7 +423,8 @@ export async function getRecommendations(
   favorites: string[],
   filter: RecommendFilter = {},
   feedback?: WatchFeedback,
-  exclude?: string[]
+  exclude?: string[],
+  excludeIds?: number[]
 ): Promise<Recommendation[]> {
   // Cold start: favorites 없으면 TMDB trending으로 빠르게 반환 (LLM 스킵)
   if (favorites.length === 0) {
@@ -434,7 +435,10 @@ export async function getRecommendations(
   const matched = await matchFavoritesToTMDB(favorites);
   if (matched.length === 0) return [];
 
-  const matchedIdsSet = new Set(matched.map((m) => m.id));
+  const matchedIdsSet = new Set([
+    ...matched.map((m) => m.id),
+    ...(excludeIds ?? []),
+  ]);
   const excludeTitlesSet = new Set(exclude ?? []);
 
   // Step 2-3
