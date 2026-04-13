@@ -316,7 +316,7 @@ export default function DiscoverPage() {
         style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
         <span className="font-display text-lg text-accent">neq,</span>
       </div>
-      <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 60, overflow: "hidden" }}>
+      <div className="transition-all duration-300 relative z-20" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 60, overflow: immersive ? "hidden" : "visible", pointerEvents: immersive ? "none" : "auto" }}>
         <FilterChips {...chipsProps} />
       </div>
 
