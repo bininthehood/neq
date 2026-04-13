@@ -87,13 +87,13 @@ export default function DiscoverPage() {
       });
       addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     }
-    // 마지막 카드 → 더 로드 (순환하지 않음)
+    // 마지막 카드 → 더 로드 (순환하지 않음, 소진 시 스킵)
     if (topIdx >= filtered.length - 1) {
-      if (!rec.loadingMore) rec.loadMoreRecs();
+      if (!rec.loadingMore && !rec.exhausted) rec.loadMoreRecs();
       return;
     }
     // 남은 카드 6개 이하면 미리 로드 (빠른 스와이프 대비)
-    if (topIdx >= filtered.length - 6 && !rec.loadingMore) {
+    if (topIdx >= filtered.length - 6 && !rec.loadingMore && !rec.exhausted) {
       rec.loadMoreRecs();
     }
     swipe.setSwiping(true);
@@ -238,7 +238,7 @@ export default function DiscoverPage() {
   // OTT 필터로 인해 부족한 경우도 커버
   useEffect(() => {
     const remaining = filtered.length - topIdx;
-    if (remaining <= 8 && !rec.loading && !rec.loadingMore && filtered.length > 0) {
+    if (remaining <= 8 && !rec.loading && !rec.loadingMore && !rec.exhausted && filtered.length > 0) {
       rec.loadMoreRecs();
     }
   }, [topIdx, filtered.length, rec.loading, rec.loadingMore]);
@@ -346,21 +346,31 @@ export default function DiscoverPage() {
               </div>
             </div>
           )}
-          {/* 로딩 스켈레톤 카드 — 덱 맨 뒤에 위치 */}
-          {rec.loadingMore && (
+          {/* 덱 뒤 상태 카드 */}
+          {rec.loadingMore && !rec.exhausted && (
             <div
               className="absolute overflow-hidden rounded-xl animate-pulse"
-              style={{
-                top: 0, bottom: "8px", left: "12px", right: "12px",
-                zIndex: 1,
-                background: "var(--surface)",
-              }}
+              style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}
             >
               <div className="absolute bottom-0 left-0 right-0 p-5 space-y-2.5">
                 <div className="h-6 w-3/5 bg-surface-raised rounded-md" />
                 <div className="h-3 w-2/5 bg-surface-raised rounded-sm" />
                 <div className="h-4 w-4/5 bg-surface-raised rounded-sm" />
               </div>
+            </div>
+          )}
+          {rec.exhausted && (
+            <div
+              className="absolute overflow-hidden rounded-xl flex flex-col items-center justify-center"
+              style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}
+            >
+              <p className="text-sm text-muted text-center px-8">추천 가능한 작품을 모두 봤어요</p>
+              <button
+                onClick={() => { rec.refreshRecommendations(); setTopIdx(0); }}
+                className="mt-3 px-4 py-2 text-xs text-accent active:scale-95"
+              >
+                새로운 추천 받기
+              </button>
             </div>
           )}
           {deckCards.map((r, stackIdx) => (

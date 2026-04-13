@@ -19,6 +19,7 @@ export function useRecommendations() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [exhausted, setExhausted] = useState(false); // 추천 풀 소진 여부
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
   const [filterYear, setFilterYear] = useState<FilterYear>("all");
@@ -138,16 +139,18 @@ export function useRecommendations() {
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
     setFilterType(t);
     setFilterOrigin(o);
+    setExhausted(false); // 새 필터 = 새 추천 풀
     loadRecs(t, o);
   };
 
   const refreshRecommendations = async () => {
+    setExhausted(false); // 새로고침 = 풀 리셋
     setRecommendations([], filterType, filterOrigin);
     await loadRecs(filterType, filterOrigin);
   };
 
   const loadMoreRecs = async () => {
-    if (loadingMore) return;
+    if (loadingMore || exhausted) return; // 소진됐으면 더 이상 호출 안 함
     setLoadingMore(true);
     const favorites = getFavorites();
     const filter: Record<string, string> = {};
@@ -174,24 +177,42 @@ export function useRecommendations() {
         return;
       }
       const data = await res.json();
-      const newRecs: Recommendation[] = data.recommendations ?? [];
-      if (newRecs.length > 0) {
+      const rawRecs: Recommendation[] = data.recommendations ?? [];
+      // 서버 응답 자체 dedup
+      const seenNew = new Set<number>();
+      const newRecs = rawRecs.filter((r) => {
+        if (seenNew.has(r.tmdbId)) return false;
+        seenNew.add(r.tmdbId);
+        return true;
+      });
+
+      if (newRecs.length === 0) {
+        // 서버가 빈 배열 → 추천 풀 소진
+        setExhausted(true);
+      } else {
+        let addedCount = 0;
         setRecs((prev) => {
           const existingIds = new Set(prev.map((r) => r.tmdbId));
-          const unique = newRecs.filter((r: Recommendation) => !existingIds.has(r.tmdbId));
+          const unique = newRecs.filter((r) => !existingIds.has(r.tmdbId));
+          addedCount = unique.length;
           if (unique.length === 0) return prev;
           const merged = [...prev, ...unique];
           setRecommendations(merged, filterType, filterOrigin);
           return merged;
         });
-        track("recommendation_load_more", { count: newRecs.length });
-        addRecHistory(
-          newRecs.map((r) => ({
-            title: r.title,
-            tmdbId: r.tmdbId,
-            posterUrl: r.posterUrl,
-          })),
-        );
+        // 전부 중복이었으면 소진으로 판단
+        if (addedCount === 0) {
+          setExhausted(true);
+        } else {
+          track("recommendation_load_more", { count: addedCount });
+          addRecHistory(
+            newRecs.map((r) => ({
+              title: r.title,
+              tmdbId: r.tmdbId,
+              posterUrl: r.posterUrl,
+            })),
+          );
+        }
       }
     } catch {
       // silent fail for load-more
@@ -215,6 +236,7 @@ export function useRecommendations() {
     filterOTTs,
     setFilterOTTs,
     loadRecs,
+    exhausted,
     handleFilterChange,
     refreshRecommendations,
     loadMoreRecs,
