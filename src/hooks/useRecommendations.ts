@@ -28,9 +28,18 @@ export function useRecommendations() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [prefetching, setPrefetching] = useState(false);
   const prefetchingRef = useRef(false); // ref 기반 가드 (state보다 즉시 반영)
-  const [filterType, setFilterType] = useState<FilterType>("all");
-  const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>("all");
-  const [filterYear, setFilterYear] = useState<FilterYear>("all");
+  const [filterType, setFilterType] = useState<FilterType>(() => {
+    if (typeof window === "undefined") return "all";
+    return (sessionStorage.getItem("neq_filter_type") as FilterType) || "all";
+  });
+  const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>(() => {
+    if (typeof window === "undefined") return "all";
+    return (sessionStorage.getItem("neq_filter_origin") as FilterOrigin) || "all";
+  });
+  const [filterYear, setFilterYear] = useState<FilterYear>(() => {
+    if (typeof window === "undefined") return "all";
+    return (sessionStorage.getItem("neq_filter_year") as FilterYear) || "all";
+  });
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
 
@@ -150,6 +159,8 @@ export function useRecommendations() {
   const handleFilterChange = (t: FilterType, o: FilterOrigin) => {
     setFilterType(t);
     setFilterOrigin(o);
+    sessionStorage.setItem("neq_filter_type", t);
+    sessionStorage.setItem("neq_filter_origin", o);
     loadRecs(t, o);
   };
 

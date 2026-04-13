@@ -284,6 +284,7 @@ export default function DiscoverPage() {
     recs: rec.recs, loading: rec.loading, onFilterChange: rec.handleFilterChange,
     onYearChange: (y: FilterYear) => {
       rec.setFilterYear(y);
+      sessionStorage.setItem("neq_filter_year", y);
       setTopIdx(0);
       // 년도 필터 변경 시 서버에서 해당 년도 작품을 가져오도록 새로 요청
       if (y !== "all") rec.loadRecs(rec.filterType, rec.filterOrigin, y);

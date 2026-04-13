@@ -119,19 +119,11 @@ export default function SwipeCard({
             {rec.type === "series" ? "시리즈" : "영화"}
           </div>
           <div
-            className="absolute bottom-0 left-0 right-0 p-5 pt-16 z-10 cursor-pointer"
+            className="absolute bottom-0 left-0 right-0 p-5 pt-16 z-10"
             style={{
               background:
                 "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))",
-            }}
-            onPointerDown={(e) => {
-              pointerStartRef.current = { x: e.clientX, y: e.clientY };
-            }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              const dx = Math.abs(e.clientX - pointerStartRef.current.x);
-              const dy = Math.abs(e.clientY - pointerStartRef.current.y);
-              if (dx < 10 && dy < 10 && !swiping) onOpenDetail();
+              pointerEvents: "none",
             }}
           >
             <h2 className="font-display text-3xl font-bold">{rec.title}</h2>
