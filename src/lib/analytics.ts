@@ -80,6 +80,11 @@ export type NekoEvent =
   | "card_shared"
   // 필터
   | "filter_changed"
+  // 검색
+  | "search_opened"
+  | "search_item_selected"
+  | "search_item_saved"
+  | "search_ott_clicked"
   // 프로필
   | "profile_viewed"
   | "data_reset"

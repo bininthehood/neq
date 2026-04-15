@@ -26,6 +26,8 @@ import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialOverlay from "@/components/discover/TutorialOverlay";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
+import SearchSheet from "@/components/discover/SearchSheet";
+import { IconSearch } from "@/components/Icons";
 
 const metaInfo = (r: Recommendation) => [
   getPrimaryCountryName(r.country),
@@ -50,6 +52,7 @@ export default function DiscoverPage() {
 
   const rec = useRecommendations();
   const detail = useDetailSheet();
+  const searchSheet = useDetailSheet();
 
   let filtered = rec.filterOTTs.size === 0
     ? rec.recs
@@ -295,9 +298,15 @@ export default function DiscoverPage() {
 
   return (
     <div className="h-dvh flex flex-col overflow-hidden relative">
-      <div className="flex items-center px-5 py-3 shrink-0 transition-all duration-300"
+      <div className="flex items-center justify-between px-5 py-3 shrink-0 transition-all duration-300"
         style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
         <span className="font-display text-lg text-accent">neq,</span>
+        <button
+          onClick={() => { track("search_opened"); searchSheet.openDetail(); }}
+          className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
+        >
+          <IconSearch size={18} color="var(--text-muted)" />
+        </button>
       </div>
       <div className="transition-all duration-300 relative z-20" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 60, overflow: immersive ? "hidden" : "visible", pointerEvents: immersive ? "none" : "auto" }}>
         <FilterChips {...chipsProps} />
@@ -416,6 +425,16 @@ export default function DiscoverPage() {
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}
         onDetailTouchStart={detail.onDetailTouchStart} onDetailTouchMove={detail.onDetailTouchMove}
         onDetailTouchEnd={detail.onDetailTouchEnd} onShare={handleShare} />}
+      <SearchSheet
+        show={searchSheet.showDetail}
+        sheetY={searchSheet.detailY}
+        animating={searchSheet.detailAnimating}
+        bodyRef={searchSheet.detailBodyRef}
+        onClose={searchSheet.closeDetail}
+        onTouchStart={searchSheet.onDetailTouchStart}
+        onTouchMove={searchSheet.onDetailTouchMove}
+        onTouchEnd={searchSheet.onDetailTouchEnd}
+      />
     </div>
   );
 }

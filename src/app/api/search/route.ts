@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
       posterUrl: posterUrl(r.poster_path, "w200"),
       year: (r.release_date ?? r.first_air_date ?? "").slice(0, 4),
       rating: r.vote_average,
+      mediaType: (r as unknown as { media_type?: string }).media_type === "tv" ? "tv" : "movie",
     }))
   );
 }
