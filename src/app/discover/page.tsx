@@ -28,6 +28,7 @@ import TutorialOverlay from "@/components/discover/TutorialOverlay";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
 import SearchSheet from "@/components/discover/SearchSheet";
 import RewindOverlay from "@/components/discover/RewindOverlay";
+import { useSync } from "@/hooks/useSync";
 import { IconSearch } from "@/components/Icons";
 
 const metaInfo = (r: Recommendation) => [
@@ -39,6 +40,7 @@ const metaInfo = (r: Recommendation) => [
 
 export default function DiscoverPage() {
   const router = useRouter();
+  useSync(); // Supabase 배치 동기화
   const [mounted, setMounted] = useState(false);
   const [topIdx, setTopIdx] = useState(() => {
     if (typeof window === "undefined") return 0;
