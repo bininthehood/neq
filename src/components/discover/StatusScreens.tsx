@@ -21,10 +21,9 @@ interface FilterChipsPassthrough {
 
 interface LoadingScreenProps extends FilterChipsPassthrough {
   filterLabel: string;
-  isColdStart?: boolean;
 }
 
-export function LoadingScreen({ filterLabel, isColdStart, ...chips }: LoadingScreenProps) {
+export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
@@ -48,11 +47,9 @@ export function LoadingScreen({ filterLabel, isColdStart, ...chips }: LoadingScr
       </div>
       <div className="px-4 pb-2 shrink-0">
         <p className="text-center text-xs py-2 text-muted">
-          {isColdStart
-            ? "요즘 인기 작품을 가져오고 있어요..."
-            : filterLabel
-              ? `${filterLabel} 추천 찾는 중...`
-              : "취향을 분석하고 있어요..."}
+          {filterLabel
+            ? `${filterLabel} 추천 찾는 중...`
+            : "추천을 찾고 있어요..."}
         </p>
       </div>
       <BottomNav active="discover" />
@@ -95,26 +92,18 @@ interface EmptyScreenProps extends FilterChipsPassthrough {
   hasFilter: boolean;
   onResetFilter: () => void;
   onRefresh: () => void;
-  onReset: () => void;
 }
 
 export function EmptyScreen({
   hasFilter,
   onResetFilter,
   onRefresh,
-  onReset,
   ...chips
 }: EmptyScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <span className="font-display text-lg text-accent">neq,</span>
-        <button
-          onClick={onReset}
-          className="text-xs px-2 min-h-[44px] flex items-center text-muted"
-        >
-          재설정
-        </button>
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex flex-col px-8 justify-center">

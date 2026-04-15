@@ -51,7 +51,6 @@ export function track(event: NekoEvent, props?: EventProps) {
 /**
  * 추적 대상 이벤트 — 기획 단계 성공 지표와 연결.
  *
- * - 온보딩 이탈률: onboarding_started → onboarding_completed
  * - 추천 품질: recommendation_loaded → card_swiped (save/pass 비율)
  * - 시청 리포트 전환: card_saved → watch_report
  * - 결정 시간: session_started → ott_link_clicked 소요 시간
@@ -61,10 +60,6 @@ export function track(event: NekoEvent, props?: EventProps) {
 export type NekoEvent =
   // 세션
   | "session_started"
-  // 온보딩
-  | "onboarding_started"
-  | "onboarding_favorite_added"
-  | "onboarding_completed"
   // 추천 로드
   | "recommendation_loaded"
   | "recommendation_load_more"

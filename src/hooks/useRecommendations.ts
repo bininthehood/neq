@@ -2,7 +2,6 @@
 
 import { useState, useRef, useCallback } from "react";
 import {
-  getFavorites,
   getRecommendations,
   setRecommendations,
   getWatchReports,
@@ -77,7 +76,6 @@ export function useRecommendations() {
     abortRef.current = controller;
     setLoading(true);
     setLoadError(null);
-    const favorites = getFavorites();
     const filter: Record<string, string | string[]> = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
@@ -99,6 +97,12 @@ export function useRecommendations() {
       feedback[r.reaction]?.push(item.recommendation.title);
     }
     const hasFeedback = Object.values(feedback).some((a) => a.length > 0);
+    // 취향 시드: loved/good 작품 우선, 나머지 saved도 포함
+    const lovedGood = [...(feedback.loved ?? []), ...(feedback.good ?? [])];
+    const otherSaved = savedItems
+      .map((s) => s.recommendation.title)
+      .filter((t) => !lovedGood.includes(t));
+    const favorites = [...lovedGood, ...otherSaved].slice(0, 20);
     const seenTitles = getSeenTitles();
     const savedTitles = savedItems.map((s) => s.recommendation.title);
     const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 150);
@@ -196,17 +200,29 @@ export function useRecommendations() {
     const controller = new AbortController();
     prefetchAbortRef.current = controller;
     try {
-      const favorites = getFavorites();
       const filter: Record<string, string | string[]> = {};
       if (filterType !== "all") filter.type = filterType;
       if (filterOrigin !== "all") filter.origin = filterOrigin;
       if (filterYear !== "all") filter.year = filterYear;
       if (filterOTTs.size > 0) filter.ott = [...filterOTTs];
+      // 취향 시드: saved + watchReport 기반
+      const savedItems = getSaved();
+      const reports = getWatchReports();
+      const lovedGoodTitles: string[] = [];
+      for (const r of reports) {
+        if (r.reaction !== "loved" && r.reaction !== "good") continue;
+        const item = savedItems.find((s) => s.recommendation.tmdbId === r.tmdbId);
+        if (item) lovedGoodTitles.push(item.recommendation.title);
+      }
+      const otherSavedTitles = savedItems
+        .map((s) => s.recommendation.title)
+        .filter((t) => !lovedGoodTitles.includes(t));
+      const favorites = [...lovedGoodTitles, ...otherSavedTitles].slice(0, 20);
       const currentRecs = recsRef.current;
       const currentTitles = currentRecs.map((r) => r.title);
       const currentIds = currentRecs.map((r) => r.tmdbId);
       const exclude = [
-        ...new Set([...getSeenTitles(), ...getSaved().map((s) => s.recommendation.title), ...currentTitles]),
+        ...new Set([...getSeenTitles(), ...savedItems.map((s) => s.recommendation.title), ...currentTitles]),
       ].slice(0, 200);
       const excludeIds = [...new Set([...currentIds, ...getSaved().map((s) => s.recommendation.tmdbId)])];
       const res = await fetch("/api/recommend", {

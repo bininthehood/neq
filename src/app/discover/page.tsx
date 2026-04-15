@@ -8,7 +8,6 @@ import {
   getSaved,
   addSeenTitles,
   addWatchReport,
-  getFavoritesMeta,
   getWatchReports,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
@@ -27,7 +26,6 @@ import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialOverlay from "@/components/discover/TutorialOverlay";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
-import FirstLoadingScreen from "@/components/discover/FirstLoadingScreen";
 
 const metaInfo = (r: Recommendation) => [
   getPrimaryCountryName(r.country),
@@ -48,8 +46,6 @@ export default function DiscoverPage() {
   const [showWatched, setShowWatched] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [immersive, setImmersive] = useState(false);
-  const [isFirstLoad, setIsFirstLoad] = useState(false);
-  const [favoritesMeta, setFavoritesMeta] = useState<ReturnType<typeof getFavoritesMeta>>([]);
   const [reentryNudge, setReentryNudge] = useState<string | null>(null);
 
   const rec = useRecommendations();
@@ -183,25 +179,11 @@ export default function DiscoverPage() {
   // --- effects ---
   useEffect(() => {
     setMounted(true);
-    // 첫 진입 감지: 플래그가 없고, 캐시된 추천도 없을 때만
-    const firstDone = localStorage.getItem("neq_first_discover_done");
-    if (!firstDone) {
-      setIsFirstLoad(true);
-      setFavoritesMeta(getFavoritesMeta());
-    }
     rec.loadRecs("all", "all");
     setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
     return () => { swipe.clearTimers(); rec.abortLoading(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
-
-  // 첫 로딩 완료 시 플래그 저장
-  useEffect(() => {
-    if (isFirstLoad && !rec.loading && filtered.length > 0) {
-      localStorage.setItem("neq_first_discover_done", "1");
-      setIsFirstLoad(false);
-    }
-  }, [isFirstLoad, rec.loading, filtered.length]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -301,15 +283,12 @@ export default function DiscoverPage() {
 
   // --- status screens ---
   if (!mounted || rec.loading) {
-    if (isFirstLoad && favoritesMeta.length > 0) {
-      return <FirstLoadingScreen favorites={favoritesMeta} />;
-    }
-    return <LoadingScreen filterLabel={filterLabel} isColdStart={isFirstLoad && favoritesMeta.length === 0} {...chipsProps} />;
+    return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterOTTs.size > 0;
-    return <EmptyScreen hasFilter={hasF} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} onReset={() => router.push("/reset")} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();

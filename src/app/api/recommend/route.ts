@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     ? rawExcludeIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 300)
     : undefined;
 
-  if (!Array.isArray(favorites)) {
+  if (favorites !== undefined && !Array.isArray(favorites)) {
     return NextResponse.json(
       { error: "잘못된 요청입니다" },
       { status: 400 }
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const recommendations = await getRecommendations(favorites, filter ?? {}, feedback, exclude, excludeIds);
+    const recommendations = await getRecommendations(favorites ?? [], filter ?? {}, feedback, exclude, excludeIds);
     return NextResponse.json({ recommendations }, {
       headers: { "X-RateLimit-Remaining": String(remaining) },
     });

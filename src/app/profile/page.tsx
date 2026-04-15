@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef, startTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  getFavorites,
   getSaved,
+  getWatchReports,
   getWatchStats,
   clearAllUserData,
 } from "@/lib/store";
@@ -16,7 +16,7 @@ import { IconClose } from "@/components/Icons";
 export default function ProfilePage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [favorites, setFavorites] = useState<string[]>([]);
+  const [tasteItems, setTasteItems] = useState<string[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
   const [deviceId, setDeviceId] = useState("");
@@ -25,14 +25,23 @@ export default function ProfilePage() {
   const trackedRef = useRef(false);
 
   const refresh = () => {
-    // 즉시: 첫 페인트에 필요한 가벼운 데이터
-    setFavorites(getFavorites());
     setDeviceId(getDeviceId());
 
-    // 지연: 무거운 집계(시청 리포트 전체 순회)는 다음 프레임에
     startTransition(() => {
-      setSavedCount(getSaved().length);
+      const savedItems = getSaved();
+      const reports = getWatchReports();
+      setSavedCount(savedItems.length);
       setStats(getWatchStats());
+      // 취향 프로필: loved/good 작품 타이틀 (최근 순)
+      const lovedGood = reports
+        .filter((r) => r.reaction === "loved" || r.reaction === "good")
+        .sort((a, b) => b.reportedAt - a.reportedAt)
+        .map((r) => {
+          const item = savedItems.find((s) => s.recommendation.tmdbId === r.tmdbId);
+          return item?.recommendation.title;
+        })
+        .filter((t): t is string => !!t);
+      setTasteItems(lovedGood);
     });
   };
 
@@ -72,28 +81,27 @@ export default function ProfilePage() {
 
       {/* 내 취향 */}
       <section className="px-5 mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xs uppercase tracking-wider text-muted font-semibold">내 취향</h2>
-          <button
-            onClick={() => router.push("/reset")}
-            className="text-xs text-accent"
-          >
-            재설정
-          </button>
-        </div>
-        {favorites.length > 0 ? (
+        <h2 className="text-xs uppercase tracking-wider text-muted font-semibold mb-2">좋아한 작품</h2>
+        {tasteItems.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {favorites.map((f) => (
+            {tasteItems.slice(0, 10).map((title) => (
               <span
-                key={f}
+                key={title}
                 className="px-3 py-1.5 text-xs bg-surface rounded-lg text-secondary"
               >
-                {f}
+                {title}
               </span>
             ))}
+            {tasteItems.length > 10 && (
+              <span className="px-3 py-1.5 text-xs text-muted">
+                +{tasteItems.length - 10}편
+              </span>
+            )}
           </div>
         ) : (
-          <p className="text-sm text-muted">기반 작품이 없어요</p>
+          <p className="text-sm text-muted">
+            저장한 작품에 시청 리포트를 남기면 취향이 쌓여요
+          </p>
         )}
       </section>
 

@@ -16,36 +16,11 @@ function safeParse<T>(key: string, fallback: T): T {
   }
 }
 
-const FAVORITES_KEY = "neq_favorites";
+const FAVORITES_KEY = "neq_favorites"; // 하위호환: clearAllUserData에서 정리용
 const FAVORITES_META_KEY = "neq_favorites_meta";
 const SAVED_KEY = "neq_saved";
 const RECS_KEY = "neq_recommendations";
 const RECS_FILTERED_PREFIX = "neq_recs_";
-
-export interface FavoriteMeta {
-  id: number;
-  title: string;
-  posterUrl: string | null;
-}
-
-// 온보딩에서 선택한 좋아하는 작품
-export function getFavorites(): string[] {
-  if (typeof window === "undefined") return [];
-  return safeParse<string[]>(FAVORITES_KEY, []);
-}
-
-export function setFavorites(titles: string[]) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(titles));
-}
-
-export function getFavoritesMeta(): FavoriteMeta[] {
-  if (typeof window === "undefined") return [];
-  return safeParse<FavoriteMeta[]>(FAVORITES_META_KEY, []);
-}
-
-export function setFavoritesMeta(items: FavoriteMeta[]) {
-  localStorage.setItem(FAVORITES_META_KEY, JSON.stringify(items));
-}
 
 // 추천 목록 — 필터별 캐시
 function filterKey(filterType: string, filterOrigin: string): string {
@@ -89,10 +64,6 @@ export function removeSaved(tmdbId: number) {
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
 }
 
-export function hasOnboarded(): boolean {
-  if (typeof window === "undefined") return false;
-  return getFavorites().length >= 3;
-}
 
 // 시청 리포트
 const REPORTS_KEY = "neq_watch_reports";
@@ -205,7 +176,7 @@ export function exportUserData(): UserDataExport {
     deviceId: getDeviceId(),
     exportedAt: Date.now(),
     data: {
-      favorites: getFavorites(),
+      favorites: [], // deprecated: 하위호환용 빈 배열
       saved: getSaved(),
       watchReports: getWatchReports(),
       seenTitles: getSeenTitles(),
@@ -252,14 +223,12 @@ export function importUserData(raw: unknown): ImportResult {
   }
 
   // 배열 검증 (없는 필드는 빈 배열로 처리)
-  const favorites = Array.isArray(data.favorites) ? (data.favorites as string[]) : [];
   const saved = Array.isArray(data.saved) ? (data.saved as SavedItem[]) : [];
   const watchReports = Array.isArray(data.watchReports) ? (data.watchReports as WatchReport[]) : [];
   const seenTitles = Array.isArray(data.seenTitles) ? (data.seenTitles as string[]) : [];
   const archived = Array.isArray(data.archived) ? (data.archived as number[]) : [];
 
-  // localStorage에 덮어쓰기
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  // localStorage에 덮어쓰기 (favorites는 deprecated — 무시)
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
   localStorage.setItem(REPORTS_KEY, JSON.stringify(watchReports));
   localStorage.setItem(SEEN_KEY, JSON.stringify(seenTitles));
@@ -268,7 +237,7 @@ export function importUserData(raw: unknown): ImportResult {
   return {
     ok: true,
     counts: {
-      favorites: favorites.length,
+      favorites: 0,
       saved: saved.length,
       watchReports: watchReports.length,
       seenTitles: seenTitles.length,
