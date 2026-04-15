@@ -371,40 +371,73 @@ function templateReason(c: EnrichedCandidate): string {
 
 // ---------- Cold Start ----------
 
-/** vote_average / media_type에 따라 reason을 다양하게 */
+/** 취향 수집용 reason — 사용자가 봤을 법한 메가 히트작 */
 function coldStartReason(item: TMDBSimilarItem): string {
-  if (item.vote_average >= 8.5) return "평점이 아주 높은 화제작이에요";
-  if (item.vote_average >= 8.0) return "평점 높고 지금 많이 보는 작품이에요";
-  if (item.media_type === "tv") return "요즘 많이 보는 시리즈예요";
-  return "이번 주 인기 작품이에요";
+  if (item.vote_average >= 8.5) return "봤다면 하트, 안 봤다면 넘겨주세요";
+  if (item.vote_average >= 8.0) return "이 작품 좋아하세요? 알려주세요";
+  if (item.media_type === "tv") return "이 시리즈 본 적 있나요?";
+  return "마음에 들면 하트를 눌러주세요";
 }
 
 /**
  * Cold start 빠른 경로: favorites 없을 때 TMDB trending API로 직접 반환.
  * LLM 큐레이션 스킵 → ~3-5초 (기존 ~16초).
  */
+// 장르별 메가 히트작 수집용 장르 ID
+const COLD_START_GENRES = {
+  movie: [
+    { id: 28, label: "액션" },
+    { id: 35, label: "코미디" },
+    { id: 18, label: "드라마" },
+    { id: 878, label: "SF" },
+    { id: 16, label: "애니메이션" },
+    { id: 53, label: "스릴러" },
+    { id: 10749, label: "로맨스" },
+    { id: 80, label: "범죄" },
+    { id: 27, label: "공포" },
+    { id: 12, label: "모험" },
+  ],
+  tv: [
+    { id: 18, label: "드라마" },
+    { id: 80, label: "범죄" },
+    { id: 10765, label: "SF/판타지" },
+    { id: 16, label: "애니메이션" },
+    { id: 35, label: "코미디" },
+    { id: 9648, label: "미스터리" },
+  ],
+};
+
 async function getColdStartRecommendations(
   filter: RecommendFilter,
   exclude?: string[]
 ): Promise<Recommendation[]> {
   const excludeSet = new Set(exclude ?? []);
 
-  // Step 1: TMDB trending — 랜덤 페이지 2개를 섞어서 다양성 확보
-  const page1 = Math.ceil(Math.random() * 5);
-  const page2 = page1 === 1 ? 2 : 1;
-  const [t1, t2] = await Promise.all([
-    getTrending("week", page1),
-    getTrending("day", page2),
-  ]);
-  // 셔플해서 매번 다른 순서
-  const trending = [...t1, ...t2].sort(() => Math.random() - 0.5);
+  // Step 1: 장르별 메가 히트작 수집 (vote_count 내림차순 = 많이 본 순)
+  const movieGenres = filter.type === "series" ? [] : COLD_START_GENRES.movie;
+  const tvGenres = filter.type === "movie" ? [] : COLD_START_GENRES.tv;
+  const allGenres = [
+    ...movieGenres.map((g) => ({ ...g, type: "movie" as const })),
+    ...tvGenres.map((g) => ({ ...g, type: "series" as const })),
+  ];
 
-  // Step 2: 타입 필터
-  const candidates = trending.filter((item) => {
+  // 장르별 2-3개씩 병렬 호출
+  const genreResults = await Promise.all(
+    allGenres.map(async (g) => {
+      const items = await discoverByGenres([g.id], g.type, 1, undefined, "vote_count.desc");
+      return items.slice(0, 3); // 장르당 가장 많이 본 3개
+    })
+  );
+
+  // 셔플: 같은 장르끼리 뭉치지 않게
+  const allItems = genreResults.flat().sort(() => Math.random() - 0.5);
+
+  // 중복 제거 + exclude 필터
+  const seen = new Set<number>();
+  const candidates = allItems.filter((item) => {
+    if (seen.has(item.id)) return false;
     if (excludeSet.has(item.title)) return false;
-    if (filter.type === "movie" && item.media_type !== "movie") return false;
-    if (filter.type === "series" && item.media_type !== "tv") return false;
-    if (filter.type === "variety" && item.media_type !== "tv") return false;
+    seen.add(item.id);
     return true;
   });
 

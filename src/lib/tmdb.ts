@@ -165,7 +165,8 @@ export async function discoverByGenres(
   genreIds: number[],
   type: "movie" | "series",
   page = 1,
-  dateRange?: { gte?: string; lte?: string }
+  dateRange?: { gte?: string; lte?: string },
+  sortBy: "vote_average.desc" | "vote_count.desc" | "popularity.desc" = "vote_average.desc"
 ): Promise<TMDBSimilarItem[]> {
   if (genreIds.length === 0) return [];
   const mediaType = type === "series" ? "tv" : "movie";
@@ -176,7 +177,7 @@ export async function discoverByGenres(
   if (dateRange?.lte) dateParams += `&${dateField}.lte=${dateRange.lte}`;
   try {
     const res = await fetch(
-      `${BASE}/discover/${mediaType}?api_key=${API_KEY}&language=ko-KR&with_genres=${genres}&sort_by=vote_average.desc&vote_count.gte=100&page=${page}${dateParams}`
+      `${BASE}/discover/${mediaType}?api_key=${API_KEY}&language=ko-KR&with_genres=${genres}&sort_by=${sortBy}&vote_count.gte=100&page=${page}${dateParams}`
     );
     if (!res.ok) return [];
     const data = await res.json();
