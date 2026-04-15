@@ -17,6 +17,11 @@
 /.next/
 /out/
 
+# serwist (service worker build output)
+/public/sw.js
+/public/sw.js.map
+/public/swe-worker-*.js
+
 # production
 /build
 
@@ -41,3 +46,7 @@ yarn-error.log*
 next-env.d.ts
 .gstack/
 _screenshots/
+_workspace/
+_brand/
+.playwright-mcp/
+.mcp.json
