@@ -27,6 +27,7 @@ import ActionBar from "@/components/discover/ActionBar";
 import TutorialOverlay from "@/components/discover/TutorialOverlay";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
 import SearchSheet from "@/components/discover/SearchSheet";
+import RewindOverlay from "@/components/discover/RewindOverlay";
 import { IconSearch } from "@/components/Icons";
 
 const metaInfo = (r: Recommendation) => [
@@ -49,6 +50,7 @@ export default function DiscoverPage() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const [reentryNudge, setReentryNudge] = useState<string | null>(null);
+  const [rewinding, setRewinding] = useState(false);
 
   const rec = useRecommendations();
   const detail = useDetailSheet();
@@ -376,6 +378,20 @@ export default function DiscoverPage() {
               onNotInterested={handleNotInterested}
               onCloseWatched={() => setShowWatched(false)} onOpenDetail={detail.openDetail} metaInfo={metaInfo(r)} />
           ))}
+          {/* 되감기 오버레이 — VHS 테이프 되감기 */}
+          {rewinding && (
+            <RewindOverlay
+              cards={filtered.slice(0, topIdx).reverse()}
+              onComplete={() => {
+                setTopIdx(0);
+                setRewinding(false);
+                swipe.setDragX(0);
+                swipe.setDragY(0);
+                swipe.setSwiping(false);
+                swipe.scrollRef.current?.scrollTo({ top: 0 });
+              }}
+            />
+          )}
           {swipe.prevOverlayX !== null && filtered.length > 1 && (() => {
             const prev = filtered[topIdx > 0 ? topIdx - 1 : filtered.length - 1];
             return prev ? <PrevCardOverlay prev={prev} prevOverlayX={swipe.prevOverlayX} isDragging={swipe.dragging.current} metaInfo={metaInfo(prev)} /> : null;
@@ -387,19 +403,11 @@ export default function DiscoverPage() {
         <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
           onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
           onRewind={() => {
-            if (topIdx === 0 || swipe.swipingRef.current) return;
+            if (topIdx === 0 || swipe.swipingRef.current || rewinding) return;
             vibrate(10);
-            // 카드가 오른쪽으로 날아가는 애니메이션 → 첫 카드로 점프
+            // 되감기 오버레이 활성화 — rAF 기반 VHS 되감기 애니메이션
             swipe.setSwiping(true);
-            swipe.setDragX(600);
-            swipe.setDragY(0);
-            const t = setTimeout(() => {
-              swipe.timersRef.current.delete(t);
-              setTopIdx(0);
-              swipe.setDragX(0); swipe.setDragY(0); swipe.setSwiping(false);
-              swipe.scrollRef.current?.scrollTo({ top: 0 });
-            }, 280);
-            swipe.timersRef.current.add(t);
+            setRewinding(true);
           }}
           onRefresh={() => { vibrate(10); setTopIdx(0); rec.refreshRecommendations(); }} />
         <BottomNav active="discover" />
