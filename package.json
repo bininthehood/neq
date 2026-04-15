@@ -2,11 +2,17 @@
   "name": "neq",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "native": "npm run start -w apps/native",
+    "native:ios": "npm run ios -w apps/native"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.48.0",

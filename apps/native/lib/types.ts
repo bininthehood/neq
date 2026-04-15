@@ -1,20 +1,10 @@
-export interface Recommendation {
-  title: string;
-  titleEn: string;
-  type: 'movie' | 'series';
-  reason: string;
-  tmdbId: number;
-  posterUrl: string | null;
-  rating: number;
-  date: string;
-  overview: string;
-  providers: { name: string; logoUrl: string | null }[];
-  watchLink: string | null;
-}
-
-export type WatchReaction = 'loved' | 'good' | 'meh' | 'dropped';
-
-export interface SavedItem {
-  recommendation: Recommendation;
-  savedAt: number;
-}
+// 공유 타입은 @neko/core에서 re-export (하위 호환)
+export type {
+  Recommendation,
+  SavedItem,
+  WatchReaction,
+  WatchReport,
+  RecommendFilter,
+  WatchFeedback,
+  SearchResult,
+} from '@neko/core';
