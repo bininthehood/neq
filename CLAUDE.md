@@ -108,8 +108,36 @@ In QA mode, flag any code that doesn't match DESIGN.md.
     └── design-orchestrator/SKILL.md
 ```
 
+## 네이티브 앱 전환 (진행 중)
+
+**상태:** Phase 2 PoC 단계 (2026-04-15 시작)
+
+**스택:**
+- **Expo SDK 52+ (React Native)** — 기존 React 자산 재활용 + iOS/Android 동시
+- Expo Router (파일 기반 라우팅)
+- NativeWind (Tailwind for RN)
+- react-native-reanimated 3 + gesture-handler (스와이프 애니메이션)
+- EAS Build / Submit / Update (OTA)
+- Appium + WebdriverIO + XCUITest/UIAutomator2 (E2E)
+
+**프로젝트 구조:**
+```
+neko/
+├── src/           # 기존 Next.js PWA (병행 유지)
+├── apps/native/   # Expo 앱 (신규)
+└── supabase/      # 공유
+```
+
+**실행 규칙:**
+- 네이티브 관련 작업 시 `apps/native/` 내부에서 작업. 기존 `src/`에 영향 주지 말 것
+- 스와이프/애니메이션 → `frontend-builder` 에이전트 (RN 섹션 참조)
+- E2E 테스트 → `qa-tester` 에이전트 (Appium 섹션 참조)
+- 웹과 네이티브 간 공통 타입 변경 시 양쪽 동기화 필수
+- 구체 로드맵: `_workspace/native-transition-plan.md` 참조
+
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
 | 2026-04-07 | 초기 구성 | 전체 | neq 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |
 | 2026-04-15 | 디자인 팀 추가 | 디자인 | Warm Cinema 탈피 + 고유 디자인 언어 구축 |
+| 2026-04-15 | 네이티브 전환 시작 | 전체 | PWA → Expo RN. frontend-builder, qa-tester 확장 |

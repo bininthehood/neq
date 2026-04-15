@@ -1,0 +1,45 @@
+{
+  "name": "native",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "appium": "appium --relaxed-security",
+    "capture": "ts-node --transpile-only e2e/capture-now.ts",
+    "test:e2e:ios": "wdio run wdio.conf.ts"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~54.0.33",
+    "expo-blur": "~15.0.8",
+    "expo-constants": "~18.0.13",
+    "expo-haptics": "~15.0.8",
+    "expo-image": "~3.0.11",
+    "expo-linking": "~8.0.11",
+    "expo-router": "~6.0.23",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-worklets": "^0.5.1"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/react": "~19.1.0",
+    "@wdio/cli": "^9.27.0",
+    "@wdio/local-runner": "^9.27.0",
+    "@wdio/mocha-framework": "^9.27.0",
+    "@wdio/spec-reporter": "^9.27.0",
+    "babel-preset-expo": "~54.0.10",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.9.2",
+    "webdriverio": "^9.27.0"
+  },
+  "private": true
+}

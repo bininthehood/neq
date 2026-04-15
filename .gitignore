@@ -2,6 +2,15 @@
 
 # dependencies
 /node_modules
+**/node_modules
+
+# expo / react native
+apps/native/.expo/
+apps/native/dist/
+apps/native/ios/
+apps/native/android/
+apps/native/e2e/screenshots/
+apps/native/e2e/_logs/
 /.pnp
 .pnp.*
 .yarn/*

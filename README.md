@@ -91,7 +91,7 @@ npm start
 
 ```
 src/
-├── app/           # 페이지 (discover, saved, onboarding, reset, api)
+├── app/           # 페이지 (discover, saved, profile, api)
 ├── components/    # 컴포넌트 (Icons, BottomNav, Reminder, discover/)
 ├── hooks/         # 커스텀 훅 (useSwipeGesture, useDetailSheet, useRecommendations)
 └── lib/           # 로직 (store, recommend, tmdb, ott-links, types)
