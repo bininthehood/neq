@@ -3,74 +3,106 @@
 ## 2026-04-15 (Day 11)
 
 ### 진행 요약
-네이티브 앱 전환 + 모노레포 정석 구조 확립. 하루 동안 Expo RN PoC → Appium E2E → npm workspaces → Turborepo까지 완료.
+네이티브 앱 전환 + 모노레포 정석 구조 확립 + 프로덕션 배포까지 하루에 완료.
+Expo RN PoC → Appium E2E → npm workspaces → @neq/* 리네임 → apps/web 이동 → Turborepo → Vercel 배포.
 
 ### 완료된 작업
 
-**Expo RN PoC (apps/native)**
-- Expo SDK 54 + RN 0.81 + Reanimated 4 + Gesture Handler
-- Expo Router Tabs (발견/검색/저장)
-- 실제 /api/recommend + /api/search 연결 (Vercel 프로덕션 서버)
-- AsyncStorage 기반 저장 관리
-- 스와이프 감도 웹 대비 부드러움 확인 (사용자 검증)
-- 커밋: `9cf0c34`
+**플러그인 정리**
+- Neko 프로젝트 `.claude/settings.json` 생성 — `enabledPlugins`로 전역 15개 중 7개만 활성
+- 유지: vercel, posthog, playwright, chrome-devtools-mcp, github, context7, code-review
+- 비활성: superpowers, frontend-design, feature-dev, code-simplifier, vercel-plugin, claude-md-management, skill-creator, postman (기존 하네스/내장 스킬과 중복)
+
+**Expo RN PoC — Phase 2 (apps/native)**
+- 스캐폴드: Expo SDK 54 + RN 0.81 + TypeScript + Expo Router + Reanimated 4 + Gesture Handler
+- Reanimated 4 세팅 함정 해결: `react-native-worklets` 분리 패키지 설치 + `babel.config.js` 플러그인 등록 + `babel-preset-expo@~54.0.10` 버전 정렬
+- 최초 PoC: 좋아요/별로 오버레이 — **사용자 지적으로 폐기** (옛 UX)
+- 재포팅: 좌=next, 우=prev 오버레이, 좋아요는 버튼 (캐러셀 브라우징)
+- 스와이프 감도 웹 대비 부드러움 사용자 검증
+
+**Expo RN 본 기능 — Phase 3 (apps/native)**
+- 3.1 추천 API: `/api/recommend` 실제 호출 (Vercel 프로덕션) — 50건 로드 확인
+- 3.2 Saved: AsyncStorage 기반 `neq_saved` 저장. 좋아요 버튼 → 저장 탭 전환 흐름 E2E 검증
+- 3.3 Search: TMDB `/api/search` 연결 + 350ms debounce + AbortController 중복 요청 제어
+- 3.4 BottomNav: Expo Router Tabs로 발견/검색/저장 3탭 구성
 
 **Appium E2E 인프라**
 - WebdriverIO 9.x + XCUITest 11 + TypeScript
-- iOS 시뮬레이터 자동 스크린샷 + 페이지 덤프 (`capture-now.ts`)
-- 좋아요→저장 플로우 E2E 검증 (`flow-like-to-saved.mjs`)
-- 검색 debounce 동작 E2E 검증 (`search-flow.mjs`)
+- `capture-now.ts` — 시뮬레이터 스크린샷 + 페이지 덤프로 에러 메시지 자동 추출
+- `flow-like-to-saved.mjs` — 좋아요 → 저장 탭 전환 검증
+- `search-flow.mjs` — 검색 debounce 동작 검증
+- `wdio.conf.ts` — 병렬 세션 Appium 서버(4723) 재사용
 
 **모노레포 1차 — 기초 (`0b3093d`)**
-- npm workspaces ["apps/*", "packages/*"]
-- `packages/core` (@neko/core) 신설 — 공유 타입, API 클라이언트
-- Metro monorepo 설정 (`apps/native/metro.config.js`)
+- npm workspaces ["apps/*", "packages/*"] 선언
+- `packages/core` (@neko/core) 신설 — 공유 타입, `createApiClient` 팩토리
+- Metro 모노레포 설정 (`apps/native/metro.config.js` — watchFolders + nodeModulesPaths)
 
-**모노레포 2차 — 정석 구조 (`598cd5e`)**
-- A 경로 완성: `src/` → `apps/web/` 이동
+**모노레포 2차 — A 경로 정석 (`598cd5e`)**
+- `src/` → `apps/web/src/` 이동 (94 파일 변경)
+- 루트 설정 파일 전부 `apps/web/`로 이동: `*.config.{ts,mjs}`, `sentry.*.config.ts`, `.env*`
 - 패키지 리네임: `@neko/*` → `@neq/*`
 - `packages/design` (@neq/design) 분리 — tokens를 core에서 분리
 - Turborepo + `turbo.json` pipeline (build/dev/lint/type-check/start)
-- bun.lock 제거, npm 단일화
+- bun.lock 제거, npm 단일화 (`packageManager: npm@10.9.3`)
 - 루트 package.json 축소 — workspaces + turbo scripts만
+
+**Vercel 배포**
+- 사용자가 Vercel 대시보드에서 Root Directory → `apps/web` 변경
+- 커밋 `e6313ce` 프로덕션 배포 **state=success**
+- 프로덕션 도메인 `neko-ecru.vercel.app` HTTP 200 + `/api/recommend` 정상 응답 ("토르: 라그나로크" 추천)
 
 **UX 규칙 정리**
 - `feedback_swipe_ux.md` 갱신 — 좌=next / 우=prev 오버레이 / 좋아요는 버튼 / 별로 없음
+  - 기존 메모리가 **반대 방향으로 저장**돼 있던 것을 수정
 - `DESIGN.md` Interaction Model 섹션 신설 (스와이프 불변식 + 터치 임계치)
 
-**문서/하네스 업데이트**
-- `frontend-builder` 에이전트 RN 섹션 추가 (웹/네이티브 플랫폼 판단 규칙)
-- `qa-tester` 에이전트 Appium WDIO 섹션 추가
+**하네스/문서 업데이트**
+- `frontend-builder` 에이전트 RN 섹션 추가 (웹/네이티브 플랫폼 판단 규칙, 매핑 가이드)
+- `qa-tester` 에이전트 Appium WDIO 섹션 추가 (드라이버, 체크리스트, 블로커)
+- `CLAUDE.md`에 "네이티브 앱 전환" 섹션 추가
 - `README.md`에서 onboarding 참조 제거
-- `_workspace/native-transition-plan.md`, `monorepo-migration-plan.md`
-
-### 검증 결과
-
-- ✅ `@neq/core`, `@neq/design`, `@neq/web`, `native` 워크스페이스 링크
-- ✅ `turbo type-check` 통과
-- ✅ `apps/web` 프로덕션 빌드 성공 (TMDB/OpenAI API 라우트 포함)
-- ✅ `apps/web` 개발 서버 http://localhost:3000 정상
-- ✅ `apps/native` TypeScript 통과 + 시뮬레이터 회귀 없음
-
-### 미완료 (다음 세션)
-
-- [ ] Vercel 대시보드에서 Root Directory → `apps/web` 변경 (사용자 수동 작업)
-- [ ] 변경 후 preview 배포 검증
-- [ ] 웹 코드에서 `@neq/core`, `@neq/design` 점진적 import (타입 drift 제거)
-- [ ] Phase 3 본 마이그레이션: FilterChips → DetailSheet → Saved → Profile → SearchSheet (네이티브로 점진 포팅)
-- [ ] Supabase anonymous auth 도입 (RLS 강화)
-- [ ] 웹에서 `meh`/"별로" WatchReaction 실제 제거 (영향 분석 필요)
+- `_workspace/native-transition-plan.md`, `_workspace/monorepo-migration-plan.md`
 
 ### 결정 이력
 
 | 항목 | 결정 | 근거 |
 |------|------|------|
-| 네이티브 스택 | Expo SDK 54 + RN | React 자산 재활용, iOS+Android 동시, OTA |
+| 네이티브 스택 | Expo SDK 54 + RN | React 자산 재활용, iOS+Android 동시, OTA, EAS 생태계 |
 | 모노레포 툴 | npm workspaces + Turborepo | 단순함 + 빌드 캐시 |
 | 패키지 네이밍 | `@neq/*` | 프로젝트 식별자 일관성 |
+| 프로젝트 구조 | next-forge 가이드 기반 A 경로 (apps/web + packages/{core,design}) | 정석 구조, drift 방지 |
 | 스와이프 semantic | 순수 캐러셀 브라우징 | like/pass = 인지 부담 |
 | "별로" / 거절 제스처 | 제거 | 결정 피로 감소 |
 | "좋아요" | 버튼 제어 | 명시적 탭 타겟 |
+| Android 1차 포함 | 예 | Expo 한계비용 낮음, 국내 Android 점유율 |
+| CI 전략 | 로컬만 → EAS Test (전환 후) | MVP 단계 오버엔지니어링 방지 |
+
+### 커밋 & 배포
+
+| SHA | 내용 |
+|-----|------|
+| `9cf0c34` | feat(native): Expo RN 앱 PoC — Discover/Search/Saved + Appium E2E |
+| `0b3093d` | refactor: npm workspaces 모노레포 전환 + packages/core 추출 |
+| `598cd5e` | refactor: 모노레포 정석 구조 전환 (A 경로) — apps/web + Turborepo + @neq/* |
+| `e6313ce` | docs: Day 11 개발일지 — 네이티브 전환 + 모노레포 정석 구조 |
+
+### 남은 작업 (다음 세션)
+
+- [ ] 웹 코드에서 `@neq/core`, `@neq/design` 점진적 import — `apps/web/src/lib/types.ts` 등 중복 타입 drift 제거
+- [ ] 네이티브 본 포팅: FilterChips → DetailSheet → Profile → SearchSheet
+- [ ] EAS Build 설정 → TestFlight 배포
+- [ ] Supabase anonymous auth 도입 (RLS anon 전면 허용 상태 벗어나기)
+- [ ] 웹에서 `meh`/"별로" WatchReaction 실제 제거 (영향 분석 필요)
+- [ ] Quiet Ink 디자인 폴리싱 (film grain 톤)
+
+### 회고
+
+- **하루 분량 판단 성공**: Expo 시작부터 프로덕션 배포까지 한 세션. 스와이프 감도 검증만 사용자 개입, 나머지는 자동 검증으로 진행.
+- **병렬 세션 활용**: Appium 인프라 세팅을 옆 세션에서 병행 → 메인 세션은 코드에 집중 가능.
+- **메모리 반대 방향 저장 버그**: 스와이프 방향이 메모리에 반대로 기록돼 PoC를 옛 UX로 구현한 실수. 사용자 지적 후 즉시 수정. 메모리 → 코드 sync 중요성.
+- **"별로" 기능 / "좋아요" 버튼화**: 아직 **웹 코드에는 반영 안 됨**. 이 UX 결정이 문서만 있고 구현 미반영 상태. 다음 세션에서 처리.
+- **Vercel Root Directory 수동 작업 한계**: CLI 미설치 + 대시보드 접근 불가로 사용자 수동 단계 필수. 다음 번엔 `npm i -g vercel` 먼저 해두면 `vercel project ls` 등으로 더 많은 자동화 가능.
 
 ## 2026-04-06 (Day 1)
 
