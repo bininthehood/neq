@@ -73,7 +73,43 @@ In QA mode, flag any code that doesn't match DESIGN.md.
     └── neq-orchestrator/SKILL.md
 ```
 
+## 하네스: 디자인 팀
+
+**목표:** neq, 디자인 시스템 리빌드. Warm Cinema 탈피 → 고유 디자인 언어 구축. 외부 디자인 에이전시 수준.
+
+**에이전트 팀:**
+| 에이전트 | 역할 | Phase |
+|---------|------|-------|
+| brand-designer | 브랜드 철학, 컬러, 타이포, 톤앤매너 | 1 |
+| ui-designer | 컴포넌트 시스템, 레이아웃, 스페이싱 | 2 |
+| motion-designer | 애니메이션, 제스처, 트랜지션 | 3 |
+| design-critic | anti-slop 감사, 경쟁 분석, 비평 | 4 |
+
+**스킬:**
+| 스킬 | 용도 |
+|------|------|
+| design-orchestrator | 디자인 팀 오케스트레이션 (Phase 1→2→3→4→DESIGN.md) |
+
+**실행 규칙:**
+- 디자인 시스템 리빌드/업그레이드 요청 시 `design-orchestrator` 스킬 사용
+- Phase 순차 실행 (1→2→3→4). 이전 Phase 산출물을 다음 Phase 입력으로 사용
+- design-critic은 모든 산출물을 cross-review
+- 최종 산출물: 새 DESIGN.md + 구현 가이드
+
+**디렉토리 구조:**
+```
+.claude/
+├── agents/
+│   ├── brand-designer.md
+│   ├── ui-designer.md
+│   ├── motion-designer.md
+│   └── design-critic.md
+└── skills/
+    └── design-orchestrator/SKILL.md
+```
+
 **변경 이력:**
 | 날짜 | 변경 내용 | 대상 | 사유 |
 |------|----------|------|------|
 | 2026-04-07 | 초기 구성 | 전체 | neq 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |
+| 2026-04-15 | 디자인 팀 추가 | 디자인 | Warm Cinema 탈피 + 고유 디자인 언어 구축 |
