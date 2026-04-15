@@ -147,7 +147,7 @@ export default function SearchSheet({
           maxHeight: "85dvh",
           borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
           transform: `translateY(${sheetY}%)`,
-          transition: animating ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)" : "none",
+          transition: animating ? "transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1)" : "none",
         }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}

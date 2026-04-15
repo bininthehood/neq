@@ -65,7 +65,7 @@ export default function SwipeCard({
           isTop && isDragging
             ? "none"
             : isTop
-              ? "transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.3s ease-out, bottom 0.3s ease-out, left 0.3s ease-out, right 0.3s ease-out, border-radius 0.3s ease-out"
+              ? "transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), top 0.3s ease-out, bottom 0.3s ease-out, left 0.3s ease-out, right 0.3s ease-out, border-radius 0.3s ease-out"
               : "transform 0.3s ease-out",
         zIndex: 10 - depth,
       }}

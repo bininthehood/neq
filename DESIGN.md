@@ -3,13 +3,15 @@
 ## Product Context
 - **What this is:** OTT 콘텐츠 발굴/큐레이션 모바일 PWA
 - **Who it's for:** 2030 직장인. 퇴근 후 소파에서 한 손으로 "오늘 뭐 볼까" 해결.
-- **Space/industry:** OTT 콘텐츠 디스커버리 (틴더식 스와이프)
+- **Space/industry:** OTT 콘텐츠 디스커버리 (스와이프 기반)
 - **Project type:** Mobile-first PWA (390x844 기준)
 
 ## Aesthetic Direction
-- **Direction:** Warm Cinema
-- **Decoration level:** Intentional (미세한 그레인 텍스쳐, 포스터 중심)
-- **Mood:** 영화관의 따뜻한 간접 조명. 포스터가 주인공이고 UI는 어둠 속에 녹아듦. 사람 손이 만든 느낌, AI slop 철저히 배제.
+- **Direction:** Quiet Ink
+- **Decoration level:** Minimal — 포스터가 유일한 색채. UI는 잉크처럼 배경에 스며든다.
+- **Mood:** 독립서점의 큐레이션 선반. 갤러리 전시실의 여백. 포스터가 주인공이고 UI는 절제된 타이포와 여백으로 존재감을 드러낸다.
+- **Brand essence:** "당신의 문화적 감각을 신뢰하는 공간"
+- **Brand personality:** Discerning(안목), Unhurried(여유), Ownable(소유감)
 - **Anti-slop:** 아래 금지 목록 참조. AI가 만든 느낌을 철저히 배제.
 
 ### Anti-slop 금지 목록
@@ -19,13 +21,15 @@
 4. 센터 정렬 일변도 (모든 헤딩, 설명, 카드가 text-align: center)
 5. 그라디언트 버튼
 6. `border-left: Npx solid accent` 스타일 인용 블록 (AI가 좋아하는 패턴)
-7. 에모지를 디자인 요소로 사용 (🚀 헤딩, ✨ 불릿 등). 텍스트/아이콘으로 대체.
+7. 에모지를 디자인 요소로 사용 (텍스트/아이콘으로 대체)
 8. `text-[10px]` 이하 폰트 사이즈. 최소 xs=11px.
 9. 장식용 blob, 물결 SVG 디바이더
 10. "Welcome to X", "Unlock the power of..." 류 제네릭 카피
+11. 스카이 블루 액센트 (Discord/Linear 기본 링크 느낌)
+12. 쿨 톤 다크 + 블루 조합 (개발자 도구 클리셰)
 
 ## Typography
-- **Display/Hero:** Fraunces (optical size, weight 700-900) — 율동적인 세리프. 영화 타이틀, "오늘 뭐 볼까?" 같은 헤드라인에 사용. AI가 절대 기본값으로 선택하지 않는 폰트.
+- **Display/Hero:** Fraunces (optical size, weight 700-900) — 율동적인 세리프. 영화 타이틀, "오늘 뭐 볼까?" 같은 헤드라인에 사용.
 - **Body:** Pretendard Variable — 한글 UI 최적. 본문, 라벨, 추천 이유, 설명 텍스트.
 - **UI/Labels:** Pretendard Variable (weight 500)
 - **Data/Tables:** Outfit (tabular-nums) — 평점, 숫자, 카운터. 깔끔한 숫자 전용.
@@ -42,26 +46,31 @@
   - display: 48px / 3rem
 
 ## Color
-- **Approach:** Restrained + Warm
-- **Background:** #0C0A09 — 워며 블랙. 순수 블랙보다 사람 손이 닿은 느낌.
-- **Surface:** #171412 — 카드, 모달 배경
-- **Surface Raised:** #211C18 — 호버, 활성 상태
-- **Border:** #2E2722 — 미세한 구분선
-- **Text Primary:** #F5F0EB — 워며 화이트. 차가운 #FFF 대신.
-- **Text Secondary:** #9C8E82 — 따뜻한 회색
-- **Text Muted:** #5C5048 — 비활성 텍스트
-- **Accent:** #E87B35 — 번트 오렌지. Save, CTA, 긍정적 행동. 영화관 간판의 따뜻함.
-- **Accent Hover:** #F08942 — 호버 시 밝아지는 오렌지
-- **Accent Dim:** rgba(232, 123, 53, 0.15) — 액센트 배경
-- **Danger:** #DC4A3A — 따뜻한 빨강. Pass, 삭제.
-- **Warning:** #D4942A — 따뜻한 노랑
-- **Info:** #5B8CD4 — 차분한 파랑
-- **Success:** #4A9E5C — 자연스러운 초록 (확인/완료에만 사용, 주액센트 아님)
+- **Approach:** Restrained + Warm Neutral
+- **Background:** #12110E — 미세한 웜 뉴트럴 다크. 차가운 쿨 블랙도, 브라운 블랙도 아닌 중도.
+- **Surface:** #1A1916 — 카드, 모달 배경
+- **Surface Raised:** #24231E — 호버, 활성 상태
+- **Surface Sunken:** #0E0D0B — 인셋 영역, 입력 필드 배경
+- **Border:** #2E2D27 — 기본 구분선
+- **Border Subtle:** #22211C — 미세한 구분 (리스트 아이템 사이)
+- **Border Strong:** #3A392F — 강조 구분선, 섹션 분리
+- **Text Primary:** #EDEDEF — 뉴트럴 화이트. bg 위 대비비 14.8:1 (AAA)
+- **Text Secondary:** #8E8F9A — 부제목, 메타 정보. 대비비 5.8:1 (AA)
+- **Text Muted:** #6B6C75 — 비활성 텍스트, 힌트. 대비비 ~3.5:1 (대형 텍스트 AA)
+- **Accent:** #C4A35A — 앰버 골드. Save, CTA, 긍정적 행동. 독립서점 조명의 따뜻한 금빛.
+- **Accent Hover:** #D4B36A — 호버 시 밝아지는 골드
+- **Accent Dim:** rgba(196, 163, 90, 0.12) — 액센트 배경
+- **Accent Strong:** #B08940 — 액티브, 포커스 링
+- **Danger:** #E05A4F — 따뜻한 빨강. Pass, 삭제. 버튼 텍스트는 --text-inverse 사용.
+- **Danger Dim:** rgba(224, 90, 79, 0.14) — 위험 영역 배경
+- **Warning:** #D4A245 — 경고
+- **Info:** #7BA3D4 — 차분한 파랑 (accent와 구별되는 톤)
+- **Success:** #4DB06A — 완료/확인
 - **Dark mode:** 이것이 기본. 라이트 모드 없음.
 
 ## Overlay 토큰
 포스터 위 텍스트, 모달 배경, 스와이프 피드백 등에 사용하는 반투명 레이어 체계.
-모든 오버레이는 워며 블랙(12, 10, 9) 기반. 차가운 순수 블랙 금지.
+모든 오버레이는 웜 뉴트럴(18, 17, 14) 기반.
 
 | 토큰 | opacity | 용도 |
 |------|---------|------|
@@ -72,28 +81,28 @@
 | `--bg-overlay-solid` | 0.97 | 상세 모달 (거의 불투명) |
 
 **Border/Dim 토큰:**
-- `--accent-border`: rgba(232, 123, 53, 0.3) — 액센트 보더
-- `--accent-border-light`: rgba(232, 123, 53, 0.2) — 약한 액센트 보더
-- `--danger-overlay`: rgba(220, 74, 58, 0.25) — Pass 스와이프 피드백
-- `--text-primary-dim`: rgba(245, 240, 235, 0.08) — 텍스트 컬러 기반 미세 배경
+- `--accent-border`: rgba(196, 163, 90, 0.25) — 액센트 보더
+- `--accent-border-light`: rgba(196, 163, 90, 0.15) — 약한 액센트 보더
+- `--danger-overlay`: rgba(224, 90, 79, 0.22) — Pass 스와이프 피드백
+- `--text-primary-dim`: rgba(237, 237, 239, 0.07) — 텍스트 컬러 기반 미세 배경
 
 ## Spacing
-- **Base unit:** 8px
+- **Base unit:** 4px
 - **Density:** Comfortable — 피곤한 상태에서도 정확히 누를 수 있는 터치 타겟
 - **Scale:** 2xs(2) xs(4) sm(8) md(16) lg(24) xl(32) 2xl(48) 3xl(64)
 - **Minimum touch target:** 44x44px
+- **좌우 여백:** 콘텐츠 20px (px-5), 그리드/필터 16px (px-4)
 
 ## Layout
 - **Approach:** Full-bleed + asymmetric
 - **Discover:** 카드가 화면의 85%. 시스템 UI는 카드 위 반투명 오버레이.
 - **Saved:** 2열 비대칭 그리드 (Pinterest식). 단조로운 균일 그리드 금지.
-- **Onboarding:** 3열 비대칭 포스터 그리드 (aspect-ratio 변화)
 - **Max content width:** 480px (모바일 최적화)
 - **Border radius:**
   - sm: 4px (뱃지, 태그)
   - md: 8px (입력, 작은 카드)
   - lg: 12px (카드, 모달)
-  - xl: 16px (메인 카드)
+  - xl: 16px (메인 카드, 바텀시트)
   - full: 9999px (버튼, 아바타)
 
 ## Responsive
@@ -107,7 +116,6 @@
 - **원칙:** 비대칭 그리드 우선. 균일한 n열 반복 금지.
 - **Discover:** 카드 1장이 화면의 85%. 스와이프 인터랙션.
 - **Saved:** 2열 비대칭 (높이 변화: `i % 3 === 0 ? 240px : 200px`). Pinterest식.
-- **Onboarding:** 3열 비대칭 (aspect-ratio 변화: `2/3` ↔ `2/3.5`).
 - **금지:** 균일한 4열 이상 그리드. 모든 카드가 같은 크기인 레이아웃.
 
 ## Accessibility
@@ -116,27 +124,47 @@
 - **확대:** viewport에서 `user-scalable=no` 금지. 사용자가 원하면 확대 가능해야 함.
 - **컬러:** 색상만으로 정보 전달 금지. 아이콘, 라벨, 패턴 병행.
 - **모바일:** `autoFocus` 금지 (모바일에서 키보드 자동 팝업 방지).
+- **대비비:** text-primary on bg ≥ 14:1 (AAA), text-secondary ≥ 4.5:1 (AA), text-muted ≥ 3.0:1 (대형 텍스트 AA)
 
 ## Motion
-- **Approach:** Intentional + physics-based
-- **Card swipe:** 스프링 물리학 — cubic-bezier(0.34, 1.56, 0.64, 1). Tension → release.
-- **Enter:** ease-out (요소가 화면에 등장)
-- **Exit:** ease-in (요소가 화면에서 퇴장)
-- **Move:** ease-in-out (위치 변경)
+- **Approach:** Intentional + physics-based + restrained
+- **원칙:** 잉크가 종이 위에 스며들 듯, 차분하고 의도적. 동시 움직임 최대 3개.
+- **Easing:**
+  - `--ease-enter`: cubic-bezier(0.25, 1, 0.5, 1) — 요소 등장
+  - `--ease-exit`: cubic-bezier(0.5, 0, 0.75, 0) — 요소 퇴장
+  - `--ease-move`: cubic-bezier(0.45, 0, 0.55, 1) — 위치 이동
+  - `--ease-spring`: cubic-bezier(0.34, 1.3, 0.64, 1) — 절제된 스프링 (30% 오버슈트)
+  - `--ease-soft`: cubic-bezier(0.4, 0, 0.2, 1) — opacity/색상 전환
 - **Duration:**
-  - micro: 50-100ms (호버, 토글)
-  - short: 150-250ms (페이드, 슬라이드)
-  - medium: 250-400ms (카드 전환, 오버레이)
-  - long: 400-700ms (전체 화면 전환)
+  - instant: 80ms (탭 피드백, 토글)
+  - quick: 150ms (필터 전환, 드롭다운)
+  - moderate: 250ms (페이드, 토스트)
+  - steady: 350ms (바텀시트, 카드 스냅백)
+  - slow: 500ms (풀스크린 전환)
+- **규칙:** 닫힘은 열림보다 50ms 짧게. 사용자 입력 첫 반응 100ms 이내.
+- **prefers-reduced-motion:** 장식 모션 비활성화. 드래그 추적 등 필수 상태 변화만 유지.
 
-## Texture
-- **Film grain:** 미세한 노이즈 오버레이 (opacity 3-5%). Surface와 빈 카드 배경에 적용.
-- **Gradient overlay:** 카드 하단 정보 영역에 from-transparent via-background/80 to-background.
+## Tone & Voice
+- **기본 톤:** 해요체 (부드러운 존댓말). "~습니다" 격식체 금지.
+- **키워드:** 담백, 확신, 위트 (적절한 순간에만)
+- **금지 표현:** 느낌표 연속, 이모지 UI, AI/알고리즘 언급, 과장 ("최고의", "완벽한")
+
+## Content Categories (확장용)
+영화/시리즈 외 확장 시 카테고리 구분 색상. 메인 UI에는 미사용, 뱃지/필터 칩에만 적용.
+
+| 카테고리 | Hex | 비고 |
+|---------|-----|------|
+| 영화 | #C4A35A | 기본 액센트와 동일 |
+| 시리즈 | #9B8AE0 | 라벤더 |
+| 음악 | #E08A6C | 코랄 |
+| 도서 | #7EC4A0 | 세이지 그린 |
+| 공연 | #D4A245 | 앰버 |
 
 ## Decisions Log
 | Date | Decision | Rationale |
 |------|----------|-----------|
 | 2026-04-06 | 초기 디자인 시스템 제안 (Cinematic Dark) | /design-consultation 첫 실행 |
-| 2026-04-07 | Warm Cinema로 변경, 오렌지 액센트 | "LLM이 만든 느낌" 피드백. 초록→오렌지, 순수블랙→워며블랙, Fraunces 세리프 추가 |
-| 2026-04-07 | Variant A 선택 | 클래식 시네마틱 방향. AI 목업 비교 후 확정 |
-| 2026-04-07 | 디자인 시스템 고도화 | /design-review 결과 반영: overlay 토큰 체계, 반응형 전략, 접근성 규칙, anti-slop 보강, 비대칭 그리드 규칙 추가 |
+| 2026-04-07 | Warm Cinema로 변경, 오렌지 액센트 | "LLM이 만든 느낌" 피드백. 초록→오렌지, Fraunces 세리프 추가 |
+| 2026-04-07 | 디자인 시스템 고도화 | overlay 토큰 체계, 반응형 전략, 접근성 규칙, anti-slop 보강 |
+| 2026-04-15 | Quiet Ink로 전환 | Warm Cinema 완전 탈피. 4인 디자인 팀(brand/ui/motion/critic) 순차 작업 |
+| 2026-04-15 | C안 확정: 앰버 골드 + A안 폰트 | 크리틱 권고 반영. 블루→앰버(경쟁사 차별화), Fraunces 유지(개성) |

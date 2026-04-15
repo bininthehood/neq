@@ -1,39 +1,39 @@
 @import "tailwindcss";
 
 :root {
-  /* Warm Cinema — Design Tokens */
-  --bg: #0C0A09;
-  --surface: #171412;
-  --surface-raised: #211C18;
-  --border: #2E2722;
+  /* Quiet Ink — Design Tokens */
+  --bg: #12110E;
+  --surface: #1A1916;
+  --surface-raised: #24231E;
+  --border: #2E2D27;
 
-  --text-primary: #F5F0EB;
-  --text-secondary: #9C8E82;
-  --text-muted: #5C5048;
+  --text-primary: #EDEDEF;
+  --text-secondary: #8E8F9A;
+  --text-muted: #6B6C75;
 
-  --accent: #E87B35;
-  --accent-dim: rgba(232, 123, 53, 0.15);
-  --accent-hover: #F08942;
+  --accent: #C4A35A;
+  --accent-dim: rgba(196, 163, 90, 0.12);
+  --accent-hover: #D4B36A;
 
-  --danger: #DC4A3A;
-  --danger-dim: rgba(220, 74, 58, 0.15);
-  --danger-overlay: rgba(220, 74, 58, 0.25);
-  --warning: #D4942A;
-  --info: #5B8CD4;
-  --success: #4A9E5C;
-  --success-dim: rgba(74, 158, 92, 0.15);
+  --danger: #E05A4F;
+  --danger-dim: rgba(224, 90, 79, 0.14);
+  --danger-overlay: rgba(224, 90, 79, 0.22);
+  --warning: #D4A245;
+  --info: #7BA3D4;
+  --success: #4DB06A;
+  --success-dim: rgba(77, 176, 106, 0.14);
 
-  /* Overlays — bg 기반 투명도 레이어 */
-  --bg-overlay-light: rgba(12, 10, 9, 0.4);
-  --bg-overlay: rgba(12, 10, 9, 0.7);
-  --bg-overlay-heavy: rgba(12, 10, 9, 0.85);
-  --bg-overlay-dense: rgba(12, 10, 9, 0.92);
-  --bg-overlay-solid: rgba(12, 10, 9, 0.97);
+  /* Overlays — bg(18,17,14) 기반 투명도 레이어 */
+  --bg-overlay-light: rgba(18, 17, 14, 0.4);
+  --bg-overlay: rgba(18, 17, 14, 0.7);
+  --bg-overlay-heavy: rgba(18, 17, 14, 0.85);
+  --bg-overlay-dense: rgba(18, 17, 14, 0.92);
+  --bg-overlay-solid: rgba(18, 17, 14, 0.97);
 
   /* Borders & dim surfaces */
-  --accent-border: rgba(232, 123, 53, 0.3);
-  --accent-border-light: rgba(232, 123, 53, 0.2);
-  --text-primary-dim: rgba(245, 240, 235, 0.08);
+  --accent-border: rgba(196, 163, 90, 0.25);
+  --accent-border-light: rgba(196, 163, 90, 0.15);
+  --text-primary-dim: rgba(237, 237, 239, 0.07);
 
   /* Spacing */
   --space-2xs: 2px;
@@ -177,7 +177,7 @@ body::after {
   to { transform: translateY(100%); }
 }
 .animate-slide-up {
-  animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: slideUp 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
 }
 .animate-slide-down {
   animation: slideDown 0.25s ease-in forwards;
@@ -242,6 +242,6 @@ body::after {
 @media (min-width: 1024px) {
   body > div {
     max-width: 420px;
-    box-shadow: 0 0 80px rgba(232, 123, 53, 0.03);
+    box-shadow: 0 0 80px rgba(196, 163, 90, 0.03);
   }
 }
