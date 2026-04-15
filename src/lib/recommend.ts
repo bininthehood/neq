@@ -413,23 +413,40 @@ async function getColdStartRecommendations(
 ): Promise<Recommendation[]> {
   const excludeSet = new Set(exclude ?? []);
 
-  // Step 1: 장르별 메가 히트작 수집 (vote_count 내림차순 = 많이 본 순)
-  const movieGenres = filter.type === "series" ? [] : COLD_START_GENRES.movie;
-  const tvGenres = filter.type === "movie" ? [] : COLD_START_GENRES.tv;
-  const allGenres = [
-    ...movieGenres.map((g) => ({ ...g, type: "movie" as const })),
-    ...tvGenres.map((g) => ({ ...g, type: "series" as const })),
-  ];
+  // Step 1: 장르별 메가 히트작 수집
+  // variety(예능) 필터 → Reality/Talk 장르로 직접 호출 (솔로지옥 등 히트작)
+  let allGenres: Array<{ id: number; label: string; type: "movie" | "series" }>;
 
-  // 장르별 2-3개씩 병렬 호출
+  if (filter.type === "variety") {
+    allGenres = VARIETY_GENRE_IDS.map((id) => ({
+      id,
+      label: id === 10764 ? "리얼리티" : "토크쇼",
+      type: "series" as const,
+    }));
+  } else {
+    const movieGenres = filter.type === "series" ? [] : COLD_START_GENRES.movie;
+    const tvGenres = filter.type === "movie" ? [] : COLD_START_GENRES.tv;
+    allGenres = [
+      ...movieGenres.map((g) => ({ ...g, type: "movie" as const })),
+      ...tvGenres.map((g) => ({ ...g, type: "series" as const })),
+    ];
+  }
+
+  // 년도 필터 → date range 전달
+  let dateRange: { gte?: string; lte?: string } | undefined;
+  if (filter.year === "recent") dateRange = { gte: "2020-01-01" };
+  if (filter.year === "2010s") dateRange = { gte: "2010-01-01", lte: "2019-12-31" };
+  if (filter.year === "classic") dateRange = { lte: "2009-12-31" };
+
+  // 장르별 병렬 호출
   const genreResults = await Promise.all(
     allGenres.map(async (g) => {
-      const items = await discoverByGenres([g.id], g.type, 1, undefined, "vote_count.desc");
-      return items.slice(0, 3); // 장르당 가장 많이 본 3개
+      const items = await discoverByGenres([g.id], g.type, 1, dateRange, "vote_count.desc");
+      return items.slice(0, 5);
     })
   );
 
-  // 셔플: 같은 장르끼리 뭉치지 않게
+  // 셔플
   const allItems = genreResults.flat().sort(() => Math.random() - 0.5);
 
   // 중복 제거 + exclude 필터
@@ -441,7 +458,7 @@ async function getColdStartRecommendations(
     return true;
   });
 
-  // Step 3: enrichment (배치 10, 조기 종료)
+  // Step 3: enrichment
   const enriched = await enrichCandidates(
     candidates.slice(0, 60).map((item) => ({
       id: item.id,
@@ -452,10 +469,29 @@ async function getColdStartRecommendations(
     }))
   );
 
-  // Step 4: OTT + origin 필터
-  const filtered = applyFilters(enriched, filter);
+  // Step 4: 필터 적용
+  let filtered = applyFilters(enriched, filter);
 
-  // Step 5: Recommendation 조립 (LLM 없이 기본 reason)
+  // Step 4.5: 결과 부족 시 자동 폴백 — 필터를 단계적으로 넓힘
+  if (filtered.length < 5) {
+    // 1차: 년도 필터 해제
+    if (filter.year) {
+      const relaxed = applyFilters(enriched, { ...filter, year: undefined });
+      if (relaxed.length > filtered.length) filtered = relaxed;
+    }
+    // 2차: origin 필터도 해제
+    if (filtered.length < 5 && filter.origin) {
+      const relaxed = applyFilters(enriched, { ...filter, year: undefined, origin: undefined });
+      if (relaxed.length > filtered.length) filtered = relaxed;
+    }
+    // 3차: OTT 필터도 해제 (type만 유지)
+    if (filtered.length < 5 && filter.ott && filter.ott.length > 0) {
+      const relaxed = applyFilters(enriched, { type: filter.type });
+      if (relaxed.length > filtered.length) filtered = relaxed;
+    }
+  }
+
+  // Step 5: Recommendation 조립
   const results: Recommendation[] = [];
   const usedTitles = new Set<string>();
 
