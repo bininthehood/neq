@@ -20,6 +20,7 @@ export interface RecommendFilter {
   type?: "movie" | "series" | "variety"; // variety = 예능 (TV + Reality/Talk 장르)
   origin?: "kr" | "foreign"; // undefined = 둘 다
   year?: "recent" | "2010s" | "classic"; // undefined = 전체
+  ott?: string[]; // OTT 이름 배열 (예: ["Netflix"]). 서버에서 providers 매칭.
 }
 
 export interface WatchFeedback {
@@ -194,6 +195,12 @@ function applyFilters(
     const isKR = c.details.country.includes("KR");
     if (filter.origin === "kr" && !isKR) return false;
     if (filter.origin === "foreign" && isKR) return false;
+
+    // OTT 필터 (서버 사이드 — 클라이언트에서 부족할 때 전달됨)
+    if (filter.ott && filter.ott.length > 0) {
+      const ottSet = new Set(filter.ott);
+      if (!c.providers.some((p) => ottSet.has(p.name))) return false;
+    }
 
     // 년도 필터
     if (filter.year) {

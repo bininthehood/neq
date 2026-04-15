@@ -289,7 +289,10 @@ export default function DiscoverPage() {
       // 년도 필터 변경 시 서버에서 해당 년도 작품을 가져오도록 새로 요청
       if (y !== "all") rec.loadRecs(rec.filterType, rec.filterOrigin, y);
     },
-    onOTTChange: rec.setFilterOTTs, onResetTopIdx: () => setTopIdx(0),
+    onOTTChange: (otts: Set<string>) => {
+      rec.handleOTTChange(otts);
+      setTopIdx(0);
+    }, onResetTopIdx: () => setTopIdx(0),
   };
   const filterLabel = [
     rec.filterOrigin === "kr" ? "국내" : rec.filterOrigin === "foreign" ? "해외" : "",
@@ -306,7 +309,7 @@ export default function DiscoverPage() {
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterOTTs.size > 0;
-    return <EmptyScreen hasFilter={hasF} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterOTTs(new Set()); }} onRefresh={rec.refreshRecommendations} onReset={() => router.push("/reset")} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} onReset={() => router.push("/reset")} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();

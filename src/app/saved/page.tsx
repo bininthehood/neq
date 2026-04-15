@@ -197,6 +197,7 @@ export default function SavedPage() {
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [groupByOTT, setGroupByOTT] = useState(false);
+  const [ottFilter, setOttFilter] = useState<string | null>(null);
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
   const [history, setHistory] = useState<RecHistoryEntry[]>([]);
 
@@ -298,18 +299,39 @@ export default function SavedPage() {
     return items;
   }, [saved, reports, viewFilter, archivedIds]);
 
+  // OTT 필터 적용
+  const ottFilteredSaved = useMemo(() => {
+    if (!ottFilter) return filteredSaved;
+    return filteredSaved.filter((item) =>
+      item.recommendation.providers.some((p) => p.name === ottFilter)
+    );
+  }, [filteredSaved, ottFilter]);
+
+  // Saved 작품에서 사용 가능한 OTT 목록 추출 (작품 수 많은 순)
+  const availableOTTs = useMemo(() => {
+    const ottCount = new Map<string, number>();
+    for (const item of filteredSaved) {
+      for (const p of item.recommendation.providers) {
+        ottCount.set(p.name, (ottCount.get(p.name) ?? 0) + 1);
+      }
+    }
+    return Array.from(ottCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  }, [filteredSaved]);
+
   // OTT별 그룹핑
   const ottGroups = useMemo(() => {
     if (!groupByOTT) return null;
     const groups: Record<string, SavedItem[]> = {};
-    for (const item of filteredSaved) {
+    for (const item of ottFilteredSaved) {
       const key = ottGroupKey(item);
       if (!groups[key]) groups[key] = [];
       groups[key].push(item);
     }
     // 작품 수 많은 OTT 먼저
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
-  }, [filteredSaved, groupByOTT]);
+  }, [ottFilteredSaved, groupByOTT]);
 
   // 히스토리 날짜별 그룹핑
   const historyGroups = useMemo(() => {
@@ -537,12 +559,60 @@ export default function SavedPage() {
             >
               {f.label}
               {f.count > 0 && (
-                <span className="font-data text-muted" style={{ fontSize: "10px" }}>
+                <span className="font-data text-muted" style={{ fontSize: "11px" }}>
                   {f.count}
                 </span>
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* OTT filter tabs */}
+      {availableOTTs.length > 1 && viewFilter !== "history" && saved.length > 0 && (
+        <div className="flex gap-2 px-5 mt-1 mb-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <button
+            onClick={() => setOttFilter(null)}
+            className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg"
+            style={{
+              background: ottFilter === null ? "var(--accent-dim)" : "transparent",
+              color: ottFilter === null ? "var(--accent)" : "var(--text-muted)",
+              fontWeight: ottFilter === null ? 600 : 400,
+            }}
+          >
+            전체
+          </button>
+          {availableOTTs.map(({ name, count }) => {
+            const isActive = ottFilter === name;
+            const iconSrc = getOTTIcon(name);
+            return (
+              <button
+                key={name}
+                onClick={() => setOttFilter(isActive ? null : name)}
+                className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg"
+                style={{
+                  background: isActive ? "var(--accent-dim)" : "transparent",
+                  color: isActive ? "var(--accent)" : "var(--text-muted)",
+                  fontWeight: isActive ? 600 : 400,
+                }}
+              >
+                {iconSrc && (
+                  <Image
+                    src={iconSrc}
+                    alt={name}
+                    width={16}
+                    height={16}
+                    className="object-contain rounded-sm"
+                    unoptimized
+                  />
+                )}
+                {name}
+                <span className="font-data" style={{ fontSize: "11px", opacity: 0.6 }}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -679,7 +749,7 @@ export default function SavedPage() {
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); setSelected(null); }}
-              className="w-8 h-8 flex items-center justify-center active:scale-90 transition-transform -mr-1"
+              className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform -mr-1"
             >
               <IconClose size={14} color="var(--text-muted)" />
             </button>
@@ -789,14 +859,14 @@ export default function SavedPage() {
           <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 저장한 작품이 없어요</p>
           <p className="text-sm mt-1.5">Discover에서 마음에 드는 작품을 저장해보세요</p>
         </div>
-      ) : filteredSaved.length === 0 ? (
+      ) : ottFilteredSaved.length === 0 ? (
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">
-            {viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
+            {ottFilter ? `${ottFilter}에 해당하는 작품이 없어요` : viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
           </p>
           <p className="text-sm mt-1.5">
-            {viewFilter === "unwatched" ? "Discover에서 새로운 작품을 찾아보세요" : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
+            {ottFilter ? "다른 OTT를 선택하거나 전체를 눌러보세요" : viewFilter === "unwatched" ? "Discover에서 새로운 작품을 찾아보세요" : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
           </p>
         </div>
       ) : groupByOTT && ottGroups ? (
@@ -844,7 +914,7 @@ export default function SavedPage() {
       ) : (
         /* 기본 그리드 뷰 */
         <div className="grid grid-cols-2 gap-3 px-5 pb-4 auto-rows-min">
-          {filteredSaved.map((item, i) => (
+          {ottFilteredSaved.map((item, i) => (
             <PosterCard
               key={item.recommendation.tmdbId}
               item={item}

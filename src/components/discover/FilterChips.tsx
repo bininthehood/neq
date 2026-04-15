@@ -76,7 +76,7 @@ export default function FilterChips({
           style={chipStyle(filterType !== "all", openDropdown === "type")}
         >
           {TYPE_LABELS[filterType]}{" "}
-          <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
+          <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         <button
           onClick={() =>
@@ -90,7 +90,7 @@ export default function FilterChips({
           )}
         >
           {ORIGIN_LABELS[filterOrigin]}{" "}
-          <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
+          <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         <button
           onClick={() =>
@@ -104,7 +104,7 @@ export default function FilterChips({
           )}
         >
           {YEAR_LABELS[filterYear]}{" "}
-          <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
+          <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         {availableOTTs.length > 0 && (
           <button
@@ -118,7 +118,7 @@ export default function FilterChips({
             )}
           >
             {ottLabel}{" "}
-            <span style={{ fontSize: 10, opacity: 0.3 }}>&#9662;</span>
+            <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
           </button>
         )}
       </div>

@@ -40,10 +40,18 @@ export function useRecommendations() {
     if (typeof window === "undefined") return "all";
     return (sessionStorage.getItem("neq_filter_year") as FilterYear) || "all";
   });
-  const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
+  const [filterOTTs, setFilterOTTs] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const raw = sessionStorage.getItem("neq_filter_otts");
+      if (raw) return new Set(JSON.parse(raw) as string[]);
+    } catch { /* ignore */ }
+    return new Set();
+  });
   const abortRef = useRef<AbortController | null>(null);
 
-  const loadRecs = async (ft: FilterType, fo: FilterOrigin, fy: FilterYear = "all") => {
+  const loadRecs = async (ft: FilterType, fo: FilterOrigin, fy: FilterYear = "all", otts?: Set<string>) => {
+    const effectiveOTTs = otts ?? filterOTTs;
     // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로)
     if (fy === "all") {
       const cached = getRecommendations(ft, fo);
@@ -70,10 +78,11 @@ export function useRecommendations() {
     setLoading(true);
     setLoadError(null);
     const favorites = getFavorites();
-    const filter: Record<string, string> = {};
+    const filter: Record<string, string | string[]> = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
     if (fy !== "all") filter.year = fy;
+    if (effectiveOTTs.size > 0) filter.ott = [...effectiveOTTs];
     const reports = getWatchReports();
     const savedItems = getSaved();
     const feedback: Record<string, string[]> = {
@@ -164,9 +173,16 @@ export function useRecommendations() {
     loadRecs(t, o);
   };
 
+  const handleOTTChange = (otts: Set<string>) => {
+    setFilterOTTs(otts);
+    try {
+      sessionStorage.setItem("neq_filter_otts", JSON.stringify([...otts]));
+    } catch { /* ignore */ }
+  };
+
   const refreshRecommendations = async () => {
     setRecommendations([], filterType, filterOrigin);
-    await loadRecs(filterType, filterOrigin);
+    await loadRecs(filterType, filterOrigin, filterYear, filterOTTs);
   };
 
   /** 다음 배치를 백그라운드로 프리페치 — 현재 recs 뒤에 추가 */
@@ -181,10 +197,11 @@ export function useRecommendations() {
     prefetchAbortRef.current = controller;
     try {
       const favorites = getFavorites();
-      const filter: Record<string, string> = {};
+      const filter: Record<string, string | string[]> = {};
       if (filterType !== "all") filter.type = filterType;
       if (filterOrigin !== "all") filter.origin = filterOrigin;
       if (filterYear !== "all") filter.year = filterYear;
+      if (filterOTTs.size > 0) filter.ott = [...filterOTTs];
       const currentRecs = recsRef.current;
       const currentTitles = currentRecs.map((r) => r.title);
       const currentIds = currentRecs.map((r) => r.tmdbId);
@@ -237,6 +254,7 @@ export function useRecommendations() {
     setFilterYear,
     filterOTTs,
     setFilterOTTs,
+    handleOTTChange,
     loadRecs,
     handleFilterChange,
     refreshRecommendations,
