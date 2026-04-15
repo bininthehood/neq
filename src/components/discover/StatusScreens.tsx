@@ -90,16 +90,21 @@ export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
 
 interface EmptyScreenProps extends FilterChipsPassthrough {
   hasFilter: boolean;
+  isColdStart: boolean;
   onResetFilter: () => void;
   onRefresh: () => void;
 }
 
 export function EmptyScreen({
   hasFilter,
+  isColdStart,
   onResetFilter,
   onRefresh,
   ...chips
 }: EmptyScreenProps) {
+  // cold start + 필터 조합 → 필터가 너무 좁은 경우
+  const isColdFilterTooNarrow = isColdStart && hasFilter;
+
   return (
     <div className="h-dvh flex flex-col">
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
@@ -111,27 +116,37 @@ export function EmptyScreen({
           <IconFilm size={36} color="var(--text-muted)" />
           <div>
             <p className="font-display text-lg font-semibold">
-              {hasFilter ? "해당 조건의 결과가 없어요" : "추천을 만들지 못했어요"}
+              {isColdFilterTooNarrow
+                ? "조건이 너무 좁아요"
+                : hasFilter
+                  ? "해당 조건의 결과가 없어요"
+                  : "추천을 만들지 못했어요"}
             </p>
             <p className="text-sm mt-1.5 text-secondary">
-              {hasFilter ? "다른 필터를 시도해보세요" : "잠시 후 다시 시도해주세요"}
+              {isColdFilterTooNarrow
+                ? "먼저 전체 필터로 작품을 둘러보고 취향을 알려주세요"
+                : hasFilter
+                  ? "다른 필터를 시도해보세요"
+                  : "잠시 후 다시 시도해주세요"}
             </p>
           </div>
           <div className="flex gap-3">
             {hasFilter && (
               <button
                 onClick={onResetFilter}
-                className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform bg-surface border border-border rounded-full"
+                className="px-5 py-2.5 text-sm font-medium active:scale-95 transition-transform bg-accent text-background rounded-full"
               >
-                필터 초기화
+                {isColdFilterTooNarrow ? "전체 보기" : "필터 초기화"}
               </button>
             )}
-            <button
-              onClick={onRefresh}
-              className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform bg-accent text-background rounded-full"
-            >
-              <IconRefresh size={14} /> 다시 시도
-            </button>
+            {!isColdFilterTooNarrow && (
+              <button
+                onClick={onRefresh}
+                className="px-5 py-2.5 text-sm font-medium flex items-center gap-2 active:scale-95 transition-transform bg-surface border border-border rounded-full"
+              >
+                <IconRefresh size={14} /> 다시 시도
+              </button>
+            )}
           </div>
         </div>
       </div>
