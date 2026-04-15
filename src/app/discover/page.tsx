@@ -48,7 +48,6 @@ export default function DiscoverPage() {
   const [showWatched, setShowWatched] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [immersive, setImmersive] = useState(false);
-  const [rewinding, setRewinding] = useState(false);
   const [reentryNudge, setReentryNudge] = useState<string | null>(null);
 
   const rec = useRecommendations();
@@ -87,18 +86,28 @@ export default function DiscoverPage() {
       });
       addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     }
-    // 마지막 카드 → 새 배치 (서버 refresh)
-    if (topIdx >= filtered.length - 1) {
-      if (!rec.loading && !rec.prefetching) {
-        rec.refreshRecommendations();
-        setTopIdx(0);
-      }
-      return;
-    }
     // 남은 10개 이하 → 다음 배치 백그라운드 프리페치
     if (topIdx >= filtered.length - 10 && !rec.prefetching) {
       rec.prefetchNextBatch();
     }
+
+    // 마지막 카드 → 스와이프 애니메이션 후 새 배치 로드
+    if (topIdx >= filtered.length - 1) {
+      swipe.setSwiping(true);
+      swipe.setDragX(-600);
+      swipe.setDragY(0);
+      const t = setTimeout(() => {
+        swipe.timersRef.current.delete(t);
+        swipe.setDragX(0); swipe.setDragY(0); swipe.setSwiping(false);
+        setTopIdx(0);
+        if (!rec.loading && !rec.prefetching) {
+          rec.refreshRecommendations();
+        }
+      }, 280);
+      swipe.timersRef.current.add(t);
+      return;
+    }
+
     swipe.setSwiping(true);
     swipe.setDragX(-600);
     swipe.setDragY(0);
@@ -378,23 +387,19 @@ export default function DiscoverPage() {
         <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
           onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
           onRewind={() => {
-            if (topIdx === 0 || rewinding) return;
+            if (topIdx === 0 || swipe.swipingRef.current) return;
             vibrate(10);
-            setRewinding(true);
-            // 빠르게 한 장씩 넘기는 시각 효과 (최대 6단계)
-            const steps = Math.min(topIdx, 6);
-            const stepSize = Math.ceil(topIdx / steps);
-            let step = 0;
-            const interval = setInterval(() => {
-              step++;
-              setTopIdx((prev) => Math.max(0, prev - stepSize));
-              if (step >= steps) {
-                clearInterval(interval);
-                setTopIdx(0);
-                setRewinding(false);
-              }
-            }, 60);
-            swipe.scrollRef.current?.scrollTo({ top: 0 });
+            // 카드가 오른쪽으로 날아가는 애니메이션 → 첫 카드로 점프
+            swipe.setSwiping(true);
+            swipe.setDragX(600);
+            swipe.setDragY(0);
+            const t = setTimeout(() => {
+              swipe.timersRef.current.delete(t);
+              setTopIdx(0);
+              swipe.setDragX(0); swipe.setDragY(0); swipe.setSwiping(false);
+              swipe.scrollRef.current?.scrollTo({ top: 0 });
+            }, 280);
+            swipe.timersRef.current.add(t);
           }}
           onRefresh={() => { vibrate(10); setTopIdx(0); rec.refreshRecommendations(); }} />
         <BottomNav active="discover" />
