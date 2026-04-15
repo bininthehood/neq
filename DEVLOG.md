@@ -1079,8 +1079,68 @@ dc97eb0 fix: cold start + 좁은 필터 조합 시 빈 결과 안내 개선
 ```
 
 ### 미해결 / 다음 할 일
-- [ ] Supabase 동기화 실사용 검증
+- [x] ~~Supabase 동기화 실사용 검증~~ → Day 10에서 완료 (push 검증 + RLS 수정)
 - [ ] Quiet Ink 디자인 세부 폴리싱 (film grain 텍스처 → Quiet Ink 톤 조정)
 - [ ] 되감기 VHS 효과 디자인 리뷰 (스캔라인 등 Quiet Ink과 톤 일치 확인)
 - [ ] 사용자 10명 테스트 + PostHog 분석
 - [ ] saved 작품 기반 개인화 전환 임계값 튜닝 (현재 saved 1개부터 개인화)
+
+---
+
+## 2026-04-15 (Day 10 오후 — Appium E2E 세팅 + Vercel 배포 + Supabase 검증)
+
+### 진행 요약
+Vercel 자동배포 실패 복구, 저장소 정리, Supabase 동기화 실사용 검증 + RLS 정책 수정, Appium iOS 자동화 인프라 세팅. 최종 블로커는 iOS 17 Safari 웹뷰 디버거 연결 — 네이티브 전환 단계로 이월.
+
+### 완료된 작업
+
+**Vercel 배포 복구**
+- 빌드 실패 원인: `supabaseUrl is required` — Vercel env에 `NEXT_PUBLIC_SUPABASE_URL/ANON_KEY` 누락
+- james님이 대시보드에서 환경변수 추가 → 재배포 성공
+- `.env.example`에 Supabase 변수 추가 (문서화)
+
+**저장소 정리**
+- `public/sw.js` (serwist 빌드 산출물) → `.gitignore` 추가 + `git rm --cached`
+- `_workspace/`, `_brand/`, `.playwright-mcp/`, `.mcp.json` → `.gitignore`
+- 루트에 흩어진 스크린샷 12개 → `_screenshots/` 이동
+- `scripts/watch-events.sh` (PostHog 실시간 이벤트 확인 유틸) 추가
+- 커밋 `43ad076`
+
+**Supabase 동기화 실사용 검증 (시나리오 A + C)**
+- iPhone 15 iOS 17.2 시뮬레이터에서 실기기 테스트 진행
+- **버그 발견**: RLS 정책이 anon profile INSERT 차단 (`row violates row-level security policy for table "profiles"`)
+- 근본 원인: auth 세션 없이 anon key로 직접 접근 → `auth.uid()` 기반 정책 실패
+- **해결**: 방향 A(anon 전면 허용)로 임시 완화. `supabase/policies.sql` 작성
+  - 5개 테이블 전부 `CREATE POLICY ... FOR ALL TO anon USING (true) WITH CHECK (true)`
+  - 보안 모델: device_id UUID 추측 불가 → MVP 단계 수용
+- **검증 결과**: 3건 저장(라라랜드/인빈시블/세븐) → 백그라운드 전환 → visibility change 훅 → Supabase에 upsert 확인
+- **구조적 한계 발견**: 현재 sync는 "크로스 디바이스 동기화"가 아니라 "단일 device의 cloud backup". localStorage 클리어 시 device_id도 소실 → 데이터 복원 불가. 향후 Supabase anonymous auth 도입 필요 (방향 B)
+
+**Appium E2E 자동화 세팅**
+- Appium 3.3.0 글로벌 설치, xcuitest driver 11.0.0
+- `appium driver doctor xcuitest` required 체크 전부 통과
+- webdriverio devDep 추가
+- WebDriverAgent 첫 빌드 성공 (iPhone 15 sim, 포트 8100 `/status` 정상)
+- `scripts/appium-test.mjs` 테스트 템플릿 작성
+- **블로커**: `webinspectord` 웹뷰 디버거가 Safari 페이지를 반환하지 않음 (iOS 17 + macOS Ventura 13.7.8 조합 known flaky)
+- **결정**: 네이티브 앱 전환 단계로 파킹. 네이티브 앱에선 Safari 경유 안 해서 이 블로커가 구조적으로 사라짐. PWA 단계 자동화는 Playwright MCP로 커버
+- 커밋 `2be76fe`
+
+### 주요 발견
+1. **RLS + anon key 직접 접근 패턴은 보안 실효성 없음** — 향후 Supabase anonymous auth 도입 필요
+2. **iOS 17 Simulator Safari 자동화는 macOS 버전 의존적** — Sonoma 이상이거나 네이티브 앱 전환이 정답
+3. **Appium 인프라는 네이티브 전환 시점 즉시 재사용 가능** — WDA 캐시 + 템플릿 남음
+
+### 주요 커밋
+```
+2be76fe chore: Appium E2E 인프라 초기 세팅 + Supabase RLS 정책
+43ad076 chore: 저장소 정리 — 빌드 산출물/워크스페이스 gitignore + 환경변수 문서화
+```
+
+### 미해결 / 다음 할 일
+- [ ] **네이티브 스택 확정** (Expo/RN vs Capacitor) — Appium 재개 전제
+- [ ] Supabase anonymous auth 도입 (방향 B) — 크로스 디바이스 실현 + RLS 실효성 확보
+- [ ] Quiet Ink 디자인 세부 폴리싱
+- [ ] 되감기 VHS 효과 디자인 리뷰
+- [ ] 사용자 10명 테스트 + PostHog 분석
+- [ ] saved 작품 기반 개인화 전환 임계값 튜닝
