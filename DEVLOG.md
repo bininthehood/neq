@@ -928,3 +928,91 @@ fc84220 feat(monitoring): Sentry 에러 모니터링 추가
 - [ ] 10명 연락처 리스트 + 카톡 메시지 발송
 - [ ] 1주일 데이터 후 PostHog Funnel 리뷰
 - [ ] WARN 항목 중 year "all" 복귀 시 데이터 편향 이슈 해결
+
+---
+
+## 2026-04-13~15 (Day 9-10)
+
+### 진행 요약
+코드 품질 점검(/health) + 린트 대규모 수정 + 적응형 큐레이션 + 온보딩 제거 + 리브랜딩 후속 + 배포 준비 + 광고 설계 기반 + Supabase DB 연동.
+
+### 코드 품질 (/health)
+- TypeScript: 10/10 (에러 0)
+- Lint: 4/10 → 수정 후 개선 (113문제 → 17문제, 85% 감소)
+- Build: 10/10 (정상)
+- Composite: 8.2/10
+
+### 린트 수정 (19→8 에러)
+- Reminder.tsx: useEffect 내 setState → useMemo로 교체
+- tmdb.ts: any 6건 → 구체적 타입 (CrewMember, CastMember 등)
+- InstallBanner.tsx: ref 렌더 접근 → canInstall 상태
+- ActionBar.tsx: unused current prop 제거
+- SwipeCard.tsx: unused dragY prop 제거
+- proxy.ts: _request 접두사
+
+### 적응형 큐레이션
+- 피드백 누적량에 따라 LLM 큐레이션 모드 자동 전환
+- 탐색 모드 (0-5건): 폭넓은 장르, 취향 30% 이하
+- 혼합 모드 (5-20건): 취향 50% + 새 장르 50%
+- 개인화 모드 (20건+): 취향 깊이 + 의외 30%
+- favorites를 "참고용"으로 격하 → 피드백이 주축
+
+### 온보딩 필수 진입 제거
+- / → /discover 직접 진입 (hasOnboarded 체크 제거)
+- Cold start: favorites 비었을 때 장르별 메가 히트작 (vote_count.desc)
+- 영화 10장르 × 3작품 + 시리즈 6장르 × 3작품 = 최대 48개
+- reason: "봤다면 하트, 안 봤다면 넘겨주세요" (취향 수집 목적)
+- 온보딩은 /onboarding, /reset에서 선택적 접근 가능
+
+### 배포 준비
+- sitemap.xml + robots.txt (Next.js MetadataRoute)
+- README 재작성 (실제 구현 상태 반영)
+- 에러 페이지 해요체 통일
+- 정사각형 OG 이미지 추가 (카카오톡 최적화)
+- 온보딩 Step 0 소개 강화 (3단계 설명 + 태그라인)
+
+### 광고 카드 설계 기반
+- ad-config.ts: AD_ENABLED = false (feature flag)
+- AD_FREQUENCY = 15 (15장마다 1개)
+- AdCard.tsx: 추천 카드와 동일한 레이아웃 + "AD" 라벨
+- 허용: entertainment, books, music, lifestyle, coupang
+- 금지: game, gambling, loan, diet, adult
+- DAU 10,000+ 시 활성화 예정
+
+### 디자인 팀 하네스 구축
+- 4인 에이전트 팀: brand-designer, ui-designer, motion-designer, design-critic
+- design-orchestrator 스킬: Phase 1(브랜드) → 2(UI) → 3(모션) → 4(비평)
+- 목표: Warm Cinema 탈피, "문화인의 앱" 고유 디자인 언어
+
+### Supabase DB 연동
+- Supabase 프로젝트 생성 (Korea 리전)
+- 테이블 5개: profiles, saved_items, watch_reports, seen_titles, archived_items
+- RLS 활성화 + device_id 기반 접근 제어
+- localStorage ↔ Supabase 배치 동기화 (sync.ts)
+- useSync 훅: 마운트 시 / 포커스 복귀 시 / 백그라운드 전환 시 자동 동기화
+- 5분 간격 제어 (shouldSync)
+
+### 마지막 카드 스와이프 UX 수정
+- 기존: 마지막 카드에서 애니메이션 없이 즉시 return → 걸림
+- 변경: 스와이프 애니메이션 완료 후 topIdx=0 + refresh
+
+### 주요 커밋
+```
+0ffeb66 feat: localStorage ↔ Supabase 배치 동기화
+c270329 feat: Supabase 연동 — 클라이언트 설정 + 테이블 생성 완료
+98bb4b5 feat: 광고 카드 설계 기반 — feature flag
+1dc79f5 feat: 디자인 팀 하네스 구축 — 4인 전문가 팀
+ed7e456 feat: cold start를 장르별 메가 히트작으로 변경
+2787aa0 feat: 적응형 큐레이션 — 피드백 기반 모드 전환
+6f358dc feat: 온보딩 필수 진입 제거 — 트렌딩 기반 콜드 스타트
+ec671d7 fix: 린트 에러 19→8개 수정
+a6f8f0d feat: sitemap.xml + robots.txt
+```
+
+### 미해결 / 다음 할 일
+- [ ] Supabase 동기화 실사용 검증
+- [ ] 디자인 팀 하네스 실행 (design-orchestrator)
+- [ ] cold start + 필터 조합 빈 결과 UX 개선
+- [ ] saved 작품 기반 개인화 자동 전환 (현재 favorites 유무로만 판별)
+- [ ] 검색 기능 구현 (SearchSheet)
+- [ ] 사용자 10명 테스트 + PostHog 분석
