@@ -1,5 +1,77 @@
 # Neko 개발 일지
 
+## 2026-04-15 (Day 11)
+
+### 진행 요약
+네이티브 앱 전환 + 모노레포 정석 구조 확립. 하루 동안 Expo RN PoC → Appium E2E → npm workspaces → Turborepo까지 완료.
+
+### 완료된 작업
+
+**Expo RN PoC (apps/native)**
+- Expo SDK 54 + RN 0.81 + Reanimated 4 + Gesture Handler
+- Expo Router Tabs (발견/검색/저장)
+- 실제 /api/recommend + /api/search 연결 (Vercel 프로덕션 서버)
+- AsyncStorage 기반 저장 관리
+- 스와이프 감도 웹 대비 부드러움 확인 (사용자 검증)
+- 커밋: `9cf0c34`
+
+**Appium E2E 인프라**
+- WebdriverIO 9.x + XCUITest 11 + TypeScript
+- iOS 시뮬레이터 자동 스크린샷 + 페이지 덤프 (`capture-now.ts`)
+- 좋아요→저장 플로우 E2E 검증 (`flow-like-to-saved.mjs`)
+- 검색 debounce 동작 E2E 검증 (`search-flow.mjs`)
+
+**모노레포 1차 — 기초 (`0b3093d`)**
+- npm workspaces ["apps/*", "packages/*"]
+- `packages/core` (@neko/core) 신설 — 공유 타입, API 클라이언트
+- Metro monorepo 설정 (`apps/native/metro.config.js`)
+
+**모노레포 2차 — 정석 구조 (`598cd5e`)**
+- A 경로 완성: `src/` → `apps/web/` 이동
+- 패키지 리네임: `@neko/*` → `@neq/*`
+- `packages/design` (@neq/design) 분리 — tokens를 core에서 분리
+- Turborepo + `turbo.json` pipeline (build/dev/lint/type-check/start)
+- bun.lock 제거, npm 단일화
+- 루트 package.json 축소 — workspaces + turbo scripts만
+
+**UX 규칙 정리**
+- `feedback_swipe_ux.md` 갱신 — 좌=next / 우=prev 오버레이 / 좋아요는 버튼 / 별로 없음
+- `DESIGN.md` Interaction Model 섹션 신설 (스와이프 불변식 + 터치 임계치)
+
+**문서/하네스 업데이트**
+- `frontend-builder` 에이전트 RN 섹션 추가 (웹/네이티브 플랫폼 판단 규칙)
+- `qa-tester` 에이전트 Appium WDIO 섹션 추가
+- `README.md`에서 onboarding 참조 제거
+- `_workspace/native-transition-plan.md`, `monorepo-migration-plan.md`
+
+### 검증 결과
+
+- ✅ `@neq/core`, `@neq/design`, `@neq/web`, `native` 워크스페이스 링크
+- ✅ `turbo type-check` 통과
+- ✅ `apps/web` 프로덕션 빌드 성공 (TMDB/OpenAI API 라우트 포함)
+- ✅ `apps/web` 개발 서버 http://localhost:3000 정상
+- ✅ `apps/native` TypeScript 통과 + 시뮬레이터 회귀 없음
+
+### 미완료 (다음 세션)
+
+- [ ] Vercel 대시보드에서 Root Directory → `apps/web` 변경 (사용자 수동 작업)
+- [ ] 변경 후 preview 배포 검증
+- [ ] 웹 코드에서 `@neq/core`, `@neq/design` 점진적 import (타입 drift 제거)
+- [ ] Phase 3 본 마이그레이션: FilterChips → DetailSheet → Saved → Profile → SearchSheet (네이티브로 점진 포팅)
+- [ ] Supabase anonymous auth 도입 (RLS 강화)
+- [ ] 웹에서 `meh`/"별로" WatchReaction 실제 제거 (영향 분석 필요)
+
+### 결정 이력
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| 네이티브 스택 | Expo SDK 54 + RN | React 자산 재활용, iOS+Android 동시, OTA |
+| 모노레포 툴 | npm workspaces + Turborepo | 단순함 + 빌드 캐시 |
+| 패키지 네이밍 | `@neq/*` | 프로젝트 식별자 일관성 |
+| 스와이프 semantic | 순수 캐러셀 브라우징 | like/pass = 인지 부담 |
+| "별로" / 거절 제스처 | 제거 | 결정 피로 감소 |
+| "좋아요" | 버튼 제어 | 명시적 탭 타겟 |
+
 ## 2026-04-06 (Day 1)
 
 ### 진행 요약
