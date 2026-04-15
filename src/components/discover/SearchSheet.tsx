@@ -177,7 +177,8 @@ export default function SearchSheet({
             value={query}
             onChange={(e) => handleInput(e.target.value)}
             placeholder="영화나 시리즈 제목"
-            className="w-full px-4 py-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
+            className="w-full px-4 py-3 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
+            style={{ fontSize: "16px" }}
           />
         </div>
 

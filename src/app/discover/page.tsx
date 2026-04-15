@@ -48,6 +48,7 @@ export default function DiscoverPage() {
   const [showWatched, setShowWatched] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [immersive, setImmersive] = useState(false);
+  const [rewinding, setRewinding] = useState(false);
   const [reentryNudge, setReentryNudge] = useState<string | null>(null);
 
   const rec = useRecommendations();
@@ -376,7 +377,25 @@ export default function DiscoverPage() {
       <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 200, overflow: "hidden" }}>
         <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
           onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
-          onRewind={() => { vibrate(10); setTopIdx(0); swipe.scrollRef.current?.scrollTo({ top: 0 }); }}
+          onRewind={() => {
+            if (topIdx === 0 || rewinding) return;
+            vibrate(10);
+            setRewinding(true);
+            // 빠르게 한 장씩 넘기는 시각 효과 (최대 6단계)
+            const steps = Math.min(topIdx, 6);
+            const stepSize = Math.ceil(topIdx / steps);
+            let step = 0;
+            const interval = setInterval(() => {
+              step++;
+              setTopIdx((prev) => Math.max(0, prev - stepSize));
+              if (step >= steps) {
+                clearInterval(interval);
+                setTopIdx(0);
+                setRewinding(false);
+              }
+            }, 60);
+            swipe.scrollRef.current?.scrollTo({ top: 0 });
+          }}
           onRefresh={() => { vibrate(10); setTopIdx(0); rec.refreshRecommendations(); }} />
         <BottomNav active="discover" />
       </div>

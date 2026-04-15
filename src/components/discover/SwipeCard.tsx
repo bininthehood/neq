@@ -75,7 +75,7 @@ export default function SwipeCard({
           src={rec.posterUrl}
           alt={rec.title}
           fill
-          className="object-cover"
+          className="object-cover object-top"
           sizes="(max-width: 480px) 90vw, 400px"
           priority={isTop}
         />
