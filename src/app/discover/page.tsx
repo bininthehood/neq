@@ -101,10 +101,12 @@ export default function DiscoverPage() {
       const t = setTimeout(() => {
         swipe.timersRef.current.delete(t);
         swipe.setDragX(0); swipe.setDragY(0); swipe.setSwiping(false);
-        setTopIdx(0);
+        // 새 배치 로드 — topIdx를 0으로 먼저 세팅하고 로딩 시작
+        // (로딩 중엔 LoadingScreen이 표시됨)
         if (!rec.loading && !rec.prefetching) {
           rec.refreshRecommendations();
         }
+        setTopIdx(0);
       }, 280);
       swipe.timersRef.current.add(t);
       return;

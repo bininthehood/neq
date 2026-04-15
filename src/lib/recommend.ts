@@ -418,11 +418,12 @@ async function getColdStartRecommendations(
   let allGenres: Array<{ id: number; label: string; type: "movie" | "series" }>;
 
   if (filter.type === "variety") {
-    allGenres = VARIETY_GENRE_IDS.map((id) => ({
-      id,
-      label: id === 10764 ? "리얼리티" : "토크쇼",
+    // Reality + Talk을 OR로 합쳐서 더 많은 결과 확보
+    allGenres = [{
+      id: VARIETY_GENRE_IDS[0], // OR 검색이므로 하나만 넣고 아래에서 두 장르 합침
+      label: "예능",
       type: "series" as const,
-    }));
+    }];
   } else {
     const movieGenres = filter.type === "series" ? [] : COLD_START_GENRES.movie;
     const tvGenres = filter.type === "movie" ? [] : COLD_START_GENRES.tv;
@@ -438,11 +439,15 @@ async function getColdStartRecommendations(
   if (filter.year === "2010s") dateRange = { gte: "2010-01-01", lte: "2019-12-31" };
   if (filter.year === "classic") dateRange = { lte: "2009-12-31" };
 
-  // 장르별 병렬 호출
+  // 장르별 병렬 호출 — 여러 페이지에서 수집해 결과 풀 확대
   const genreResults = await Promise.all(
-    allGenres.map(async (g) => {
-      const items = await discoverByGenres([g.id], g.type, 1, dateRange, "vote_count.desc");
-      return items.slice(0, 5);
+    allGenres.flatMap((g) => {
+      const genreIds = filter.type === "variety" ? VARIETY_GENRE_IDS : [g.id];
+      const pages = filter.type === "variety" ? [1, 2, 3] : [1]; // 예능은 3페이지 수집
+      return pages.map(async (page) => {
+        const items = await discoverByGenres(genreIds, g.type, page, dateRange, "vote_count.desc");
+        return items.slice(0, 10);
+      });
     })
   );
 
