@@ -1011,8 +1011,76 @@ a6f8f0d feat: sitemap.xml + robots.txt
 
 ### 미해결 / 다음 할 일
 - [ ] Supabase 동기화 실사용 검증
-- [ ] 디자인 팀 하네스 실행 (design-orchestrator)
-- [ ] cold start + 필터 조합 빈 결과 UX 개선
-- [ ] saved 작품 기반 개인화 자동 전환 (현재 favorites 유무로만 판별)
-- [ ] 검색 기능 구현 (SearchSheet)
+- [x] ~~디자인 팀 하네스 실행 (design-orchestrator)~~ → Day 9에서 완료
+- [x] ~~cold start + 필터 조합 빈 결과 UX 개선~~ → Day 9에서 수정
+- [x] ~~saved 작품 기반 개인화 자동 전환~~ → Day 9에서 favorites 제거, saved+watchReport 기반 전환
+- [x] ~~검색 기능 구현 (SearchSheet)~~ → Day 9에서 구현
 - [ ] 사용자 10명 테스트 + PostHog 분석
+
+---
+
+## 2026-04-15 (Day 9)
+
+### 진행 요약
+OTT 필터 완성, 온보딩 제거 (추천 엔진 전환), 검색 기능, 디자인 시스템 리빌드, cold start 버그 수정까지 9건 커밋.
+
+### 완료된 작업
+
+**OTT 필터 서버 연결 + Saved 고도화**
+- useRecommendations에서 filter.ott 배열을 서버에 전달, sessionStorage 저장/복원
+- Saved 페이지: OTT 필터 탭 + 그룹핑 뷰 + 빈 상태 대응
+- UX 감사 6건 수정: 터치 타겟 44px, anti-slop 폰트 11px, 저장 버튼 상태 구분, DESIGN.md 스프링 bezier
+
+**추천 엔진 전환 — onboarding/reset 제거 (-760줄)**
+- favorites(온보딩 선택) 대신 saved의 loved/good 작품을 취향 시드로 사용
+- onboarding, reset 페이지 삭제 + FirstLoadingScreen 삭제
+- Profile "내 취향" → "좋아한 작품" (loved/good 기반)으로 재설계
+- store.ts favorites 함수 제거, analytics onboarding 이벤트 제거
+- 신규 유저: trending cold start → 저장하면 자동 개인화
+
+**작품 검색 + OTT 가용성 조회**
+- Discover 헤더에 검색 아이콘 추가 → SearchSheet 바텀시트
+- /api/search에 mediaType 반환 추가
+- /api/search/providers 엔드포인트 신규 (getKoreanProviders 활용)
+- 검색 결과 탭 → OTT provider 조회 + 딥링크 + 저장 기능
+- 검색 analytics 이벤트 4종 추가
+
+**Quiet Ink 디자인 시스템 적용**
+- 4인 디자인 팀(brand/ui/motion/critic) 순차 작업
+- Phase 1(브랜드): "Quiet Ink" 방향 — 독립서점 큐레이션 선반 무드
+- Phase 2(UI): 12개 컴포넌트 규격 + 스페이싱 + 상태별 디자인
+- Phase 3(모션): 절제된 스프링 (오버슈트 56%→30%), 5종 이징 체계
+- Phase 4(비평): 블루 액센트 → 앰버 골드 권고 (경쟁사 차별화)
+- 최종 확정: C안 색상(앰버 골드 #C4A35A + 웜 뉴트럴 #12110E) + A안 폰트(Fraunces)
+- CSS 변수 교체만으로 전체 앱 적용 (토큰 기반 설계 덕분)
+
+**UX 피드백 수정 3건**
+- 검색 input font-size 16px (iOS 자동 줌 방지)
+- SwipeCard 포스터 object-top (하단 잘림 방지)
+- 되감기 애니메이션: RewindOverlay 컴포넌트 (rAF 기반 VHS 되감기 효과)
+
+**Cold start 버그 수정**
+- 예능 필터 지원: Reality/Talk 장르 3페이지 수집 (결과 풀 확대)
+- 자동 필터 폴백: 결과 부족 시 년도→origin→OTT 단계적 해제
+- EmptyScreen cold start 안내: "조건이 너무 좁아요" + "전체 보기" CTA
+- 마지막 카드 무한 루프: refreshRecommendations를 setTopIdx(0) 전에 호출
+
+### 주요 커밋
+```
+e7fabda feat: Day 9 — OTT 필터 완성 + Saved 고도화 + UX 폴리싱
+ee43955 refactor: onboarding/reset 제거 — saved+watchReport 기반 추천으로 전환
+ce4ef08 feat: 작품 검색 + OTT 가용성 조회 기능
+7c77de0 design: Quiet Ink 디자인 시스템 적용 — Warm Cinema 탈피
+4453965 fix: UX 피드백 3건 — 검색 줌 방지, 포스터 잘림, 되감기
+f61a872 fix: 되감기 애니메이션 — 스와이프 패턴 통일
+fbc510e feat: 되감기 애니메이션 — rAF 기반 VHS 되감기 효과
+dc97eb0 fix: cold start + 좁은 필터 조합 시 빈 결과 안내 개선
+472feb0 fix: cold start 예능 필터 — 3페이지 수집 + 무한 루프 수정
+```
+
+### 미해결 / 다음 할 일
+- [ ] Supabase 동기화 실사용 검증
+- [ ] Quiet Ink 디자인 세부 폴리싱 (film grain 텍스처 → Quiet Ink 톤 조정)
+- [ ] 되감기 VHS 효과 디자인 리뷰 (스캔라인 등 Quiet Ink과 톤 일치 확인)
+- [ ] 사용자 10명 테스트 + PostHog 분석
+- [ ] saved 작품 기반 개인화 전환 임계값 튜닝 (현재 saved 1개부터 개인화)
