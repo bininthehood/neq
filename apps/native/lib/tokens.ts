@@ -1,1 +1,1 @@
-export { colors, spacing, radius } from '@neko/core';
+export { colors, spacing, radius } from '@neq/design';

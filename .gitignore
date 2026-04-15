@@ -1,16 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
 # dependencies
-/node_modules
+node_modules
 **/node_modules
-
-# expo / react native
-apps/native/.expo/
-apps/native/dist/
-apps/native/ios/
-apps/native/android/
-apps/native/e2e/screenshots/
-apps/native/e2e/_logs/
 /.pnp
 .pnp.*
 .yarn/*
@@ -19,20 +9,23 @@ apps/native/e2e/_logs/
 !.yarn/releases
 !.yarn/versions
 
+# turborepo
+.turbo
+
+# expo / react native
+apps/native/.expo/
+apps/native/dist/
+apps/native/ios/
+apps/native/android/
+apps/native/e2e/screenshots/
+apps/native/e2e/_logs/
+
 # testing
 /coverage
 
-# next.js
-/.next/
-/out/
-
-# serwist (service worker build output)
-/public/sw.js
-/public/sw.js.map
-/public/swe-worker-*.js
-
-# production
-/build
+# env files
+.env*
+!.env.example
 
 # misc
 .DS_Store
@@ -44,15 +37,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
-
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
+
+# project-specific
 .gstack/
 _screenshots/
 _workspace/

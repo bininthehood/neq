@@ -2,39 +2,22 @@
   "name": "neq",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "npm@10.9.3",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --webpack",
-    "start": "next start",
-    "lint": "eslint",
-    "native": "npm run start -w apps/native",
-    "native:ios": "npm run ios -w apps/native"
-  },
-  "dependencies": {
-    "@sentry/nextjs": "^10.48.0",
-    "@serwist/next": "^9.5.7",
-    "@supabase/supabase-js": "^2.103.0",
-    "@vercel/analytics": "^2.0.1",
-    "next": "16.2.2",
-    "openai": "^6.33.0",
-    "posthog-js": "^1.367.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "serwist": "^9.5.7"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "type-check": "turbo type-check",
+    "web:dev": "turbo dev --filter=@neq/web",
+    "native:ios": "npm run ios -w apps/native",
+    "native:start": "npm run start -w apps/native"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.2",
-    "playwright": "^1.59.1",
-    "tailwindcss": "^4",
+    "turbo": "^2.5.5",
     "typescript": "^5",
     "webdriverio": "^9.27.0"
   },

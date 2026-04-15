@@ -2,7 +2,53 @@
   "permissions": {
     "allow": [
       "Skill(review)",
-      "Skill(qa)"
+      "Skill(qa)",
+      "mcp__playwright__browser_snapshot",
+      "Skill(ship)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_console_messages",
+      "Skill(design-review)",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_resize",
+      "WebSearch",
+      "WebFetch(domain:neko-ecru.vercel.app)",
+      "WebFetch(domain:vercel.com)",
+      "Bash(rm -f /Users/james/Projects/neko/.git/index.lock)",
+      "Bash(git add:*)",
+      "Bash(git commit -m 'fix\\(rec\\): Hybrid 추천 검증 — 시리즈 필터 + reason 길이 + 중복 제거 + 배치 최적화:*)",
+      "Bash(git push:*)",
+      "Skill(office-hours)",
+      "Skill(investigate)",
+      "Bash(ls /Users/james/Projects/neko/.env*)",
+      "Bash(git rm *)",
+      "Bash(git commit -m ' *)",
+      "Bash(xcrun simctl *)",
+      "Bash(adb devices *)",
+      "Bash(xcode-select -p)",
+      "Bash(curl -s 'https://djrmoxzsiyecfhdidllq.supabase.co/rest/v1/profiles?select=id,device_id,created_at' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcm1veHpzaXllY2ZoZGlkbGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMzg5MzcsImV4cCI6MjA5MTgxNDkzN30.GUUDICMuF2Ee-3tetwxWQo3Jil-BKDwA3zJQDSbZzuY' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcm1veHpzaXllY2ZoZGlkbGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMzg5MzcsImV4cCI6MjA5MTgxNDkzN30.GUUDICMuF2Ee-3tetwxWQo3Jil-BKDwA3zJQDSbZzuY')",
+      "Bash(curl -s 'https://djrmoxzsiyecfhdidllq.supabase.co/rest/v1/saved_items?select=tmdb_id,title' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcm1veHpzaXllY2ZoZGlkbGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMzg5MzcsImV4cCI6MjA5MTgxNDkzN30.GUUDICMuF2Ee-3tetwxWQo3Jil-BKDwA3zJQDSbZzuY' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqcm1veHpzaXllY2ZoZGlkbGxxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyMzg5MzcsImV4cCI6MjA5MTgxNDkzN30.GUUDICMuF2Ee-3tetwxWQo3Jil-BKDwA3zJQDSbZzuY')",
+      "Bash(npm -v)",
+      "Bash(brew --version)",
+      "Bash(xcodebuild -version)",
+      "Bash(sw_vers)",
+      "Bash(npm install *)",
+      "Bash(appium --version)",
+      "Bash(appium driver *)",
+      "Bash(curl -s http://localhost:4723/status)",
+      "Bash(appium *)",
+      "Bash(python3 -m json.tool)",
+      "Bash(node scripts/appium-test.mjs)",
+      "Bash(awk '{print $2, $10, $11}')",
+      "Bash(ls /Users/james/Library/Developer/Xcode/DerivedData/WebDriverAgent-*/Build/Products/Debug-iphonesimulator/)",
+      "Bash(ps -o %cpu,etime,command -p 77144)",
+      "Bash(curl -s http://127.0.0.1:8100/status)",
+      "Bash(git commit *)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "playwright"
+  ]
 }

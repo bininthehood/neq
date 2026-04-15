@@ -1,0 +1,23 @@
+# next
+.next/
+out/
+build/
+next-env.d.ts
+
+# env files
+.env*.local
+.env
+
+# serwist service worker build output
+public/sw.js
+public/sw.js.map
+public/swe-worker-*.js
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+
+# turbo
+.turbo
