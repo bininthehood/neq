@@ -17,6 +17,8 @@ export interface RecommendRequest {
   excludeIds?: number[];
   /** 저장한 작품 총 개수 — 모드 판정(탐색/혼합/개인화)에 signal로 사용 */
   savedCount?: number;
+  /** 온보딩에서 선택한 초기 취향 작품 수 — 모드 판정 signal */
+  onboardingCount?: number;
 }
 
 export function createApiClient(baseUrl: string) {

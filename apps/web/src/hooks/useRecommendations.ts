@@ -120,6 +120,7 @@ export function useRecommendations() {
           favorites,
           filter,
           savedCount: savedItems.length,
+          onboardingCount: onboardingPicks.length,
           ...(hasFeedback ? { feedback } : {}),
           ...(exclude.length > 0 ? { exclude } : {}),
         }),

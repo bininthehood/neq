@@ -27,6 +27,7 @@ import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialOverlay from "@/components/discover/TutorialOverlay";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
+import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
 import SearchSheet from "@/components/discover/SearchSheet";
 import RewindOverlay from "@/components/discover/RewindOverlay";
 import { useSync } from "@/hooks/useSync";
@@ -309,6 +310,10 @@ export default function DiscoverPage() {
 
   // --- status screens ---
   if (!mounted || rec.loading) {
+    // 첫 로드: 온보딩 직후(saved 0, recs 캐시 없음) → 스켈레톤 + 취향 분석 메시지
+    const isFirstLoad =
+      rec.recs.length === 0 && hasOnboarded() && getSaved().length === 0;
+    if (isFirstLoad) return <FirstLoadingSkeleton />;
     return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;

@@ -37,12 +37,17 @@ export async function POST(req: NextRequest) {
     exclude: rawExclude,
     excludeIds: rawExcludeIds,
     savedCount: rawSavedCount,
+    onboardingCount: rawOnboardingCount,
   } = await req.json();
 
-  // savedCount 검증: 음수/비정수 방어
+  // savedCount / onboardingCount 검증: 음수/비정수 방어
   const savedCount =
     typeof rawSavedCount === "number" && rawSavedCount > 0
       ? Math.floor(rawSavedCount)
+      : 0;
+  const onboardingCount =
+    typeof rawOnboardingCount === "number" && rawOnboardingCount > 0
+      ? Math.floor(rawOnboardingCount)
       : 0;
 
   // exclude 검증: 문자열 배열, 각 항목 50자 제한, 특수문자 제거, 최대 150개
@@ -72,7 +77,8 @@ export async function POST(req: NextRequest) {
       feedback,
       exclude,
       excludeIds,
-      savedCount
+      savedCount,
+      onboardingCount
     );
     return NextResponse.json({ recommendations }, {
       headers: { "X-RateLimit-Remaining": String(remaining) },

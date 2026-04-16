@@ -213,7 +213,8 @@ async function curateWithLLM(
   candidates: EnrichedCandidate[],
   favorites: string[],
   feedback?: WatchFeedback,
-  savedCount: number = 0
+  savedCount: number = 0,
+  onboardingCount: number = 0
 ): Promise<CuratedPick[]> {
   if (candidates.length === 0) return [];
 
@@ -230,12 +231,13 @@ async function curateWithLLM(
   const feedbackText = buildFeedbackPrompt(feedback);
 
   // 취향 신호 누적량에 따라 큐레이션 모드 결정.
-  // feedback(명시적 시청 반응) + savedCount(저장 = 암묵적 관심)를 합산.
-  // saved만 쌓이고 watchReport 없으면 영영 "탐색" 모드에 머무는 문제 해결.
+  // feedback(시청 반응) + savedCount(저장) + onboardingCount(초기 취향 선언) 모두 signal.
+  //   - 온보딩 5개 선택 → 바로 혼합 모드 진입 (탐색 모드 건너뜀)
+  //   - 저장/리포트 없이도 온보딩 signal 유지
   const totalFeedback = feedback
     ? feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length
     : 0;
-  const totalSignal = totalFeedback + savedCount;
+  const totalSignal = totalFeedback + savedCount + onboardingCount;
 
   // 임계치: cold start 카드 50개 대비 사용자 반응률로 조정
   //  ≤4  탐색   — 초기 (1~8% 반응)
@@ -520,7 +522,8 @@ export async function getRecommendations(
   feedback?: WatchFeedback,
   exclude?: string[],
   excludeIds?: number[],
-  savedCount: number = 0
+  savedCount: number = 0,
+  onboardingCount: number = 0
 ): Promise<Recommendation[]> {
   // Cold start: favorites 없으면 TMDB trending으로 빠르게 반환 (LLM 스킵)
   if (favorites.length === 0) {
@@ -649,7 +652,13 @@ export async function getRecommendations(
   if (filtered.length === 0) return [];
 
   // Step 6
-  const curated = await curateWithLLM(filtered, favorites, feedback, savedCount);
+  const curated = await curateWithLLM(
+    filtered,
+    favorites,
+    feedback,
+    savedCount,
+    onboardingCount
+  );
 
   // Step 7: 조립 — LLM 선택 20개 + 나머지 30개 (템플릿 reason)
   const results: Recommendation[] = [];
