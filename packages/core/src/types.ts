@@ -1,7 +1,14 @@
-/**
- * 웹/네이티브 양쪽에서 공유하는 도메인 타입.
- * 백엔드 API 응답 계약의 단일 출처.
- */
+export interface TMDBResult {
+  id: number;
+  title?: string;
+  name?: string;
+  overview: string;
+  vote_average: number;
+  release_date?: string;
+  first_air_date?: string;
+  poster_path: string | null;
+  genre_ids?: number[];
+}
 
 export interface Recommendation {
   title: string;
@@ -15,12 +22,12 @@ export interface Recommendation {
   overview: string;
   providers: { name: string; logoUrl: string | null }[];
   watchLink: string | null;
-  director?: string | null;
-  cast?: string[];
-  runtime?: number | null;
-  seasons?: number | null;
-  country?: string[];
-  backdrop?: string | null;
+  director: string | null;
+  cast: string[];
+  runtime: number | null;
+  seasons: number | null;
+  country: string[];
+  backdrop: string | null;
   originCountry?: string[];
 }
 
@@ -59,3 +66,18 @@ export interface SearchResult {
   rating: number;
   mediaType: 'movie' | 'tv';
 }
+
+export interface UserDataExport {
+  version: number;
+  deviceId: string;
+  exportedAt: number;
+  data: {
+    favorites: string[];
+    saved: SavedItem[];
+    watchReports: WatchReport[];
+    seenTitles: string[];
+    archived: number[];
+  };
+}
+
+export const USER_DATA_SCHEMA_VERSION = 1;

@@ -1,5 +1,5 @@
-// 공유 타입은 @neq/core에서 re-export (하위 호환)
 export type {
+  TMDBResult,
   Recommendation,
   SavedItem,
   WatchReaction,
@@ -7,4 +7,7 @@ export type {
   RecommendFilter,
   WatchFeedback,
   SearchResult,
+  UserDataExport,
 } from '@neq/core';
+
+export { USER_DATA_SCHEMA_VERSION } from '@neq/core';

@@ -12,23 +12,9 @@ import {
   type TMDBSimilarItem,
 } from "./tmdb";
 import { VARIETY_GENRE_IDS } from "./discover-types";
-import type { Recommendation } from "./types";
+import type { Recommendation, RecommendFilter, WatchFeedback } from "./types";
 
 const openai = new OpenAI();
-
-export interface RecommendFilter {
-  type?: "movie" | "series" | "variety"; // variety = 예능 (TV + Reality/Talk 장르)
-  origin?: "kr" | "foreign"; // undefined = 둘 다
-  year?: "recent" | "2010s" | "classic"; // undefined = 전체
-  ott?: string[]; // OTT 이름 배열 (예: ["Netflix"]). 서버에서 providers 매칭.
-}
-
-export interface WatchFeedback {
-  loved: string[];   // 인생작이라고 한 작품들
-  good: string[];    // 재밌었다고 한 작품들
-  meh: string[];     // 그저 그랬다고 한 작품들
-  dropped: string[]; // 포기한 작품들
-}
 
 function buildFeedbackPrompt(feedback?: WatchFeedback): string {
   if (!feedback) return "";
