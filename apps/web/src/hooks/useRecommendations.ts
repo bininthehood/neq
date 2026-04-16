@@ -190,6 +190,9 @@ export function useRecommendations() {
     try {
       sessionStorage.setItem("neq_filter_otts", JSON.stringify([...otts]));
     } catch { /* ignore */ }
+    // OTT 필터 변경 시 서버 재조회 — 캐시 50개 밖의 작품도 가져오도록
+    // (예: 국내 + Netflix 조합처럼 좁은 필터에서 빈 결과 방지)
+    loadRecs(filterType, filterOrigin, filterYear, otts);
   };
 
   const refreshRecommendations = async () => {
