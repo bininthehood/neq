@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { supabase, ensureAuth, getAuthUid } from "./supabase";
 import { getDeviceId } from "./device-id";
 import {
@@ -63,6 +64,10 @@ async function getOrCreateProfile(): Promise<string | null> {
 
   if (error) {
     console.error("[sync] profile creation failed:", error.message);
+    Sentry.captureMessage(`[sync] profile creation failed: ${error.message}`, {
+      level: "error",
+      tags: { origin: "sync.getOrCreateProfile" },
+    });
     return null;
   }
 
@@ -173,6 +178,7 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
     return { success: true, pushed };
   } catch (err) {
     console.error("[sync] push failed:", err);
+    Sentry.captureException(err, { tags: { origin: "sync.pushToServer" } });
     return { success: false, pushed };
   }
 }
@@ -259,6 +265,7 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
     return { success: true, pulled };
   } catch (err) {
     console.error("[sync] pull failed:", err);
+    Sentry.captureException(err, { tags: { origin: "sync.pullFromServer" } });
     return { success: false, pulled };
   }
 }

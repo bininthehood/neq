@@ -11,9 +11,16 @@
 
 set -e
 
-# .env.local 로드
-if [ -f .env.local ]; then
-  export $(grep -E '^(POSTHOG_PAT|POSTHOG_PROJECT_ID|POSTHOG_HOST)=' .env.local | xargs)
+# .env.local 탐색 (모노레포 전환으로 apps/web/로 이동됨)
+ENV_FILE=""
+for candidate in .env.local apps/web/.env.local ../.env.local; do
+  if [ -f "$candidate" ]; then
+    ENV_FILE="$candidate"
+    break
+  fi
+done
+if [ -n "$ENV_FILE" ]; then
+  export $(grep -E '^(POSTHOG_PAT|POSTHOG_PROJECT_ID|POSTHOG_HOST)=' "$ENV_FILE" | xargs)
 fi
 
 POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
@@ -40,7 +47,7 @@ while true; do
 
   echo "$RESPONSE" | jq -r '.results[] |
     "\(.timestamp | split("T")[1] | split(".")[0])  \(.event)  \(.properties | to_entries | map(select(.key | test("^(tmdb_id|reaction|direction|title|count|source|provider|kind|value)$"))) | map("\(.key)=\(.value)") | join(" "))"' \
-    | tac
+    | tail -r
 
   echo ""
   echo "⟳ 5초 후 갱신..."
