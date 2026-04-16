@@ -8,9 +8,13 @@ import {
   getWatchReports,
   getSeenTitles,
   getArchivedIds,
+  getFavoritesMeta,
+  setFavorites,
+  setFavoritesMeta,
   addSaved,
   addWatchReport,
   archiveItem,
+  type FavoriteMeta,
 } from "./store";
 import type { SavedItem, WatchReport } from "./types";
 
@@ -174,6 +178,17 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += rows.length;
     }
 
+    // 5. onboarding_picks (profiles row에 JSON으로 저장)
+    const onboardingPicks = getFavoritesMeta();
+    if (onboardingPicks.length > 0) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ onboarding_picks: onboardingPicks })
+        .eq("id", profileId);
+
+      if (!error) pushed += onboardingPicks.length;
+    }
+
     console.log(`[sync] pushed ${pushed} items to server`);
     return { success: true, pushed };
   } catch (err) {
@@ -258,6 +273,23 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
         if (localArchived.has(row.tmdb_id)) continue;
         archiveItem(row.tmdb_id);
         pulled++;
+      }
+    }
+
+    // 4. onboarding_picks — 로컬 비어있을 때만 복원 (덮어쓰기 방지)
+    const localPicks = getFavoritesMeta();
+    if (localPicks.length === 0) {
+      const { data: profileRow } = await supabase
+        .from("profiles")
+        .select("onboarding_picks")
+        .eq("id", profileId)
+        .single();
+
+      const serverPicks = profileRow?.onboarding_picks as FavoriteMeta[] | null;
+      if (Array.isArray(serverPicks) && serverPicks.length > 0) {
+        setFavoritesMeta(serverPicks);
+        setFavorites(serverPicks.map((p) => p.title));
+        pulled += serverPicks.length;
       }
     }
 
