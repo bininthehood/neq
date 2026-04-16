@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Text } from 'react-native';
+import { View, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import {
   useFonts,
@@ -18,17 +18,35 @@ import { colors } from '../lib/tokens';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
+function TabItem({
+  icon,
+  label,
+  focused,
+}: {
+  icon: string;
+  label: string;
+  focused: boolean;
+}) {
   return (
-    <Text
-      style={{
-        color: focused ? colors.accent : colors.textMuted,
-        fontSize: 13,
-        fontWeight: focused ? '700' : '500',
-      }}
-    >
-      {label}
-    </Text>
+    <View style={{ alignItems: 'center', gap: 2, minWidth: 60 }}>
+      <Text
+        style={{
+          color: focused ? colors.accent : colors.textMuted,
+          fontSize: 18,
+        }}
+      >
+        {icon}
+      </Text>
+      <Text
+        style={{
+          color: focused ? colors.accent : colors.textMuted,
+          fontSize: 10,
+          fontWeight: focused ? '700' : '500',
+        }}
+      >
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -58,6 +76,8 @@ export default function RootLayout() {
             tabBarStyle: {
               backgroundColor: colors.surface,
               borderTopColor: colors.border,
+              height: 72,
+              paddingTop: 8,
             },
             tabBarShowLabel: false,
             sceneStyle: { backgroundColor: colors.bg },
@@ -66,25 +86,25 @@ export default function RootLayout() {
           <Tabs.Screen
             name="index"
             options={{
-              tabBarIcon: ({ focused }) => <TabIcon label="발견" focused={focused} />,
-            }}
-          />
-          <Tabs.Screen
-            name="search"
-            options={{
-              tabBarIcon: ({ focused }) => <TabIcon label="검색" focused={focused} />,
+              tabBarIcon: ({ focused }) => (
+                <TabItem icon="◉" label="발견" focused={focused} />
+              ),
             }}
           />
           <Tabs.Screen
             name="saved"
             options={{
-              tabBarIcon: ({ focused }) => <TabIcon label="저장" focused={focused} />,
+              tabBarIcon: ({ focused }) => (
+                <TabItem icon="♡" label="저장" focused={focused} />
+              ),
             }}
           />
           <Tabs.Screen
             name="profile"
             options={{
-              tabBarIcon: ({ focused }) => <TabIcon label="프로필" focused={focused} />,
+              tabBarIcon: ({ focused }) => (
+                <TabItem icon="◎" label="프로필" focused={focused} />
+              ),
             }}
           />
         </Tabs>

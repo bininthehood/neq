@@ -18,9 +18,17 @@ interface Props {
   depth: number;
   dragX: number;
   isDragging: boolean;
+  immersive?: boolean;
 }
 
-export default function SwipeCard({ rec, isTop, depth, dragX, isDragging }: Props) {
+export default function SwipeCard({
+  rec,
+  isTop,
+  depth,
+  dragX,
+  isDragging,
+  immersive = false,
+}: Props) {
   const animatedDepth = useSharedValue(depth);
 
   useEffect(() => {
@@ -70,11 +78,11 @@ export default function SwipeCard({ rec, isTop, depth, dragX, isDragging }: Prop
           <LinearGradient
             colors={['transparent', 'rgba(18,17,14,0.6)', colors.bg]}
             locations={[0, 0.5, 1]}
-            style={[styles.infoGradient, { opacity: isTop && !isDragging ? 1 : 0 }]}
+            style={[styles.infoGradient, { opacity: isTop && !isDragging && !immersive ? 1 : 0 }]}
             pointerEvents="none"
           />
           <View
-            style={[styles.infoContent, { opacity: isTop && !isDragging ? 1 : 0 }]}
+            style={[styles.infoContent, { opacity: isTop && !isDragging && !immersive ? 1 : 0 }]}
             pointerEvents="none"
           >
             <Text style={styles.title}>{rec.title}</Text>

@@ -3,14 +3,20 @@ import { colors, radius, spacing } from '../lib/tokens';
 
 interface Props {
   isSaved: boolean;
+  canRewind?: boolean;
+  onRewind?: () => void;
   onShare: () => void;
+  onOpenDetail: () => void;
   onRefresh: () => void;
   onToggleSave: () => void;
 }
 
 export default function ActionBar({
   isSaved,
+  canRewind = false,
+  onRewind,
   onShare,
+  onOpenDetail,
   onRefresh,
   onToggleSave,
 }: Props) {
@@ -18,18 +24,39 @@ export default function ActionBar({
     <View style={styles.wrap}>
       <View style={styles.left}>
         <Pressable
+          style={({ pressed }) => [
+            styles.iconBtn,
+            !canRewind && styles.iconDisabled,
+            pressed && styles.pressed,
+          ]}
+          onPress={onRewind}
+          disabled={!canRewind}
+          accessibilityLabel="처음으로"
+          hitSlop={4}
+        >
+          <Text style={styles.iconText}>⟲</Text>
+        </Pressable>
+        <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           onPress={onShare}
           accessibilityLabel="공유"
-          hitSlop={8}
+          hitSlop={4}
         >
           <Text style={styles.iconText}>⤴</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+          onPress={onOpenDetail}
+          accessibilityLabel="상세보기"
+          hitSlop={4}
+        >
+          <Text style={styles.iconText}>ⓘ</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           onPress={onRefresh}
           accessibilityLabel="새 추천"
-          hitSlop={8}
+          hitSlop={4}
         >
           <Text style={styles.iconText}>⟳</Text>
         </Pressable>
@@ -44,9 +71,7 @@ export default function ActionBar({
         onPress={onToggleSave}
         accessibilityLabel={isSaved ? '저장 해제' : '저장'}
       >
-        <Text
-          style={[styles.saveIcon, isSaved && styles.saveIconActive]}
-        >
+        <Text style={[styles.saveIcon, isSaved && styles.saveIconActive]}>
           {isSaved ? '♥' : '♡'}
         </Text>
       </Pressable>
@@ -60,7 +85,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   left: {
     flexDirection: 'row',
@@ -72,9 +97,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconDisabled: {
+    opacity: 0.3,
+  },
   iconText: {
     color: colors.textMuted,
-    fontSize: 18,
+    fontSize: 17,
   },
   saveBtn: {
     width: 56,

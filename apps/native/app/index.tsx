@@ -23,6 +23,7 @@ import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar from '../components/ActionBar';
 import TutorialOverlay from '../components/TutorialOverlay';
+import SearchSheet from '../components/SearchSheet';
 import { fetchRecommendations } from '../lib/api';
 import { getSaved, toggleSaved } from '../lib/store';
 import type {
@@ -73,6 +74,8 @@ export default function DiscoverScreen() {
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [immersive, setImmersive] = useState(false);
 
   const load = useCallback(
     async (filter: RecommendFilter = {}) => {
@@ -171,7 +174,7 @@ export default function DiscoverScreen() {
     .maxDuration(250)
     .maxDistance(10)
     .onStart(() => {
-      if (currentRec) runOnJS(setDetailOpen)(true);
+      runOnJS(setImmersive)((v) => !v);
     });
 
   const pan = Gesture.Pan()
@@ -263,6 +266,13 @@ export default function DiscoverScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
         <Text style={styles.logo}>neq,</Text>
+        <Pressable
+          style={styles.searchIcon}
+          onPress={() => setSearchOpen(true)}
+          hitSlop={8}
+        >
+          <Text style={styles.searchIconText}>⌕</Text>
+        </Pressable>
       </View>
 
       <FilterChips
@@ -311,6 +321,7 @@ export default function DiscoverScreen() {
                       depth={depth}
                       dragX={depth === 0 ? dragX : 0}
                       isDragging={isDragging}
+                      immersive={depth === 0 && immersive}
                     />
                   );
                 })}
@@ -343,7 +354,10 @@ export default function DiscoverScreen() {
       {state === 'ready' && currentRec && (
         <ActionBar
           isSaved={isLiked}
+          canRewind={topIdx > 0}
+          onRewind={() => setTopIdx(0)}
           onShare={handleShare}
+          onOpenDetail={() => setDetailOpen(true)}
           onRefresh={handleRefresh}
           onToggleSave={toggleLike}
         />
@@ -353,6 +367,11 @@ export default function DiscoverScreen() {
         rec={currentRec ?? null}
         visible={detailOpen}
         onClose={() => setDetailOpen(false)}
+      />
+
+      <SearchSheet
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
       />
     </SafeAreaView>
   );
@@ -372,6 +391,16 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: fonts.display,
     letterSpacing: 0.5,
+  },
+  searchIcon: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchIconText: {
+    color: colors.textSecondary,
+    fontSize: 22,
   },
   stackWrap: { flex: 1 },
   stack: { flex: 1, position: 'relative' },

@@ -29,15 +29,13 @@ const styles = StyleSheet.create({
   },
   pill: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm,
     borderRadius: radius.xl,
-    backgroundColor: colors.overlayHeavy,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.overlayLight,
   },
   text: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '500',
+    color: colors.textSecondary,
+    fontSize: 12,
+    opacity: 0.85,
   },
 });
