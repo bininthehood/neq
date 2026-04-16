@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics';
 import SwipeCard from '../components/SwipeCard';
 import PrevCardOverlay from '../components/PrevCardOverlay';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
+import DetailSheet from '../components/DetailSheet';
 import { fetchRecommendations } from '../lib/api';
 import { getSaved, toggleSaved } from '../lib/store';
 import type {
@@ -67,6 +68,7 @@ export default function DiscoverScreen() {
 
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
   const [prevActive, setPrevActive] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const load = useCallback(
     async (filter: RecommendFilter = {}) => {
@@ -144,6 +146,13 @@ export default function DiscoverScreen() {
       return next;
     });
   }
+
+  const tap = Gesture.Tap()
+    .maxDuration(250)
+    .maxDistance(10)
+    .onStart(() => {
+      if (currentRec) runOnJS(setDetailOpen)(true);
+    });
 
   const pan = Gesture.Pan()
     .onBegin(() => {
@@ -231,7 +240,7 @@ export default function DiscoverScreen() {
         )}
 
         {state === 'ready' && !exhausted && (
-          <GestureDetector gesture={pan}>
+          <GestureDetector gesture={Gesture.Exclusive(tap, pan)}>
             <Animated.View style={styles.stack}>
               {cardsToShow
                 .slice()
@@ -284,6 +293,12 @@ export default function DiscoverScreen() {
           {state === 'ready' ? '← 다음 · 이전 →' : ''}
         </Text>
       </View>
+
+      <DetailSheet
+        rec={currentRec ?? null}
+        visible={detailOpen}
+        onClose={() => setDetailOpen(false)}
+      />
     </SafeAreaView>
   );
 }
