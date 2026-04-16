@@ -53,6 +53,12 @@ export default function RootLayout() {
               tabBarIcon: ({ focused }) => <TabIcon label="저장" focused={focused} />,
             }}
           />
+          <Tabs.Screen
+            name="profile"
+            options={{
+              tabBarIcon: ({ focused }) => <TabIcon label="프로필" focused={focused} />,
+            }}
+          />
         </Tabs>
       </SafeAreaProvider>
     </GestureHandlerRootView>
