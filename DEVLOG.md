@@ -84,6 +84,18 @@ Discover 기준:
 | 아이콘 | 유니코드 문자 | SVG 포팅 보류, ROI 낮음 |
 | Pretendard | 시스템 폰트 폴백 | iOS 기본 한글 폰트로 충분 |
 
+**PWA 피드백 기반 추천 로직 수정 (`332685b`)**
+- 문제: saved 많이 해도 watchReport 없으면 영영 "탐색" 모드 — 취향 반영 체감 안 됨
+- 원인: `totalFeedback` 만으로 모드 판정. saved는 signal로 안 썼음.
+- 수정:
+  - `totalSignal = totalFeedback + savedCount` 로 변경
+  - 임계치 cold start 50개 대비 반응률 기준 재조정:
+    - `≤4` 탐색 (반응률 ≤8%)
+    - `5~9` 혼합 (반응률 10~18%)
+    - `≥10` 개인화 (반응률 20%+)
+  - 이전 21+ → 10+ 로 하향. saved 10만 해도 개인화 진입
+- 레이어: recommend.ts / route.ts / useRecommendations.ts / @neq/core/api.ts / 네이티브 index.tsx
+
 ### 커밋 & 배포
 
 | SHA | 내용 |
@@ -96,20 +108,49 @@ Discover 기준:
 | `ea3933f` | Discover 폴리싱 1차 (메타/OTT/ActionBar/Tutorial/빈상태) |
 | `a0085fa` | Discover 폴리싱 2-1차 (로고/폰트/배지/그라디언트) |
 | `4776b0e` | Discover 폴리싱 2-2차 (검색/ActionBar/BottomNav) |
+| `332685b` | saved 누적도 큐레이션 모드 signal로 포함 |
 
 ### 남은 작업
 
+- [ ] 취향 단계 인디케이터 UI (Profile 또는 Discover 힌트) — **내일 #2**
+- [ ] 필터별 exclude 캐시 재검토 (실재 여부 조사 후 판단) — **내일 #3**
 - [ ] 다른 화면 개별 폴리싱 (Saved Pinterest grid, Profile chip style, DetailSheet backdrop 등)
 - [ ] SVG 아이콘 포팅 (react-native-svg, 웹 Icons 컴포넌트 번역)
 - [ ] EAS Build + TestFlight
 - [ ] PostHog 실사용자 피드백 수신 → `_workspace/feedback-log.md` 기록 → 처리
 - [ ] 반복 `[ui-both]` 패턴 3회+ 시 headless 훅 추출 검토
 
+### 추천 엔진 동작 (오늘 명확히 문서화)
+
+Cold start → 취향 반영 전환 흐름:
+
+1. **Cold start** (`favorites.length === 0`)
+   - `getColdStartRecommendations()` 빠른 경로 (TMDB trending, LLM 스킵, 3-5초)
+   - 장르별 메가히트 50개, variety는 Reality+Talk 3페이지
+
+2. **LLM 큐레이션 모드 분기** (`totalSignal = feedback + savedCount` 기준)
+   - `≤4` 탐색 70% / 취향 30%
+   - `5~9` 혼합 50/50
+   - `≥10` 개인화 70% + 30%는 의외성 필수
+
+3. **클라이언트 페이로드**
+   - `favorites` (loved/good 우선 + saved, max 20)
+   - `feedback` (WatchReport 있을 때만)
+   - `exclude` (seenTitles ∪ savedTitles, max 150)
+   - `savedCount` (saved 총 개수 — 신규)
+   - `filter` (UI 필터)
+
+4. **서버 파이프라인** (favorites 있을 때)
+   - TMDB 검색 → /recommendations 병합 → 메타 풍부화 → 필터링
+   - LLM 큐레이션 (모드별, 20개 pick + 한글 reason)
+   - 나머지 30개 template fallback → 총 50개 반환
+
 ### 회고
 
 - **"폴리싱 완료" 조기 선언 반복**: 1차에서도 그랬고 사용자 지적으로 2차 진행. 체계적 diff 없이 눈에 띈 것만 고치는 버릇 — 이후엔 웹/네이티브 나란히 비교를 전제로.
 - **공유 레이어의 실체**: 데이터·로직·토큰·타입은 공유. UI는 이중. 이를 문서화해서 피드백 처리 흐름을 정리한 게 오늘 가장 큰 소득.
 - **PostHog 복구**: API key 누락 2시간 전 해결. 앞으로 실제 피드백 관찰 모드.
+- **추천 모드 시그널 공백**: "saved 많이 했는데 취향 반영 안 됨" 잠재 피드백 예측 → 즉시 수정. 세션 끝에 원인 진단 + 수정 한 번에 들어간 좋은 예.
 
 ## 2026-04-15 (Day 11)
 
