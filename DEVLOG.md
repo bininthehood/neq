@@ -1,5 +1,116 @@
 # Neko 개발 일지
 
+## 2026-04-16 (Day 12)
+
+### 진행 요약
+타입 drift 제거 + Supabase anonymous auth + 네이티브 본 포팅 (FilterChips → DetailSheet → Profile) + Discover 일괄 폴리싱 2차. 공유 레이어·이중 UI 작업의 경계를 문서화하고 피드백 처리 프로세스 확립.
+
+### 완료된 작업
+
+**타입 drift 제거 (`eee9821`)**
+- `apps/web/src/lib/types.ts` 로컬 정의 전부 삭제 → `@neq/core` re-export
+- `recommend.ts`에 중복 정의된 `RecommendFilter`/`WatchFeedback` 제거
+- `@neq/core/types.ts`에 web 기준 필수 필드 반영 (`director`, `cast`, `runtime`, `seasons`, `country`, `backdrop` — 웹은 필수 타입이므로)
+- `UserDataExport`, `TMDBResult`, `USER_DATA_SCHEMA_VERSION` core로 이관
+- `apps/native/lib/mock.ts` 삭제 (실제 API 전환 완료)
+
+**Supabase anonymous auth (`508f937`)**
+- `apps/web/src/lib/supabase.ts`에 `ensureAuth()` + `getAuthUid()` 추가
+  - 세션 없으면 `signInAnonymously()` 자동 호출, 싱글톤 Promise로 동시성 처리
+- `sync.ts` `getOrCreateProfile()` 3단계:
+  1. `auth.uid()`로 프로필 조회 → 있으면 반환
+  2. 기존 `device_id` 프로필에 `user_id` 연결 (마이그레이션)
+  3. 둘 다 없으면 신규 생성
+- `supabase/002_anonymous_auth.sql`
+  - `profiles.user_id uuid REFERENCES auth.users(id) UNIQUE`
+  - anon 전면 허용 5개 정책 삭제
+  - `auth.uid()` 기반 5개 테이블 RLS 신규 정책
+- Supabase 대시보드에서 Anonymous Sign-Ins 활성화 + SQL 실행 완료
+
+**네이티브 본 포팅 (Phase 3)**
+- `FilterChips` (`0790eac`): 4칩 드롭다운, API 필터 매핑
+  - `@neq/core`에 `discover.ts` 이관 (`FilterType/Origin/Year`, `OTT_OPTIONS`, 라벨)
+- `DetailSheet` (`74cc247`): 바텀시트 + Pan 드래그 닫기 + OTT 열기 + Share
+  - 탭 = 시트 오픈 (→ 폴리싱 2차에서 **포스터 immersive**로 변경)
+- `Profile` (`4f8df1e`): 좋아한 작품 / 시청 기록 / 초기화 / 앱 정보
+  - `apps/native/lib/store.ts`에 `getWatchReports`, `addWatchReport`, `getWatchStats`, `getDeviceId`, `clearAllUserData` 추가
+  - `expo-crypto` 의존성
+
+**Discover 일괄 폴리싱 1차 (`ea3933f`)**
+- 메타 라인 (국가·연도·시간 + OTT 아이콘)
+- ActionBar (Share + Refresh + Save)
+- TutorialOverlay (첫 3장 힌트)
+- 빈 상태 메시지 분기
+- `@neq/core`에 `ott.ts` + `country.ts` 이관
+
+**Discover 일괄 폴리싱 2차 (`a0085fa` + `4776b0e`)**
+- 사용자 피드백 6건 반영:
+  - 로고: "Neko" → **neq,** (Fraunces)
+  - 카운터 제거
+  - 폰트: `@expo-google-fonts/fraunces + outfit` + `useFonts` + SplashScreen 제어
+  - 배지 플랫화 (둥근 pill → 텍스트 + textShadow)
+  - 3-stop LinearGradient 적용
+  - 탭 = **포스터 immersive** (DetailSheet는 ⓘ 버튼으로만)
+  - ActionBar 4+1 (⟲ ⤴ ⓘ ⟳ + ♥)
+  - BottomNav 4탭 → 3탭 + 아이콘 (발견/저장/프로필)
+  - Search 탭 제거 → 우상단 ⌕ → `SearchSheet` 바텀시트
+  - TutorialOverlay 스타일 약화
+- `packages/design/tokens.ts`에 `fonts` 상수 추가
+
+**공유 레이어/이중 UI 경계 문서화**
+- `_workspace/feedback-intake.md`: 피드백 라벨링 템플릿 (`[data]/[core]/[design]/[ui-web]/[ui-native]/[ui-both]/[infra]`)
+- `_workspace/feedback-log.md`: 시간순 피드백 로그 (빈 상태에서 시작)
+- 원칙: 데이터/로직/토큰은 자동 공유, UI 렌더링만 이중 작업
+- 반복 `[ui-both]` 3회 이상 패턴 시 `packages/core/hooks/*` 로 headless 훅 추출 검토 (옵션 A, 지금은 C)
+
+### 격차 인식 — 정직한 parity 추정
+
+Discover 기준:
+- 구조/레이아웃: ~70%
+- 시각 디테일 (아이콘·간격·shadow): ~45%
+- 다른 화면 (Saved/Profile/DetailSheet/SearchSheet): 40-55%
+- 인터랙션/애니메이션: 미측정
+- **전체 체감: 55-65%**
+
+완전 픽셀 일치는 ROI 낮음. 실사용 피드백 받으며 점진 개선하기로 결정.
+
+### 결정 이력
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| 검색 접근 | 탭 제거 → 우상단 ⌕ → 바텀시트 | 웹 parity |
+| 카드 탭 | 포스터 immersive | 웹 동작 일치, DetailSheet는 ⓘ로 |
+| 공유 전략 | 옵션 C (현재 구조 유지 + 라벨링) | 성급한 훅 추출 회피, 3회+ 반복 시 재검토 |
+| 아이콘 | 유니코드 문자 | SVG 포팅 보류, ROI 낮음 |
+| Pretendard | 시스템 폰트 폴백 | iOS 기본 한글 폰트로 충분 |
+
+### 커밋 & 배포
+
+| SHA | 내용 |
+|-----|------|
+| `eee9821` | 타입 단일 출처 — @neq/core re-export |
+| `508f937` | Supabase anonymous auth + RLS |
+| `0790eac` | FilterChips 포팅 + API 필터 |
+| `74cc247` | DetailSheet 포팅 |
+| `4f8df1e` | Profile 화면 + 4번째 탭 |
+| `ea3933f` | Discover 폴리싱 1차 (메타/OTT/ActionBar/Tutorial/빈상태) |
+| `a0085fa` | Discover 폴리싱 2-1차 (로고/폰트/배지/그라디언트) |
+| `4776b0e` | Discover 폴리싱 2-2차 (검색/ActionBar/BottomNav) |
+
+### 남은 작업
+
+- [ ] 다른 화면 개별 폴리싱 (Saved Pinterest grid, Profile chip style, DetailSheet backdrop 등)
+- [ ] SVG 아이콘 포팅 (react-native-svg, 웹 Icons 컴포넌트 번역)
+- [ ] EAS Build + TestFlight
+- [ ] PostHog 실사용자 피드백 수신 → `_workspace/feedback-log.md` 기록 → 처리
+- [ ] 반복 `[ui-both]` 패턴 3회+ 시 headless 훅 추출 검토
+
+### 회고
+
+- **"폴리싱 완료" 조기 선언 반복**: 1차에서도 그랬고 사용자 지적으로 2차 진행. 체계적 diff 없이 눈에 띈 것만 고치는 버릇 — 이후엔 웹/네이티브 나란히 비교를 전제로.
+- **공유 레이어의 실체**: 데이터·로직·토큰·타입은 공유. UI는 이중. 이를 문서화해서 피드백 처리 흐름을 정리한 게 오늘 가장 큰 소득.
+- **PostHog 복구**: API key 누락 2시간 전 해결. 앞으로 실제 피드백 관찰 모드.
+
 ## 2026-04-15 (Day 11)
 
 ### 진행 요약
