@@ -3,7 +3,11 @@
 ## 2026-04-16 (Day 12)
 
 ### 진행 요약
-타입 drift 제거 + Supabase anonymous auth + 네이티브 본 포팅 (FilterChips → DetailSheet → Profile) + Discover 일괄 폴리싱 2차. 공유 레이어·이중 UI 작업의 경계를 문서화하고 피드백 처리 프로세스 확립.
+**병렬 세션:** 타입 drift 제거 + Supabase anonymous auth + 네이티브 본 포팅 (FilterChips → DetailSheet → Profile) + Discover 일괄 폴리싱 2차. 공유 레이어·이중 UI 작업의 경계를 문서화하고 피드백 처리 프로세스 확립.
+
+**메인 세션:** Vercel 배포/PostHog 복구 + Supabase 동기화 3건 복합 원인 진단 → 복구 완료 + 온보딩 픽 Supabase 동기화 추가. 실사용자 이벤트·저장 데이터 정상 수집 경로 확보.
+
+두 세션이 각자 영역에서 main 브랜치 직접 커밋, 충돌 없음.
 
 ### 완료된 작업
 
@@ -151,6 +155,149 @@ Cold start → 취향 반영 전환 흐름:
 - **공유 레이어의 실체**: 데이터·로직·토큰·타입은 공유. UI는 이중. 이를 문서화해서 피드백 처리 흐름을 정리한 게 오늘 가장 큰 소득.
 - **PostHog 복구**: API key 누락 2시간 전 해결. 앞으로 실제 피드백 관찰 모드.
 - **추천 모드 시그널 공백**: "saved 많이 했는데 취향 반영 안 됨" 잠재 피드백 예측 → 즉시 수정. 세션 끝에 원인 진단 + 수정 한 번에 들어간 좋은 예.
+
+---
+
+## 2026-04-16 (Day 12) — 메인 세션 작업
+
+### 세션 맥락
+
+- 주 작업자: 메인 세션
+- 병렬 세션: 다른 quick fix 진행 (온보딩 화면 복원 `4e29181` 포함)
+- 두 세션 모두 main 브랜치에 직접 커밋, 영역 겹치지 않음
+
+### 완료된 작업
+
+**1. Vercel 배포 + PostHog 복구**
+
+문제:
+- 공유한 5명 중 PostHog 대시보드에 프로덕션 이벤트 0건
+- 로컬 개발 이벤트 871건만 축적
+
+진단:
+- 프로덕션 JS 번들 13개 chunk 전수 스캔 → PostHog 키(phc_*) 미포함
+- `PostHogProvider.tsx`에 `if (!key) return` 가드 있어서 init 자체가 스킵됨
+- 원인 확정: Vercel 프로덕션 env에 `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` 누락
+
+수정:
+- james님이 Vercel Dashboard에 env var 추가 + 재배포
+- 배포 후 아이폰 Safari 테스트 이벤트 정상 수신 확인
+- `neko-ecru.vercel.app` 호스트로 `card_swiped` / `card_saved` 찍히기 시작
+
+**2. Supabase 동기화 복구 (가장 긴 세션)**
+
+문제:
+- PostHog엔 `card_saved` 이벤트 12건 있는데 Supabase `saved_items`는 0건
+- 저장 데이터가 Supabase에 전혀 반영 안 됨
+- 어제(Day 10) 있던 테스트 데이터도 사라져 있음
+
+복합 원인 3가지 발견:
+
+원인 A — RLS 정책 누락
+- 어제 적용한 `supabase/policies.sql`이 사라져 있음 (병렬 세션의 스키마 변경 중 소실 추정)
+- 직접 curl로 profile insert 시도 → "new row violates row-level security policy" 에러
+- anon key 직접 접근 경로가 막힘
+
+원인 B — Supabase Anonymous Sign-ins 비활성화
+- 병렬 세션이 방향 B(Supabase anonymous auth, 커밋 `508f937`) 구현했지만
+- Supabase 프로젝트 레벨에서 Anonymous Sign-ins이 disabled 상태
+- `signInAnonymously()` 호출 시 422 `anonymous_provider_disabled` 에러
+- `getAuthUid()` → null → `getOrCreateProfile()` → null → insert 시도 자체 안 함
+- 에러는 `console.error`에만 찍혀 관측 불가
+
+원인 C — 역할 불일치
+- 기존 `policies.sql`은 `FOR ALL TO anon` 만 커버
+- `signInAnonymously` 성공 시 유저는 `authenticated` 역할로 전환
+- authenticated 역할용 정책 부재로 모든 insert 차단
+
+수정:
+- `supabase/policies.sql` 업데이트: `FOR ALL TO anon, authenticated USING (true) WITH CHECK (true)`
+  5개 테이블 전부 (profiles, saved_items, watch_reports, seen_titles, archived_items)
+- james님이 Supabase Dashboard → Authentication → Providers에서 Anonymous Sign-ins 활성화
+- SQL Editor에서 업데이트된 `policies.sql` 재적용
+- `apps/web/src/hooks/useSync.ts` 안정화:
+  - pagehide 이벤트 리스너 추가 (iOS Safari tab close 대응)
+  - visibilitychange + pagehide 둘 다 onHide 호출
+  - 중복 push 방지 ref guard (`pushingOnHide`)
+  - 에러 시 `Sentry.captureException` / `captureMessage` 연결
+- `apps/web/src/lib/sync.ts` 개선:
+  - Sentry import 추가
+  - `getOrCreateProfile` 에러 → `Sentry.captureMessage`
+  - `pushToServer` catch → `Sentry.captureException`
+  - `pullFromServer` catch → `Sentry.captureException`
+- `scripts/watch-events.sh` 패치:
+  - 모노레포 전환으로 `.env.local` 위치 변경 (`apps/web/.env.local`) 대응
+  - macOS에 `tac` 없어서 `tail -r`로 교체
+
+E2E 검증:
+- curl로 전체 플로우 확인: signup 201 → token 발급 → profile insert 201 → saved_items insert 201 → cleanup 204
+- 주요 커밋: `1b50021`
+
+**3. 온보딩 픽 Supabase 동기화 추가**
+
+문제:
+- 병렬 세션이 복원한 온보딩 기능(커밋 `4e29181`)의 결과가 localStorage에만 저장
+- `neq_favorites`, `neq_favorites_meta` 키로 저장되지만 `sync.ts`는 이걸 업로드 안 함
+- 재설치 / localStorage 클리어 시 온보딩 결과 소실
+- 추천 엔진 핵심 시드인데 백업 없음
+
+설계 선택 (방법 A~C 중):
+- 방법 A: `profiles`에 `onboarding_picks` JSON 컬럼 (채택)
+- 방법 B: 별도 `onboarding_picks` 테이블 (과함)
+- 방법 C: `saved_items`에 source 컬럼 (개념 혼선)
+- 방법 A가 1회성 데이터 성격에 맞고 스키마 변경 최소
+
+수정:
+- `supabase/migrations/20260416_onboarding_picks.sql` 생성
+  - `ALTER TABLE profiles ADD COLUMN IF NOT EXISTS onboarding_picks JSONB`
+- `sync.ts` `pushToServer`에 5단계 추가:
+  - `getFavoritesMeta()` → `profiles.onboarding_picks` UPDATE
+- `sync.ts` `pullFromServer`에 4단계 추가:
+  - 로컬 비어있을 때만 서버에서 복원 (덮어쓰기 방지)
+  - `setFavoritesMeta` + `setFavorites` 양쪽 복원
+- james님이 Dashboard에서 마이그레이션 SQL 실행
+
+E2E 검증:
+- signup → profile insert → picks UPDATE 200 → 읽기 정상 → cleanup 204
+- 주요 커밋: `a5ba438`
+
+### 주요 커밋 (메인 세션)
+
+| SHA | 내용 |
+|-----|------|
+| `a5ba438` | feat(sync): 온보딩 픽 Supabase 동기화 — profiles.onboarding_picks JSON 컬럼 |
+| `1b50021` | fix(sync): Supabase 동기화 복구 — 익명 auth + RLS + pagehide + Sentry |
+
+### 주요 커밋 (병렬 세션, 참고용)
+
+| SHA | 내용 |
+|-----|------|
+| `4e29181` | feat(web): 온보딩 화면 복원 — 실사용자 피드백 반영 |
+| `508f937` | feat(auth): Supabase anonymous auth 도입 + RLS auth.uid() 기반 전환 |
+| `598cd5e` | refactor: 모노레포 정석 구조 전환 (A 경로) — apps/web + Turborepo + @neq/* |
+
+### Supabase 서버 측 변경 (SQL Editor로 적용, 코드 아닌 설정)
+
+1. Authentication → Providers → Allow anonymous sign-ins 활성화
+2. `supabase/policies.sql` 재적용 (anon + authenticated 양쪽 커버)
+3. `supabase/migrations/20260416_onboarding_picks.sql` 적용 (JSONB 컬럼 추가)
+
+### 잠재적 후속 작업 (미착수)
+
+- [ ] Sentry dashboard에서 `sync_failed` 이벤트 실제 수집 확인 (프로덕션 배포 후)
+- [ ] PostHog `card_saved` vs Supabase `saved_items` 카운트 일치율 대시보드
+- [ ] 프로덕션 재배포로 pagehide 개선 반영 (현재 코드는 commit됐지만 미배포)
+- [ ] 실기기에서 전체 플로우 수동 검증 (james 아이폰)
+- [ ] 방향 B 완성: `user_id = auth.uid()` 기반 타이트한 RLS로 점진 전환
+- [ ] 크로스 디바이스 동기화를 위한 이메일 로그인 도입 (장기)
+
+### 사용자와의 논의 (코드 아님, 맥락 보존용)
+
+- PWA vs Native 의사결정 재조정 — Neko는 UX 민감 축 지배적이라 네이티브 전환 "불가피 아님"이지만 "검증 전제 조건에 가까움"
+- Expo Go로 지인 10명 테스트 → 데이터 나오면 TestFlight로 업그레이드 트리거 기준 합의
+- 모노레포 전환의 정당성 재확인 — 타입 drift 방지 + 포팅 효율
+- 현재 로드맵: PWA 피드백 반영 → 네이티브 동기화 → Expo Go 10명 테스트 → (기준 충족 시) TestFlight
+- 유저 식별 모델: device_id + user_id + profile_id 3개 UUID로 익명 유저 추적 (로그인 없이도 서버 저장 가능)
 
 ## 2026-04-15 (Day 11)
 
