@@ -1,0 +1,297 @@
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import {
+  TYPE_LABELS,
+  ORIGIN_LABELS,
+  YEAR_LABELS,
+  OTT_OPTIONS,
+  type FilterType,
+  type FilterOrigin,
+  type FilterYear,
+} from '@neq/core';
+import { colors, radius, spacing } from '../lib/tokens';
+
+type DropdownKey = 'type' | 'origin' | 'year' | 'ott' | null;
+
+interface Props {
+  filterType: FilterType;
+  filterOrigin: FilterOrigin;
+  filterYear: FilterYear;
+  filterOTTs: Set<string>;
+  availableOTTs: string[];
+  disabled?: boolean;
+  onFilterChange: (t: FilterType, o: FilterOrigin) => void;
+  onYearChange: (y: FilterYear) => void;
+  onOTTChange: (otts: Set<string>) => void;
+}
+
+const TYPE_OPTIONS: FilterType[] = ['all', 'movie', 'series', 'variety'];
+const ORIGIN_OPTIONS: FilterOrigin[] = ['all', 'kr', 'foreign'];
+const YEAR_OPTIONS: FilterYear[] = ['all', 'recent', '2010s', 'classic'];
+
+export default function FilterChips({
+  filterType,
+  filterOrigin,
+  filterYear,
+  filterOTTs,
+  availableOTTs,
+  disabled,
+  onFilterChange,
+  onYearChange,
+  onOTTChange,
+}: Props) {
+  const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
+
+  const ottLabel =
+    filterOTTs.size === 0
+      ? 'OTT'
+      : filterOTTs.size === 1
+        ? [...filterOTTs][0]
+        : `OTT ${filterOTTs.size}개`;
+
+  function toggle(key: DropdownKey) {
+    setOpenDropdown((prev) => (prev === key ? null : key));
+  }
+
+  function Chip({
+    active,
+    isOpen,
+    label,
+    onPress,
+  }: {
+    active: boolean;
+    isOpen: boolean;
+    label: string;
+    onPress: () => void;
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={disabled}
+        style={[
+          styles.chip,
+          active && styles.chipActive,
+          isOpen && styles.chipOpen,
+          disabled && styles.chipDisabled,
+        ]}
+      >
+        <Text style={[styles.chipText, active && styles.chipTextActive]}>
+          {label}
+        </Text>
+        <Text style={styles.caret}>▾</Text>
+      </Pressable>
+    );
+  }
+
+  function Option({
+    active,
+    label,
+    onPress,
+  }: {
+    active: boolean;
+    label: string;
+    onPress: () => void;
+  }) {
+    return (
+      <Pressable
+        onPress={onPress}
+        style={[styles.option, active && styles.optionActive]}
+      >
+        <Text style={[styles.optionText, active && styles.optionTextActive]}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipRow}
+      >
+        <Chip
+          active={filterType !== 'all'}
+          isOpen={openDropdown === 'type'}
+          label={TYPE_LABELS[filterType]}
+          onPress={() => toggle('type')}
+        />
+        <Chip
+          active={filterOrigin !== 'all'}
+          isOpen={openDropdown === 'origin'}
+          label={ORIGIN_LABELS[filterOrigin]}
+          onPress={() => toggle('origin')}
+        />
+        <Chip
+          active={filterYear !== 'all'}
+          isOpen={openDropdown === 'year'}
+          label={YEAR_LABELS[filterYear]}
+          onPress={() => toggle('year')}
+        />
+        {availableOTTs.length > 0 && (
+          <Chip
+            active={filterOTTs.size > 0}
+            isOpen={openDropdown === 'ott'}
+            label={ottLabel}
+            onPress={() => toggle('ott')}
+          />
+        )}
+      </ScrollView>
+
+      {openDropdown && (
+        <View style={styles.panel}>
+          {openDropdown === 'type' &&
+            TYPE_OPTIONS.map((t) => (
+              <Option
+                key={t}
+                active={filterType === t}
+                label={t === 'all' ? '전체' : TYPE_LABELS[t]}
+                onPress={() => {
+                  onFilterChange(t, filterOrigin);
+                  setOpenDropdown(null);
+                }}
+              />
+            ))}
+          {openDropdown === 'origin' &&
+            ORIGIN_OPTIONS.map((o) => (
+              <Option
+                key={o}
+                active={filterOrigin === o}
+                label={o === 'all' ? '전체' : ORIGIN_LABELS[o]}
+                onPress={() => {
+                  onFilterChange(filterType, o);
+                  setOpenDropdown(null);
+                }}
+              />
+            ))}
+          {openDropdown === 'year' &&
+            YEAR_OPTIONS.map((y) => (
+              <Option
+                key={y}
+                active={filterYear === y}
+                label={y === 'all' ? '전체' : YEAR_LABELS[y]}
+                onPress={() => {
+                  onYearChange(y);
+                  setOpenDropdown(null);
+                }}
+              />
+            ))}
+          {openDropdown === 'ott' && (
+            <>
+              <Option
+                active={filterOTTs.size === 0}
+                label="모든 OTT"
+                onPress={() => {
+                  onOTTChange(new Set());
+                  setOpenDropdown(null);
+                }}
+              />
+              {availableOTTs.map((ott) => {
+                const selected = filterOTTs.has(ott);
+                return (
+                  <Option
+                    key={ott}
+                    active={selected}
+                    label={ott}
+                    onPress={() => {
+                      const next = new Set(filterOTTs);
+                      if (selected) next.delete(ott);
+                      else next.add(ott);
+                      onOTTChange(next);
+                    }}
+                  />
+                );
+              })}
+            </>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Re-export for callers that build available OTT list.
+export { OTT_OPTIONS };
+
+const styles = StyleSheet.create({
+  wrap: {
+    flexShrink: 0,
+    position: 'relative',
+    zIndex: 10,
+  },
+  chipRow: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm + 4,
+    paddingTop: spacing.sm + 2,
+    paddingBottom: 6,
+    minHeight: 44,
+    gap: 4,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  chipActive: {
+    borderBottomColor: colors.accent,
+  },
+  chipOpen: {
+    transform: [{ scale: 1.02 }],
+  },
+  chipDisabled: {
+    opacity: 0.5,
+  },
+  chipText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  chipTextActive: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  caret: {
+    color: colors.textMuted,
+    fontSize: 10,
+  },
+  panel: {
+    position: 'absolute',
+    top: '100%',
+    left: spacing.md,
+    right: spacing.md,
+    padding: spacing.sm + 4,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 8,
+    zIndex: 100,
+  },
+  option: {
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: 'transparent',
+  },
+  optionActive: {
+    backgroundColor: colors.accentDim,
+  },
+  optionText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '400',
+  },
+  optionTextActive: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
+});

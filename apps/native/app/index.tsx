@@ -18,9 +18,16 @@ import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import SwipeCard from '../components/SwipeCard';
 import PrevCardOverlay from '../components/PrevCardOverlay';
+import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import { fetchRecommendations } from '../lib/api';
 import { getSaved, toggleSaved } from '../lib/store';
-import type { Recommendation } from '../lib/types';
+import type {
+  Recommendation,
+  RecommendFilter,
+  FilterType,
+  FilterOrigin,
+  FilterYear,
+} from '../lib/types';
 import { colors, spacing } from '../lib/tokens';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -28,6 +35,20 @@ const NEXT_THRESHOLD = -80;
 const PREV_OVERLAY_TRIGGER = 0.3;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
+
+function toApiFilter(
+  type: FilterType,
+  origin: FilterOrigin,
+  year: FilterYear,
+  otts: Set<string>,
+): RecommendFilter {
+  const filter: RecommendFilter = {};
+  if (type !== 'all') filter.type = type;
+  if (origin !== 'all') filter.origin = origin;
+  if (year !== 'all') filter.year = year;
+  if (otts.size > 0) filter.ott = [...otts];
+  return filter;
+}
 
 export default function DiscoverScreen() {
   const [recs, setRecs] = useState<Recommendation[]>([]);
@@ -39,26 +60,53 @@ export default function DiscoverScreen() {
   const [isDragging, setIsDragging] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
 
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>('all');
+  const [filterYear, setFilterYear] = useState<FilterYear>('all');
+  const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
+
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
   const [prevActive, setPrevActive] = useState(false);
 
-  const load = useCallback(async () => {
-    setState('loading');
-    setErrorMsg(null);
-    try {
-      const data = await fetchRecommendations({});
-      setRecs(data);
-      setTopIdx(0);
-      setState('ready');
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류');
-      setState('error');
-    }
-  }, []);
+  const load = useCallback(
+    async (filter: RecommendFilter = {}) => {
+      setState('loading');
+      setErrorMsg(null);
+      try {
+        const data = await fetchRecommendations({ filter });
+        setRecs(data);
+        setTopIdx(0);
+        setState('ready');
+      } catch (e) {
+        setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류');
+        setState('error');
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     load();
   }, [load]);
+
+  function applyFilterChange(nextState: {
+    type?: FilterType;
+    origin?: FilterOrigin;
+    year?: FilterYear;
+    otts?: Set<string>;
+  }) {
+    const nextType = nextState.type ?? filterType;
+    const nextOrigin = nextState.origin ?? filterOrigin;
+    const nextYear = nextState.year ?? filterYear;
+    const nextOtts = nextState.otts ?? filterOTTs;
+
+    if (nextState.type !== undefined) setFilterType(nextType);
+    if (nextState.origin !== undefined) setFilterOrigin(nextOrigin);
+    if (nextState.year !== undefined) setFilterYear(nextYear);
+    if (nextState.otts !== undefined) setFilterOTTs(nextOtts);
+
+    load(toApiFilter(nextType, nextOrigin, nextYear, nextOtts));
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -139,6 +187,10 @@ export default function DiscoverScreen() {
   const isLiked = currentRec ? savedIds.has(currentRec.tmdbId) : false;
   const exhausted = state === 'ready' && cardsToShow.length === 0;
 
+  const availableOTTs = OTT_OPTIONS.filter((ott) =>
+    recs.some((r) => r.providers.some((p) => p.name === ott)),
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
@@ -147,6 +199,18 @@ export default function DiscoverScreen() {
           {state === 'ready' ? `${Math.min(topIdx + 1, recs.length)} / ${recs.length}` : ''}
         </Text>
       </View>
+
+      <FilterChips
+        filterType={filterType}
+        filterOrigin={filterOrigin}
+        filterYear={filterYear}
+        filterOTTs={filterOTTs}
+        availableOTTs={availableOTTs}
+        disabled={state === 'loading'}
+        onFilterChange={(t, o) => applyFilterChange({ type: t, origin: o })}
+        onYearChange={(y) => applyFilterChange({ year: y })}
+        onOTTChange={(otts) => applyFilterChange({ otts })}
+      />
 
       <View style={styles.stackWrap}>
         {state === 'loading' && (
@@ -160,7 +224,7 @@ export default function DiscoverScreen() {
           <View style={styles.centered}>
             <Text style={styles.errorTitle}>요청이 실패했어요</Text>
             <Text style={styles.errorDetail}>{errorMsg}</Text>
-            <Pressable style={styles.resetBtn} onPress={load}>
+            <Pressable style={styles.resetBtn} onPress={() => load()}>
               <Text style={styles.resetText}>다시 시도</Text>
             </Pressable>
           </View>
@@ -195,7 +259,7 @@ export default function DiscoverScreen() {
         {exhausted && (
           <View style={styles.centered}>
             <Text style={styles.emptyTitle}>모두 봤어요</Text>
-            <Pressable style={styles.resetBtn} onPress={load}>
+            <Pressable style={styles.resetBtn} onPress={() => load()}>
               <Text style={styles.resetText}>새 추천 받기</Text>
             </Pressable>
           </View>
