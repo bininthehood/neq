@@ -22,6 +22,7 @@ import Animated, {
   Extrapolation,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
+import { getOTTLink, getOTTIcon } from '@neq/core';
 import { colors, radius, spacing } from '../lib/tokens';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -96,7 +97,12 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
   }
 
   function openProvider(providerName: string, watchLink: string | null) {
-    const url = watchLink || `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + (rec?.title ?? ''))}`;
+    if (!rec) return;
+    // 네이티브는 항상 모바일 → 앱 딥링크 우선
+    const url =
+      getOTTLink(providerName, rec.title, true) ||
+      watchLink ||
+      `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + rec.title)}`;
     Linking.openURL(url).catch(() => {});
   }
 
@@ -186,25 +192,28 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
                   </Text>
                 ) : (
                   <View style={styles.providerList}>
-                    {rec.providers.map((p) => (
-                      <Pressable
-                        key={p.name}
-                        style={styles.providerRow}
-                        onPress={() => openProvider(p.name, rec.watchLink)}
-                      >
-                        <View style={styles.providerIcon}>
-                          {p.logoUrl ? (
-                            <Image
-                              source={{ uri: p.logoUrl }}
-                              style={StyleSheet.absoluteFill}
-                              contentFit="contain"
-                            />
-                          ) : null}
-                        </View>
-                        <Text style={styles.providerName}>{p.name}</Text>
-                        <Text style={styles.providerOpen}>열기</Text>
-                      </Pressable>
-                    ))}
+                    {rec.providers.map((p) => {
+                      const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
+                      return (
+                        <Pressable
+                          key={p.name}
+                          style={styles.providerRow}
+                          onPress={() => openProvider(p.name, rec.watchLink)}
+                        >
+                          <View style={styles.providerIcon}>
+                            {iconUrl ? (
+                              <Image
+                                source={{ uri: iconUrl }}
+                                style={StyleSheet.absoluteFill}
+                                contentFit="contain"
+                              />
+                            ) : null}
+                          </View>
+                          <Text style={styles.providerName}>{p.name}</Text>
+                          <Text style={styles.providerOpen}>열기</Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 )}
               </View>

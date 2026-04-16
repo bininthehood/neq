@@ -6,6 +6,7 @@ import {
   Pressable,
   Dimensions,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -20,6 +21,8 @@ import SwipeCard from '../components/SwipeCard';
 import PrevCardOverlay from '../components/PrevCardOverlay';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DetailSheet from '../components/DetailSheet';
+import ActionBar from '../components/ActionBar';
+import TutorialOverlay from '../components/TutorialOverlay';
 import { fetchRecommendations } from '../lib/api';
 import { getSaved, toggleSaved } from '../lib/store';
 import type {
@@ -147,6 +150,22 @@ export default function DiscoverScreen() {
     });
   }
 
+  async function handleShare() {
+    if (!currentRec) return;
+    try {
+      await Share.share({
+        message: `${currentRec.title} (${currentRec.titleEn}) — Neko 추천`,
+      });
+    } catch {
+      /* user dismissed */
+    }
+  }
+
+  function handleRefresh() {
+    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterOTTs);
+    load(filter);
+  }
+
   const tap = Gesture.Tap()
     .maxDuration(250)
     .maxDistance(10)
@@ -199,6 +218,45 @@ export default function DiscoverScreen() {
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
     recs.some((r) => r.providers.some((p) => p.name === ott)),
   );
+
+  const hasFilter =
+    filterType !== 'all' ||
+    filterOrigin !== 'all' ||
+    filterYear !== 'all' ||
+    filterOTTs.size > 0;
+
+  const { emptyTitle, emptyHint } = (() => {
+    if (!hasFilter) {
+      return {
+        emptyTitle: '모두 봤어요',
+        emptyHint: '새 추천을 불러오면 다른 작품이 나타나요',
+      };
+    }
+    if (filterOrigin === 'kr') {
+      return {
+        emptyTitle: '국내 작품을 찾지 못했어요',
+        emptyHint: '필터를 완화하면 해외 작품도 함께 보여드릴게요',
+      };
+    }
+    if (filterOTTs.size > 0) {
+      return {
+        emptyTitle: '선택한 OTT에서 찾지 못했어요',
+        emptyHint: 'OTT 필터를 풀고 다시 시도해보세요',
+      };
+    }
+    return {
+      emptyTitle: '이 조건에선 추천이 없어요',
+      emptyHint: '필터를 초기화하거나 다시 시도해보세요',
+    };
+  })();
+
+  function clearFilters() {
+    setFilterType('all');
+    setFilterOrigin('all');
+    setFilterYear('all');
+    setFilterOTTs(new Set());
+    load({});
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -261,38 +319,37 @@ export default function DiscoverScreen() {
               {prevActive && prevRec && (
                 <PrevCardOverlay rec={prevRec} overlayX={prevOverlayX} />
               )}
+              <TutorialOverlay visible={topIdx < 3 && !isDragging && !prevActive} />
             </Animated.View>
           </GestureDetector>
         )}
 
         {exhausted && (
           <View style={styles.centered}>
-            <Text style={styles.emptyTitle}>모두 봤어요</Text>
-            <Pressable style={styles.resetBtn} onPress={() => load()}>
-              <Text style={styles.resetText}>새 추천 받기</Text>
-            </Pressable>
+            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+            <Text style={styles.emptyHint}>{emptyHint}</Text>
+            <View style={styles.emptyActions}>
+              {hasFilter && (
+                <Pressable style={styles.resetBtnSecondary} onPress={clearFilters}>
+                  <Text style={styles.resetTextSecondary}>필터 초기화</Text>
+                </Pressable>
+              )}
+              <Pressable style={styles.resetBtn} onPress={handleRefresh}>
+                <Text style={styles.resetText}>다시 시도</Text>
+              </Pressable>
+            </View>
           </View>
         )}
       </View>
 
       {state === 'ready' && currentRec && (
-        <View style={styles.actionBar}>
-          <Pressable
-            style={[styles.likeBtn, isLiked && styles.likeBtnActive]}
-            onPress={toggleLike}
-          >
-            <Text style={[styles.likeText, isLiked && styles.likeTextActive]}>
-              {isLiked ? '♥ 좋아요' : '♡ 좋아요'}
-            </Text>
-          </Pressable>
-        </View>
+        <ActionBar
+          isSaved={isLiked}
+          onShare={handleShare}
+          onRefresh={handleRefresh}
+          onToggleSave={toggleLike}
+        />
       )}
-
-      <View style={styles.footer}>
-        <Text style={styles.hint}>
-          {state === 'ready' ? '← 다음 · 이전 →' : ''}
-        </Text>
-      </View>
 
       <DetailSheet
         rec={currentRec ?? null}
@@ -333,33 +390,30 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     color: colors.textPrimary,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
+  },
+  emptyHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 4,
     marginBottom: spacing.md,
+    lineHeight: 19,
   },
-  actionBar: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
+  emptyActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
-  likeBtn: {
-    minWidth: 200,
-    alignItems: 'center',
-    backgroundColor: colors.surfaceRaised,
+  resetBtnSecondary: {
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 4,
+    paddingVertical: spacing.sm + 2,
     borderRadius: 999,
   },
-  likeBtnActive: {
-    backgroundColor: colors.accentDim,
-    borderColor: colors.accentBorder,
-  },
-  likeText: { color: colors.textSecondary, fontWeight: '600', fontSize: 15 },
-  likeTextActive: { color: colors.accent },
-  footer: { paddingVertical: spacing.sm, alignItems: 'center' },
-  hint: { color: colors.textMuted, fontSize: 12 },
+  resetTextSecondary: { color: colors.textSecondary, fontWeight: '600' },
   resetBtn: {
     backgroundColor: colors.accentDim,
     borderWidth: 1,

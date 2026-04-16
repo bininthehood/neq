@@ -7,6 +7,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
+import { buildMetaInfo, getOTTIcon } from '@neq/core';
 import { colors, radius, spacing } from '../lib/tokens';
 
 interface Props {
@@ -67,7 +68,27 @@ export default function SwipeCard({ rec, isTop, depth, dragX, isDragging }: Prop
       {depth <= 1 && (
         <View style={[styles.infoOverlay, { opacity: isTop && !isDragging ? 1 : 0 }]}>
           <Text style={styles.title}>{rec.title}</Text>
-          <Text style={styles.subtitle}>{rec.titleEn}</Text>
+          <View style={styles.metaRow}>
+            {buildMetaInfo(rec) ? (
+              <Text style={styles.metaText}>{buildMetaInfo(rec)}</Text>
+            ) : null}
+            {rec.providers.length > 0 && (
+              <View style={styles.providerIcons}>
+                {rec.providers.slice(0, 4).map((p) => {
+                  const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
+                  return iconUrl ? (
+                    <Image
+                      key={p.name}
+                      source={{ uri: iconUrl }}
+                      style={styles.providerIcon}
+                      contentFit="contain"
+                      transition={0}
+                    />
+                  ) : null;
+                })}
+              </View>
+            )}
+          </View>
           <View style={styles.reasonBox}>
             <Text style={styles.reasonText}>{rec.reason}</Text>
           </View>
@@ -141,10 +162,26 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
   },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 2,
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: 6,
+  },
+  metaText: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  providerIcons: {
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+  },
+  providerIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 3,
+    backgroundColor: colors.surface,
   },
   reasonBox: {
     marginTop: spacing.sm + 4,
