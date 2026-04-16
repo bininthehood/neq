@@ -15,7 +15,7 @@ import {
   addSaved,
 } from "@/lib/store";
 import type { RecHistoryEntry } from "@/lib/store";
-import type { SavedItem, WatchReaction } from "@/lib/types";
+import type { SavedItem, WatchReaction, Recommendation } from "@/lib/types";
 import Image from "next/image";
 import BottomNav from "@/components/BottomNav";
 import { IconStar, IconClose, IconCheck, IconHeart, IconShare } from "@/components/Icons";
@@ -354,27 +354,58 @@ export default function SavedPage() {
   // saved에 있는 tmdbId Set
   const savedIdSet = useMemo(() => new Set(saved.map((s) => s.recommendation.tmdbId)), [saved]);
 
-  const handleResave = (entry: RecHistoryEntry) => {
-    addSaved({
-      title: entry.title,
-      tmdbId: entry.tmdbId,
-      posterUrl: entry.posterUrl,
-      reason: "",
-      rating: 0,
-      providers: [],
-      type: "movie",
-      titleEn: "",
-      overview: "",
-      backdrop: null,
-      date: entry.date,
-      runtime: null,
-      seasons: null,
-      country: [],
-      director: null,
-      cast: [],
-      watchLink: null,
-    });
+  /** history 항목 → TMDB 상세 조회로 full Recommendation 복원 */
+  const hydrateEntry = async (entry: RecHistoryEntry): Promise<Recommendation | null> => {
+    try {
+      const params = new URLSearchParams({ id: String(entry.tmdbId) });
+      if (entry.type) params.set("type", entry.type);
+      const res = await fetch(`/api/tmdb/hydrate?${params.toString()}`);
+      if (!res.ok) return null;
+      return (await res.json()) as Recommendation;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleResave = async (entry: RecHistoryEntry) => {
+    const full = await hydrateEntry(entry);
+    if (full) {
+      addSaved(full);
+    } else {
+      // hydrate 실패 시 최소 정보로 폴백 (평점/OTT 등 없음)
+      addSaved({
+        title: entry.title,
+        tmdbId: entry.tmdbId,
+        posterUrl: entry.posterUrl,
+        reason: "",
+        rating: 0,
+        providers: [],
+        type: entry.type ?? "movie",
+        titleEn: "",
+        overview: "",
+        backdrop: null,
+        date: entry.date,
+        runtime: null,
+        seasons: null,
+        country: [],
+        director: null,
+        cast: [],
+        watchLink: null,
+      });
+    }
     refreshData();
+  };
+
+  /** 히스토리 항목 클릭 시: saved면 그 기반으로, 아니면 hydrate 후 임시 SavedItem으로 detail 열기 */
+  const handleHistoryClick = async (entry: RecHistoryEntry) => {
+    const existing = saved.find((s) => s.recommendation.tmdbId === entry.tmdbId);
+    if (existing) {
+      openDetailFor(existing);
+      return;
+    }
+    const full = await hydrateEntry(entry);
+    if (!full) return;
+    openDetailFor({ recommendation: full, savedAt: Date.now() });
   };
 
   const handleRemove = (tmdbId: number) => {
@@ -802,14 +833,12 @@ export default function SavedPage() {
                 <div className="flex gap-3 px-5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
                   {group.items.map((entry) => {
                     const isSaved = savedIdSet.has(entry.tmdbId);
-                    const savedItem = isSaved ? saved.find((s) => s.recommendation.tmdbId === entry.tmdbId) : null;
+                    // savedItem 플래그는 handleHistoryClick 내부에서 재조회
                     return (
                       <div
                         key={entry.tmdbId}
                         className="flex-shrink-0 w-16 cursor-pointer"
-                        onClick={() => {
-                          if (savedItem) openDetailFor(savedItem);
-                        }}
+                        onClick={() => handleHistoryClick(entry)}
                       >
                         <div className="relative w-16 h-24 overflow-hidden rounded-md">
                           {entry.posterUrl ? (

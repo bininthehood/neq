@@ -158,6 +158,7 @@ export function useRecommendations() {
             title: r.title,
             tmdbId: r.tmdbId,
             posterUrl: r.posterUrl,
+            type: r.type,
           })),
         );
       }

@@ -164,6 +164,8 @@ export interface RecHistoryEntry {
   tmdbId: number;
   posterUrl: string | null;
   date: string; // ISO date
+  /** TMDB 상세 조회(hydrate)에 필요. 이전 스키마엔 없을 수 있음 — 하이드레이션 시 movie 폴백 */
+  type?: "movie" | "series";
 }
 
 export function getRecHistory(): RecHistoryEntry[] {
@@ -171,7 +173,9 @@ export function getRecHistory(): RecHistoryEntry[] {
   return safeParse<RecHistoryEntry[]>(HISTORY_KEY, []);
 }
 
-export function addRecHistory(recs: { title: string; tmdbId: number; posterUrl: string | null }[]) {
+export function addRecHistory(
+  recs: { title: string; tmdbId: number; posterUrl: string | null; type?: "movie" | "series" }[],
+) {
   const existing = getRecHistory();
   const existingIds = new Set(existing.map((e) => e.tmdbId));
   const date = new Date().toISOString().slice(0, 10);
