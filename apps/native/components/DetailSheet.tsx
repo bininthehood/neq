@@ -23,6 +23,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
 import { getOTTLink, getOTTIcon } from '@neq/core';
+import { fonts } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -282,9 +283,10 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 24,
+    fontFamily: fonts.display,
     paddingRight: 56,
+    lineHeight: 30,
   },
   subtitle: {
     color: colors.textMuted,
@@ -296,8 +298,8 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     color: colors.accent,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontFamily: fonts.data,
   },
   backdropWrap: {
     width: '100%',

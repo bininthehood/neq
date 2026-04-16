@@ -13,6 +13,7 @@ import { useFocusEffect } from 'expo-router';
 import { getSaved, removeSaved } from '../lib/store';
 import type { SavedItem } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
+import { fonts } from '@neq/design';
 
 const COLS = 2;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 22,
-    fontWeight: '700',
+    fontFamily: fonts.display,
   },
   counter: { color: colors.textMuted, fontSize: 13 },
   empty: {

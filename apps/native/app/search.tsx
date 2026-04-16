@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { searchTMDB, type SearchResult } from '../lib/api';
 import { colors, radius, spacing } from '../lib/tokens';
+import { fonts } from '@neq/design';
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
@@ -142,7 +143,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  title: { color: colors.textPrimary, fontSize: 22, fontWeight: '700' },
+  title: { color: colors.textPrimary, fontSize: 22, fontFamily: fonts.display },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',

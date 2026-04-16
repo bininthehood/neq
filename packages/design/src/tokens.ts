@@ -41,6 +41,19 @@ export const radius = {
   xl: 24,
 } as const;
 
+/**
+ * 폰트 패밀리 키 — 네이티브는 expo-font로 로드한 이름을 사용.
+ * 웹은 CSS 변수(--font-display 등)로 별도 매핑.
+ * 로드 실패/미완료 시 시스템 폴백으로 degrade.
+ */
+export const fonts = {
+  display: 'Fraunces_700Bold',
+  displayReg: 'Fraunces_400Regular',
+  data: 'Outfit_600SemiBold',
+  dataReg: 'Outfit_400Regular',
+} as const;
+
 export type Colors = typeof colors;
 export type Spacing = typeof spacing;
 export type Radius = typeof radius;
+export type Fonts = typeof fonts;

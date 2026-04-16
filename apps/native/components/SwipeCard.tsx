@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -8,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
 import { buildMetaInfo, getOTTIcon } from '@neq/core';
+import { fonts } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 
 interface Props {
@@ -58,41 +60,50 @@ export default function SwipeCard({ rec, isTop, depth, dragX, isDragging }: Prop
         </View>
       )}
 
-      <View style={styles.ratingBadge}>
-        <Text style={styles.ratingText}>★ {rec.rating.toFixed(1)}</Text>
-      </View>
-      <View style={styles.typeBadge}>
-        <Text style={styles.typeText}>{rec.type === 'series' ? '시리즈' : '영화'}</Text>
-      </View>
+      <Text style={styles.ratingText}>★ {rec.rating.toFixed(1)}</Text>
+      <Text style={styles.typeText}>
+        {rec.type === 'series' ? '시리즈' : '영화'}
+      </Text>
 
       {depth <= 1 && (
-        <View style={[styles.infoOverlay, { opacity: isTop && !isDragging ? 1 : 0 }]}>
-          <Text style={styles.title}>{rec.title}</Text>
-          <View style={styles.metaRow}>
-            {buildMetaInfo(rec) ? (
-              <Text style={styles.metaText}>{buildMetaInfo(rec)}</Text>
-            ) : null}
-            {rec.providers.length > 0 && (
-              <View style={styles.providerIcons}>
-                {rec.providers.slice(0, 4).map((p) => {
-                  const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
-                  return iconUrl ? (
-                    <Image
-                      key={p.name}
-                      source={{ uri: iconUrl }}
-                      style={styles.providerIcon}
-                      contentFit="contain"
-                      transition={0}
-                    />
-                  ) : null;
-                })}
-              </View>
-            )}
+        <>
+          <LinearGradient
+            colors={['transparent', 'rgba(18,17,14,0.6)', colors.bg]}
+            locations={[0, 0.5, 1]}
+            style={[styles.infoGradient, { opacity: isTop && !isDragging ? 1 : 0 }]}
+            pointerEvents="none"
+          />
+          <View
+            style={[styles.infoContent, { opacity: isTop && !isDragging ? 1 : 0 }]}
+            pointerEvents="none"
+          >
+            <Text style={styles.title}>{rec.title}</Text>
+            <View style={styles.metaRow}>
+              {buildMetaInfo(rec) ? (
+                <Text style={styles.metaText}>{buildMetaInfo(rec)}</Text>
+              ) : null}
+              {rec.providers.length > 0 && (
+                <View style={styles.providerIcons}>
+                  {rec.providers.slice(0, 4).map((p) => {
+                    const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
+                    return iconUrl ? (
+                      <Image
+                        key={p.name}
+                        source={{ uri: iconUrl }}
+                        style={styles.providerIcon}
+                        contentFit="contain"
+                        transition={0}
+                      />
+                    ) : null;
+                  })}
+                </View>
+              )}
+            </View>
+            <View style={styles.reasonBox}>
+              <Text style={styles.reasonText}>{rec.reason}</Text>
+            </View>
           </View>
-          <View style={styles.reasonBox}>
-            <Text style={styles.reasonText}>{rec.reason}</Text>
-          </View>
-        </View>
+        </>
       )}
     </>
   );
@@ -121,46 +132,46 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: '700',
   },
-  ratingBadge: {
+  ratingText: {
     position: 'absolute',
     top: spacing.md,
     right: spacing.md,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-  },
-  ratingText: {
     color: colors.accent,
-    fontWeight: '600',
-    fontSize: 13,
+    fontFamily: fonts.data,
+    fontSize: 14,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  typeBadge: {
+  typeText: {
     position: 'absolute',
     top: spacing.md,
     left: spacing.md,
-    backgroundColor: colors.overlay,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-  },
-  typeText: {
     color: colors.textPrimary,
     fontSize: 13,
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  infoOverlay: {
+  infoGradient: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
+    bottom: 0,
+    height: 280,
+  },
+  infoContent: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     padding: spacing.lg,
-    paddingTop: spacing['2xl'],
-    backgroundColor: colors.overlayHeavy,
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 30,
+    fontFamily: fonts.display,
+    lineHeight: 36,
   },
   metaRow: {
     flexDirection: 'row',
@@ -171,6 +182,7 @@ const styles = StyleSheet.create({
   metaText: {
     color: colors.textMuted,
     fontSize: 12,
+    fontFamily: fonts.dataReg,
   },
   providerIcons: {
     flexDirection: 'row',
@@ -185,7 +197,7 @@ const styles = StyleSheet.create({
   },
   reasonBox: {
     marginTop: spacing.sm + 4,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.sm + 2,
     borderRadius: radius.md,

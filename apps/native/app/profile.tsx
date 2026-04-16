@@ -18,6 +18,7 @@ import {
   clearAllUserData,
 } from '../lib/store';
 import { colors, radius, spacing } from '../lib/tokens';
+import { fonts } from '@neq/design';
 
 interface Stats {
   total: number;
@@ -205,8 +206,8 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontFamily: fonts.display,
   },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: spacing.xl },
@@ -263,8 +264,8 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: colors.accent,
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 28,
+    fontFamily: fonts.data,
   },
   statLabel: {
     color: colors.textMuted,

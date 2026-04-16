@@ -33,6 +33,7 @@ import type {
   FilterYear,
 } from '../lib/types';
 import { colors, spacing } from '../lib/tokens';
+import { fonts } from '@neq/design';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const NEXT_THRESHOLD = -80;
@@ -261,10 +262,7 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.logo}>Neko</Text>
-        <Text style={styles.counter}>
-          {state === 'ready' ? `${Math.min(topIdx + 1, recs.length)} / ${recs.length}` : ''}
-        </Text>
+        <Text style={styles.logo}>neq,</Text>
       </View>
 
       <FilterChips
@@ -369,8 +367,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  logo: { color: colors.accent, fontSize: 20, fontWeight: '700', letterSpacing: 1 },
-  counter: { color: colors.textMuted, fontSize: 13 },
+  logo: {
+    color: colors.accent,
+    fontSize: 22,
+    fontFamily: fonts.display,
+    letterSpacing: 0.5,
+  },
   stackWrap: { flex: 1 },
   stack: { flex: 1, position: 'relative' },
   centered: {
