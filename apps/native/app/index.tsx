@@ -82,7 +82,13 @@ export default function DiscoverScreen() {
       setState('loading');
       setErrorMsg(null);
       try {
-        const data = await fetchRecommendations({ filter });
+        const saved = await getSaved();
+        const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
+        const data = await fetchRecommendations({
+          filter,
+          favorites,
+          savedCount: saved.length,
+        });
         setRecs(data);
         setTopIdx(0);
         setState('ready');

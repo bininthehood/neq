@@ -113,6 +113,7 @@ export function useRecommendations() {
         body: JSON.stringify({
           favorites,
           filter,
+          savedCount: savedItems.length,
           ...(hasFeedback ? { feedback } : {}),
           ...(exclude.length > 0 ? { exclude } : {}),
         }),

@@ -212,7 +212,8 @@ interface CuratedPick {
 async function curateWithLLM(
   candidates: EnrichedCandidate[],
   favorites: string[],
-  feedback?: WatchFeedback
+  feedback?: WatchFeedback,
+  savedCount: number = 0
 ): Promise<CuratedPick[]> {
   if (candidates.length === 0) return [];
 
@@ -228,18 +229,25 @@ async function curateWithLLM(
 
   const feedbackText = buildFeedbackPrompt(feedback);
 
-  // 피드백 누적량에 따라 큐레이션 모드 결정
+  // 취향 신호 누적량에 따라 큐레이션 모드 결정.
+  // feedback(명시적 시청 반응) + savedCount(저장 = 암묵적 관심)를 합산.
+  // saved만 쌓이고 watchReport 없으면 영영 "탐색" 모드에 머무는 문제 해결.
   const totalFeedback = feedback
     ? feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length
     : 0;
+  const totalSignal = totalFeedback + savedCount;
 
+  // 임계치: cold start 카드 50개 대비 사용자 반응률로 조정
+  //  ≤4  탐색   — 초기 (1~8% 반응)
+  //  5~9 혼합   — 어느 정도 쌓임 (10~18% 반응)
+  //  ≥10 개인화 — 충분한 신호 (20%+ 반응)
   let modeGuide: string;
-  if (totalFeedback <= 5) {
+  if (totalSignal <= 4) {
     modeGuide = `[큐레이션 모드: 탐색]
 이 사용자는 아직 탐색 초기입니다. 폭넓게 다양한 장르와 스타일의 작품을 추천하세요.
 유명하지만 숨겨진 면이 있는 작품, 장르 교차 작품, 예상 밖의 선택을 우선하세요.
 취향 기반 작품은 30% 이하로 제한하고, 70%는 새로운 발견 위주로 구성하세요.`;
-  } else if (totalFeedback <= 20) {
+  } else if (totalSignal <= 9) {
     modeGuide = `[큐레이션 모드: 혼합]
 취향 데이터가 어느 정도 쌓였습니다. 취향에 맞는 작품 50% + 새로운 장르/스타일 탐색 50%로 균형 잡으세요.
 사용자가 좋아한 작품과 비슷한 결도 좋지만, 아직 안 접해본 장르도 반드시 포함하세요.`;
@@ -511,7 +519,8 @@ export async function getRecommendations(
   filter: RecommendFilter = {},
   feedback?: WatchFeedback,
   exclude?: string[],
-  excludeIds?: number[]
+  excludeIds?: number[],
+  savedCount: number = 0
 ): Promise<Recommendation[]> {
   // Cold start: favorites 없으면 TMDB trending으로 빠르게 반환 (LLM 스킵)
   if (favorites.length === 0) {
@@ -640,7 +649,7 @@ export async function getRecommendations(
   if (filtered.length === 0) return [];
 
   // Step 6
-  const curated = await curateWithLLM(filtered, favorites, feedback);
+  const curated = await curateWithLLM(filtered, favorites, feedback, savedCount);
 
   // Step 7: 조립 — LLM 선택 20개 + 나머지 30개 (템플릿 reason)
   const results: Recommendation[] = [];
