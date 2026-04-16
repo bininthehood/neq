@@ -60,6 +60,10 @@ export function track(event: NekoEvent, props?: EventProps) {
 export type NekoEvent =
   // 세션
   | "session_started"
+  // 온보딩
+  | "onboarding_started"
+  | "onboarding_favorite_added"
+  | "onboarding_completed"
   // 추천 로드
   | "recommendation_loaded"
   | "recommendation_load_more"

@@ -7,6 +7,7 @@ import {
   getWatchReports,
   getSaved,
   getSeenTitles,
+  getFavorites,
   addRecHistory,
 } from "@/lib/store";
 import type { Recommendation } from "@/lib/types";
@@ -97,12 +98,17 @@ export function useRecommendations() {
       feedback[r.reaction]?.push(item.recommendation.title);
     }
     const hasFeedback = Object.values(feedback).some((a) => a.length > 0);
-    // 취향 시드: loved/good 작품 우선, 나머지 saved도 포함
-    const lovedGood = [...(feedback.loved ?? []), ...(feedback.good ?? [])];
+    // 취향 시드 우선순위:
+    //  1. 온보딩 픽 (명시적 초기 취향)
+    //  2. loved/good reaction (명시적 시청 반응)
+    //  3. 나머지 saved (약한 신호, dedupe 후 포함)
+    const onboardingPicks = getFavorites();
+    const lovedGood = [...(feedback.loved ?? []), ...(feedback.good ?? [])]
+      .filter((t) => !onboardingPicks.includes(t));
     const otherSaved = savedItems
       .map((s) => s.recommendation.title)
-      .filter((t) => !lovedGood.includes(t));
-    const favorites = [...lovedGood, ...otherSaved].slice(0, 20);
+      .filter((t) => !onboardingPicks.includes(t) && !lovedGood.includes(t));
+    const favorites = [...onboardingPicks, ...lovedGood, ...otherSaved].slice(0, 20);
     const seenTitles = getSeenTitles();
     const savedTitles = savedItems.map((s) => s.recommendation.title);
     const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 150);

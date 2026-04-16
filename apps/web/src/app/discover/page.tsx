@@ -9,6 +9,7 @@ import {
   addSeenTitles,
   addWatchReport,
   getWatchReports,
+  hasOnboarded,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
@@ -197,9 +198,15 @@ export default function DiscoverPage() {
 
   // --- effects ---
   useEffect(() => {
+    // 온보딩 게이트: favorites 없고 saved도 없으면 온보딩으로
+    const saved = getSaved();
+    if (!hasOnboarded() && saved.length === 0) {
+      router.replace("/onboarding");
+      return;
+    }
     setMounted(true);
     rec.loadRecs("all", "all");
-    setSavedIds(new Set(getSaved().map((s) => s.recommendation.tmdbId)));
+    setSavedIds(new Set(saved.map((s) => s.recommendation.tmdbId)));
     return () => { swipe.clearTimers(); rec.abortLoading(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);

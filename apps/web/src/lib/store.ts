@@ -16,11 +16,46 @@ function safeParse<T>(key: string, fallback: T): T {
   }
 }
 
-const FAVORITES_KEY = "neq_favorites"; // 하위호환: clearAllUserData에서 정리용
+const FAVORITES_KEY = "neq_favorites";
 const FAVORITES_META_KEY = "neq_favorites_meta";
 const SAVED_KEY = "neq_saved";
 const RECS_KEY = "neq_recommendations";
 const RECS_FILTERED_PREFIX = "neq_recs_";
+
+export interface FavoriteMeta {
+  id: number;
+  title: string;
+  posterUrl: string | null;
+}
+
+/**
+ * 온보딩에서 선택한 좋아하는 작품 (3-5개) 제목 배열.
+ * LLM 큐레이션 시 취향 시드로 사용.
+ */
+export function getFavorites(): string[] {
+  if (typeof window === "undefined") return [];
+  return safeParse<string[]>(FAVORITES_KEY, []);
+}
+
+export function setFavorites(titles: string[]) {
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(titles));
+}
+
+/** Profile 화면 렌더용 메타 (포스터 포함) */
+export function getFavoritesMeta(): FavoriteMeta[] {
+  if (typeof window === "undefined") return [];
+  return safeParse<FavoriteMeta[]>(FAVORITES_META_KEY, []);
+}
+
+export function setFavoritesMeta(items: FavoriteMeta[]) {
+  localStorage.setItem(FAVORITES_META_KEY, JSON.stringify(items));
+}
+
+/** 온보딩 완료 여부 — favorites 3개 이상이면 완료로 간주 */
+export function hasOnboarded(): boolean {
+  if (typeof window === "undefined") return false;
+  return getFavorites().length >= 3;
+}
 
 // 추천 목록 — 필터별 캐시
 function filterKey(filterType: string, filterOrigin: string): string {
