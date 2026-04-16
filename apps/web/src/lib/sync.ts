@@ -1,6 +1,6 @@
 "use client";
 
-import { supabase } from "./supabase";
+import { supabase, ensureAuth, getAuthUid } from "./supabase";
 import { getDeviceId } from "./device-id";
 import {
   getSaved,
@@ -15,24 +15,49 @@ import type { SavedItem, WatchReport } from "./types";
 
 // ---------- Profile ----------
 
-/** device_id로 프로필 조회 또는 생성. profile UUID 반환. */
+/**
+ * auth.uid() 기반 프로필 조회 또는 생성. device_id 마이그레이션 포함.
+ *
+ * 1. auth.uid()로 프로필 조회 → 있으면 반환
+ * 2. device_id로 기존 프로필 조회 → 있으면 user_id 연결 후 반환
+ * 3. 둘 다 없으면 새 프로필 생성
+ */
 async function getOrCreateProfile(): Promise<string | null> {
-  const deviceId = getDeviceId();
-  if (!deviceId) return null;
+  await ensureAuth();
+  const uid = await getAuthUid();
+  if (!uid) return null;
 
-  // 기존 프로필 조회
-  const { data: existing } = await supabase
+  // 1. auth.uid() 기반 조회
+  const { data: byUid } = await supabase
     .from("profiles")
     .select("id")
-    .eq("device_id", deviceId)
+    .eq("user_id", uid)
     .single();
 
-  if (existing) return existing.id;
+  if (byUid) return byUid.id;
 
-  // 신규 생성
+  // 2. device_id 마이그레이션: 기존 프로필에 user_id 연결
+  const deviceId = getDeviceId();
+  if (deviceId) {
+    const { data: byDevice } = await supabase
+      .from("profiles")
+      .select("id, user_id")
+      .eq("device_id", deviceId)
+      .single();
+
+    if (byDevice && !byDevice.user_id) {
+      await supabase
+        .from("profiles")
+        .update({ user_id: uid })
+        .eq("id", byDevice.id);
+      return byDevice.id;
+    }
+  }
+
+  // 3. 신규 생성
   const { data: created, error } = await supabase
     .from("profiles")
-    .insert({ device_id: deviceId })
+    .insert({ device_id: deviceId, user_id: uid })
     .select("id")
     .single();
 
