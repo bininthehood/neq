@@ -160,15 +160,29 @@ export default function SearchSheet({
 
         {/* search input + close */}
         <div className="flex items-center gap-2 px-4 pb-3 shrink-0">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => handleInput(e.target.value)}
-            placeholder="영화나 시리즈 제목"
-            className="flex-1 px-4 py-3 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
-            style={{ fontSize: "16px" }}
-          />
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => handleInput(e.target.value)}
+              placeholder="영화나 시리즈 제목"
+              className="w-full px-4 py-3 pr-10 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
+              style={{ fontSize: "16px" }}
+            />
+            {query.length > 0 && (
+              <button
+                onClick={() => { handleInput(""); inputRef.current?.focus(); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                style={{ background: "var(--text-muted)", color: "var(--surface)" }}
+              >
+                <svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="square">
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                </svg>
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="shrink-0 px-3 py-3 text-sm text-muted active:scale-95 transition-transform"
