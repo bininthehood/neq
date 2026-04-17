@@ -105,7 +105,7 @@ export default function OnboardingPage() {
   if (step === 0) return (
     <div className="h-dvh flex flex-col max-w-lg mx-auto w-full overflow-y-auto">
       <div className="flex-1 flex flex-col items-center justify-center px-8 py-10">
-        <h1 className="font-display font-bold text-accent" style={{ fontSize: "3.5rem" }}>neq,</h1>
+        <img src="/neq-logo.png" alt="neq," className="h-14 object-contain" />
         <p className="font-display italic text-xl mt-3 text-center text-foreground">
           당신의 취향을 발견하세요
         </p>
@@ -152,9 +152,7 @@ export default function OnboardingPage() {
     <div className="h-dvh flex flex-col max-w-lg mx-auto w-full">
       {/* Fixed header */}
       <div className="shrink-0 px-5 pt-8 pb-3">
-        <h1 className="font-display font-bold text-accent" style={{ fontSize: "36px" }}>
-          neq,
-        </h1>
+        <img src="/neq-logo.png" alt="neq," className="h-10 object-contain" />
         <p className="mt-2 text-secondary">
           마음에 드는 작품 {selected.length < 3 ? "3-5개" : "더"} 골라주세요
         </p>

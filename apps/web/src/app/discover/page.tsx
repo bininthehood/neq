@@ -332,7 +332,7 @@ export default function DiscoverPage() {
     <div className="h-dvh flex flex-col overflow-hidden relative">
       <div className="flex items-center justify-between px-5 py-3 shrink-0 transition-all duration-300"
         style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
-        <span className="font-display text-lg text-accent">neq,</span>
+        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
         <button
           onClick={() => { track("search_opened"); searchSheet.openDetail(); }}
           className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
