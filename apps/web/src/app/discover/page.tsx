@@ -199,7 +199,6 @@ export default function DiscoverPage() {
 
   // --- effects ---
   useEffect(() => {
-    // 온보딩 게이트: favorites 없고 saved도 없으면 온보딩으로
     const saved = getSaved();
     if (!hasOnboarded() && saved.length === 0) {
       router.replace("/onboarding");
@@ -309,8 +308,11 @@ export default function DiscoverPage() {
   ].filter(Boolean).join(" ");
 
   // --- status screens ---
-  if (!mounted || rec.loading) {
-    // 첫 로드: 온보딩 직후(saved 0, recs 캐시 없음) → 스켈레톤 + 취향 분석 메시지
+  if (!mounted) {
+    // mounted 전: 온보딩 체크 중이거나 리다이렉트 중 → 빈 배경만 표시
+    return <div className="h-dvh" style={{ background: "var(--background)" }} />;
+  }
+  if (rec.loading) {
     const isFirstLoad =
       rec.recs.length === 0 && hasOnboarded() && getSaved().length === 0;
     if (isFirstLoad) return <FirstLoadingSkeleton />;

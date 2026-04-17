@@ -15,6 +15,7 @@ import {
   Outfit_600SemiBold,
 } from '@expo-google-fonts/outfit';
 import { colors } from '../lib/tokens';
+import { useSync } from '../hooks/useSync';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -51,6 +52,8 @@ function TabItem({
 }
 
 export default function RootLayout() {
+  useSync();
+
   const [fontsLoaded, fontError] = useFonts({
     Fraunces_400Regular,
     Fraunces_700Bold,
