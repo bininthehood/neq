@@ -2,10 +2,11 @@
 
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
-import { IconStar, IconSave } from "@/components/Icons";
+import { IconStar, IconSave, IconChevronUp } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 import { addSaved } from "@/lib/store";
 import { track } from "@/lib/analytics";
+import { getPrimaryCountryName } from "@/lib/country-names";
 import type { Recommendation } from "@/lib/types";
 
 interface SearchResult {
@@ -50,6 +51,8 @@ export default function SearchSheet({
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -85,43 +88,58 @@ export default function SearchSheet({
   const handleSelect = async (item: SearchResult) => {
     if (selectedId === item.id) {
       setSelectedId(null);
+      setDetailRec(null);
       setProviders([]);
       return;
     }
     setSelectedId(item.id);
+    setLoadingDetail(true);
     setLoadingProviders(true);
     track("search_item_selected", { tmdb_id: item.id, title: item.title });
     try {
       const type = item.mediaType === "tv" ? "series" : "movie";
-      const res = await fetch(`/api/search/providers?id=${item.id}&type=${type}`);
-      const data = await res.json();
-      setProviders(data.providers ?? []);
+      const [provRes, hydRes] = await Promise.all([
+        fetch(`/api/search/providers?id=${item.id}&type=${type}`),
+        fetch(`/api/tmdb/hydrate?id=${item.id}&type=${type}`),
+      ]);
+      const provData = await provRes.json();
+      setProviders(provData.providers ?? []);
+      if (hydRes.ok) {
+        const rec = await hydRes.json();
+        setDetailRec(rec);
+      } else {
+        setDetailRec(null);
+      }
     } catch {
       setProviders([]);
+      setDetailRec(null);
     }
     setLoadingProviders(false);
+    setLoadingDetail(false);
   };
 
   const handleSave = (item: SearchResult) => {
-    const rec: Recommendation = {
-      title: item.title,
-      titleEn: item.title,
-      type: item.mediaType === "tv" ? "series" : "movie",
-      reason: "검색해서 저장한 작품이에요",
-      tmdbId: item.id,
-      posterUrl: item.posterUrl,
-      rating: item.rating,
-      date: item.year,
-      overview: "",
-      providers: providers.map((p) => ({ name: p.name, logoUrl: p.logoUrl })),
-      watchLink: null,
-      director: null,
-      cast: [],
-      runtime: null,
-      seasons: null,
-      country: [],
-      backdrop: null,
-    };
+    const rec: Recommendation = detailRec && detailRec.tmdbId === item.id
+      ? { ...detailRec, reason: detailRec.reason || "검색해서 저장한 작품이에요" }
+      : {
+          title: item.title,
+          titleEn: item.title,
+          type: item.mediaType === "tv" ? "series" : "movie",
+          reason: "검색해서 저장한 작품이에요",
+          tmdbId: item.id,
+          posterUrl: item.posterUrl,
+          rating: item.rating,
+          date: item.year,
+          overview: "",
+          providers: providers.map((p) => ({ name: p.name, logoUrl: p.logoUrl })),
+          watchLink: null,
+          director: null,
+          cast: [],
+          runtime: null,
+          seasons: null,
+          country: [],
+          backdrop: null,
+        };
     addSaved(rec);
     setSavedIds((s) => new Set(s).add(item.id));
     track("search_item_saved", { tmdb_id: item.id, title: item.title });
@@ -243,63 +261,98 @@ export default function SearchSheet({
                       )}
                     </div>
                   </div>
+                  <div className="shrink-0 transition-transform" style={{ transform: isSelected ? "rotate(180deg)" : "rotate(0deg)" }}>
+                    <IconChevronUp size={14} color="var(--text-muted)" />
+                  </div>
                 </button>
 
-                {/* OTT providers panel */}
+                {/* Detail + OTT panel */}
                 {isSelected && (
                   <div
-                    className="mx-3 mt-1 mb-2 p-3 rounded-lg animate-fade-in"
+                    className="mx-3 mt-1 mb-2 p-3 rounded-lg animate-fade-in space-y-3"
                     style={{ background: "var(--surface)" }}
                   >
-                    {loadingProviders ? (
-                      <div className="text-xs text-muted py-2">OTT 조회 중...</div>
-                    ) : providers.length > 0 ? (
-                      <div>
-                        <div className="text-xs text-muted mb-2">시청 가능한 OTT</div>
-                        <div className="flex flex-wrap gap-2">
-                          {providers.map((p) => {
-                            const link = getOTTLink(p.name, item.title);
-                            const icon = getOTTIcon(p.name) ?? p.logoUrl;
-                            return (
-                              <a
-                                key={p.name}
-                                href={link ?? "#"}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => track("search_ott_clicked", { provider: p.name, tmdb_id: item.id })}
-                                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px]"
-                                style={{
-                                  background: "var(--surface-raised)",
-                                  color: "var(--text-primary)",
-                                }}
-                              >
-                                {icon && (
-                                  <Image
-                                    src={icon}
-                                    alt={p.name}
-                                    width={20}
-                                    height={20}
-                                    className="object-contain rounded-sm"
-                                    unoptimized
-                                  />
-                                )}
-                                {p.name}
-                              </a>
-                            );
-                          })}
-                        </div>
-                      </div>
+                    {(loadingDetail || loadingProviders) ? (
+                      <div className="text-xs text-muted py-2">정보를 불러오는 중...</div>
                     ) : (
-                      <div className="text-xs text-muted py-1">
-                        한국에서 이용 가능한 OTT가 없어요
-                      </div>
+                      <>
+                        {detailRec && (
+                          <div className="space-y-2">
+                            {detailRec.director && (
+                              <div className="text-xs text-muted">
+                                감독 <span className="text-secondary">{detailRec.director}</span>
+                              </div>
+                            )}
+                            {detailRec.cast.length > 0 && (
+                              <div className="text-xs text-muted">
+                                출연 <span className="text-secondary">{detailRec.cast.slice(0, 4).join(", ")}</span>
+                              </div>
+                            )}
+                            <div className="text-xs text-muted">
+                              {[
+                                getPrimaryCountryName(detailRec.country),
+                                detailRec.date?.slice(0, 4),
+                                detailRec.runtime ? `${detailRec.runtime}분` : null,
+                                detailRec.seasons ? `시즌 ${detailRec.seasons}` : null,
+                              ].filter(Boolean).join(" · ")}
+                            </div>
+                            {detailRec.overview && (
+                              <p className="text-xs text-secondary leading-relaxed line-clamp-3">
+                                {detailRec.overview}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {providers.length > 0 ? (
+                          <div>
+                            <div className="text-xs text-muted mb-2">시청 가능한 OTT</div>
+                            <div className="flex flex-wrap gap-2">
+                              {providers.map((p) => {
+                                const link = getOTTLink(p.name, item.title);
+                                const icon = getOTTIcon(p.name) ?? p.logoUrl;
+                                return (
+                                  <a
+                                    key={p.name}
+                                    href={link ?? "#"}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={() => track("search_ott_clicked", { provider: p.name, tmdb_id: item.id })}
+                                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px]"
+                                    style={{
+                                      background: "var(--surface-raised)",
+                                      color: "var(--text-primary)",
+                                    }}
+                                  >
+                                    {icon && (
+                                      <Image
+                                        src={icon}
+                                        alt={p.name}
+                                        width={20}
+                                        height={20}
+                                        className="object-contain rounded-sm"
+                                        unoptimized
+                                      />
+                                    )}
+                                    {p.name}
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted py-1">
+                            한국에서 이용 가능한 OTT가 없어요
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* Save button */}
                     <button
                       onClick={() => handleSave(item)}
                       disabled={isSaved}
-                      className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px]"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px]"
                       style={{
                         background: isSaved ? "var(--surface-raised)" : "var(--accent-dim)",
                         color: isSaved ? "var(--text-muted)" : "var(--accent)",
