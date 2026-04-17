@@ -6,7 +6,8 @@ import { IconStar, IconSave, IconChevronUp } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 import { addSaved } from "@/lib/store";
 import { track } from "@/lib/analytics";
-import { getPrimaryCountryName } from "@/lib/country-names";
+import { useDetailSheet } from "@/hooks/useDetailSheet";
+import DetailSheet from "./DetailSheet";
 import type { Recommendation } from "@/lib/types";
 
 interface SearchResult {
@@ -53,6 +54,7 @@ export default function SearchSheet({
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const detail = useDetailSheet();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -266,101 +268,86 @@ export default function SearchSheet({
                   </div>
                 </button>
 
-                {/* Detail + OTT panel */}
+                {/* OTT + actions panel */}
                 {isSelected && (
                   <div
                     className="mx-3 mt-1 mb-2 p-3 rounded-lg animate-fade-in space-y-3"
                     style={{ background: "var(--surface)" }}
                   >
-                    {(loadingDetail || loadingProviders) ? (
-                      <div className="text-xs text-muted py-2">정보를 불러오는 중...</div>
+                    {loadingProviders ? (
+                      <div className="text-xs text-muted py-2">OTT 조회 중...</div>
+                    ) : providers.length > 0 ? (
+                      <div>
+                        <div className="text-xs text-muted mb-2">시청 가능한 OTT</div>
+                        <div className="flex flex-wrap gap-2">
+                          {providers.map((p) => {
+                            const link = getOTTLink(p.name, item.title);
+                            const icon = getOTTIcon(p.name) ?? p.logoUrl;
+                            return (
+                              <a
+                                key={p.name}
+                                href={link ?? "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => track("search_ott_clicked", { provider: p.name, tmdb_id: item.id })}
+                                className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px]"
+                                style={{
+                                  background: "var(--surface-raised)",
+                                  color: "var(--text-primary)",
+                                }}
+                              >
+                                {icon && (
+                                  <Image
+                                    src={icon}
+                                    alt={p.name}
+                                    width={20}
+                                    height={20}
+                                    className="object-contain rounded-sm"
+                                    unoptimized
+                                  />
+                                )}
+                                {p.name}
+                              </a>
+                            );
+                          })}
+                        </div>
+                      </div>
                     ) : (
-                      <>
-                        {detailRec && (
-                          <div className="space-y-2">
-                            {detailRec.director && (
-                              <div className="text-xs text-muted">
-                                감독 <span className="text-secondary">{detailRec.director}</span>
-                              </div>
-                            )}
-                            {detailRec.cast.length > 0 && (
-                              <div className="text-xs text-muted">
-                                출연 <span className="text-secondary">{detailRec.cast.slice(0, 4).join(", ")}</span>
-                              </div>
-                            )}
-                            <div className="text-xs text-muted">
-                              {[
-                                getPrimaryCountryName(detailRec.country),
-                                detailRec.date?.slice(0, 4),
-                                detailRec.runtime ? `${detailRec.runtime}분` : null,
-                                detailRec.seasons ? `시즌 ${detailRec.seasons}` : null,
-                              ].filter(Boolean).join(" · ")}
-                            </div>
-                            {detailRec.overview && (
-                              <p className="text-xs text-secondary leading-relaxed line-clamp-3">
-                                {detailRec.overview}
-                              </p>
-                            )}
-                          </div>
-                        )}
-
-                        {providers.length > 0 ? (
-                          <div>
-                            <div className="text-xs text-muted mb-2">시청 가능한 OTT</div>
-                            <div className="flex flex-wrap gap-2">
-                              {providers.map((p) => {
-                                const link = getOTTLink(p.name, item.title);
-                                const icon = getOTTIcon(p.name) ?? p.logoUrl;
-                                return (
-                                  <a
-                                    key={p.name}
-                                    href={link ?? "#"}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => track("search_ott_clicked", { provider: p.name, tmdb_id: item.id })}
-                                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px]"
-                                    style={{
-                                      background: "var(--surface-raised)",
-                                      color: "var(--text-primary)",
-                                    }}
-                                  >
-                                    {icon && (
-                                      <Image
-                                        src={icon}
-                                        alt={p.name}
-                                        width={20}
-                                        height={20}
-                                        className="object-contain rounded-sm"
-                                        unoptimized
-                                      />
-                                    )}
-                                    {p.name}
-                                  </a>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-xs text-muted py-1">
-                            한국에서 이용 가능한 OTT가 없어요
-                          </div>
-                        )}
-                      </>
+                      <div className="text-xs text-muted py-1">
+                        한국에서 이용 가능한 OTT가 없어요
+                      </div>
                     )}
 
-                    {/* Save button */}
-                    <button
-                      onClick={() => handleSave(item)}
-                      disabled={isSaved}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px]"
-                      style={{
-                        background: isSaved ? "var(--surface-raised)" : "var(--accent-dim)",
-                        color: isSaved ? "var(--text-muted)" : "var(--accent)",
-                      }}
-                    >
-                      <IconSave size={16} color={isSaved ? "var(--text-muted)" : "var(--accent)"} filled={isSaved} />
-                      {isSaved ? "저장됨" : "저장하기"}
-                    </button>
+                    <div className="flex gap-2">
+                      {/* Save button */}
+                      <button
+                        onClick={() => handleSave(item)}
+                        disabled={isSaved}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px]"
+                        style={{
+                          background: isSaved ? "var(--surface-raised)" : "var(--accent-dim)",
+                          color: isSaved ? "var(--text-muted)" : "var(--accent)",
+                        }}
+                      >
+                        <IconSave size={16} color={isSaved ? "var(--text-muted)" : "var(--accent)"} filled={isSaved} />
+                        {isSaved ? "저장됨" : "저장하기"}
+                      </button>
+                      {/* Detail button */}
+                      <button
+                        onClick={() => { if (detailRec) detail.openDetail(); }}
+                        disabled={loadingDetail || !detailRec}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px] disabled:opacity-40"
+                        style={{
+                          background: "var(--surface-raised)",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        상세
+                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="square">
+                          <polyline points="9 6 15 12 9 18" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -368,6 +355,20 @@ export default function SearchSheet({
           })}
         </div>
       </div>
+      {detailRec && detail.showDetail && (
+        <DetailSheet
+          rec={detailRec}
+          showDetail={detail.showDetail}
+          detailY={detail.detailY}
+          detailAnimating={detail.detailAnimating}
+          detailBodyRef={detail.detailBodyRef}
+          onClose={detail.closeDetail}
+          onDetailTouchStart={detail.onDetailTouchStart}
+          onDetailTouchMove={detail.onDetailTouchMove}
+          onDetailTouchEnd={detail.onDetailTouchEnd}
+          onShare={async () => {}}
+        />
+      )}
     </div>
   );
 }
