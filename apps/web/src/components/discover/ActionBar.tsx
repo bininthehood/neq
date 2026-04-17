@@ -61,7 +61,7 @@ export default function ActionBar({
           className="w-14 h-14 flex items-center justify-center active:scale-90 transition-transform"
           style={{
             background: isSaved ? "var(--accent)" : "var(--surface-raised)",
-            borderRadius: "var(--radius-xl)",
+            borderRadius: "4px 16px 16px 4px",
           }}
         >
           <IconSave

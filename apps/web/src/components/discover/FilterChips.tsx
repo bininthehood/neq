@@ -131,7 +131,7 @@ export default function FilterChips({
             onClick={() => setOpenDropdown(null)}
           />
           <div
-            className="absolute left-4 right-4 z-30 p-3 flex flex-wrap gap-2 animate-fade-in bg-surface-raised rounded-lg"
+            className="absolute left-4 right-4 z-30 p-3 flex flex-wrap gap-2 animate-fade-in bg-surface-raised rounded-sm"
             style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}
           >
             {openDropdown === "type" &&
@@ -143,11 +143,12 @@ export default function FilterChips({
                     onFilterChange(t, filterOrigin);
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-sm"
                   style={{
                     background: filterType === t ? "var(--accent-dim)" : "transparent",
                     color: filterType === t ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterType === t ? 600 : 400,
+                    borderLeft: filterType === t ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {t === "all" ? "전체" : TYPE_LABELS[t]}
@@ -162,11 +163,12 @@ export default function FilterChips({
                     onFilterChange(filterType, o);
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-sm"
                   style={{
                     background: filterOrigin === o ? "var(--accent-dim)" : "transparent",
                     color: filterOrigin === o ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterOrigin === o ? 600 : 400,
+                    borderLeft: filterOrigin === o ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {o === "all" ? "전체" : ORIGIN_LABELS[o]}
@@ -182,11 +184,12 @@ export default function FilterChips({
                     onResetTopIdx();
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-sm"
                   style={{
                     background: filterYear === y ? "var(--accent-dim)" : "transparent",
                     color: filterYear === y ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterYear === y ? 600 : 400,
+                    borderLeft: filterYear === y ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {y === "all" ? "전체" : YEAR_LABELS[y]}
@@ -200,11 +203,12 @@ export default function FilterChips({
                     onResetTopIdx();
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-sm"
                   style={{
                     background: filterOTTs.size === 0 ? "var(--accent-dim)" : "transparent",
                     color: filterOTTs.size === 0 ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterOTTs.size === 0 ? 600 : 400,
+                    borderLeft: filterOTTs.size === 0 ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   모든 OTT
@@ -226,11 +230,12 @@ export default function FilterChips({
                         onOTTChange(next);
                         onResetTopIdx();
                       }}
-                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg"
+                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-sm"
                       style={{
                         background: selected ? "var(--accent-dim)" : "transparent",
                         color: selected ? "var(--accent)" : "var(--text-secondary)",
                         fontWeight: selected ? 600 : 400,
+                        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
                       }}
                     >
                       {getOTTIcon(ott) && (
