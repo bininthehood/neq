@@ -148,6 +148,7 @@ export default function FilterChips({
                     background: filterType === t ? "var(--accent-dim)" : "transparent",
                     color: filterType === t ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterType === t ? 600 : 400,
+                    borderLeft: filterType === t ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {t === "all" ? "전체" : TYPE_LABELS[t]}
@@ -167,6 +168,7 @@ export default function FilterChips({
                     background: filterOrigin === o ? "var(--accent-dim)" : "transparent",
                     color: filterOrigin === o ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterOrigin === o ? 600 : 400,
+                    borderLeft: filterOrigin === o ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {o === "all" ? "전체" : ORIGIN_LABELS[o]}
@@ -187,6 +189,7 @@ export default function FilterChips({
                     background: filterYear === y ? "var(--accent-dim)" : "transparent",
                     color: filterYear === y ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterYear === y ? 600 : 400,
+                    borderLeft: filterYear === y ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {y === "all" ? "전체" : YEAR_LABELS[y]}
@@ -205,6 +208,7 @@ export default function FilterChips({
                     background: filterOTTs.size === 0 ? "var(--accent-dim)" : "transparent",
                     color: filterOTTs.size === 0 ? "var(--accent)" : "var(--text-secondary)",
                     fontWeight: filterOTTs.size === 0 ? 600 : 400,
+                    borderLeft: filterOTTs.size === 0 ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   모든 OTT
@@ -231,6 +235,7 @@ export default function FilterChips({
                         background: selected ? "var(--accent-dim)" : "transparent",
                         color: selected ? "var(--accent)" : "var(--text-secondary)",
                         fontWeight: selected ? 600 : 400,
+                        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
                       }}
                     >
                       {getOTTIcon(ott) && (
