@@ -4,8 +4,12 @@ import type {
   WatchReport,
   WatchReaction,
   UserDataExport,
+  Persona,
+  FavoriteMeta,
 } from "./types";
 import { USER_DATA_SCHEMA_VERSION } from "./types";
+
+export type { FavoriteMeta } from "./types";
 import { getDeviceId } from "./device-id";
 
 function safeParse<T>(key: string, fallback: T): T {
@@ -16,72 +20,248 @@ function safeParse<T>(key: string, fallback: T): T {
   }
 }
 
+// === localStorage keys ===
+
+const PERSONAS_KEY = "neq_personas";
+const ACTIVE_PERSONA_KEY = "neq_active_persona_id";
+const MIGRATION_VERSION_KEY = "neq_migration_version";
+
+// Global keys (not per-persona)
+const SAVED_KEY = "neq_saved";
+const ARCHIVE_KEY = "neq_archived";
+const HISTORY_KEY = "neq_rec_history";
+
+// Legacy flat keys (v1 — read during migration, then removed)
 const FAVORITES_KEY = "neq_favorites";
 const FAVORITES_META_KEY = "neq_favorites_meta";
-const SAVED_KEY = "neq_saved";
 const RECS_KEY = "neq_recommendations";
 const RECS_FILTERED_PREFIX = "neq_recs_";
+const REPORTS_KEY = "neq_watch_reports";
+const SEEN_KEY = "neq_seen_titles";
 
-export interface FavoriteMeta {
-  id: number;
-  title: string;
-  posterUrl: string | null;
+const MAX_SEEN = 200;
+
+// === Migration ===
+
+let _migrated = false;
+
+function createEmptyPersona(id: string, name: string): Persona {
+  return {
+    id,
+    name,
+    favorites: [],
+    favoritesMeta: [],
+    watchReports: [],
+    seenTitles: [],
+    recCache: [],
+    recFilteredCache: {},
+  };
 }
 
-/**
- * 온보딩에서 선택한 좋아하는 작품 (3-5개) 제목 배열.
- * LLM 큐레이션 시 취향 시드로 사용.
- */
+export function migrateToPersonaV2() {
+  if (typeof window === "undefined") return;
+  if (_migrated) return;
+  _migrated = true;
+
+  const ver = safeParse<number>(MIGRATION_VERSION_KEY, 0);
+  if (ver >= 2) return;
+
+  const favorites = safeParse<string[]>(FAVORITES_KEY, []);
+  const favoritesMeta = safeParse<FavoriteMeta[]>(FAVORITES_META_KEY, []);
+  const watchReports = safeParse<WatchReport[]>(REPORTS_KEY, []);
+  const seenTitles = safeParse<string[]>(SEEN_KEY, []);
+  const recCache = safeParse<Recommendation[]>(RECS_KEY, []);
+
+  const recFilteredCache: Record<string, Recommendation[]> = {};
+  const filteredKeys = Object.keys(localStorage).filter((k) =>
+    k.startsWith(RECS_FILTERED_PREFIX),
+  );
+  for (const k of filteredKeys) {
+    recFilteredCache[k] = safeParse<Recommendation[]>(k, []);
+  }
+
+  const defaultPersona: Persona = {
+    id: "default",
+    name: "기본",
+    favorites,
+    favoritesMeta,
+    watchReports,
+    seenTitles,
+    recCache,
+    recFilteredCache,
+  };
+
+  localStorage.setItem(PERSONAS_KEY, JSON.stringify([defaultPersona]));
+  localStorage.setItem(ACTIVE_PERSONA_KEY, JSON.stringify("default"));
+  localStorage.setItem(MIGRATION_VERSION_KEY, JSON.stringify(2));
+
+  // Remove legacy flat keys
+  localStorage.removeItem(FAVORITES_KEY);
+  localStorage.removeItem(FAVORITES_META_KEY);
+  localStorage.removeItem(REPORTS_KEY);
+  localStorage.removeItem(SEEN_KEY);
+  localStorage.removeItem(RECS_KEY);
+  for (const k of filteredKeys) {
+    localStorage.removeItem(k);
+  }
+}
+
+function ensureMigrated() {
+  if (!_migrated) migrateToPersonaV2();
+}
+
+// === Persona CRUD ===
+
+export function getPersonas(): Persona[] {
+  if (typeof window === "undefined") return [];
+  ensureMigrated();
+  return safeParse<Persona[]>(PERSONAS_KEY, []);
+}
+
+export function setPersonas(personas: Persona[]) {
+  localStorage.setItem(PERSONAS_KEY, JSON.stringify(personas));
+}
+
+export function getActivePersonaId(): string {
+  if (typeof window === "undefined") return "default";
+  ensureMigrated();
+  return safeParse<string>(ACTIVE_PERSONA_KEY, "default");
+}
+
+export function setActivePersonaId(id: string) {
+  localStorage.setItem(ACTIVE_PERSONA_KEY, JSON.stringify(id));
+}
+
+export function getActivePersona(): Persona {
+  ensureMigrated();
+  const personas = getPersonas();
+  const activeId = getActivePersonaId();
+  return (
+    personas.find((p) => p.id === activeId) ??
+    personas[0] ??
+    createEmptyPersona("default", "기본")
+  );
+}
+
+function updateActivePersona(updater: (p: Persona) => Persona) {
+  const personas = getPersonas();
+  const activeId = getActivePersonaId();
+  const idx = personas.findIndex((p) => p.id === activeId);
+  if (idx === -1) return;
+  personas[idx] = updater(personas[idx]);
+  setPersonas(personas);
+}
+
+const MAX_PERSONAS = 3;
+
+export function createPersona(
+  name: string,
+  favorites: string[],
+  favoritesMeta: FavoriteMeta[],
+): string | null {
+  const personas = getPersonas();
+  if (personas.length >= MAX_PERSONAS) return null;
+  const id = crypto.randomUUID().slice(0, 8);
+  const persona = createEmptyPersona(id, name);
+  persona.favorites = favorites;
+  persona.favoritesMeta = favoritesMeta;
+  personas.push(persona);
+  setPersonas(personas);
+  return id;
+}
+
+export function switchPersona(id: string) {
+  const personas = getPersonas();
+  if (!personas.some((p) => p.id === id)) return;
+  setActivePersonaId(id);
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem("neq_top_idx");
+    const sessionKeys = Object.keys(sessionStorage).filter(
+      (k) => k.startsWith("neq_filter_") || k.startsWith("neq_ott_"),
+    );
+    for (const k of sessionKeys) {
+      sessionStorage.removeItem(k);
+    }
+  }
+}
+
+export function deletePersona(id: string) {
+  let personas = getPersonas();
+  personas = personas.filter((p) => p.id !== id);
+  if (personas.length === 0) {
+    personas = [createEmptyPersona("default", "기본")];
+  }
+  setPersonas(personas);
+  if (getActivePersonaId() === id) {
+    setActivePersonaId(personas[0].id);
+  }
+}
+
+// === Favorites (per-persona) ===
+
 export function getFavorites(): string[] {
   if (typeof window === "undefined") return [];
-  return safeParse<string[]>(FAVORITES_KEY, []);
+  return getActivePersona().favorites;
 }
 
 export function setFavorites(titles: string[]) {
-  localStorage.setItem(FAVORITES_KEY, JSON.stringify(titles));
+  updateActivePersona((p) => ({ ...p, favorites: titles }));
 }
 
-/** Profile 화면 렌더용 메타 (포스터 포함) */
 export function getFavoritesMeta(): FavoriteMeta[] {
   if (typeof window === "undefined") return [];
-  return safeParse<FavoriteMeta[]>(FAVORITES_META_KEY, []);
+  return getActivePersona().favoritesMeta;
 }
 
 export function setFavoritesMeta(items: FavoriteMeta[]) {
-  localStorage.setItem(FAVORITES_META_KEY, JSON.stringify(items));
+  updateActivePersona((p) => ({ ...p, favoritesMeta: items }));
 }
 
-/** 온보딩 완료 여부 — favorites 3개 이상이면 완료로 간주 */
 export function hasOnboarded(): boolean {
   if (typeof window === "undefined") return false;
-  return getFavorites().length >= 3;
+  ensureMigrated();
+  const personas = getPersonas();
+  return personas.some((p) => p.favorites.length >= 3);
 }
 
-// 추천 목록 — 필터별 캐시
-function filterKey(filterType: string, filterOrigin: string): string {
-  return `${RECS_FILTERED_PREFIX}${filterType}_${filterOrigin}`;
+// === Recommendations (per-persona) ===
+
+function filterCacheKey(ft: string, fo: string): string {
+  return `${RECS_FILTERED_PREFIX}${ft}_${fo}`;
 }
 
 export function getRecommendations(ft = "all", fo = "all"): Recommendation[] {
   if (typeof window === "undefined") return [];
-  const key = ft === "all" && fo === "all" ? RECS_KEY : filterKey(ft, fo);
-  return safeParse<Recommendation[]>(key, []);
+  const persona = getActivePersona();
+  if (ft === "all" && fo === "all") return persona.recCache;
+  return persona.recFilteredCache[filterCacheKey(ft, fo)] ?? [];
 }
 
 export function setRecommendations(recs: Recommendation[], ft = "all", fo = "all") {
-  const key = ft === "all" && fo === "all" ? RECS_KEY : filterKey(ft, fo);
-  localStorage.setItem(key, JSON.stringify(recs));
+  if (ft === "all" && fo === "all") {
+    updateActivePersona((p) => ({ ...p, recCache: recs }));
+  } else {
+    updateActivePersona((p) => ({
+      ...p,
+      recFilteredCache: {
+        ...p.recFilteredCache,
+        [filterCacheKey(ft, fo)]: recs,
+      },
+    }));
+  }
 }
 
 export function clearAllRecommendations() {
   if (typeof window === "undefined") return;
-  const keys = Object.keys(localStorage).filter(
-    (k) => k === RECS_KEY || k.startsWith(RECS_FILTERED_PREFIX)
-  );
-  keys.forEach((k) => localStorage.removeItem(k));
+  updateActivePersona((p) => ({
+    ...p,
+    recCache: [],
+    recFilteredCache: {},
+  }));
 }
 
-// 저장한 작품
+// === Saved (global) ===
+
 export function getSaved(): SavedItem[] {
   if (typeof window === "undefined") return [];
   return safeParse<SavedItem[]>(SAVED_KEY, []);
@@ -99,13 +279,11 @@ export function removeSaved(tmdbId: number) {
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
 }
 
-
-// 시청 리포트
-const REPORTS_KEY = "neq_watch_reports";
+// === Watch Reports (per-persona) ===
 
 export function getWatchReports(): WatchReport[] {
   if (typeof window === "undefined") return [];
-  return safeParse<WatchReport[]>(REPORTS_KEY, []);
+  return getActivePersona().watchReports;
 }
 
 export function getWatchReport(tmdbId: number): WatchReport | undefined {
@@ -113,14 +291,21 @@ export function getWatchReport(tmdbId: number): WatchReport | undefined {
 }
 
 export function addWatchReport(tmdbId: number, reaction: WatchReaction) {
-  const reports = getWatchReports().filter((r) => r.tmdbId !== tmdbId);
-  reports.push({ tmdbId, reaction, reportedAt: Date.now() });
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+  const activeId = getActivePersonaId();
+  updateActivePersona((p) => ({
+    ...p,
+    watchReports: [
+      ...p.watchReports.filter((r) => r.tmdbId !== tmdbId),
+      { tmdbId, reaction, reportedAt: Date.now(), contextId: activeId },
+    ],
+  }));
 }
 
 export function removeWatchReport(tmdbId: number) {
-  const reports = getWatchReports().filter((r) => r.tmdbId !== tmdbId);
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(reports));
+  updateActivePersona((p) => ({
+    ...p,
+    watchReports: p.watchReports.filter((r) => r.tmdbId !== tmdbId),
+  }));
 }
 
 export function getWatchStats() {
@@ -134,8 +319,7 @@ export function getWatchStats() {
   };
 }
 
-// 아카이브 (시청 완료 후 숨긴 작품)
-const ARCHIVE_KEY = "neq_archived";
+// === Archive (global) ===
 
 export function getArchivedIds(): number[] {
   if (typeof window === "undefined") return [];
@@ -155,16 +339,15 @@ export function unarchiveItem(tmdbId: number) {
   localStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
 }
 
-// 추천 히스토리 — 과거 추천 기록
-const HISTORY_KEY = "neq_rec_history";
+// === Rec History (global) ===
+
 const MAX_HISTORY = 100;
 
 export interface RecHistoryEntry {
   title: string;
   tmdbId: number;
   posterUrl: string | null;
-  date: string; // ISO date
-  /** TMDB 상세 조회(hydrate)에 필요. 이전 스키마엔 없을 수 있음 — 하이드레이션 시 movie 폴백 */
+  date: string;
   type?: "movie" | "series";
 }
 
@@ -186,40 +369,40 @@ export function addRecHistory(
   localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
 }
 
-// 지나간 작품 (스와이프로 넘긴 제목들) — 재추천 방지
-const SEEN_KEY = "neq_seen_titles";
-const MAX_SEEN = 200; // 최대 저장 수
+// === Seen Titles (per-persona) ===
 
 export function getSeenTitles(): string[] {
   if (typeof window === "undefined") return [];
-  return safeParse<string[]>(SEEN_KEY, []);
+  return getActivePersona().seenTitles;
 }
 
 export function addSeenTitles(titles: string[]) {
-  const seen = getSeenTitles();
-  const updated = [...new Set([...seen, ...titles])].slice(-MAX_SEEN);
-  localStorage.setItem(SEEN_KEY, JSON.stringify(updated));
+  updateActivePersona((p) => ({
+    ...p,
+    seenTitles: [...new Set([...p.seenTitles, ...titles])].slice(-MAX_SEEN),
+  }));
 }
 
 export function clearSeenTitles() {
-  localStorage.removeItem(SEEN_KEY);
+  updateActivePersona((p) => ({ ...p, seenTitles: [] }));
 }
 
-// ============================================================
-// 데이터 내보내기/가져오기 — 백엔드 sync API와 동일한 스키마
-// ============================================================
+// === Export / Import ===
 
 export function exportUserData(): UserDataExport {
+  ensureMigrated();
   return {
     version: USER_DATA_SCHEMA_VERSION,
     deviceId: getDeviceId(),
     exportedAt: Date.now(),
     data: {
-      favorites: [], // deprecated: 하위호환용 빈 배열
+      favorites: [],
       saved: getSaved(),
-      watchReports: getWatchReports(),
-      seenTitles: getSeenTitles(),
+      watchReports: [],
+      seenTitles: [],
       archived: getArchivedIds(),
+      personas: getPersonas(),
+      activePersonaId: getActivePersonaId(),
     },
   };
 }
@@ -236,16 +419,9 @@ export interface ImportResult {
   };
 }
 
-/**
- * JSON을 읽어 localStorage에 복원한다.
- * - 버전 체크
- * - 필수 필드 검증
- * - 실패 시 현재 데이터 유지 (원자적 동작)
- */
 export function importUserData(raw: unknown): ImportResult {
   if (typeof window === "undefined") return { ok: false, error: "window unavailable" };
 
-  // 기본 구조 검증
   if (!raw || typeof raw !== "object") {
     return { ok: false, error: "올바르지 않은 파일 형식이에요" };
   }
@@ -261,50 +437,76 @@ export function importUserData(raw: unknown): ImportResult {
     return { ok: false, error: "데이터 필드가 없어요" };
   }
 
-  // 배열 검증 (없는 필드는 빈 배열로 처리)
   const saved = Array.isArray(data.saved) ? (data.saved as SavedItem[]) : [];
-  const watchReports = Array.isArray(data.watchReports) ? (data.watchReports as WatchReport[]) : [];
-  const seenTitles = Array.isArray(data.seenTitles) ? (data.seenTitles as string[]) : [];
   const archived = Array.isArray(data.archived) ? (data.archived as number[]) : [];
 
-  // localStorage에 덮어쓰기 (favorites는 deprecated — 무시)
+  if (obj.version >= 2 && Array.isArray(data.personas)) {
+    // v2 import: restore personas directly
+    const personas = data.personas as Persona[];
+    const activeId = typeof data.activePersonaId === "string" ? data.activePersonaId : "default";
+    setPersonas(personas);
+    setActivePersonaId(activeId);
+    localStorage.setItem(MIGRATION_VERSION_KEY, JSON.stringify(2));
+    _migrated = true;
+  } else {
+    // v1 import: wrap in default persona
+    const watchReports = Array.isArray(data.watchReports) ? (data.watchReports as WatchReport[]) : [];
+    const seenTitles = Array.isArray(data.seenTitles) ? (data.seenTitles as string[]) : [];
+    const favorites = Array.isArray(data.favorites) ? (data.favorites as string[]) : [];
+
+    const defaultPersona = createEmptyPersona("default", "기본");
+    defaultPersona.favorites = favorites;
+    defaultPersona.watchReports = watchReports;
+    defaultPersona.seenTitles = seenTitles;
+
+    setPersonas([defaultPersona]);
+    setActivePersonaId("default");
+    localStorage.setItem(MIGRATION_VERSION_KEY, JSON.stringify(2));
+    _migrated = true;
+  }
+
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
-  localStorage.setItem(REPORTS_KEY, JSON.stringify(watchReports));
-  localStorage.setItem(SEEN_KEY, JSON.stringify(seenTitles));
   localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archived));
+
+  const personas = getPersonas();
+  const totalWatchReports = personas.reduce((n, p) => n + p.watchReports.length, 0);
+  const totalSeenTitles = personas.reduce((n, p) => n + p.seenTitles.length, 0);
+  const totalFavorites = personas.reduce((n, p) => n + p.favorites.length, 0);
 
   return {
     ok: true,
     counts: {
-      favorites: 0,
+      favorites: totalFavorites,
       saved: saved.length,
-      watchReports: watchReports.length,
-      seenTitles: seenTitles.length,
+      watchReports: totalWatchReports,
+      seenTitles: totalSeenTitles,
       archived: archived.length,
     },
   };
 }
 
-/** 모든 사용자 데이터 초기화 (디바이스 ID는 유지) */
 export function clearAllUserData() {
   if (typeof window === "undefined") return;
   const keysToRemove = [
-    FAVORITES_KEY,
-    FAVORITES_META_KEY,
+    PERSONAS_KEY,
+    ACTIVE_PERSONA_KEY,
+    MIGRATION_VERSION_KEY,
     SAVED_KEY,
-    REPORTS_KEY,
-    SEEN_KEY,
     ARCHIVE_KEY,
     HISTORY_KEY,
+    // Legacy keys (in case migration never ran)
+    FAVORITES_KEY,
+    FAVORITES_META_KEY,
+    REPORTS_KEY,
+    SEEN_KEY,
     RECS_KEY,
     "neq_first_discover_done",
     "neq_tutorial_seen",
   ];
   keysToRemove.forEach((k) => localStorage.removeItem(k));
-  // 필터별 캐시도 제거
   Object.keys(localStorage)
     .filter((k) => k.startsWith(RECS_FILTERED_PREFIX))
     .forEach((k) => localStorage.removeItem(k));
-  // sessionStorage도 정리
   sessionStorage.removeItem("neq_top_idx");
+  _migrated = false;
 }

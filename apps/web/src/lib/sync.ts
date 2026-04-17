@@ -9,6 +9,7 @@ import {
   getSeenTitles,
   getArchivedIds,
   getFavoritesMeta,
+  getActivePersonaId,
   setFavorites,
   setFavoritesMeta,
   addSaved,
@@ -85,6 +86,7 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
   const profileId = await getOrCreateProfile();
   if (!profileId) return { success: false, pushed: 0 };
 
+  const isDefaultPersona = getActivePersonaId() === "default";
   let pushed = 0;
 
   try {
@@ -120,8 +122,8 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += rows.length;
     }
 
-    // 2. watch_reports
-    const reports = getWatchReports();
+    // 2. watch_reports (default persona only — v1 sync limitation)
+    const reports = isDefaultPersona ? getWatchReports() : [];
     if (reports.length > 0) {
       const rows = reports.map((r: WatchReport) => ({
         profile_id: profileId,
@@ -137,8 +139,8 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += rows.length;
     }
 
-    // 3. seen_titles
-    const seen = getSeenTitles();
+    // 3. seen_titles (default persona only — v1 sync limitation)
+    const seen = isDefaultPersona ? getSeenTitles() : [];
     if (seen.length > 0) {
       // seen은 양이 많을 수 있으므로 서버에 없는 것만 추가
       const { data: existing } = await supabase
@@ -178,8 +180,8 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += rows.length;
     }
 
-    // 5. onboarding_picks (profiles row에 JSON으로 저장)
-    const onboardingPicks = getFavoritesMeta();
+    // 5. onboarding_picks (default persona only — v1 sync limitation)
+    const onboardingPicks = isDefaultPersona ? getFavoritesMeta() : [];
     if (onboardingPicks.length > 0) {
       const { error } = await supabase
         .from("profiles")
@@ -202,6 +204,15 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
 
 /** 서버 데이터를 로컬로 가져오기 (로컬에 없는 것만 추가) */
 export async function pullFromServer(): Promise<{ success: boolean; pulled: number }> {
+  // v1 제한: 서버 동기화는 "default" 페르소나만 지원.
+  // store의 setter들이 활성 페르소나에 쓰기 때문에,
+  // 비-default 페르소나가 활성 상태에서 pull하면 서버 데이터(default 기준)가
+  // 다른 페르소나에 잘못 기록됨. v2에서 서버 측 페르소나 지원 시 해제 예정.
+  if (getActivePersonaId() !== "default") {
+    console.log("[sync] pull skipped — non-default persona active (v1 limitation)");
+    return { success: true, pulled: 0 };
+  }
+
   const profileId = await getOrCreateProfile();
   if (!profileId) return { success: false, pulled: 0 };
 

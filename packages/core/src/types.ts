@@ -42,6 +42,7 @@ export interface WatchReport {
   tmdbId: number;
   reaction: WatchReaction;
   reportedAt: number;
+  contextId?: string;
 }
 
 export interface RecommendFilter {
@@ -67,6 +68,35 @@ export interface SearchResult {
   mediaType: 'movie' | 'tv';
 }
 
+export interface Persona {
+  id: string;
+  name: string;
+  favorites: string[];
+  favoritesMeta: FavoriteMeta[];
+  watchReports: WatchReport[];
+  seenTitles: string[];
+  recCache: Recommendation[];
+  recFilteredCache: Record<string, Recommendation[]>;
+}
+
+export interface FavoriteMeta {
+  id: number;
+  title: string;
+  posterUrl: string | null;
+}
+
+export interface UserDataExportV2 {
+  version: 2;
+  deviceId: string;
+  exportedAt: number;
+  data: {
+    personas: Persona[];
+    activePersonaId: string;
+    saved: SavedItem[];
+    archived: number[];
+  };
+}
+
 export interface UserDataExport {
   version: number;
   deviceId: string;
@@ -77,7 +107,9 @@ export interface UserDataExport {
     watchReports: WatchReport[];
     seenTitles: string[];
     archived: number[];
+    personas?: Persona[];
+    activePersonaId?: string;
   };
 }
 
-export const USER_DATA_SCHEMA_VERSION = 1;
+export const USER_DATA_SCHEMA_VERSION = 2;

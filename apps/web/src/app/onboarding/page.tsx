@@ -3,7 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { setFavorites, setFavoritesMeta } from "@/lib/store";
+import { setFavorites, setFavoritesMeta, getPersonas } from "@/lib/store";
+import { usePersona } from "@/contexts/PersonaContext";
 import { track } from "@/lib/analytics";
 import { IconClose, IconCheck } from "@/components/Icons";
 
@@ -31,7 +32,8 @@ const FALLBACK_SUGGESTIONS: SearchResult[] = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState(0); // 0=소개, 1=작품 선택
+  const persona = usePersona();
+  const [step, setStep] = useState(0);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selected, setSelected] = useState<SearchResult[]>([]);
@@ -96,6 +98,7 @@ export default function OnboardingPage() {
     track("onboarding_completed", { favorites_count: selected.length });
     setFavorites(selected.map((s) => s.title));
     setFavoritesMeta(selected.map((s) => ({ id: s.id, title: s.title, posterUrl: s.posterUrl })));
+    persona.refresh();
     router.push("/discover");
   };
 

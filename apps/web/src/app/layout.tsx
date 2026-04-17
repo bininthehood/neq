@@ -5,6 +5,7 @@ import "./globals.css";
 import InstallBanner from "@/components/InstallBanner";
 import Reminder from "@/components/Reminder";
 import PostHogProvider from "@/components/PostHogProvider";
+import { PersonaProvider } from "@/contexts/PersonaContext";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -92,7 +93,9 @@ export default function RootLayout({
       </head>
       <body className="h-full">
         <PostHogProvider>
-          <div className="h-dvh flex flex-col">{children}</div>
+          <PersonaProvider>
+            <div className="h-dvh flex flex-col">{children}</div>
+          </PersonaProvider>
           <InstallBanner />
           <Reminder />
           <Analytics />

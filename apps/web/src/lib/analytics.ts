@@ -92,6 +92,10 @@ export type NekoEvent =
   // 프로필
   | "profile_viewed"
   | "data_reset"
+  // 페르소나
+  | "persona_switched"
+  | "persona_created"
+  | "persona_deleted"
   // 넛지
   | "nudge_shown"
   | "nudge_reported"

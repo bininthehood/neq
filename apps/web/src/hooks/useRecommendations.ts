@@ -98,17 +98,10 @@ export function useRecommendations() {
       feedback[r.reaction]?.push(item.recommendation.title);
     }
     const hasFeedback = Object.values(feedback).some((a) => a.length > 0);
-    // 취향 시드 우선순위:
-    //  1. 온보딩 픽 (명시적 초기 취향)
-    //  2. loved/good reaction (명시적 시청 반응)
-    //  3. 나머지 saved (약한 신호, dedupe 후 포함)
     const onboardingPicks = getFavorites();
     const lovedGood = [...(feedback.loved ?? []), ...(feedback.good ?? [])]
       .filter((t) => !onboardingPicks.includes(t));
-    const otherSaved = savedItems
-      .map((s) => s.recommendation.title)
-      .filter((t) => !onboardingPicks.includes(t) && !lovedGood.includes(t));
-    const favorites = [...onboardingPicks, ...lovedGood, ...otherSaved].slice(0, 20);
+    const favorites = [...onboardingPicks, ...lovedGood].slice(0, 20);
     const seenTitles = getSeenTitles();
     const savedTitles = savedItems.map((s) => s.recommendation.title);
     const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 150);
@@ -217,19 +210,16 @@ export function useRecommendations() {
       if (filterOrigin !== "all") filter.origin = filterOrigin;
       if (filterYear !== "all") filter.year = filterYear;
       if (filterOTTs.size > 0) filter.ott = [...filterOTTs];
-      // 취향 시드: saved + watchReport 기반
       const savedItems = getSaved();
       const reports = getWatchReports();
+      const onboardingPicks = getFavorites();
       const lovedGoodTitles: string[] = [];
       for (const r of reports) {
         if (r.reaction !== "loved" && r.reaction !== "good") continue;
         const item = savedItems.find((s) => s.recommendation.tmdbId === r.tmdbId);
         if (item) lovedGoodTitles.push(item.recommendation.title);
       }
-      const otherSavedTitles = savedItems
-        .map((s) => s.recommendation.title)
-        .filter((t) => !lovedGoodTitles.includes(t));
-      const favorites = [...lovedGoodTitles, ...otherSavedTitles].slice(0, 20);
+      const favorites = [...onboardingPicks, ...lovedGoodTitles.filter((t) => !onboardingPicks.includes(t))].slice(0, 20);
       const currentRecs = recsRef.current;
       const currentTitles = currentRecs.map((r) => r.title);
       const currentIds = currentRecs.map((r) => r.tmdbId);

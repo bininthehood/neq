@@ -31,6 +31,7 @@ import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
 import SearchSheet from "@/components/discover/SearchSheet";
 import RewindOverlay from "@/components/discover/RewindOverlay";
 import { useSync } from "@/hooks/useSync";
+import { usePersona } from "@/contexts/PersonaContext";
 import { IconSearch } from "@/components/Icons";
 
 const metaInfo = (r: Recommendation) => [
@@ -59,6 +60,8 @@ export default function DiscoverPage() {
   const rec = useRecommendations();
   const detail = useDetailSheet();
   const searchSheet = useDetailSheet();
+  const persona = usePersona();
+  const [personaOpen, setPersonaOpen] = useState(false);
 
   let filtered = rec.filterOTTs.size === 0
     ? rec.recs
@@ -333,6 +336,78 @@ export default function DiscoverPage() {
       <div className="flex items-center justify-between px-5 py-3 shrink-0 transition-all duration-300"
         style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
+        {persona.personas.length > 1 && (
+          <div className="relative">
+            <button
+              onClick={() => setPersonaOpen((v) => !v)}
+              className="flex items-center gap-1 h-11 px-2 active:scale-95 transition-transform"
+            >
+              <span className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                {persona.activePersona?.name ?? "기본"}
+              </span>
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none" style={{ transform: personaOpen ? "rotate(180deg)" : "none", transition: "transform 150ms var(--ease-enter)" }}>
+                <path d="M1 2.5L4 5.5L7 2.5" stroke="var(--text-muted)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            {personaOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setPersonaOpen(false)} />
+                <div
+                  className="absolute right-0 top-full mt-1 z-40 min-w-[160px] py-1 rounded-xl"
+                  style={{
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                    animation: "fade-in 150ms var(--ease-enter)",
+                  }}
+                >
+                  {persona.personas.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => {
+                        if (p.id !== persona.activePersonaId) {
+                          persona.switchPersona(p.id);
+                          rec.abortLoading();
+                          rec.setFilterYear("all");
+                          setTopIdx(0);
+                          sessionStorage.removeItem("neq_top_idx");
+                          rec.loadRecs("all", "all");
+                          track("persona_switched", { persona_id: p.id, persona_name: p.name });
+                        }
+                        setPersonaOpen(false);
+                      }}
+                      className="w-full flex items-center px-4 h-12 text-sm active:scale-[0.98] transition-transform"
+                      style={{ color: p.id === persona.activePersonaId ? "var(--accent)" : "var(--text-primary)" }}
+                    >
+                      {p.name}
+                      {p.id === persona.activePersonaId && (
+                        <svg className="ml-auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  ))}
+                  {persona.personas.length < 3 ? (
+                    <button
+                      onClick={() => {
+                        setPersonaOpen(false);
+                        router.push("/profile");
+                      }}
+                      className="w-full flex items-center px-4 h-12 text-sm active:scale-[0.98] transition-transform"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      + 새 취향
+                    </button>
+                  ) : (
+                    <div className="px-4 py-2 text-xs" style={{ color: "var(--text-muted)" }}>
+                      최대 3개까지 만들 수 있어요
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <button
           onClick={() => { track("search_opened"); searchSheet.openDetail(); }}
           className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"

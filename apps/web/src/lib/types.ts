@@ -9,6 +9,9 @@ export type {
   WatchFeedback,
   SearchResult,
   UserDataExport,
+  UserDataExportV2,
+  Persona,
+  FavoriteMeta,
 } from "@neq/core";
 
 export { USER_DATA_SCHEMA_VERSION } from "@neq/core";
