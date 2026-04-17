@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import Image from "next/image";
-import { IconClose, IconStar, IconSave } from "@/components/Icons";
+import { IconStar, IconSave } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 import { addSaved } from "@/lib/store";
 import { track } from "@/lib/analytics";
@@ -158,28 +158,23 @@ export default function SearchSheet({
           <div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} />
         </div>
 
-        {/* header */}
-        <div className="flex items-center justify-between px-5 pb-3 shrink-0">
-          <h2 className="font-display text-lg font-bold">작품 검색</h2>
-          <button
-            onClick={onClose}
-            className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
-          >
-            <IconClose size={18} color="var(--text-muted)" />
-          </button>
-        </div>
-
-        {/* search input */}
-        <div className="px-5 pb-3 shrink-0">
+        {/* search input + close */}
+        <div className="flex items-center gap-2 px-4 pb-3 shrink-0">
           <input
             ref={inputRef}
             type="text"
             value={query}
             onChange={(e) => handleInput(e.target.value)}
             placeholder="영화나 시리즈 제목"
-            className="w-full px-4 py-3 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
+            className="flex-1 px-4 py-3 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
             style={{ fontSize: "16px" }}
           />
+          <button
+            onClick={onClose}
+            className="shrink-0 px-3 py-3 text-sm text-muted active:scale-95 transition-transform"
+          >
+            취소
+          </button>
         </div>
 
         {/* results */}
