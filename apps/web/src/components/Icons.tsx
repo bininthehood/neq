@@ -40,9 +40,10 @@ export function IconInfo({ size = 24, color = "currentColor", className }: IconP
 
 export function IconRefresh({ size = 16, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
-      <path d="M21 12a9 9 0 11-3-6.7" stroke={color} strokeWidth={1.2} strokeLinecap="square" />
-      <polyline points="21 3 21 9 15 9" stroke={color} strokeWidth={2} fill="none" strokeLinecap="square" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polyline points="23 4 23 10 17 10" />
+      <polyline points="1 20 1 14 7 14" />
+      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
     </svg>
   );
 }
@@ -101,13 +102,9 @@ export function IconStar({ size = 14, color = "currentColor", className }: IconP
 
 export function IconDiscover({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
-      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1} />
-      <path d="M16.5 7.5L14 14l-6.5 2.5L10 10l6.5-2.5z" fill={color} stroke="none" />
-      <line x1="12" y1="2" x2="12" y2="4.5" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
-      <line x1="12" y1="19.5" x2="12" y2="22" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
-      <line x1="2" y1="12" x2="4.5" y2="12" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
-      <line x1="19.5" y1="12" x2="22" y2="12" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill={color} stroke="none" />
     </svg>
   );
 }
