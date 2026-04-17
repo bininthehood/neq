@@ -1,5 +1,75 @@
 # Neko 개발 일지
 
+## 2026-04-17 (Day 13)
+
+### 진행 요약
+**Taste Context (페르소나 v1)** 기획부터 구현까지 한 세션에 완료. 같은 사용자의 다른 취향 컨텍스트(영화 vs 예능 vs 시리즈)를 분리하여 추천 품질 개선. 기존 "전체 초기화 후 재온보딩" 워크어라운드를 해결.
+
+풀 파이프라인: office-hours(기획) → plan-eng-review(아키텍처) → plan-design-review(UI) → neko-orchestrator(구현) → investigate(버그 수정) → ship(배포).
+
+### 완료된 작업
+
+**페르소나 기능 기획 (/office-hours)**
+- "같은 사람의 다른 취향 컨텍스트" 프레이밍 확립 (Netflix 멀티프로필과 차별화)
+- Codex second opinion: saved는 글로벌 유지, 온보딩 픽/시청 반응만 분리
+- 디자인 문서 작성 + adversarial review 2라운드 (8.5/10)
+
+**아키텍처 리뷰 (/plan-eng-review)**
+- 10개 이슈 발견 + 전부 해결. Codex outside voice가 결정적:
+  - sync.ts 충돌 발견 → push/pull 모두 default persona only 가드
+  - saved 누수 → seed에서 saved 제외, exclude에만 유지
+  - 키 분리 → 단일 blob으로 재결정 (데이터 소량, 간단+안전)
+  - 반응형 모델 → PersonaContext + Provider 도입
+  - 파일 범위 6→10개로 확장 (sync, routing, saved 추가)
+
+**디자인 리뷰 (/plan-design-review)**
+- 초기 4/10 → 최종 8/10. 7개 차원 리뷰
+- UI 패턴: Dropdown (로고 옆), 미니 온보딩 바텀시트
+- DESIGN.md(Quiet Ink) 토큰 매핑 완료
+- 목업 3종 생성 (gstack designer)
+
+**구현 (/neko-orchestrator + frontend-builder)**
+- `packages/core/src/types.ts`: WatchReport.contextId?, Persona 인터페이스, schema v2
+- `apps/web/src/lib/store.ts`: persona CRUD, v1→v2 원자적 마이그레이션, export/import v2
+- `apps/web/src/contexts/PersonaContext.tsx`: React Context + Provider
+- `apps/web/src/hooks/useRecommendations.ts`: seed = persona favorites + reports만
+- `apps/web/src/app/discover/page.tsx`: 헤더 드롭다운 전환기
+- `apps/web/src/app/profile/page.tsx`: 페르소나 관리 + 미니 온보딩 바텀시트
+- `apps/web/src/app/onboarding/page.tsx`: 첫 persona 생성
+- `apps/web/src/lib/sync.ts`: default persona only push/pull 가드
+- UX 리뷰: CRITICAL 1 + HIGH 2 수정 (터치 타겟, anti-slop 그리드, 바텀시트 임계값)
+- QA 리뷰: sync push 가드 추가, loadRecs 중복 호출 제거
+
+**테스트 인프라 (vitest)**
+- vitest 세팅 + store-persona 테스트 27개 전부 통과
+- 커버리지: 마이그레이션 (v1→v2, 멱등성, 빈 상태), CRUD (생성, 전환, 삭제, 최대3개), 데이터 격리, 글로벌 유지, export/import, hasOnboarded
+
+**버그 수정 (/investigate)**
+- `<button>` 안에 `<button>` 중첩 → hydration 에러 → createPersona localStorage 쓰기 실패
+- 수정: 외부 `<button>`을 `<div role="button">`으로 변경
+
+### 주요 결정
+| 결정 | 값 | 근거 |
+|------|---|------|
+| Storage | 단일 blob (neq_personas) | Codex: 데이터 소량, 간단+안전 |
+| saved | 글로벌 유지 | Codex 도전 채택: 한 곳에서 전체 보기 |
+| Seed | persona only, saved 제외 | persona 간 추천 누수 방지 |
+| Sync | default only | Supabase 스키마 변경 없이 v1 제한 |
+| UI | Dropdown (로고 옆) | 공간 절약, 필터칩과 비경쟁 |
+| Reactivity | PersonaContext | localStorage만으로 재렌더링 불가 |
+
+### 기술 스택 변경
+- vitest + @testing-library/react + jsdom 추가
+- PersonaContext (React Context) 신규
+
+### 남은 과제
+- Supabase 스키마 확장 (persona별 동기화, v2)
+- 네이티브 앱 persona 포팅
+- 페르소나 삭제 기능 (v1에서는 최대 3개 제한으로 충분)
+- 아바타/성격 태그 (Full Persona, Approach B)
+
+---
+
 ## 2026-04-16 (Day 12)
 
 ### 진행 요약
