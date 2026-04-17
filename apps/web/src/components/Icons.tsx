@@ -6,7 +6,7 @@ interface IconProps {
 
 export function IconPass({ size = 24, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="square" strokeLinejoin="miter" className={className}>
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
@@ -14,44 +14,42 @@ export function IconPass({ size = 24, color = "currentColor", className }: IconP
 }
 
 export function IconSave({ size = 24, color = "currentColor", className, filled = true }: IconProps & { filled?: boolean }) {
+  if (filled) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+      </svg>
+    );
+  }
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? color : "none"} stroke={filled ? "none" : color} strokeWidth={1.8} className={className}>
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+        stroke={color} strokeWidth={1.2} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconInfo({ size = 24, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="12" y1="16" x2="12" y2="12" />
-      <line x1="12" y1="8" x2="12.01" y2="8" />
-    </svg>
-  );
-}
-
-export function IconUndo({ size = 20, color = "currentColor", className }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <polyline points="1 4 1 10 7 10" />
-      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="square" className={className}>
+      <line x1="12" y1="16" x2="12" y2="12" strokeWidth={2} />
+      <circle cx="12" cy="8" r="0.8" fill={color} stroke="none" />
     </svg>
   );
 }
 
 export function IconRefresh({ size = 16, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <polyline points="23 4 23 10 17 10" />
-      <polyline points="1 20 1 14 7 14" />
-      <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M21 12a9 9 0 11-3-6.7" stroke={color} strokeWidth={1.2} strokeLinecap="square" />
+      <polyline points="21 3 21 9 15 9" stroke={color} strokeWidth={2} fill="none" strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconRewind({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
       <polygon points="11 19 2 12 11 5 11 19" />
       <polygon points="22 19 13 12 22 5 22 19" />
     </svg>
@@ -60,17 +58,17 @@ export function IconRewind({ size = 20, color = "currentColor", className }: Ico
 
 export function IconDetail({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="4" y1="6" x2="20" y2="6" />
-      <line x1="4" y1="12" x2="14" y2="12" />
-      <line x1="4" y1="18" x2="17" y2="18" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <line x1="4" y1="7" x2="20" y2="7" stroke={color} strokeWidth={2.2} strokeLinecap="square" />
+      <line x1="4" y1="12" x2="16" y2="12" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
+      <line x1="4" y1="17" x2="12" y2="17" stroke={color} strokeWidth={1} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconChevronUp({ size = 16, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="square" className={className}>
       <polyline points="18 15 12 9 6 15" />
     </svg>
   );
@@ -78,17 +76,17 @@ export function IconChevronUp({ size = 16, color = "currentColor", className }: 
 
 export function IconClose({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <line x1="6" y1="6" x2="18" y2="18" stroke={color} strokeWidth={2.2} strokeLinecap="square" />
+      <line x1="18" y1="6" x2="6" y2="18" stroke={color} strokeWidth={1.2} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconCheck({ size = 16, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <polyline points="20 6 9 17 4 12" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="square" className={className}>
+      <polyline points="20 6 9 17 4 12" strokeWidth={2.5} />
     </svg>
   );
 }
@@ -96,117 +94,114 @@ export function IconCheck({ size = 16, color = "currentColor", className }: Icon
 export function IconStar({ size = 14, color = "currentColor", className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none" className={className}>
-      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      <path d="M12 2l2.4 7.2H22l-6 4.8 2.4 7.2L12 16.4l-6.4 4.8 2.4-7.2-6-4.8h7.6L12 2z" />
     </svg>
   );
 }
 
 export function IconDiscover({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill={color} stroke="none" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1} />
+      <path d="M16.5 7.5L14 14l-6.5 2.5L10 10l6.5-2.5z" fill={color} stroke="none" />
+      <line x1="12" y1="2" x2="12" y2="4.5" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
+      <line x1="12" y1="19.5" x2="12" y2="22" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
+      <line x1="2" y1="12" x2="4.5" y2="12" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
+      <line x1="19.5" y1="12" x2="22" y2="12" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconHeart({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+        stroke={color} strokeWidth={1.2} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconFilm({ size = 40, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-      <line x1="7" y1="2" x2="7" y2="22" />
-      <line x1="17" y1="2" x2="17" y2="22" />
-      <line x1="2" y1="12" x2="22" y2="12" />
-      <line x1="2" y1="7" x2="7" y2="7" />
-      <line x1="2" y1="17" x2="7" y2="17" />
-      <line x1="17" y1="7" x2="22" y2="7" />
-      <line x1="17" y1="17" x2="22" y2="17" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <rect x="2" y="2" width="20" height="20" rx="2" stroke={color} strokeWidth={1.2} />
+      <line x1="7" y1="2" x2="7" y2="22" stroke={color} strokeWidth={1.8} strokeLinecap="square" />
+      <line x1="17" y1="2" x2="17" y2="22" stroke={color} strokeWidth={1.8} strokeLinecap="square" />
+      <line x1="2" y1="12" x2="22" y2="12" stroke={color} strokeWidth={1} />
+      <line x1="2" y1="7" x2="7" y2="7" stroke={color} strokeWidth={1} />
+      <line x1="2" y1="17" x2="7" y2="17" stroke={color} strokeWidth={1} />
+      <line x1="17" y1="7" x2="22" y2="7" stroke={color} strokeWidth={1} />
+      <line x1="17" y1="17" x2="22" y2="17" stroke={color} strokeWidth={1} />
     </svg>
   );
 }
 
-// 온보딩 아이콘
 export function IconClapper({ size = 24, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      {/* 보드 본체 */}
-      <rect x="2" y="10" width="20" height="12" rx="2" />
-      {/* 클래퍼 하단 (보드에 붙은 부분) */}
-      <path d="M2 10h20" />
-      {/* 클래퍼 상단 (열린 상태 — 비스듬히 올라감) */}
-      <path d="M2 10l3-7h14l3 7" />
-      {/* 슬레이트 줄무늬 */}
-      <line x1="7.5" y1="3.5" x2="9" y2="10" />
-      <line x1="13.5" y1="3.5" x2="15" y2="10" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="square" className={className}>
+      <rect x="2" y="10" width="20" height="12" rx="2" strokeWidth={1.2} />
+      <path d="M2 10h20" strokeWidth={1.8} />
+      <path d="M2 10l3-7h14l3 7" strokeWidth={1.2} />
+      <line x1="7.5" y1="3.5" x2="9" y2="10" strokeWidth={1} />
+      <line x1="13.5" y1="3.5" x2="15" y2="10" strokeWidth={1} />
     </svg>
   );
 }
 
 export function IconDiamond({ size = 24, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M6 3h12l4 6-10 12L2 9z" />
-      <path d="M2 9h20" />
-      <path d="M10 3l-2 6 4 12 4-12-2-6" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="square" className={className}>
+      <path d="M6 3h12l4 6-10 12L2 9z" strokeWidth={1.2} />
+      <path d="M2 9h20" strokeWidth={1.8} />
+      <path d="M10 3l-2 6 4 12 4-12-2-6" strokeWidth={1} />
     </svg>
   );
 }
 
 export function IconSwipe({ size = 24, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M18 11V6a2 2 0 0 0-4 0" />
-      <path d="M14 10V4a2 2 0 0 0-4 0v7" />
-      <path d="M10 10.5V9a2 2 0 0 0-4 0v6" />
-      <path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2a8 8 0 0 1-6-2.7" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeLinecap="square" className={className}>
+      <path d="M18 11V6a2 2 0 0 0-4 0" strokeWidth={1.2} />
+      <path d="M14 10V4a2 2 0 0 0-4 0v7" strokeWidth={1.2} />
+      <path d="M10 10.5V9a2 2 0 0 0-4 0v6" strokeWidth={1.2} />
+      <path d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2a8 8 0 0 1-6-2.7" strokeWidth={1.8} />
     </svg>
   );
 }
 
 export function IconUser({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="12" cy="8" r="4" stroke={color} strokeWidth={1.2} />
+      <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke={color} strokeWidth={2} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconSearch({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="11" cy="11" r="8" />
-      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <circle cx="10.5" cy="10.5" r="7.5" stroke={color} strokeWidth={1.2} />
+      <line x1="16" y1="16" x2="21.5" y2="21.5" stroke={color} strokeWidth={2.5} strokeLinecap="square" />
     </svg>
   );
 }
 
 export function IconShare({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-      <polyline points="16 6 12 2 8 6" />
-      <line x1="12" y1="2" x2="12" y2="15" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
+      <path d="M4 14v6a2 2 0 002 2h12a2 2 0 002-2v-6" stroke={color} strokeWidth={1.2} strokeLinecap="square" />
+      <line x1="12" y1="3" x2="12" y2="16" stroke={color} strokeWidth={2} strokeLinecap="square" />
+      <polyline points="8 7 12 3 16 7" stroke={color} strokeWidth={1.2} fill="none" strokeLinecap="square" />
     </svg>
   );
 }
 
-/** 필름 릴 스피너 — Warm Cinema 브랜드 스피너 */
 export function NeqSpinner({ size = 40, className }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={`animate-spin-slow ${className ?? ""}`}>
-      {/* 외부 링 */}
       <circle cx="24" cy="24" r="22" stroke="var(--border)" strokeWidth="2" />
-      <circle cx="24" cy="24" r="22" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="34.5 103.5" />
-      {/* 필름 릴 구멍들 */}
+      <circle cx="24" cy="24" r="22" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="square" strokeDasharray="34.5 103.5" />
       <circle cx="24" cy="24" r="4" fill="var(--accent)" opacity="0.3" />
       <circle cx="24" cy="12" r="2.5" fill="var(--accent)" opacity="0.7" />
       <circle cx="34.4" cy="18" r="2.5" fill="var(--accent)" opacity="0.5" />
@@ -218,7 +213,6 @@ export function NeqSpinner({ size = 40, className }: { size?: number; className?
   );
 }
 
-/** neq 로고 마크 — N 기반 미니멀 마크 */
 export function NeqLogo({ size = 48, className }: { size?: number; className?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 48 48" fill="none" className={className}>
@@ -227,8 +221,8 @@ export function NeqLogo({ size = 48, className }: { size?: number; className?: s
         d="M14 34V14l10 14.5L34 14v20"
         stroke="var(--accent)"
         strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+        strokeLinecap="square"
+        strokeLinejoin="miter"
       />
     </svg>
   );
