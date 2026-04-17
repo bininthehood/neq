@@ -110,14 +110,14 @@ export default function SwipeCard({
           }}
         >
           <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10 bg-overlay"
-            style={{ borderRadius: "2px 8px 8px 2px", borderLeft: "2px solid var(--accent)" }}>
+            style={{ borderRadius: "3px", borderLeft: "2px solid var(--accent)" }}>
             <IconStar size={13} color="var(--accent)" />
             <span className="font-data font-semibold text-accent">
               {rec.rating.toFixed(1)}
             </span>
           </div>
           <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm z-10 bg-overlay"
-            style={{ borderRadius: "8px 2px 2px 8px", borderRight: "2px solid var(--accent)" }}>
+            style={{ borderRadius: "3px", borderRight: "2px solid var(--accent)" }}>
             {rec.type === "series" ? "시리즈" : "영화"}
           </div>
           <div
