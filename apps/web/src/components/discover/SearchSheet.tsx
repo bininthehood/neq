@@ -140,12 +140,12 @@ export default function SearchSheet({
         }}
         onClick={onClose}
       />
-      {/* sheet */}
+      {/* sheet — 전체 높이로 키보드에 가려지지 않음 */}
       <div
         className="relative w-full max-w-lg mx-auto flex flex-col bg-surface-raised"
         style={{
-          maxHeight: "85dvh",
-          borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
+          height: "100dvh",
+          borderRadius: 0,
           transform: `translateY(${sheetY}%)`,
           transition: animating ? "transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1)" : "none",
         }}
