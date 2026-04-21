@@ -38,7 +38,7 @@ async function getOrCreateProfile(): Promise<string | null> {
     .from("profiles")
     .select("id")
     .eq("user_id", uid)
-    .single();
+    .maybeSingle();
 
   if (byUid) return byUid.id;
 
@@ -49,7 +49,7 @@ async function getOrCreateProfile(): Promise<string | null> {
       .from("profiles")
       .select("id, user_id")
       .eq("device_id", deviceId)
-      .single();
+      .maybeSingle();
 
     if (byDevice && !byDevice.user_id) {
       await supabase
