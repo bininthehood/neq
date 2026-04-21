@@ -269,14 +269,14 @@ export default function ProfilePage() {
         <div className="grid grid-cols-2 gap-3">
           <div
             className="p-4 bg-surface rounded-lg"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}
+            style={{ boxShadow: "var(--shadow-sm)" }}
           >
             <div className="font-data text-2xl font-bold text-accent">{savedCount}</div>
             <div className="text-xs text-muted mt-1">저장한 작품</div>
           </div>
           <div
             className="p-4 bg-surface rounded-lg"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}
+            style={{ boxShadow: "var(--shadow-sm)" }}
           >
             <div className="font-data text-2xl font-bold text-accent">{stats.total}</div>
             <div className="text-xs text-muted mt-1">시청 리포트</div>
@@ -340,7 +340,7 @@ export default function ProfilePage() {
         >
           <div
             className="w-full max-w-[320px] p-5 bg-surface-raised rounded-xl"
-            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+            style={{ boxShadow: "var(--shadow-lg)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="font-display text-lg font-bold">정말 초기화할까요?</h3>
@@ -374,7 +374,7 @@ export default function ProfilePage() {
             style={{
               background: "var(--surface-raised)",
               color: "var(--text-primary)",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+              boxShadow: "var(--shadow-toast)",
             }}
           >
             <span

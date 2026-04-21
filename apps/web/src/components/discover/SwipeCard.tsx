@@ -109,8 +109,7 @@ export default function SwipeCard({
             pointerEvents: isTop && !immersive ? "auto" : "none",
           }}
         >
-          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10 bg-overlay"
-            style={{ borderRadius: "var(--radius-md)" }}>
+          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10 bg-overlay rounded-md">
             <IconStar size={13} color="var(--accent)" />
             <span className="font-data font-semibold text-accent">
               {rec.rating.toFixed(1)}
@@ -151,7 +150,7 @@ export default function SwipeCard({
             </div>
             <div
               className="mt-2 px-2.5 py-1.5 text-sm text-secondary"
-              style={{ background: "var(--accent-dim)", borderRadius: "2px", borderLeft: "2px solid var(--accent)" }}
+              style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-sm)", borderLeft: "2px solid var(--accent)" }}
             >
               {rec.reason}
             </div>

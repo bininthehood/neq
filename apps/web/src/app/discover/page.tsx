@@ -357,7 +357,7 @@ export default function DiscoverPage() {
                   style={{
                     background: "var(--surface)",
                     border: "1px solid var(--border)",
-                    boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+                    boxShadow: "var(--shadow-lg)",
                     animation: "fade-in 150ms var(--ease-enter)",
                   }}
                 >
@@ -516,7 +516,7 @@ export default function DiscoverPage() {
             style={{
               background: "var(--surface-raised)",
               color: "var(--text-primary)",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+              boxShadow: "var(--shadow-toast)",
             }}
           >
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)" }} />
@@ -532,7 +532,7 @@ export default function DiscoverPage() {
             style={{
               background: "var(--surface-raised)",
               color: "var(--text-primary)",
-              boxShadow: "0 2px 12px rgba(0,0,0,0.4)",
+              boxShadow: "var(--shadow-toast)",
             }}
             onClick={() => {
               router.push("/saved");

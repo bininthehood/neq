@@ -132,7 +132,7 @@ export default function FilterChips({
           />
           <div
             className="absolute left-3 right-3 z-30 p-3 flex flex-wrap gap-2 animate-fade-in bg-surface-raised rounded-lg"
-            style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.5)" }}
+            style={{ boxShadow: "var(--shadow-dropdown)" }}
           >
             {openDropdown === "type" &&
               (["all", "movie", "series", "variety"] as const).map((t) => (

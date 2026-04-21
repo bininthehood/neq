@@ -52,6 +52,13 @@
   --radius-xl: 16px;
   --radius-full: 9999px;
 
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  --shadow-dropdown: 0 4px 20px rgba(0,0,0,0.5);
+  --shadow-toast: 0 2px 12px rgba(0,0,0,0.4);
+
   /* Typography */
   --font-display: var(--font-fraunces), Georgia, serif;
   --font-body: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;

@@ -28,14 +28,14 @@ export default function ProfileLoading() {
           <div className="grid grid-cols-2 gap-3">
             <div
               className="p-4 bg-surface rounded-lg"
-              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}
+              style={{ boxShadow: "var(--shadow-sm)" }}
             >
               <div className="h-8 w-10 animate-pulse bg-surface-raised rounded-md" />
               <div className="h-3 w-16 animate-pulse bg-surface-raised rounded-sm mt-2" />
             </div>
             <div
               className="p-4 bg-surface rounded-lg"
-              style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }}
+              style={{ boxShadow: "var(--shadow-sm)" }}
             >
               <div className="h-8 w-10 animate-pulse bg-surface-raised rounded-md" />
               <div className="h-3 w-16 animate-pulse bg-surface-raised rounded-sm mt-2" />

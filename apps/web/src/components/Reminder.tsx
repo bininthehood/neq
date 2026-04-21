@@ -41,7 +41,7 @@ export default function Reminder() {
       <div
         className="max-w-lg mx-auto flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-lg"
         style={{
-          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          boxShadow: "var(--shadow-md)",
         }}
       >
         <div className="flex-1 min-w-0">
