@@ -82,6 +82,8 @@ export type NekoEvent =
   | "ott_link_clicked"
   // 공유
   | "card_shared"
+  | "share_saved"
+  | "share_viewed"
   // 필터
   | "filter_changed"
   // 검색

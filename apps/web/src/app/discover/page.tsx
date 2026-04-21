@@ -165,6 +165,7 @@ export default function DiscoverPage() {
 
   const handleShare = useCallback(async (r: Recommendation) => {
     const providers = r.providers.map((p) => p.name).join(", ");
+    const shareUrl = `${window.location.origin}/share/${r.tmdbId}?type=${r.type}`;
     const body = [
       `\uD83C\uDFAC ${r.title}`,
       r.reason,
@@ -172,11 +173,11 @@ export default function DiscoverPage() {
       providers ? `\uD83D\uDCFA ${providers}` : null,
       `\u2B50 ${r.rating.toFixed(1)}`,
       "",
-      "neq, \u2014 \uC624\uB298 \uBF50 \uBCFC\uAE4C?",
+      shareUrl,
     ].filter((line) => line !== null).join("\n");
     if (navigator.share) {
       try {
-        await navigator.share({ title: r.title, text: body });
+        await navigator.share({ title: r.title, text: body, url: shareUrl });
         track("card_shared", { tmdb_id: r.tmdbId, title: r.title });
       } catch {}
     } else {

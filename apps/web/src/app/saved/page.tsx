@@ -1105,11 +1105,11 @@ export default function SavedPage() {
             <button
               onClick={async () => {
                 const rec = detailItem!.recommendation;
-                const text = `${rec.title} — ${rec.reason}`;
+                const shareUrl = `${window.location.origin}/share/${rec.tmdbId}?type=${rec.type}`;
                 const providers = rec.providers.map((p) => p.name).join(", ");
-                const body = `${text}\n${providers}에서 볼 수 있어요\n\nneq에서 발견`;
+                const body = `\uD83C\uDFAC ${rec.title}\n${rec.reason}\n${providers ? `\uD83D\uDCFA ${providers}` : ""}\n\n${shareUrl}`;
                 if (navigator.share) {
-                  try { await navigator.share({ title: rec.title, text: body }); } catch {}
+                  try { await navigator.share({ title: rec.title, text: body, url: shareUrl }); } catch {}
                 } else {
                   await navigator.clipboard.writeText(body);
                 }
