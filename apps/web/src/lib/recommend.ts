@@ -357,11 +357,86 @@ function buildRecommendationObject(
 
 // ---------- 템플릿 reason (LLM 미선택 후보용) ----------
 
+const GENRE_REASONS: Record<number, string[]> = {
+  28:    ["액션 시퀀스가 정말 시원해요", "손에 땀을 쥐게 하는 액션이에요"],
+  12:    ["모험심을 자극하는 이야기예요", "스케일이 남다른 모험물이에요"],
+  16:    ["작화가 정말 예술이에요", "애니메이션의 매력을 느껴보세요"],
+  35:    ["웃음이 빵빵 터지는 작품이에요", "유쾌한 기분이 필요할 때 딱이에요"],
+  80:    ["긴장감이 끝까지 놓이지 않아요", "범죄 스릴러를 좋아하면 딱이에요"],
+  99:    ["실화라서 더 몰입돼요", "다큐멘터리인데 영화보다 재밌어요"],
+  18:    ["감정이 깊이 남는 드라마예요", "여운이 오래 가는 작품이에요"],
+  10751: ["온 가족이 함께 볼 수 있어요", "마음이 따뜻해지는 이야기예요"],
+  14:    ["상상력이 폭발하는 판타지예요", "현실을 잊게 해주는 세계관이에요"],
+  36:    ["역사 속에 숨겨진 이야기예요", "시대극의 묵직함이 매력이에요"],
+  27:    ["심장이 쫄깃해지는 공포물이에요", "무서운데 계속 보게 돼요"],
+  10402: ["음악이 영혼을 울리는 작품이에요", "OST만으로도 가치 있어요"],
+  9648:  ["추리하는 재미가 쏠쏠해요", "미스터리 좋아하면 꼭 보세요"],
+  10749: ["설렘이 가득한 로맨스예요", "심쿵 포인트가 한두 개가 아니에요"],
+  878:   ["SF 세계관이 탄탄해요", "과학적 상상력이 돋보이는 작품이에요"],
+  53:    ["손에 땀을 쥐는 긴장감이에요", "한순간도 긴장을 놓을 수 없어요"],
+  10752: ["전쟁의 잔혹함과 인간애를 담았어요", "전쟁 영화의 정석이에요"],
+  37:    ["서부극 특유의 건조한 매력이에요", "클래식 장르를 즐겨보세요"],
+  10765: ["SF와 판타지가 절묘하게 섞여요", "세계관에 빠져들게 돼요"],
+  10764: ["리얼리티의 재미가 중독적이에요", "예능 좋아하면 빠질 수밖에 없어요"],
+  10767: ["토크가 재밌어서 시간 가는 줄 몰라요", "편하게 보기 좋은 프로그램이에요"],
+};
+
+const RATING_REASONS = [
+  "평점이 말해주는 검증된 작품이에요",
+  "수많은 관객이 인정한 작품이에요",
+  "평점이 높은 데는 이유가 있어요",
+];
+
+const CLASSIC_REASONS = [
+  "세월이 지나도 빛나는 고전이에요",
+  "오래됐지만 지금 봐도 신선해요",
+  "클래식에는 이유가 있어요",
+];
+
+const RECENT_REASONS = [
+  "최근작인데 반응이 뜨거워요",
+  "요즘 핫한 작품이에요",
+  "신작 중 눈에 띄는 작품이에요",
+];
+
+const KR_REASONS = [
+  "한국 콘텐츠의 저력을 느껴보세요",
+  "K-콘텐츠 팬이라면 놓치지 마세요",
+];
+
 function templateReason(c: EnrichedCandidate): string {
-  if (c.item.vote_average >= 8.5) return "평점이 아주 높은 작품이에요";
-  if (c.item.vote_average >= 8.0) return "평점 높고 입소문 난 작품이에요";
+  const genreIds = c.item.genre_ids ?? [];
+  const year = parseInt((c.item.release_date ?? c.item.first_air_date ?? "").slice(0, 4));
+  const isKR = c.details.country.includes("KR");
+  const rating = c.item.vote_average;
+
+  // 장르 기반 reason 후보 수집
+  const candidates: string[] = [];
+  for (const gid of genreIds) {
+    const reasons = GENRE_REASONS[gid];
+    if (reasons) candidates.push(...reasons);
+  }
+
+  // 평점 기반
+  if (rating >= 8.0) candidates.push(...RATING_REASONS);
+
+  // 년도 기반
+  if (!isNaN(year)) {
+    if (year <= 2005) candidates.push(...CLASSIC_REASONS);
+    if (year >= 2024) candidates.push(...RECENT_REASONS);
+  }
+
+  // 한국 작품
+  if (isKR) candidates.push(...KR_REASONS);
+
+  // 후보가 있으면 랜덤 선택, 없으면 폴백
+  if (candidates.length > 0) {
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  // 폴백
+  if (rating >= 8.5) return "평점이 아주 높은 작품이에요";
   if (c.type === "series") return "한 번 시작하면 멈출 수 없는 시리즈예요";
-  if (c.item.vote_average >= 7.0) return "숨겨진 명작이에요";
   return "취향에 맞을 것 같은 작품이에요";
 }
 
@@ -684,5 +759,40 @@ export async function getRecommendations(
     usedTitles.add(c.item.title);
   }
 
-  return results;
+  // Step 8: 장르 인터리빙 — 같은 주요 장르가 3연속 나오지 않도록 재배치
+  return interleaveByGenre(results);
+}
+
+/** 주요 장르 ID 추출 (첫 번째 장르 사용) */
+function primaryGenre(rec: Recommendation): string {
+  return rec.type; // movie vs series는 기본 구분
+}
+
+/** 같은 타입(movie/series)이 3연속 나오지 않도록 재배치 */
+function interleaveByGenre(recs: Recommendation[]): Recommendation[] {
+  if (recs.length <= 3) return recs;
+
+  const result: Recommendation[] = [];
+  const remaining = [...recs];
+
+  // 첫 항목 추가
+  result.push(remaining.shift()!);
+
+  while (remaining.length > 0) {
+    const lastTwo = result.slice(-2).map(primaryGenre);
+    const allSame = lastTwo.length === 2 && lastTwo[0] === lastTwo[1];
+
+    if (allSame) {
+      // 다른 타입의 작품을 찾아서 끼워넣기
+      const diffIdx = remaining.findIndex((r) => primaryGenre(r) !== lastTwo[0]);
+      if (diffIdx >= 0) {
+        result.push(remaining.splice(diffIdx, 1)[0]);
+        continue;
+      }
+    }
+
+    result.push(remaining.shift()!);
+  }
+
+  return result;
 }
