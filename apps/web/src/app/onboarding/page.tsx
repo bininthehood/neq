@@ -103,7 +103,7 @@ export default function OnboardingPage() {
     try {
       sessionStorage.setItem("neq_onb_completed_ts", String(Date.now()));
     } catch { /* ignore */ }
-    // 픽을 saved에 자동 시드 — 백그라운드 hydrate, discover 진입은 지연 없음
+    // 픽을 saved에 자동 시드 — 백그라운드 hydrate, 다음 화면 진입은 지연 없음
     // saved 페이지에 "뭐라도 있게" 만들어 재방문 유인 확보
     for (const s of selected) {
       fetch(`/api/tmdb/hydrate?id=${s.id}`)
@@ -115,7 +115,8 @@ export default function OnboardingPage() {
           /* silent — 시드 실패해도 온보딩 진행엔 영향 없음 */
         });
     }
-    router.push("/discover");
+    // Bridge screen을 거쳐 Discover로 — 추천 prefetch + 감성 연결
+    router.push("/onboarding/complete");
   };
 
   const showSuggestions = query.length === 0 && results.length === 0;

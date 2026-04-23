@@ -25,7 +25,7 @@ import DetailSheet from "@/components/discover/DetailSheet";
 import SwipeCard from "@/components/discover/SwipeCard";
 import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
-import TutorialOverlay from "@/components/discover/TutorialOverlay";
+import CoachMark, { type CoachStep } from "@/components/discover/CoachMark";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
 import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
 import SearchSheet from "@/components/discover/SearchSheet";
@@ -52,7 +52,14 @@ export default function DiscoverPage() {
   });
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [showWatched, setShowWatched] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
+  const [coachDone, setCoachDone] = useState<Record<CoachStep, boolean>>({
+    swipe: false,
+    save: false,
+    persona: false,
+  });
+  const [coachV2Shown, setCoachV2Shown] = useState(true); // 기본 true — mount 후 localStorage 확인하고 조정
+  const [coachSwipeAction, setCoachSwipeAction] = useState(false);
+  const [coachSaveAction, setCoachSaveAction] = useState(false);
   const [immersive, setImmersive] = useState(false);
   const [reentryNudge, setReentryNudge] = useState<string | null>(null);
   const [rewinding, setRewinding] = useState(false);
@@ -231,6 +238,7 @@ export default function DiscoverPage() {
       track("card_saved", { tmdb_id: current.tmdbId, title: current.title });
       addSaved(current);
       setSavedIds((s) => new Set(s).add(id));
+      setCoachSaveAction(true); // 사용자 의도적 저장만 coach dismiss 트리거
     }
   };
 
@@ -291,10 +299,35 @@ export default function DiscoverPage() {
     }
   }, [topIdx, filtered.length, rec.loading, rec.prefetching]);
 
+  // CoachMark v2 초기 상태 — mount 시 1회 localStorage 읽기
   useEffect(() => {
-    if (!mounted || rec.loading) return;
-    if (!localStorage.getItem("neq_tutorial_seen") && filtered.length > 0) setShowTutorial(true);
-  }, [mounted, rec.loading, filtered.length]);
+    if (typeof localStorage === "undefined") return;
+    setCoachV2Shown(localStorage.getItem("neq_coach_v2_shown") === "1");
+    setCoachDone({
+      swipe: localStorage.getItem("neq_coach_swipe_done") === "1",
+      save: localStorage.getItem("neq_coach_save_done") === "1",
+      persona: localStorage.getItem("neq_coach_persona_done") === "1",
+    });
+  }, []);
+
+  // 스와이프 액션 → coach dismiss 트리거 (topIdx가 0에서 한 번이라도 증가하면)
+  useEffect(() => {
+    if (topIdx > 0) setCoachSwipeAction(true);
+  }, [topIdx]);
+  // save coach의 action dismiss는 toggleSave 내부에서 직접 setCoachSaveAction 호출 (자동 시드/sync로 인한 savedIds 변화 오탐 방지)
+
+  const handleCoachDismiss = useCallback((step: CoachStep) => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(`neq_coach_${step}_done`, "1");
+    setCoachDone((prev) => {
+      const next = { ...prev, [step]: true };
+      if (next.swipe && next.save && next.persona) {
+        localStorage.setItem("neq_coach_v2_shown", "1");
+        setCoachV2Shown(true);
+      }
+      return next;
+    });
+  }, []);
 
   // 재진입 넛지: 어제 저장한 미시청 작품이 있으면 토스트 표시
   useEffect(() => {
@@ -581,7 +614,28 @@ export default function DiscoverPage() {
           </div>
         </div>
       )}
-      {showTutorial && <TutorialOverlay onDismiss={() => { setShowTutorial(false); localStorage.setItem("neq_tutorial_seen", "1"); }} />}
+      {/* CoachMark v2 — 카드 1/3/5 진입 시점별 힌트 */}
+      {!coachV2Shown && mounted && filtered.length > 0 && (
+        <>
+          <CoachMark
+            step="swipe"
+            active={!coachDone.swipe && topIdx === 0}
+            completedByAction={coachSwipeAction}
+            onDismiss={handleCoachDismiss}
+          />
+          <CoachMark
+            step="save"
+            active={!coachDone.save && topIdx === 2}
+            completedByAction={coachSaveAction}
+            onDismiss={handleCoachDismiss}
+          />
+          <CoachMark
+            step="persona"
+            active={!coachDone.persona && topIdx === 4}
+            onDismiss={handleCoachDismiss}
+          />
+        </>
+      )}
       {current && detail.showDetail && <DetailSheet rec={current} showDetail={detail.showDetail} detailY={detail.detailY}
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}
         onDetailTouchStart={detail.onDetailTouchStart} onDetailTouchMove={detail.onDetailTouchMove}

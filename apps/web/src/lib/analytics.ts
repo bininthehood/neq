@@ -102,4 +102,9 @@ export type NekoEvent =
   | "nudge_shown"
   | "nudge_reported"
   | "nudge_dismissed"
-  | "reentry_nudge_shown";
+  | "reentry_nudge_shown"
+  // 온보딩 브릿지 & 코치마크
+  | "bridge_shown"
+  | "bridge_completed"
+  | "coach_shown"
+  | "coach_completed";

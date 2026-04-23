@@ -48,6 +48,31 @@ function consumeOnboardingTimestamp(): number | undefined {
   }
 }
 
+const PREFETCH_TTL_MS = 60_000;
+
+/** Bridge screen이 미리 받아 놓은 추천 결과 1회성 소비. 없거나 만료/필터 불일치면 null */
+function consumePrefetchedRecs(ft: string, fo: string):
+  | { recs: unknown[] }
+  | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem("neq_prefetched_recs");
+    if (!raw) return null;
+    sessionStorage.removeItem("neq_prefetched_recs");
+    const parsed = JSON.parse(raw) as {
+      recs: unknown[];
+      ts: number;
+      filter: { type: string; origin: string };
+    };
+    if (Date.now() - parsed.ts > PREFETCH_TTL_MS) return null;
+    if (parsed.filter.type !== ft || parsed.filter.origin !== fo) return null;
+    if (!Array.isArray(parsed.recs) || parsed.recs.length === 0) return null;
+    return { recs: parsed.recs };
+  } catch {
+    return null;
+  }
+}
+
 export function useRecommendations() {
   const [recs, _setRecs] = useState<Recommendation[]>([]);
   const recsRef = useRef<Recommendation[]>([]); // stale closure 방지
@@ -115,6 +140,48 @@ export function useRecommendations() {
     const t0 = performance.now();
     const isFirstEntry = firstEntryRef.current;
     firstEntryRef.current = false;
+
+    // Bridge screen에서 prefetch된 결과가 있으면 네트워크 스킵
+    if (isFirstEntry) {
+      const prefetched = consumePrefetchedRecs(ft, fo);
+      if (prefetched) {
+        const prefRecs = prefetched.recs as Recommendation[];
+        const seen = new Set<number>();
+        const deduped = prefRecs.filter((r) => {
+          if (seen.has(r.tmdbId)) return false;
+          seen.add(r.tmdbId);
+          return true;
+        });
+        setRecommendations(deduped, ft, fo);
+        setRecs(deduped);
+        setLoading(false);
+        if (deduped.length > 0) {
+          const duration_ms = Math.round(performance.now() - t0);
+          const time_from_onboarding_ms = consumeOnboardingTimestamp();
+          track("recommendation_loaded", {
+            count: deduped.length,
+            filter_type: ft,
+            filter_origin: fo,
+            duration_ms,
+            cold_start: false,
+            first_entry: true,
+            has_feedback: false,
+            favorites_count: getFavorites().length,
+            prefetched: true,
+            ...(time_from_onboarding_ms !== undefined ? { time_from_onboarding_ms } : {}),
+          });
+          addRecHistory(
+            deduped.map((r) => ({
+              title: r.title,
+              tmdbId: r.tmdbId,
+              posterUrl: r.posterUrl,
+              type: r.type,
+            })),
+          );
+        }
+        return;
+      }
+    }
     const filter: Record<string, string | string[]> = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
