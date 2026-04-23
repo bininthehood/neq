@@ -132,13 +132,29 @@ export default function DiscoverPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, filtered.length, rec.prefetching]);
 
+  // detail_opened 래퍼 — source/providers_count 계측 추가.
+  // /saved 페이지와 구분해서 discover 내 각 진입 경로(탭/액션바/스와이프/키보드) 비교용
+  const openDetailTracked = useCallback((source: string) => {
+    const cur = filtered[topIdx];
+    if (cur) {
+      track("detail_opened", {
+        tmdb_id: cur.tmdbId,
+        title: cur.title,
+        providers_count: cur.providers.length,
+        source,
+      });
+    }
+    detail.openDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topIdx, filtered.length, detail.openDetail]);
+
   const swipe = useSwipeGesture({
     topIdx,
     filteredLength: filtered.length,
     nextCard,
     setTopIdx,
     onSwipeDown: () => setShowWatched(true),
-    onSwipeUp: () => detail.openDetail(),
+    onSwipeUp: () => openDetailTracked("swipe_up"),
     onPrevCard: () => {
       const cur = filtered[topIdx];
       if (cur) {
@@ -236,7 +252,7 @@ export default function DiscoverPage() {
     const h = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") nextCard();
       else if (e.key === "ArrowRight") swipe.prevCard();
-      else if (e.key === "ArrowUp") detail.openDetail();
+      else if (e.key === "ArrowUp") openDetailTracked("keyboard");
       else if (e.key === "ArrowDown" || e.key === "Escape") detail.closeDetail();
     };
     window.addEventListener("keydown", h);
@@ -489,7 +505,7 @@ export default function DiscoverPage() {
               showWatched={stackIdx === deckCards.length - 1 && showWatched} onCardTap={handleCardTap}
               onWatchedReaction={handleWatchedReaction} onWatchedSkip={handleWatchedSkip}
               onNotInterested={handleNotInterested}
-              onCloseWatched={() => setShowWatched(false)} onOpenDetail={detail.openDetail} metaInfo={metaInfo(r)} />
+              onCloseWatched={() => setShowWatched(false)} onOpenDetail={() => openDetailTracked("card_tap")} metaInfo={metaInfo(r)} />
           ))}
           {/* 되감기 오버레이 — VHS 테이프 되감기 */}
           {rewinding && (
@@ -514,7 +530,7 @@ export default function DiscoverPage() {
 
       <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 200, overflow: "hidden" }}>
         <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
-          onShare={() => current && handleShare(current)} onOpenDetail={detail.openDetail} onToggleSave={toggleSave}
+          onShare={() => current && handleShare(current)} onOpenDetail={() => openDetailTracked("action_bar")} onToggleSave={toggleSave}
           onRewind={() => {
             if (topIdx === 0 || swipe.swipingRef.current || rewinding) return;
             vibrate(10);
