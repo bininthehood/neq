@@ -47,6 +47,7 @@ yarn-error.log*
 .gstack/
 _screenshots/
 _workspace/
+_workspace_*/
 _brand/
 .playwright-mcp/
 .mcp.json
