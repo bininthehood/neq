@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { setFavorites, setFavoritesMeta, getPersonas } from "@/lib/store";
+import { setFavorites, setFavoritesMeta, getPersonas, addSaved } from "@/lib/store";
 import { usePersona } from "@/contexts/PersonaContext";
 import { track } from "@/lib/analytics";
 import { IconClose, IconCheck } from "@/components/Icons";
@@ -103,6 +103,18 @@ export default function OnboardingPage() {
     try {
       sessionStorage.setItem("neq_onb_completed_ts", String(Date.now()));
     } catch { /* ignore */ }
+    // 픽을 saved에 자동 시드 — 백그라운드 hydrate, discover 진입은 지연 없음
+    // saved 페이지에 "뭐라도 있게" 만들어 재방문 유인 확보
+    for (const s of selected) {
+      fetch(`/api/tmdb/hydrate?id=${s.id}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((rec) => {
+          if (rec) addSaved(rec);
+        })
+        .catch(() => {
+          /* silent — 시드 실패해도 온보딩 진행엔 영향 없음 */
+        });
+    }
     router.push("/discover");
   };
 
@@ -231,7 +243,7 @@ export default function OnboardingPage() {
                   <button
                     key={item.id}
                     onClick={() => toggleSelect(item)}
-                    className="relative overflow-hidden transition-all active:scale-95 rounded-lg animate-fade-in"
+                    className="relative overflow-hidden transition-all active:scale-95 rounded-lg animate-fade-in bg-surface"
                     style={{
                       outline: isSelected ? "2px solid var(--accent)" : "none",
                       outlineOffset: "-2px",
@@ -241,7 +253,17 @@ export default function OnboardingPage() {
                     }}
                   >
                     {item.posterUrl ? (
-                      <Image src={item.posterUrl} alt={item.title} fill className="object-cover" sizes="(max-width: 480px) 33vw, 160px" />
+                      <Image
+                        src={item.posterUrl}
+                        alt={item.title}
+                        fill
+                        className="object-cover transition-opacity duration-300 opacity-0 data-[loaded=true]:opacity-100"
+                        sizes="(max-width: 480px) 33vw, 160px"
+                        priority={i < 6}
+                        onLoad={(e) =>
+                          e.currentTarget.setAttribute("data-loaded", "true")
+                        }
+                      />
                     ) : (
                       <div className="w-full h-full bg-surface" />
                     )}
