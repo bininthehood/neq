@@ -14,6 +14,40 @@ import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
 
+/** Server-Timing 헤더 파싱: "match;dur=123, gather;dur=456" → { srv_match_ms: 123, ... } */
+function parseServerTiming(header: string | null): Record<string, number> {
+  if (!header) return {};
+  const out: Record<string, number> = {};
+  for (const entry of header.split(",")) {
+    const parts = entry.trim().split(";");
+    const name = parts[0]?.trim();
+    if (!name) continue;
+    for (const p of parts.slice(1)) {
+      const [k, v] = p.trim().split("=");
+      if (k === "dur" && v !== undefined) {
+        const n = Number(v);
+        if (!Number.isNaN(n)) out[`srv_${name}_ms`] = Math.round(n);
+      }
+    }
+  }
+  return out;
+}
+
+/** 세션 스토리지에서 온보딩 완료 시각을 1회성으로 꺼냄 */
+function consumeOnboardingTimestamp(): number | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const ts = sessionStorage.getItem("neq_onb_completed_ts");
+    if (!ts) return undefined;
+    sessionStorage.removeItem("neq_onb_completed_ts");
+    const parsed = parseInt(ts, 10);
+    if (Number.isNaN(parsed)) return undefined;
+    return Date.now() - parsed;
+  } catch {
+    return undefined;
+  }
+}
+
 export function useRecommendations() {
   const [recs, _setRecs] = useState<Recommendation[]>([]);
   const recsRef = useRef<Recommendation[]>([]); // stale closure 방지
@@ -28,6 +62,7 @@ export function useRecommendations() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [prefetching, setPrefetching] = useState(false);
   const prefetchingRef = useRef(false); // ref 기반 가드 (state보다 즉시 반영)
+  const firstEntryRef = useRef(true); // 세션 내 첫 loadRecs 호출 여부
   const [filterType, setFilterType] = useState<FilterType>(() => {
     if (typeof window === "undefined") return "all";
     return (sessionStorage.getItem("neq_filter_type") as FilterType) || "all";
@@ -77,6 +112,9 @@ export function useRecommendations() {
     abortRef.current = controller;
     setLoading(true);
     setLoadError(null);
+    const t0 = performance.now();
+    const isFirstEntry = firstEntryRef.current;
+    firstEntryRef.current = false;
     const filter: Record<string, string | string[]> = {};
     if (ft !== "all") filter.type = ft;
     if (fo !== "all") filter.origin = fo;
@@ -128,6 +166,7 @@ export function useRecommendations() {
         track("recommendation_failed", { reason: "http_error" });
         return;
       }
+      const serverTimings = parseServerTiming(res.headers.get("server-timing"));
       const data = await res.json();
       const rawRecs: Recommendation[] = data.recommendations ?? [];
       // 서버 응답에서도 중복 방어 (tmdbId 기준)
@@ -141,10 +180,23 @@ export function useRecommendations() {
       setRecs(newRecs);
       setLoading(false);
       if (newRecs.length > 0) {
+        const duration_ms = Math.round(performance.now() - t0);
+        const time_from_onboarding_ms = isFirstEntry
+          ? consumeOnboardingTimestamp()
+          : undefined;
         track("recommendation_loaded", {
           count: newRecs.length,
           filter_type: ft,
           filter_origin: fo,
+          duration_ms,
+          cold_start: favorites.length === 0,
+          first_entry: isFirstEntry,
+          has_feedback: hasFeedback,
+          favorites_count: favorites.length,
+          ...(time_from_onboarding_ms !== undefined
+            ? { time_from_onboarding_ms }
+            : {}),
+          ...serverTimings,
         });
         addRecHistory(
           newRecs.map((r: Recommendation) => ({
@@ -204,6 +256,7 @@ export function useRecommendations() {
     prefetchAbortRef.current?.abort();
     const controller = new AbortController();
     prefetchAbortRef.current = controller;
+    const t0 = performance.now();
     try {
       const filter: Record<string, string | string[]> = {};
       if (filterType !== "all") filter.type = filterType;
@@ -234,6 +287,7 @@ export function useRecommendations() {
         signal: controller.signal,
       });
       if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }
+      const serverTimings = parseServerTiming(res.headers.get("server-timing"));
       const data = await res.json();
       const newRecs: Recommendation[] = data.recommendations ?? [];
       if (newRecs.length > 0) {
@@ -243,7 +297,13 @@ export function useRecommendations() {
           if (unique.length === 0) return prev;
           const merged = [...prev, ...unique];
           setRecommendations(merged, filterType, filterOrigin);
-          track("recommendation_load_more", { count: unique.length });
+          const duration_ms = Math.round(performance.now() - t0);
+          track("recommendation_load_more", {
+            count: unique.length,
+            duration_ms,
+            favorites_count: favorites.length,
+            ...serverTimings,
+          });
           return merged;
         });
       }

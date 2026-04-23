@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const recommendations = await getRecommendations(
+    const { recommendations, timings } = await getRecommendations(
       favorites ?? [],
       filter ?? {},
       feedback,
@@ -80,9 +80,16 @@ export async function POST(req: NextRequest) {
       savedCount,
       onboardingCount
     );
-    return NextResponse.json({ recommendations }, {
-      headers: { "X-RateLimit-Remaining": String(remaining) },
-    });
+    // Server-Timing 헤더로 각 단계 ms 전파 (match/gather/enrich/filter/llm/cold)
+    // 다른 출처에서 읽으려면 Access-Control-Expose-Headers 필요하지만 현재는 동일 출처
+    const serverTiming = Object.entries(timings)
+      .map(([key, ms]) => `${key};dur=${ms}`)
+      .join(", ");
+    const headers: Record<string, string> = {
+      "X-RateLimit-Remaining": String(remaining),
+    };
+    if (serverTiming) headers["Server-Timing"] = serverTiming;
+    return NextResponse.json({ recommendations }, { headers });
   } catch (error) {
     console.error("Recommendation error:", error);
     return NextResponse.json(

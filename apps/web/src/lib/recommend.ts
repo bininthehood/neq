@@ -583,6 +583,11 @@ async function getColdStartRecommendations(
 
 // ---------- Main ----------
 
+export type RecommendResult = {
+  recommendations: Recommendation[];
+  timings: Record<string, number>;
+};
+
 /**
  * Hybrid 추천 파이프라인:
  *   TMDB 검색 → TMDB /recommendations 병합·랭킹 → 메타 풍부화 →
@@ -590,6 +595,9 @@ async function getColdStartRecommendations(
  *
  * Cold start (favorites 비어있음) → TMDB trending 빠른 경로 (LLM 스킵, ~3-5초).
  * 기존 매번 LLM 호출(gpt-4o) 방식 대비 ~10배 저렴, ~3배 빠름.
+ *
+ * 반환값의 timings는 각 단계 소요 ms (match/gather/enrich/filter/llm/cold).
+ * enrich와 filter는 보충 경로가 탔을 때 누적.
  */
 export async function getRecommendations(
   favorites: string[],
@@ -599,15 +607,25 @@ export async function getRecommendations(
   excludeIds?: number[],
   savedCount: number = 0,
   onboardingCount: number = 0
-): Promise<Recommendation[]> {
+): Promise<RecommendResult> {
+  const timings: Record<string, number> = {};
+  const mark = (key: string, t0: number) => {
+    timings[key] = (timings[key] ?? 0) + Math.round(performance.now() - t0);
+  };
+
   // Cold start: favorites 없으면 TMDB trending으로 빠르게 반환 (LLM 스킵)
   if (favorites.length === 0) {
-    return getColdStartRecommendations(filter, exclude);
+    const t = performance.now();
+    const recommendations = await getColdStartRecommendations(filter, exclude);
+    mark("cold", t);
+    return { recommendations, timings };
   }
 
   // Step 1: favorites 매칭
+  const tMatch = performance.now();
   const matched = await matchFavoritesToTMDB(favorites);
-  if (matched.length === 0) return [];
+  mark("match", tMatch);
+  if (matched.length === 0) return { recommendations: [], timings };
 
   const matchedIdsSet = new Set([
     ...matched.map((m) => m.id),
@@ -616,14 +634,20 @@ export async function getRecommendations(
   const excludeTitlesSet = new Set(exclude ?? []);
 
   // Step 2-3
+  const tGather = performance.now();
   const candidates = await gatherCandidates(matched, matchedIdsSet, excludeTitlesSet);
-  if (candidates.length === 0) return [];
+  mark("gather", tGather);
+  if (candidates.length === 0) return { recommendations: [], timings };
 
   // Step 4
+  const tEnrich = performance.now();
   const enriched = await enrichCandidates(candidates);
+  mark("enrich", tEnrich);
 
   // Step 5
+  const tFilter = performance.now();
   let filtered = applyFilters(enriched, filter).slice(0, 50);
+  mark("filter", tFilter);
 
   // Step 5.5: 크로스타입 보충 — 필터 적용 후 결과가 부족하면 discover로 보충
   // (예: 영화만 취향에 넣고 시리즈 필터 → TMDB /recommendations는 영화만 반환 → 시리즈 부족)
@@ -668,8 +692,12 @@ export async function getRecommendations(
         }));
 
       if (supplementCandidates.length > 0) {
+        const tSupE = performance.now();
         const supplementEnriched = await enrichCandidates(supplementCandidates);
+        mark("enrich", tSupE);
+        const tSupF = performance.now();
         const supplementFiltered = applyFilters(supplementEnriched, filter);
+        mark("filter", tSupF);
         filtered = [...filtered, ...supplementFiltered].slice(0, 50);
       }
     }
@@ -717,16 +745,21 @@ export async function getRecommendations(
         }));
 
       if (yearCandidates.length > 0) {
+        const tYearE = performance.now();
         const yearEnriched = await enrichCandidates(yearCandidates);
+        mark("enrich", tYearE);
+        const tYearF = performance.now();
         const yearFiltered = applyFilters(yearEnriched, filter);
+        mark("filter", tYearF);
         filtered = [...filtered, ...yearFiltered].slice(0, 50);
       }
     }
   }
 
-  if (filtered.length === 0) return [];
+  if (filtered.length === 0) return { recommendations: [], timings };
 
   // Step 6
+  const tLlm = performance.now();
   const curated = await curateWithLLM(
     filtered,
     favorites,
@@ -734,6 +767,7 @@ export async function getRecommendations(
     savedCount,
     onboardingCount
   );
+  mark("llm", tLlm);
 
   // Step 7: 조립 — LLM 선택 20개 + 나머지 30개 (템플릿 reason)
   const results: Recommendation[] = [];
@@ -760,7 +794,7 @@ export async function getRecommendations(
   }
 
   // Step 8: 장르 인터리빙 — 같은 주요 장르가 3연속 나오지 않도록 재배치
-  return interleaveByGenre(results);
+  return { recommendations: interleaveByGenre(results), timings };
 }
 
 /** 주요 장르 ID 추출 (첫 번째 장르 사용) */

@@ -99,6 +99,10 @@ export default function OnboardingPage() {
     setFavorites(selected.map((s) => s.title));
     setFavoritesMeta(selected.map((s) => ({ id: s.id, title: s.title, posterUrl: s.posterUrl })));
     persona.refresh();
+    // 온보딩 완료 시각 기록 — useRecommendations 첫 호출에서 time_from_onboarding_ms 계산
+    try {
+      sessionStorage.setItem("neq_onb_completed_ts", String(Date.now()));
+    } catch { /* ignore */ }
     router.push("/discover");
   };
 
