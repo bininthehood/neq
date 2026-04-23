@@ -328,6 +328,10 @@ export default function ProfilePage() {
             </span>
           </div>
         </div>
+        <p className="mt-4 pt-3 border-t border-border text-[11px] leading-relaxed text-muted">
+          This product uses TMDB and the TMDB APIs but is not endorsed,
+          certified, or otherwise approved by TMDB.
+        </p>
       </section>
       </div>
 
