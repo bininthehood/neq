@@ -21,7 +21,6 @@ interface SwipeCardProps {
   onWatchedSkip: () => void;
   onNotInterested: () => void;
   onCloseWatched: () => void;
-  onOpenDetail: () => void;
   metaInfo: string;
 }
 
@@ -39,7 +38,6 @@ export default function SwipeCard({
   onWatchedSkip,
   onNotInterested,
   onCloseWatched,
-  onOpenDetail,
   metaInfo,
 }: SwipeCardProps) {
   const pointerStartRef = useRef({ x: 0, y: 0 });

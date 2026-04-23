@@ -505,7 +505,7 @@ export default function DiscoverPage() {
               showWatched={stackIdx === deckCards.length - 1 && showWatched} onCardTap={handleCardTap}
               onWatchedReaction={handleWatchedReaction} onWatchedSkip={handleWatchedSkip}
               onNotInterested={handleNotInterested}
-              onCloseWatched={() => setShowWatched(false)} onOpenDetail={() => openDetailTracked("card_tap")} metaInfo={metaInfo(r)} />
+              onCloseWatched={() => setShowWatched(false)} metaInfo={metaInfo(r)} />
           ))}
           {/* 되감기 오버레이 — VHS 테이프 되감기 */}
           {rewinding && (
