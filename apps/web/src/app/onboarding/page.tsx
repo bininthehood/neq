@@ -151,8 +151,8 @@ export default function OnboardingPage() {
           <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
             <span className="font-display text-xl text-accent shrink-0">3</span>
             <div>
-              <div className="text-sm font-semibold">스와이프하며 저장</div>
-              <div className="text-xs mt-0.5 text-muted">마음에 들면 하트, 보기 싫으면 넘기기</div>
+              <div className="text-sm font-semibold">하트로 저장</div>
+              <div className="text-xs mt-0.5 text-muted">마음에 드는 작품을 모아보세요</div>
             </div>
           </div>
         </div>
