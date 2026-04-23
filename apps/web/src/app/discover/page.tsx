@@ -132,7 +132,24 @@ export default function DiscoverPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, filtered.length, rec.prefetching]);
 
-  const swipe = useSwipeGesture({ topIdx, filteredLength: filtered.length, nextCard, setTopIdx, onSwipeDown: () => setShowWatched(true) });
+  const swipe = useSwipeGesture({
+    topIdx,
+    filteredLength: filtered.length,
+    nextCard,
+    setTopIdx,
+    onSwipeDown: () => setShowWatched(true),
+    onSwipeUp: () => detail.openDetail(),
+    onPrevCard: () => {
+      const cur = filtered[topIdx];
+      if (cur) {
+        track("card_swiped", {
+          direction: "right",
+          tmdb_id: cur.tmdbId,
+          title: cur.title,
+        });
+      }
+    },
+  });
 
   const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
     if (!current) return;

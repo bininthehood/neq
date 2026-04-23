@@ -9,6 +9,8 @@ interface UseSwipeGestureParams {
   nextCard: () => void;
   setTopIdx: React.Dispatch<React.SetStateAction<number>>;
   onSwipeDown?: () => void;
+  onSwipeUp?: () => void;
+  onPrevCard?: () => void;
 }
 
 export function useSwipeGesture({
@@ -17,6 +19,8 @@ export function useSwipeGesture({
   nextCard,
   setTopIdx,
   onSwipeDown,
+  onSwipeUp,
+  onPrevCard,
 }: UseSwipeGestureParams) {
   const [dragX, setDragX] = useState(0);
   const [firstCardHint, setFirstCardHint] = useState(false);
@@ -77,11 +81,12 @@ export function useSwipeGesture({
           setDragX(dx);
           setDragY(0);
         }
-      } else if (dirLock.current === "v" && dy > 0) {
-        setDragY(Math.min(100, dy * 0.5));
+      } else if (dirLock.current === "v") {
+        if (dy > 0) setDragY(Math.min(100, dy * 0.5));
+        else if (onSwipeUp) setDragY(Math.max(-100, dy * 0.5));
       }
     },
-    [scrollLocked, filteredLength, topIdx, firstCardHint],
+    [scrollLocked, filteredLength, topIdx, firstCardHint, onSwipeUp],
   );
 
   const onTouchEnd = useCallback(() => {
@@ -95,6 +100,9 @@ export function useSwipeGesture({
       if (dragY > 40 && onSwipeDown) {
         vibrate(10);
         onSwipeDown();
+      } else if (dragY < -40 && onSwipeUp) {
+        vibrate(10);
+        onSwipeUp();
       }
       setDragY(0);
     } else if (dir === "h") {
@@ -107,6 +115,7 @@ export function useSwipeGesture({
           // 30%+ -> land: animate to 0, then switch topIdx
           setPrevOverlayX(0);
           vibrate(10);
+          onPrevCard?.();
           setTimeout(() => {
             setTopIdx((i) => (i > 0 ? i - 1 : filteredLength - 1));
             setPrevOverlayX(null);
@@ -126,7 +135,7 @@ export function useSwipeGesture({
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dragX, dragY, nextCard, prevOverlayX, filteredLength, onSwipeDown]);
+  }, [dragX, dragY, nextCard, prevOverlayX, filteredLength, onSwipeDown, onSwipeUp, onPrevCard]);
 
   // prevCard via keyboard/button - overlay animation
   const prevCard = useCallback(() => {
@@ -138,6 +147,7 @@ export function useSwipeGesture({
     requestAnimationFrame(() => {
       setPrevOverlayX(0);
       vibrate(10);
+      onPrevCard?.();
       const t = setTimeout(() => {
         timersRef.current.delete(t);
         setTopIdx((i) => i - 1);
@@ -147,7 +157,7 @@ export function useSwipeGesture({
       }, 350);
       timersRef.current.add(t);
     });
-  }, [swiping, topIdx, prevOverlayX, filteredLength, setTopIdx]);
+  }, [swiping, topIdx, prevOverlayX, filteredLength, setTopIdx, onPrevCard]);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach(clearTimeout);
