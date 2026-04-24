@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS tmdb_metadata (
   overview       TEXT,
   rating         NUMERIC,
   release_date   TEXT,
-  poster_url     TEXT,
-  backdrop_url   TEXT,
+  poster_path    TEXT,
+  backdrop_path  TEXT,
   director       TEXT,
   cast_names     TEXT[],
   runtime        INTEGER,
@@ -55,9 +55,15 @@ CREATE TABLE IF NOT EXISTS tmdb_metadata (
 );
 
 -- providers_fetched_at은 Q5 결정으로 추가: providers만 30일 TTL 분리 (전체 metadata 180일 유지)
+-- poster_path/backdrop_path는 mapping-validation.md 결정: 원본 path만 저장하고 읽기 시 prefix 생성
+--   (recommend.ts는 w500, share/[id]는 w1280 등 크기별 URL을 동적 생성)
 -- 기존 실행본 호환을 위한 멱등 ALTER
 ALTER TABLE tmdb_metadata
-  ADD COLUMN IF NOT EXISTS providers_fetched_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS providers_fetched_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS poster_path TEXT,
+  ADD COLUMN IF NOT EXISTS backdrop_path TEXT,
+  DROP COLUMN IF EXISTS poster_url,
+  DROP COLUMN IF EXISTS backdrop_url;
 
 CREATE INDEX IF NOT EXISTS idx_metadata_fetched ON tmdb_metadata (fetched_at);
 CREATE INDEX IF NOT EXISTS idx_metadata_genres ON tmdb_metadata USING GIN (genre_ids);
