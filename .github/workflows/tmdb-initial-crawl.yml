@@ -1,0 +1,50 @@
+name: TMDB Initial Crawl (1회성)
+
+# 초기 bulk crawl. workflow_dispatch로 수동 실행.
+# popularity 상위 movie 50K + tv 30K = 80K 메타데이터 채움.
+# 예상 소요: 2.2시간 (Actions 단일 job 6h 제한 내). private 예산 약 132분 소모.
+
+on:
+  workflow_dispatch:
+    inputs:
+      movie_limit:
+        description: "popularity 상위 movie 개수 (기본 50000)"
+        required: false
+        default: "50000"
+      tv_limit:
+        description: "popularity 상위 tv 개수 (기본 30000)"
+        required: false
+        default: "30000"
+      rate_limit_rps:
+        description: "TMDB rate limit req/s (기본 30)"
+        required: false
+        default: "30"
+
+concurrency:
+  group: tmdb-initial-crawl
+  cancel-in-progress: false
+
+jobs:
+  initial-crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --ignore-scripts
+
+      - name: Run tmdb-initial-crawl
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          MOVIE_LIMIT: ${{ inputs.movie_limit || '50000' }}
+          TV_LIMIT: ${{ inputs.tv_limit || '30000' }}
+          TMDB_RATE_LIMIT_RPS: ${{ inputs.rate_limit_rps || '30' }}
+        run: npx tsx scripts/tmdb-initial-crawl.ts
