@@ -194,41 +194,60 @@ function consumeLine(
 }
 
 /**
- * Stale 레코드 soft delete. Supabase 기본 statement_timeout(60s) 회피 위해
- * 배치 5000건씩 반복. 초기 대량 정리(~1.3M) + 이후 일일 delta 모두 대응.
+ * Stale 레코드 soft delete. Supabase statement_timeout(60s) 회피 위해 2-step 배치:
+ *   1) SELECT tmdb_id LIMIT 5000 — 인덱스 탐색 + LIMIT SQL 레벨 적용
+ *   2) UPDATE WHERE tmdb_id IN (ids) — PK 인덱스 스캔으로 빠름
+ * media_type별로 분리 (composite PK 안전).
+ * 초기 대량 정리(~1.3M) + 이후 일일 delta 모두 대응.
  */
 async function markStale(
   admin: SupabaseClient,
   startedAt: Date,
 ): Promise<number> {
   const BATCH_SIZE = 5000;
-  const MAX_ITERATIONS = 500; // 안전 상한: 5000 * 500 = 2.5M
+  const MAX_ITERATIONS = 500;
   let total = 0;
-  for (let i = 0; i < MAX_ITERATIONS; i++) {
-    const { data, error } = await admin
-      .from("tmdb_catalog")
-      .update({ deleted: true })
-      .lt("last_export", startedAt.toISOString())
-      .eq("deleted", false)
-      .select("tmdb_id")
-      .limit(BATCH_SIZE);
-    if (error) {
-      console.error(
-        `[tmdb-catalog-sync] soft delete 배치 ${i} 실패:`,
-        error.message,
-      );
-      return total;
+  for (const mediaType of ["movie", "tv"] as const) {
+    let typeTotal = 0;
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+      const { data, error } = await admin
+        .from("tmdb_catalog")
+        .select("tmdb_id")
+        .eq("media_type", mediaType)
+        .lt("last_export", startedAt.toISOString())
+        .eq("deleted", false)
+        .limit(BATCH_SIZE);
+      if (error) {
+        console.error(
+          `[tmdb-catalog-sync] soft delete select 실패 (${mediaType}):`,
+          error.message,
+        );
+        break;
+      }
+      if (!data || data.length === 0) break;
+      const ids = data.map((r) => r.tmdb_id);
+      const upd = await admin
+        .from("tmdb_catalog")
+        .update({ deleted: true })
+        .eq("media_type", mediaType)
+        .in("tmdb_id", ids);
+      if (upd.error) {
+        console.error(
+          `[tmdb-catalog-sync] soft delete update 실패 (${mediaType}):`,
+          upd.error.message,
+        );
+        break;
+      }
+      typeTotal += data.length;
+      total += data.length;
+      if (i % 10 === 9) {
+        console.log(
+          `[tmdb-catalog-sync] soft delete ${mediaType} 진행 ${typeTotal}건 (배치 ${i + 1})`,
+        );
+      }
     }
-    const n = data?.length ?? 0;
-    if (n === 0) return total;
-    total += n;
-    if (i % 10 === 9) {
-      console.log(`[tmdb-catalog-sync] soft delete 진행 ${total}건 (배치 ${i + 1})`);
-    }
+    console.log(`[tmdb-catalog-sync] soft delete ${mediaType} 완료: ${typeTotal}건`);
   }
-  console.warn(
-    `[tmdb-catalog-sync] soft delete MAX_ITERATIONS 도달 (${total}건 처리). 다음 실행에서 이어짐.`,
-  );
   return total;
 }
 
