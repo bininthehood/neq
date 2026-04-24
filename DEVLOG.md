@@ -7,6 +7,89 @@
 ---
 
 
+## 2026-04-24 (Day 15)
+
+### 진행 요약
+**TMDB 미러 Phase 1 완성.** `/api/recommend` enrich 단계(4.8~12.3s) 병목 해소를 위한 자체 카탈로그 미러 구축. Vercel Hobby 10초 제약으로 Vercel cron → **GitHub Actions로 이전**. Supabase 500MB 한도 대응으로 `popularity≥1.0` 필터 도입. 메인/보조 세션 병렬 작업으로 Open Questions 6개 해소 + Phase 2 초안 사전 준비.
+
+### 완료된 작업
+
+**TMDB 미러 Phase 1 (커밋 5개)**
+- `supabase/migrations/20260424_tmdb_mirror.sql` — `tmdb_catalog`, `tmdb_metadata`, `tmdb_crawl_queue` + `pg_trgm` + RLS. 멱등 ALTER 패턴
+- `scripts/tmdb-catalog-sync.ts` — Daily ID Export 스트리밍 gunzip + popularity 필터 + 1000건 배치 upsert + 2-step soft delete
+- `.github/workflows/tmdb-catalog-sync.yml` — 매일 08:00 UTC + workflow_dispatch
+- `apps/web/src/lib/supabase-admin.ts` — service_role 싱글톤 (Phase 2 대기)
+- 스키마 후속 3회 반영: `providers_fetched_at`(Q5), `poster_path`/`backdrop_path`(mapping-validation)
+
+**실측 검증 (GitHub Actions 4회 실행)**
+- 1.4M → 98K active + 1.3M soft-deleted (`popularity<1.0` 자동 정리)
+- movie 45.6K + tv 52.4K = 98,057 active 레코드
+- 정상 운영 시 일일 duration 1~2분 예상
+
+**Prod 스모크 테스트 3건**
+- `/api/recommend` warm latency 7.85~9.67s (p95 ≤10s 간신히 충족), **cold start 20s 관찰**
+- Profile 페이지 TMDB Attribution 문구 정상 렌더 (`prod-profile-attribution.png`)
+- Bridge → Discover 전환 정상, CoachMark dismiss flag(`neq_coach_swipe_done`) 저장 확인
+
+**정리 작업**
+- `apps/web/vercel.json` 삭제 (Vercel cron 폐기)
+- 루트 Playwright 스크린샷 5개 삭제
+- `turbo.json` env에 `CRON_SECRET` 추가
+- 프로젝트 메모리에 TMDB 라이선스 제약 저장 (`project_tmdb_license.md`)
+
+### 주요 결정
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| catalog-sync 실행 환경 | Vercel cron → **GitHub Actions** | Hobby 10초 한도 · 로컬 실측 279s |
+| popularity 필터 | `≥1.0` | Supabase 무료 500MB 장기 여유 (catalog ~12MB + metadata 160MB + pgvector 78MB = 250MB) |
+| Phase 4 pgvector 차원 | **256** (1536 → 축소) | Supabase 500MB 내 유지 |
+| soft delete 구조 | **2-step SELECT+UPDATE IN + LIMIT 5000** | PostgREST UPDATE의 LIMIT가 SQL에 안 내려가 60s timeout 발생 |
+| poster/backdrop 저장 | `path`만 저장 (prefix는 읽기 시) | recommend.ts w500 / share w1280 크기별 URL 동적 생성 필요 |
+| 초기 bulk 실행 환경 | GitHub Actions (Phase 2) | 로컬 2.2h 대비 CI 재현성 |
+| Supabase 플랜 | 무료 유지 | popularity 필터 + pgvector 차원 축소로 한도 내 |
+
+### 배운 점
+
+**PostgREST `.update().limit()` 함정**
+- `.update().limit(N)`을 쓰면 SQL에 LIMIT이 안 내려가고 서버가 전체 UPDATE 시도 → `canceling statement due to statement timeout`
+- 해결: SELECT로 `LIMIT` 적용해 id 목록을 확보한 뒤 `UPDATE ... WHERE id IN (...)` 2-step
+- PostgREST UPDATE LIMIT은 문서상 지원이지만 실측에서 안정성 낮음
+
+**TMDB Daily ID Export는 API Key 불필요 + 공개 공식 경로**
+- `files.tmdb.org/p/exports/` 공개 gzip. 약관상 의도된 사용법
+- catalog는 "어떤 ID가 존재하는지" 인덱스용이고, detail 크롤은 Phase 2부터
+
+**Supabase RLS + service_role의 단순한 패턴**
+- RLS enable만 걸고 정책 없음 → service_role 전용 (anon/authenticated 완전 차단)
+- `SUPABASE_SERVICE_ROLE_KEY`는 서버 전용 싱글톤으로 분리
+
+**병렬 세션의 가치**
+- 보조 세션이 Phase 2 초안(`_workspace/phase2-draft/`) + `mapping-validation.md`를 선행 작성
+- 메인 세션이 Phase 1 검증하는 동안 블로커 3건 조기 발견 (poster_path, vercel.json 중복, providers_fetched_at)
+
+### 남은 과제
+
+- [ ] **사용자 조치**: Supabase Dashboard SQL Editor에서 `20260424_tmdb_mirror.sql` 재실행 (providers_fetched_at + poster_path/backdrop_path 반영). 멱등 ALTER라 안전
+- [ ] Phase 2 착수 — `_workspace/phase2-draft/` 초안 기반으로 bulk-crawl + 98K metadata 적재
+- [ ] `/api/recommend` cold start 20초 개선 검토 (Vercel function cold start 문제)
+- [ ] CoachMark 오버레이 UI 자체 스크린샷 재검증 (localStorage 조작 + 즉시 캡처)
+- [ ] 어제 배포분 데이터 2~3일 누적 후 p50/p90 · providers_count 분포 분석
+
+### 배포 상태
+
+커밋 5건 main 푸시 완료:
+```
+f8f560c fix(tmdb-mirror): tmdb_metadata에 poster_path/backdrop_path 원본 저장
+67a2b35 fix(tmdb-mirror): soft delete MAX_ITERATIONS 1500 + 도달 시 경고 로그
+f590209 fix(tmdb-mirror): soft delete를 2-step SELECT+UPDATE IN으로 전환
+fb10418 fix(tmdb-mirror): soft delete 배치 루프 + Actions timeout 30분
+4f8de2b feat(tmdb-mirror): Phase 1 — Daily ID Export 카탈로그 미러
+```
+
+---
+
+
 ## 2026-04-23 (Day 14)
 
 ### 진행 요약
