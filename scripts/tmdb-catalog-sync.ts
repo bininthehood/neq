@@ -205,10 +205,11 @@ async function markStale(
   startedAt: Date,
 ): Promise<number> {
   const BATCH_SIZE = 5000;
-  const MAX_ITERATIONS = 500;
+  const MAX_ITERATIONS = 1500; // 5000 * 1500 = 7.5M 상한. 초기 대량 정리(~1.1M) 1회 완결.
   let total = 0;
   for (const mediaType of ["movie", "tv"] as const) {
     let typeTotal = 0;
+    let hitLimit = true;
     for (let i = 0; i < MAX_ITERATIONS; i++) {
       const { data, error } = await admin
         .from("tmdb_catalog")
@@ -224,7 +225,10 @@ async function markStale(
         );
         break;
       }
-      if (!data || data.length === 0) break;
+      if (!data || data.length === 0) {
+        hitLimit = false;
+        break;
+      }
       const ids = data.map((r) => r.tmdb_id);
       const upd = await admin
         .from("tmdb_catalog")
@@ -246,7 +250,15 @@ async function markStale(
         );
       }
     }
-    console.log(`[tmdb-catalog-sync] soft delete ${mediaType} 완료: ${typeTotal}건`);
+    if (hitLimit) {
+      console.warn(
+        `[tmdb-catalog-sync] soft delete ${mediaType} MAX_ITERATIONS(${MAX_ITERATIONS}) 도달: ${typeTotal}건 처리, 다음 실행에서 이어짐`,
+      );
+    } else {
+      console.log(
+        `[tmdb-catalog-sync] soft delete ${mediaType} 완료: ${typeTotal}건`,
+      );
+    }
   }
   return total;
 }
