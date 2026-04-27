@@ -181,21 +181,26 @@ async function filterNotInMetadata(
   admin: SupabaseClient,
   targets: Array<{ tmdb_id: number; media_type: MediaType }>,
 ): Promise<Array<{ tmdb_id: number; media_type: MediaType }>> {
-  // Supabase의 .in() 최대 2000개 단위로 청크
-  const CHUNK = 2000;
+  // .in()으로 큰 ID 배열 전달 시 PostgREST URL 길이 한도 초과로 fetch fail.
+  // metadata 전체를 작은 페이지로 가져와 Set 구축 후 JS에서 diff.
+  const PAGE = 1000;
   const existing = new Set<string>();
 
   for (const mediaType of ["movie", "tv"] as const) {
-    const ids = targets.filter((t) => t.media_type === mediaType).map((t) => t.tmdb_id);
-    for (let i = 0; i < ids.length; i += CHUNK) {
-      const slice = ids.slice(i, i + CHUNK);
+    let offset = 0;
+    while (true) {
       const { data, error } = await admin
         .from("tmdb_metadata")
         .select("tmdb_id")
         .eq("media_type", mediaType)
-        .in("tmdb_id", slice);
+        .order("tmdb_id", { ascending: true })
+        .range(offset, offset + PAGE - 1);
       if (error) throw new Error(`metadata 조회 실패: ${error.message}`);
-      for (const r of data ?? []) existing.add(`${mediaType}:${r.tmdb_id}`);
+      const rows = data ?? [];
+      if (rows.length === 0) break;
+      for (const r of rows) existing.add(`${mediaType}:${r.tmdb_id}`);
+      if (rows.length < PAGE) break;
+      offset += PAGE;
     }
   }
 
