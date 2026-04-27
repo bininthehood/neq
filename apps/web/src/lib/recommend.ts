@@ -215,8 +215,8 @@ async function curateWithLLM(
   feedback?: WatchFeedback,
   savedCount: number = 0,
   onboardingCount: number = 0
-): Promise<CuratedPick[]> {
-  if (candidates.length === 0) return [];
+): Promise<{ picks: CuratedPick[]; usage: TokenUsage | null }> {
+  if (candidates.length === 0) return { picks: [], usage: null };
 
   const candidateList = candidates
     .map((c) => {
@@ -297,8 +297,14 @@ ${feedbackText}
       temperature: 0.8,
     });
 
+    const usage: TokenUsage = {
+      prompt_tokens: response.usage?.prompt_tokens ?? 0,
+      completion_tokens: response.usage?.completion_tokens ?? 0,
+      cached_tokens: response.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+    };
+
     const content = response.choices[0].message.content;
-    if (!content) return [];
+    if (!content) return { picks: [], usage };
 
     const parsed = JSON.parse(content) as Record<string, unknown>;
     const rawSelected =
@@ -307,7 +313,7 @@ ${feedbackText}
       (Object.values(parsed).find((v) => Array.isArray(v)) as unknown[] | undefined) ??
       [];
 
-    return rawSelected
+    const picks = rawSelected
       .filter(
         (s): s is { id: number; reason: string } =>
           typeof s === "object" &&
@@ -316,9 +322,10 @@ ${feedbackText}
           typeof (s as Record<string, unknown>).reason === "string"
       )
       .map((s) => ({ id: s.id, reason: s.reason.slice(0, 60) }));
+    return { picks, usage };
   } catch (err) {
     console.error("LLM curation failed:", err);
-    return [];
+    return { picks: [], usage: null };
   }
 }
 
@@ -583,9 +590,16 @@ async function getColdStartRecommendations(
 
 // ---------- Main ----------
 
+export type TokenUsage = {
+  prompt_tokens: number;
+  completion_tokens: number;
+  cached_tokens: number;
+};
+
 export type RecommendResult = {
   recommendations: Recommendation[];
   timings: Record<string, number>;
+  usage?: TokenUsage;
 };
 
 /**
@@ -775,7 +789,7 @@ export async function getRecommendations(
   const usedTitles = new Set<string>();
 
   // Phase 1: LLM이 선택한 20개 (개인화 reason)
-  for (const { id, reason } of curated) {
+  for (const { id, reason } of curated.picks) {
     if (results.length >= 20) break;
     const c = filtered.find((f) => f.id === id);
     if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
@@ -794,7 +808,11 @@ export async function getRecommendations(
   }
 
   // Step 8: 장르 인터리빙 — 같은 주요 장르가 3연속 나오지 않도록 재배치
-  return { recommendations: interleaveByGenre(results), timings };
+  return {
+    recommendations: interleaveByGenre(results),
+    timings,
+    ...(curated.usage ? { usage: curated.usage } : {}),
+  };
 }
 
 /** 주요 장르 ID 추출 (첫 번째 장르 사용) */

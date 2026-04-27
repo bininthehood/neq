@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { recommendations, timings } = await getRecommendations(
+    const { recommendations, timings, usage } = await getRecommendations(
       favorites ?? [],
       filter ?? {},
       feedback,
@@ -89,7 +89,10 @@ export async function POST(req: NextRequest) {
       "X-RateLimit-Remaining": String(remaining),
     };
     if (serverTiming) headers["Server-Timing"] = serverTiming;
-    return NextResponse.json({ recommendations, timings }, { headers });
+    return NextResponse.json(
+      usage ? { recommendations, timings, usage } : { recommendations, timings },
+      { headers },
+    );
   } catch (error) {
     console.error("Recommendation error:", error);
     return NextResponse.json(

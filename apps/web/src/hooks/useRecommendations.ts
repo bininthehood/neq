@@ -26,6 +26,20 @@ function timingsToProps(timings: unknown): Record<string, number> {
   return out;
 }
 
+/** /api/recommend 응답 body의 usage → PostHog 프로퍼티 (srv_<field>) */
+function usageToProps(usage: unknown): Record<string, number> {
+  if (!usage || typeof usage !== "object") return {};
+  const u = usage as Record<string, unknown>;
+  const out: Record<string, number> = {};
+  for (const k of ["prompt_tokens", "completion_tokens", "cached_tokens"] as const) {
+    const v = u[k];
+    if (typeof v === "number" && !Number.isNaN(v)) {
+      out[`srv_${k}`] = v;
+    }
+  }
+  return out;
+}
+
 /** 세션 스토리지에서 온보딩 완료 시각을 1회성으로 꺼냄 */
 function consumeOnboardingTimestamp(): number | undefined {
   if (typeof window === "undefined") return undefined;
@@ -45,7 +59,7 @@ const PREFETCH_TTL_MS = 60_000;
 
 /** Bridge screen이 미리 받아 놓은 추천 결과 1회성 소비. 없거나 만료/필터 불일치면 null */
 function consumePrefetchedRecs(ft: string, fo: string):
-  | { recs: unknown[]; timings: unknown }
+  | { recs: unknown[]; timings: unknown; usage: unknown }
   | null {
   if (typeof window === "undefined") return null;
   try {
@@ -55,13 +69,14 @@ function consumePrefetchedRecs(ft: string, fo: string):
     const parsed = JSON.parse(raw) as {
       recs: unknown[];
       timings?: unknown;
+      usage?: unknown;
       ts: number;
       filter: { type: string; origin: string };
     };
     if (Date.now() - parsed.ts > PREFETCH_TTL_MS) return null;
     if (parsed.filter.type !== ft || parsed.filter.origin !== fo) return null;
     if (!Array.isArray(parsed.recs) || parsed.recs.length === 0) return null;
-    return { recs: parsed.recs, timings: parsed.timings };
+    return { recs: parsed.recs, timings: parsed.timings, usage: parsed.usage };
   } catch {
     return null;
   }
@@ -164,6 +179,7 @@ export function useRecommendations() {
             prefetched: true,
             ...(time_from_onboarding_ms !== undefined ? { time_from_onboarding_ms } : {}),
             ...timingsToProps(prefetched.timings),
+            ...usageToProps(prefetched.usage),
           });
           addRecHistory(
             deduped.map((r) => ({
@@ -230,6 +246,7 @@ export function useRecommendations() {
       }
       const data = await res.json();
       const serverTimings = timingsToProps(data.timings);
+      const serverUsage = usageToProps(data.usage);
       const rawRecs: Recommendation[] = data.recommendations ?? [];
       // 서버 응답에서도 중복 방어 (tmdbId 기준)
       const seenIds = new Set<number>();
@@ -259,6 +276,7 @@ export function useRecommendations() {
             ? { time_from_onboarding_ms }
             : {}),
           ...serverTimings,
+          ...serverUsage,
         });
         addRecHistory(
           newRecs.map((r: Recommendation) => ({
@@ -351,6 +369,7 @@ export function useRecommendations() {
       if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }
       const data = await res.json();
       const serverTimings = timingsToProps(data.timings);
+      const serverUsage = usageToProps(data.usage);
       const newRecs: Recommendation[] = data.recommendations ?? [];
       if (newRecs.length > 0) {
         setRecs((prev) => {
@@ -365,6 +384,7 @@ export function useRecommendations() {
             duration_ms,
             favorites_count: favorites.length,
             ...serverTimings,
+            ...serverUsage,
           });
           return merged;
         });

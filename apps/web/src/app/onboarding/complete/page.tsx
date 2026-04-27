@@ -99,6 +99,7 @@ export default function OnboardingCompletePage() {
               JSON.stringify({
                 recs,
                 timings: data.timings,
+                usage: data.usage,
                 ts: Date.now(),
                 filter: { type: "all", origin: "all" },
               }),
