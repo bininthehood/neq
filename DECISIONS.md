@@ -150,6 +150,24 @@ DEVLOG에 분산된 핵심 설계·제품 결정을 한 곳에 정리합니다.
 
 ---
 
+## External Data Sources
+
+### 21. OTT 가용성은 TMDB(JustWatch) 단일 소스 + 한계 인지 정책 (2026-04-27, Day 18)
+- **결정:** OTT 가용성/링크 데이터는 **TMDB watch/providers 단일 소스**만 운영. 외부 데이터 소스(Watchmode/JustWatch B2B/자체 크롤링) 통합 안 함. 누락 OTT는 UX 폴백으로 처리.
+- **근거 (Day 18 F8 진단):**
+  - TMDB(JustWatch) KR provider: Netflix/Prime/Disney+/AppleTV+/wavve/Tving/Watcha 정상 커버
+  - **쿠팡플레이/Seezn 등 일부 한국 OTT 추적 부재** (JustWatch가 1차 raw에서 빠뜨림)
+  - **Watchmode 검증 결과**: KR 10개 provider 중 글로벌 OTT만, **한국 토종 0**. 통합 가치 0
+  - JustWatch B2B 라이선스: 연 수만 달러 추정 → DAU 10K+ 단계 협상 영역
+  - 자체 크롤링: 법적 리스크(이용약관 위반) + 안정성 ↓
+- **영향:**
+  - **UX 폴백** (W3 디자인 리빌드 통합 시점): detail에 *"OTT 정보는 일부 플랫폼(쿠팡플레이 등)이 누락될 수 있어요"* 디스클레이머 + 외부 검색 redirect
+  - **OTT 가격 정보(F2)도 동일 영역**: TMDB 미제공 + JustWatch 라이선스 동일. **가격 자체 보류**, 단 **카테고리 라벨(구독/대여/구매)은 도입 가능** (F2 P1)
+  - **Deep link 전략** (F4, W5): TMDB watchLink hub 우선 + Universal Link, 한국 토종은 web 검색 fallback. 자세한 사항은 `_workspace/ott-deeplink-research.md`
+  - **DAU 10K+ 도달 시 재검토**: 직접 라이선스 협상 또는 사용자 제보 supplement 테이블 옵션 5 활성화
+
+---
+
 ## Appendix: 기각된 대안
 
 | 대안 | 선택 대신 한 것 | 기각 사유 |
@@ -163,6 +181,7 @@ DEVLOG에 분산된 핵심 설계·제품 결정을 한 곳에 정리합니다.
 | Capacitor | Expo RN | 자산 재활용 + EAS OTA (#19) |
 | 데이터 백업 UI (프로필 내) | 함수만 보존, UI 제거 | "AI가 만든 기능" 느낌 (#15) |
 | anon key + device_id RLS | Supabase anonymous auth | 보안 실효성 0 (#16) |
+| Watchmode API 통합 (한국 OTT 보강 목적) | TMDB 단일 + UX 폴백 | KR provider 10개 중 한국 토종 0, 통합 가치 0 (#21) |
 
 ---
 
