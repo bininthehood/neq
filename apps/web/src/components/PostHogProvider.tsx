@@ -21,7 +21,8 @@ export default function PostHogProvider({ children }: { children: React.ReactNod
     posthog.init(key, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
       person_profiles: "identified_only", // 익명 사용자는 프로필 생성 안 함 (비용 절감)
-      capture_pageview: true,
+      // SPA 라우트 변경(history pushState)도 자동 $pageview 캡처. true는 첫 로드만 잡음
+      capture_pageview: "history_change",
       capture_pageleave: true,
       loaded: (ph) => {
         // 익명 deviceId를 distinct_id로 사용 (세션 간 유지)
