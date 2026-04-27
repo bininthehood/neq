@@ -2,8 +2,9 @@ name: TMDB Bulk Crawl
 
 on:
   schedule:
-    # 1시간 간격. 월 720분 사용 (private 2000분/월 한도 내)
-    - cron: "15 * * * *"
+    # Phase 2 본격 시작 전 임시: 6시간 간격(월 ~180분). 큐 비어있는 동안 Actions 예산 보호.
+    # initial-crawl 실행 후 1시간 간격(`15 * * * *`)으로 복원할 것.
+    - cron: "15 */6 * * *"
   workflow_dispatch:
     inputs:
       batch_size:
