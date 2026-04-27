@@ -153,16 +153,28 @@ async function pickTopFromCatalog(
   mediaType: MediaType,
   limit: number,
 ): Promise<number[]> {
-  const { data, error } = await admin
-    .from("tmdb_catalog")
-    .select("tmdb_id")
-    .eq("media_type", mediaType)
-    .eq("deleted", false)
-    .eq("adult", false)
-    .order("popularity", { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(`catalog select 실패 (${mediaType}): ${error.message}`);
-  return (data ?? []).map((r) => r.tmdb_id as number);
+  // Supabase PostgREST 기본 max-rows 1000 회피: range로 페이징
+  const PAGE = 1000;
+  const ids: number[] = [];
+  let offset = 0;
+  while (offset < limit) {
+    const end = Math.min(offset + PAGE, limit) - 1;
+    const { data, error } = await admin
+      .from("tmdb_catalog")
+      .select("tmdb_id")
+      .eq("media_type", mediaType)
+      .eq("deleted", false)
+      .eq("adult", false)
+      .order("popularity", { ascending: false })
+      .range(offset, end);
+    if (error) throw new Error(`catalog select 실패 (${mediaType}): ${error.message}`);
+    const rows = data ?? [];
+    if (rows.length === 0) break;
+    ids.push(...rows.map((r) => r.tmdb_id as number));
+    if (rows.length < end - offset + 1) break;
+    offset += PAGE;
+  }
+  return ids;
 }
 
 async function filterNotInMetadata(

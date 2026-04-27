@@ -138,16 +138,28 @@ async function pullQueue(
   admin: SupabaseClient,
   limit: number,
 ): Promise<QueueRow[]> {
-  const { data, error } = await admin
-    .from("tmdb_crawl_queue")
-    .select("tmdb_id, media_type, failed_count")
-    .lt("failed_count", MAX_FAILURES)
-    .order("priority", { ascending: false })
-    .order("failed_count", { ascending: true })
-    .order("attempted_at", { ascending: true, nullsFirst: true })
-    .limit(limit);
-  if (error) throw new Error(`큐 pull 실패: ${error.message}`);
-  return (data ?? []) as QueueRow[];
+  // Supabase PostgREST 기본 max-rows 1000 회피: range로 페이징
+  const PAGE = 1000;
+  const rows: QueueRow[] = [];
+  let offset = 0;
+  while (offset < limit) {
+    const end = Math.min(offset + PAGE, limit) - 1;
+    const { data, error } = await admin
+      .from("tmdb_crawl_queue")
+      .select("tmdb_id, media_type, failed_count")
+      .lt("failed_count", MAX_FAILURES)
+      .order("priority", { ascending: false })
+      .order("failed_count", { ascending: true })
+      .order("attempted_at", { ascending: true, nullsFirst: true })
+      .range(offset, end);
+    if (error) throw new Error(`큐 pull 실패: ${error.message}`);
+    const page = (data ?? []) as QueueRow[];
+    if (page.length === 0) break;
+    rows.push(...page);
+    if (page.length < end - offset + 1) break;
+    offset += PAGE;
+  }
+  return rows;
 }
 
 async function fetchMetadata(
