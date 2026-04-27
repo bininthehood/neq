@@ -13,7 +13,8 @@ import {
 import { track } from "@/lib/analytics";
 
 const MIN_DISPLAY_MS = 1500;
-const TIMEOUT_MS = 10000;
+// prod /api/recommend cold start이 ~20s까지 걸려 prefetch가 abort되면 discover에서 재요청 → 누적 ~21s 대기
+const TIMEOUT_MS = 30000;
 const SLOW_COPY_THRESHOLD_MS = 5000;
 
 type Metas = ReturnType<typeof getFavoritesMeta>;
