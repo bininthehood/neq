@@ -185,8 +185,8 @@ async function tmdbGet(
   const url = `https://api.themoviedb.org/3/${row.media_type}/${row.tmdb_id}${path}?api_key=${TMDB_API_KEY}&language=ko-KR`;
   const res = await fetch(url);
   if (!res.ok) {
-    if (res.status === 429) {
-      // 백오프 후 재시도 1회
+    // 429(rate limit) + 5xx(서버 일시 장애) 모두 백오프 후 1회 재시도
+    if (res.status === 429 || res.status >= 500) {
       await sleep(2000);
       const retry = await fetch(url);
       if (!retry.ok) throw new Error(`TMDB ${path || "/detail"} ${retry.status}`);
