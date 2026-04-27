@@ -60,7 +60,7 @@ export interface ProviderInfo {
 export async function getKoreanProviders(
   id: number,
   type: "movie" | "series"
-): Promise<{ providers: { name: string; logoUrl: string | null }[]; watchLink: string | null }> {
+): Promise<{ providers: { name: string; logoUrl: string | null; category?: 'subscription' | 'rent' | 'buy' }[]; watchLink: string | null }> {
   const mediaType = type === "series" ? "tv" : "movie";
   const res = await fetch(
     `${BASE}/${mediaType}/${id}/watch/providers?api_key=${API_KEY}`
@@ -69,20 +69,25 @@ export async function getKoreanProviders(
   const kr = data.results?.KR;
   if (!kr) return { providers: [], watchLink: null };
 
-  const raw: Array<{ provider_name: string; logo_path: string | null }> = [
-    ...(kr.flatrate ?? []),
-    ...(kr.rent ?? []),
-    ...(kr.buy ?? []),
+  // 구독(flatrate) > 대여(rent) > 구매(buy) 순서로 dedup. 같은 provider가 여러 카테고리에 있으면 가장 사용자 친화적인 것 채택
+  type RawProv = { provider_name: string; logo_path: string | null };
+  const buckets: Array<{ items: RawProv[]; category: 'subscription' | 'rent' | 'buy' }> = [
+    { items: kr.flatrate ?? [], category: 'subscription' },
+    { items: kr.rent ?? [], category: 'rent' },
+    { items: kr.buy ?? [], category: 'buy' },
   ];
   const seen = new Set<string>();
-  const providers: { name: string; logoUrl: string | null }[] = [];
-  for (const p of raw) {
-    if (seen.has(p.provider_name)) continue;
-    seen.add(p.provider_name);
-    providers.push({
-      name: p.provider_name,
-      logoUrl: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
-    });
+  const providers: { name: string; logoUrl: string | null; category?: 'subscription' | 'rent' | 'buy' }[] = [];
+  for (const { items, category } of buckets) {
+    for (const p of items) {
+      if (seen.has(p.provider_name)) continue;
+      seen.add(p.provider_name);
+      providers.push({
+        name: p.provider_name,
+        logoUrl: p.logo_path ? `https://image.tmdb.org/t/p/w92${p.logo_path}` : null,
+        category,
+      });
+    }
   }
   return { providers, watchLink: kr.link ?? null };
 }

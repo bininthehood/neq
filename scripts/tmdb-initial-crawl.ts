@@ -54,7 +54,7 @@ type MetadataRow = {
   country: string[] | null;
   origin_country: string[] | null;
   genre_ids: number[] | null;
-  providers: Array<{ name: string; logoUrl: string | null }> | null;
+  providers: Array<{ name: string; logoUrl: string | null; category: 'subscription' | 'rent' | 'buy' }> | null;
   watch_link: string | null;
   providers_fetched_at: string;
   fetched_at: string;
@@ -315,27 +315,31 @@ function mapToMetadataRow(
 
 function extractKoreanProviders(
   providers: Record<string, unknown>,
-): Array<{ name: string; logoUrl: string | null }> | null {
+): Array<{ name: string; logoUrl: string | null; category: 'subscription' | 'rent' | 'buy' }> | null {
   const kr = (providers.results as Record<string, unknown> | undefined)?.KR as
     | Record<string, unknown>
     | undefined;
   if (!kr) return null;
-  const raw: Array<{ provider_name?: string; logo_path?: string | null }> = [
-    ...((kr.flatrate as Array<unknown>) ?? []),
-    ...((kr.rent as Array<unknown>) ?? []),
-    ...((kr.buy as Array<unknown>) ?? []),
-  ] as Array<{ provider_name?: string; logo_path?: string | null }>;
+  type RawProv = { provider_name?: string; logo_path?: string | null };
+  const buckets: Array<{ items: RawProv[]; category: 'subscription' | 'rent' | 'buy' }> = [
+    { items: (kr.flatrate as RawProv[] | undefined) ?? [], category: 'subscription' },
+    { items: (kr.rent as RawProv[] | undefined) ?? [], category: 'rent' },
+    { items: (kr.buy as RawProv[] | undefined) ?? [], category: 'buy' },
+  ];
   const seen = new Set<string>();
-  const result: Array<{ name: string; logoUrl: string | null }> = [];
-  for (const p of raw) {
-    if (!p.provider_name || seen.has(p.provider_name)) continue;
-    seen.add(p.provider_name);
-    result.push({
-      name: p.provider_name,
-      logoUrl: p.logo_path
-        ? `https://image.tmdb.org/t/p/w92${p.logo_path}`
-        : null,
-    });
+  const result: Array<{ name: string; logoUrl: string | null; category: 'subscription' | 'rent' | 'buy' }> = [];
+  for (const { items, category } of buckets) {
+    for (const p of items) {
+      if (!p.provider_name || seen.has(p.provider_name)) continue;
+      seen.add(p.provider_name);
+      result.push({
+        name: p.provider_name,
+        logoUrl: p.logo_path
+          ? `https://image.tmdb.org/t/p/w92${p.logo_path}`
+          : null,
+        category,
+      });
+    }
   }
   return result.length > 0 ? result : null;
 }

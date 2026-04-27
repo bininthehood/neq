@@ -20,7 +20,8 @@ export interface Recommendation {
   rating: number;
   date: string;
   overview: string;
-  providers: { name: string; logoUrl: string | null }[];
+  // category는 TMDB watch/providers의 flatrate/rent/buy 분류. 구버전 metadata에는 없음(optional).
+  providers: { name: string; logoUrl: string | null; category?: 'subscription' | 'rent' | 'buy' }[];
   watchLink: string | null;
   director: string | null;
   cast: string[];

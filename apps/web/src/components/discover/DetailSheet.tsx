@@ -192,6 +192,11 @@ export default function DetailSheet({
                       <div className="w-8 h-8 flex-shrink-0 rounded-sm bg-surface" />
                     )}
                     <span className="flex-1">{p.name}</span>
+                    {p.category && (
+                      <span className="text-[10px] text-muted px-2 py-0.5 rounded-full border border-surface-raised">
+                        {p.category === "subscription" ? "구독" : p.category === "rent" ? "대여" : "구매"}
+                      </span>
+                    )}
                     <span className="text-xs text-accent">열기</span>
                   </a>
                 );
