@@ -87,6 +87,10 @@ export async function POST(req: NextRequest) {
       .join(", ");
     const headers: Record<string, string> = {
       "X-RateLimit-Remaining": String(remaining),
+      // P0-1 회귀 추적용 임시 디버그 (확인 후 제거 예정)
+      "X-Debug-Timings-Length": String(Object.keys(timings).length),
+      "X-Debug-Timings-Keys": Object.keys(timings).join(","),
+      "X-Debug-Server-Timing-Set": serverTiming ? "yes" : "no",
     };
     if (serverTiming) headers["Server-Timing"] = serverTiming;
     return NextResponse.json({ recommendations }, { headers });
