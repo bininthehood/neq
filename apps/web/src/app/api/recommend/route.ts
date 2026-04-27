@@ -80,20 +80,16 @@ export async function POST(req: NextRequest) {
       savedCount,
       onboardingCount
     );
-    // Server-Timing 헤더로 각 단계 ms 전파 (match/gather/enrich/filter/llm/cold)
-    // 다른 출처에서 읽으려면 Access-Control-Expose-Headers 필요하지만 현재는 동일 출처
+    // 단계별 ms는 응답 body에 포함. Server-Timing 헤더는 dev tools 호환용 보존
+    // (Vercel/Next.js infra가 Server-Timing 헤더를 응답에서 strip하는 동작이 관측되어 body 경유)
     const serverTiming = Object.entries(timings)
       .map(([key, ms]) => `${key};dur=${ms}`)
       .join(", ");
     const headers: Record<string, string> = {
       "X-RateLimit-Remaining": String(remaining),
-      // P0-1 회귀 추적용 임시 디버그 (확인 후 제거 예정)
-      "X-Debug-Timings-Length": String(Object.keys(timings).length),
-      "X-Debug-Timings-Keys": Object.keys(timings).join(","),
-      "X-Debug-Server-Timing-Set": serverTiming ? "yes" : "no",
     };
     if (serverTiming) headers["Server-Timing"] = serverTiming;
-    return NextResponse.json({ recommendations }, { headers });
+    return NextResponse.json({ recommendations, timings }, { headers });
   } catch (error) {
     console.error("Recommendation error:", error);
     return NextResponse.json(

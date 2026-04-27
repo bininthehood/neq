@@ -14,20 +14,13 @@ import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
 
-/** Server-Timing 헤더 파싱: "match;dur=123, gather;dur=456" → { srv_match_ms: 123, ... } */
-function parseServerTiming(header: string | null): Record<string, number> {
-  if (!header) return {};
+/** /api/recommend 응답 body의 timings → PostHog 프로퍼티 (srv_<step>_ms) */
+function timingsToProps(timings: unknown): Record<string, number> {
+  if (!timings || typeof timings !== "object") return {};
   const out: Record<string, number> = {};
-  for (const entry of header.split(",")) {
-    const parts = entry.trim().split(";");
-    const name = parts[0]?.trim();
-    if (!name) continue;
-    for (const p of parts.slice(1)) {
-      const [k, v] = p.trim().split("=");
-      if (k === "dur" && v !== undefined) {
-        const n = Number(v);
-        if (!Number.isNaN(n)) out[`srv_${name}_ms`] = Math.round(n);
-      }
+  for (const [key, ms] of Object.entries(timings as Record<string, unknown>)) {
+    if (typeof ms === "number" && !Number.isNaN(ms)) {
+      out[`srv_${key}_ms`] = Math.round(ms);
     }
   }
   return out;
@@ -52,7 +45,7 @@ const PREFETCH_TTL_MS = 60_000;
 
 /** Bridge screen이 미리 받아 놓은 추천 결과 1회성 소비. 없거나 만료/필터 불일치면 null */
 function consumePrefetchedRecs(ft: string, fo: string):
-  | { recs: unknown[] }
+  | { recs: unknown[]; timings: unknown }
   | null {
   if (typeof window === "undefined") return null;
   try {
@@ -61,13 +54,14 @@ function consumePrefetchedRecs(ft: string, fo: string):
     sessionStorage.removeItem("neq_prefetched_recs");
     const parsed = JSON.parse(raw) as {
       recs: unknown[];
+      timings?: unknown;
       ts: number;
       filter: { type: string; origin: string };
     };
     if (Date.now() - parsed.ts > PREFETCH_TTL_MS) return null;
     if (parsed.filter.type !== ft || parsed.filter.origin !== fo) return null;
     if (!Array.isArray(parsed.recs) || parsed.recs.length === 0) return null;
-    return { recs: parsed.recs };
+    return { recs: parsed.recs, timings: parsed.timings };
   } catch {
     return null;
   }
@@ -169,6 +163,7 @@ export function useRecommendations() {
             favorites_count: getFavorites().length,
             prefetched: true,
             ...(time_from_onboarding_ms !== undefined ? { time_from_onboarding_ms } : {}),
+            ...timingsToProps(prefetched.timings),
           });
           addRecHistory(
             deduped.map((r) => ({
@@ -233,8 +228,8 @@ export function useRecommendations() {
         track("recommendation_failed", { reason: "http_error" });
         return;
       }
-      const serverTimings = parseServerTiming(res.headers.get("server-timing"));
       const data = await res.json();
+      const serverTimings = timingsToProps(data.timings);
       const rawRecs: Recommendation[] = data.recommendations ?? [];
       // 서버 응답에서도 중복 방어 (tmdbId 기준)
       const seenIds = new Set<number>();
@@ -354,8 +349,8 @@ export function useRecommendations() {
         signal: controller.signal,
       });
       if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }
-      const serverTimings = parseServerTiming(res.headers.get("server-timing"));
       const data = await res.json();
+      const serverTimings = timingsToProps(data.timings);
       const newRecs: Recommendation[] = data.recommendations ?? [];
       if (newRecs.length > 0) {
         setRecs((prev) => {

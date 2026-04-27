@@ -98,6 +98,7 @@ export default function OnboardingCompletePage() {
               "neq_prefetched_recs",
               JSON.stringify({
                 recs,
+                timings: data.timings,
                 ts: Date.now(),
                 filter: { type: "all", origin: "all" },
               }),
