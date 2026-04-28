@@ -17,7 +17,13 @@ import {
   archiveItem,
   type FavoriteMeta,
 } from "./store";
-import type { SavedItem, WatchReport } from "./types";
+import {
+  getAccountPrefs,
+  setAccountPrefs,
+  defaultAccountPrefs,
+} from "./account-prefs";
+import { isOnboardingV2Enabled } from "./env";
+import type { SavedItem, WatchReport, AccountPrefs } from "./types";
 
 // ---------- Profile ----------
 
@@ -191,6 +197,18 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += onboardingPicks.length;
     }
 
+    // 6. account_prefs (Onboarding V2 — feature flag 뒤)
+    //    flag OFF 시 column 자체를 건드리지 않으므로 V1 prod 영향 0.
+    if (isOnboardingV2Enabled()) {
+      const accountPrefs = getAccountPrefs();
+      const { error } = await supabase
+        .from("profiles")
+        .update({ account_prefs: accountPrefs })
+        .eq("id", profileId);
+
+      if (!error) pushed += 1;
+    }
+
     console.log(`[sync] pushed ${pushed} items to server`);
     return { success: true, pushed };
   } catch (err) {
@@ -287,20 +305,55 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
       }
     }
 
-    // 4. onboarding_picks — 로컬 비어있을 때만 복원 (덮어쓰기 방지)
+    // 4. onboarding_picks (+ account_prefs when V2 flag ON)
+    //    onboarding_picks: 로컬 비어있을 때만 복원 (덮어쓰기 방지)
+    //    account_prefs: V2 flag ON 시에만 select. flag OFF → column 무시 → V1 영향 0.
+    const v2Enabled = isOnboardingV2Enabled();
     const localPicks = getFavoritesMeta();
-    if (localPicks.length === 0) {
+    const needPicksPull = localPicks.length === 0;
+
+    if (needPicksPull || v2Enabled) {
+      const selectCols = v2Enabled
+        ? "onboarding_picks, account_prefs"
+        : "onboarding_picks";
       const { data: profileRow } = await supabase
         .from("profiles")
-        .select("onboarding_picks")
+        .select(selectCols)
         .eq("id", profileId)
         .single();
 
-      const serverPicks = profileRow?.onboarding_picks as FavoriteMeta[] | null;
-      if (Array.isArray(serverPicks) && serverPicks.length > 0) {
-        setFavoritesMeta(serverPicks);
-        setFavorites(serverPicks.map((p) => p.title));
-        pulled += serverPicks.length;
+      // typeof profileRow는 select 문자열에 따라 동적 — 안전하게 unknown 캐스팅
+      const row = profileRow as
+        | {
+            onboarding_picks?: FavoriteMeta[] | null;
+            account_prefs?: AccountPrefs | null;
+          }
+        | null;
+
+      if (needPicksPull) {
+        const serverPicks = row?.onboarding_picks ?? null;
+        if (Array.isArray(serverPicks) && serverPicks.length > 0) {
+          setFavoritesMeta(serverPicks);
+          setFavorites(serverPicks.map((p) => p.title));
+          pulled += serverPicks.length;
+        }
+      }
+
+      if (v2Enabled) {
+        const serverPrefs = row?.account_prefs ?? null;
+        if (serverPrefs && typeof serverPrefs === "object") {
+          // 서버 우선 — 단, default 와 동일한 빈 객체면 굳이 덮어쓰지 않음
+          const merged: AccountPrefs = {
+            ...defaultAccountPrefs(),
+            ...serverPrefs,
+            notificationPrefs: {
+              ...defaultAccountPrefs().notificationPrefs,
+              ...(serverPrefs.notificationPrefs ?? {}),
+            },
+          };
+          setAccountPrefs(merged);
+          pulled += 1;
+        }
       }
     }
 

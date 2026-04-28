@@ -12,6 +12,9 @@ export type {
   UserDataExportV2,
   Persona,
   FavoriteMeta,
+  AccountPrefs,
+  NotificationPrefs,
+  NekoPushSubscriptionJSON,
 } from "@neq/core";
 
 export { USER_DATA_SCHEMA_VERSION } from "@neq/core";

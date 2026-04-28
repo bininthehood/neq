@@ -86,6 +86,44 @@ export interface FavoriteMeta {
   posterUrl: string | null;
 }
 
+// === Onboarding V2 — 계정 레벨 prefs (페르소나 외부) ===
+//
+// 페르소나(Persona)는 사용자가 가진 N개의 취향 프로필 — favorites 5픽이 핵심 신호.
+// AccountPrefs는 계정 전체 단위의 약한 신호 — 장르 칩 / 구독 OTT / 알림 토글.
+// 두 신호는 LLM 입력에서 강한(favorites) + 약한(tasteGenres, subscribedOtt) 조합으로 사용.
+//
+// 스펙: _workspace/onboarding-v2-spec.md
+// 마이그레이션: supabase/migrations/20260428_onboarding_v2.sql (profiles.account_prefs JSONB)
+
+/**
+ * Web Push API 표준 PushSubscription 의 직렬화 형태.
+ *
+ * lib.dom 의 PushSubscriptionJSON 과 동등하지만, 서버 사이드/노드 환경에서도
+ * 빌드되어야 하므로 동일한 shape 의 자체 타입을 정의한다.
+ */
+export interface NekoPushSubscriptionJSON {
+  endpoint: string;
+  expirationTime?: number | null;
+  keys?: {
+    p256dh: string;
+    auth: string;
+  };
+}
+
+export interface NotificationPrefs {
+  weeklyRec: boolean;       // 주간 추천
+  newRelease: boolean;      // 새 작품 (4가지 트리거 통합 토글)
+  ottExpiry: boolean;       // OTT 만료 (proxy 추정)
+  monthlyReport: boolean;   // 월간 리포트
+  pushSubscription: NekoPushSubscriptionJSON | null;
+}
+
+export interface AccountPrefs {
+  tasteGenres: string[];          // 장르 ID 또는 slug ('thriller', 'documentary', ...)
+  subscribedOtt: number[];        // TMDB provider id 배열
+  notificationPrefs: NotificationPrefs;
+}
+
 export interface UserDataExportV2 {
   version: 2;
   deviceId: string;
