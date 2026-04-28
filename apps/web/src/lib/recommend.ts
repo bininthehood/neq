@@ -188,7 +188,8 @@ async function gatherCandidates(
   // 상위 20개는 유지하고, 나머지는 셔플 → 매 호출마다 다른 조합
   const top = sorted.slice(0, 20);
   const rest = sorted.slice(20).sort(() => Math.random() - 0.5);
-  return [...top, ...rest].slice(0, 100);
+  // 100 → 75: user prompt 토큰 ~25% 절감 + LLM 처리 시간 ~15~20% 단축 추정 [Day 19 옵션 5]
+  return [...top, ...rest].slice(0, 75);
 }
 
 // ---------- Step 4: 메타데이터 풍부화 ----------
