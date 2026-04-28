@@ -58,3 +58,38 @@ export function isNotificationsEnabled(): boolean {
 export function isSearchGroupedEnabled(): boolean {
   return readFlag("NEXT_PUBLIC_SEARCH_GROUPED");
 }
+
+// ─────────────────────────────────────────────
+// VAPID — Web Push 서명용 키 (P0-4 알림 인프라)
+//
+// NEXT_PUBLIC_VAPID_PUBLIC_KEY 는 client + server 양쪽에서 사용 (구독 등록).
+// VAPID_PRIVATE_KEY / VAPID_SUBJECT 는 서버 전용 (web-push.sendNotification).
+// 미설정 시 isVapidConfigured() === false → sendPush 가 dry-run 으로 동작.
+// 키 발급: `npx web-push generate-vapid-keys` (apps/web 루트)
+// ─────────────────────────────────────────────
+
+export const NEXT_PUBLIC_VAPID_PUBLIC_KEY =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
+
+export function getVapidPrivateKey(): string {
+  return process.env.VAPID_PRIVATE_KEY ?? "";
+}
+
+export function getVapidSubject(): string {
+  return process.env.VAPID_SUBJECT ?? "mailto:dusgod30@gmail.com";
+}
+
+export function isVapidConfigured(): boolean {
+  return Boolean(NEXT_PUBLIC_VAPID_PUBLIC_KEY && getVapidPrivateKey());
+}
+
+// ─────────────────────────────────────────────
+// CRON_SECRET — Vercel Cron 인증 + admin 호출
+//
+// Vercel은 cron 호출 시 `Authorization: Bearer <CRON_SECRET>` 헤더를 자동 부착.
+// 미설정 시 모든 cron 호출 401 (안전 default).
+// ─────────────────────────────────────────────
+
+export function getCronSecret(): string {
+  return process.env.CRON_SECRET ?? "";
+}

@@ -1,0 +1,26 @@
+name: TMDB Providers Snapshot
+
+on:
+  schedule:
+    # 매일 03:00 KST = 18:00 UTC. saved 작품의 OTT provider 일별 스냅샷.
+    # 어제 vs 오늘 비교로 OTT 만료 proxy 제공 (notifications/ott-expiry).
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: tmdb-providers-snapshot
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Call cron endpoint
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PROD_URL/api/cron/tmdb-providers-snapshot"

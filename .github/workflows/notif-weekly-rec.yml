@@ -1,0 +1,27 @@
+name: Notifications - Weekly Recommendation
+
+on:
+  schedule:
+    # 매주 토요일 09:00 KST = 토 00:00 UTC.
+    # 활성 사용자에게 주간 큐레이션 추천 push.
+    # spec: _workspace/notification-triggers-detail.md §1
+    - cron: "0 0 * * 6"
+  workflow_dispatch:
+
+concurrency:
+  group: notif-weekly-rec
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Call cron endpoint
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PROD_URL/api/cron/notifications/weekly-rec"

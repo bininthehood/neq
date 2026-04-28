@@ -1,0 +1,27 @@
+name: Notifications - OTT Expiry
+
+on:
+  schedule:
+    # 매일 11:00 KST = 02:00 UTC. (tmdb-providers-snapshot 이후)
+    # 어제 vs 오늘 provider 비교로 사라진 OTT 검출 → "곧 내려갈 수 있어요" 약한 톤 알림.
+    # spec: _workspace/notification-triggers-detail.md §3
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: notif-ott-expiry
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Call cron endpoint
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PROD_URL/api/cron/notifications/ott-expiry"

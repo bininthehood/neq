@@ -109,4 +109,8 @@ export type NekoEvent =
   | "bridge_shown"
   | "bridge_completed"
   | "coach_shown"
-  | "coach_completed";
+  | "coach_completed"
+  // Onboarding V2 (Day 24, P0-4): 알림 인프라
+  | "notification_subscribed"
+  | "notification_blocked"
+  | "notification_clicked";

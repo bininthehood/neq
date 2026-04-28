@@ -1,0 +1,27 @@
+name: Notifications - Refresh Persons
+
+on:
+  schedule:
+    # 매주 일요일 02:00 KST = 토 17:00 UTC.
+    # 활성 사용자의 favorites/saved에서 director/cast person_id 추출 + 백필.
+    # spec: _workspace/notification-triggers-detail.md §6
+    - cron: "0 17 * * 6"
+  workflow_dispatch:
+
+concurrency:
+  group: notif-refresh-persons
+  cancel-in-progress: false
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Call cron endpoint
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PROD_URL/api/cron/notifications/refresh-persons"
