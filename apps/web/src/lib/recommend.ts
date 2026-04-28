@@ -16,6 +16,35 @@ import type { Recommendation, RecommendFilter, WatchFeedback } from "./types";
 
 const openai = new OpenAI();
 
+// LLM 큐레이션의 고정 prefix. 사용자별 동적 데이터(modeGuide, 취향, 후보)는 user 메시지로 이동시켜
+// OpenAI prompt caching prefix를 안정화한다. 1024+ 토큰 동일 prefix 시 자동 cache hit.
+const CURATION_SYSTEM_PROMPT = `당신은 OTT 큐레이터입니다. 사용자 메시지에 담긴 큐레이션 모드와 취향 정보를 바탕으로 후보 중에서 20개를 골라 reason을 작성하세요.
+
+[작성 규칙]
+- 후보 중 20개 선택 (후보가 적으면 전부)
+- 장르 다양성: 같은 장르 연속 3개 금지
+- reason: 반드시 20자 이상 30자 이하, 해요체 (~해요/~이에요)
+- 왜 이 사용자에게 맞는지 구체적으로 써야 함
+- 좋은 예 (20-30자, 반드시 이 길이를 따라하세요):
+  "중반부터 숨 못 쉬어요. 반전이 미쳤어요" (20자)
+  "기생충 좋아하면 꼭 봐야 해요. 사회풍자극" (22자)
+  "첫 회 끝나면 바로 다음 회 재생하게 돼요" (21자)
+  "실화 기반이라 몰입감 장난 아니에요. 꼭 보세요" (24자)
+- 나쁜 예 (너무 짧음, 절대 이러면 안 됨):
+  "심리적 깊이가 매력" (10자) ← 너무 짧음
+  "OST가 좋아요" (7자) ← 너무 짧음
+  "깊은 고찰이 매력적입니다" (격식체, 추상적) ← 격식체 금지
+
+[큐레이션 철학]
+- 사용자가 "이런 작품 처음 알았다"고 느낄 수 있는 추천을 우선
+- 평점만 따라가지 말고 사용자 취향 모드(탐색/혼합/개인화)와 작품의 결을 매칭
+- 메인스트림과 숨은 보석을 균형 있게 배치
+- 한국 사용자가 접근 가능한 작품 위주 (한국 OTT 보유 또는 글로벌 OTT)
+- 시리즈와 영화의 분배는 사용자 모드 가이드를 따름
+
+[출력 형식 (JSON)]
+{"selected": [{"id": 숫자, "reason": "문구"}, ...]}`;
+
 function buildFeedbackPrompt(feedback?: WatchFeedback): string {
   if (!feedback) return "";
   const parts: string[] = [];
@@ -260,38 +289,21 @@ async function curateWithLLM(
 필터 버블에 갇히지 않게 하세요.`;
   }
 
-  const systemPrompt = `당신은 OTT 큐레이터입니다. 아래 후보 중에서 20개를 골라 reason을 작성하세요.
+  const userPrompt = `${modeGuide}
 
-${modeGuide}
-
-[사용자 취향 기반 (참고용)]
+[사용자 취향 기반]
 좋아하는 작품: ${favorites.join(", ")}
 ${feedbackText}
 
-[작성 규칙]
-- 후보 중 20개 선택 (후보가 적으면 전부)
-- 장르 다양성: 같은 장르 연속 3개 금지
-- reason: 반드시 20자 이상 30자 이하, 해요체 (~해요/~이에요)
-- 왜 이 사용자에게 맞는지 구체적으로 써야 함
-- 좋은 예 (20-30자, 반드시 이 길이를 따라하세요):
-  "중반부터 숨 못 쉬어요. 반전이 미쳤어요" (20자)
-  "기생충 좋아하면 꼭 봐야 해요. 사회풍자극" (22자)
-  "첫 회 끝나면 바로 다음 회 재생하게 돼요" (21자)
-  "실화 기반이라 몰입감 장난 아니에요. 꼭 보세요" (24자)
-- 나쁜 예 (너무 짧음, 절대 이러면 안 됨):
-  "심리적 깊이가 매력" (10자) ← 너무 짧음
-  "OST가 좋아요" (7자) ← 너무 짧음
-  "깊은 고찰이 매력적입니다" (격식체, 추상적) ← 격식체 금지
-
-[출력 형식 (JSON)]
-{"selected": [{"id": 숫자, "reason": "문구"}, ...]}`;
+[후보 ${candidates.length}개]
+${candidateList}`;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `[후보 ${candidates.length}개]\n${candidateList}` },
+        { role: "system", content: CURATION_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
       temperature: 0.8,
