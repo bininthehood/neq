@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRecommendations } from "@/lib/recommend";
+import { getRecommendations, getRecommendationsStreaming } from "@/lib/recommend";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 /** 다양한 플랫폼/프록시 환경에서 클라이언트 IP를 안정적으로 추출 */
@@ -68,6 +68,51 @@ export async function POST(req: NextRequest) {
       { error: "잘못된 요청입니다" },
       { status: 400 }
     );
+  }
+
+  // streaming opt-in: 클라이언트가 x-neko-streaming: 1 헤더 보낼 때만 NDJSON stream 응답.
+  // 그 외에는 기존 non-streaming 동작 유지 (회귀 위험 0).
+  const useStreaming = req.headers.get("x-neko-streaming") === "1";
+
+  if (useStreaming) {
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+        const emit = (line: object) =>
+          controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
+        try {
+          await getRecommendationsStreaming(
+            favorites ?? [],
+            filter ?? {},
+            feedback,
+            exclude,
+            excludeIds,
+            savedCount,
+            onboardingCount,
+            {
+              onCard: (rec) => emit({ type: "card", rec }),
+              onTimings: (timings) => emit({ type: "timings", timings }),
+              onUsage: (usage) => emit({ type: "usage", usage }),
+            },
+          );
+          emit({ type: "done" });
+        } catch (err) {
+          emit({
+            type: "error",
+            message: err instanceof Error ? err.message : String(err),
+          });
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+        "X-RateLimit-Remaining": String(remaining),
+      },
+    });
   }
 
   try {

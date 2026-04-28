@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { parse as parsePartialJSON } from "partial-json";
 import "./env"; // validate env vars at startup
 import {
   searchTMDB,
@@ -893,4 +894,236 @@ function interleaveByGenre(recs: Recommendation[]): Recommendation[] {
   }
 
   return result;
+}
+
+// ---------- Streaming 변형 (옵션 1, Day 19 PoC, streaming-poc-design.md) ----------
+
+export type StreamingCallbacks = {
+  onCard: (rec: Recommendation) => void;
+  onTimings: (timings: Record<string, number>) => void;
+  onUsage: (usage: TokenUsage) => void;
+};
+
+/**
+ * curateWithLLM의 streaming 변형. partial-json으로 점진 파싱 + onPick 콜백.
+ * 마지막 element는 incomplete 가능성이 있어 length-1까지만 emit, 종료 후 잔여 emit.
+ */
+async function curateWithLLMStreaming(
+  candidates: EnrichedCandidate[],
+  favorites: string[],
+  feedback: WatchFeedback | undefined,
+  savedCount: number,
+  onboardingCount: number,
+  onPick: (pick: { id: number; reason: string }) => void,
+): Promise<TokenUsage | null> {
+  if (candidates.length === 0) return null;
+
+  // candidateList / modeGuide / userPrompt 구성: curateWithLLM과 동일 구조
+  const candidateList = candidates
+    .map((c) => {
+      const year = (c.item.release_date ?? c.item.first_air_date ?? "").slice(0, 4);
+      const kind = c.type === "series" ? "시리즈" : "영화";
+      const rating = c.item.vote_average.toFixed(1);
+      const overview = (c.item.overview ?? "").replace(/\s+/g, " ").slice(0, 150);
+      return `[ID:${c.id}] ${c.item.title} (${kind}${year ? ", " + year : ""}, 평점 ${rating}) — ${overview}`;
+    })
+    .join("\n");
+
+  const feedbackText = buildFeedbackPrompt(feedback);
+  const totalFeedback = feedback
+    ? feedback.loved.length + feedback.good.length + feedback.meh.length + feedback.dropped.length
+    : 0;
+  const totalSignal = totalFeedback + savedCount + onboardingCount;
+  let modeGuide: string;
+  if (totalSignal <= 4) {
+    modeGuide = `[큐레이션 모드: 탐색]
+이 사용자는 아직 탐색 초기입니다. 폭넓게 다양한 장르와 스타일의 작품을 추천하세요.
+유명하지만 숨겨진 면이 있는 작품, 장르 교차 작품, 예상 밖의 선택을 우선하세요.
+취향 기반 작품은 30% 이하로 제한하고, 70%는 새로운 발견 위주로 구성하세요.`;
+  } else if (totalSignal <= 9) {
+    modeGuide = `[큐레이션 모드: 혼합]
+취향 데이터가 어느 정도 쌓였습니다. 취향에 맞는 작품 50% + 새로운 장르/스타일 탐색 50%로 균형 잡으세요.
+사용자가 좋아한 작품과 비슷한 결도 좋지만, 아직 안 접해본 장르도 반드시 포함하세요.`;
+  } else {
+    modeGuide = `[큐레이션 모드: 개인화]
+사용자의 취향 데이터가 풍부합니다. 취향을 깊이 반영하되, 반드시 30% 이상은 사용자가 아직 안 접해본 장르나 스타일로 구성하세요.
+"이런 것도 좋아할 수 있어요" 같은 의외의 추천이 반드시 포함되어야 합니다.
+필터 버블에 갇히지 않게 하세요.`;
+  }
+
+  const userPrompt = `${modeGuide}
+
+[사용자 취향 기반]
+좋아하는 작품: ${favorites.join(", ")}
+${feedbackText}
+
+[후보 ${candidates.length}개]
+${candidateList}`;
+
+  let usage: TokenUsage | null = null;
+  let buffer = "";
+  let lastEmittedIdx = 0;
+
+  const emitFromArray = (sel: unknown[], end: number) => {
+    for (let i = lastEmittedIdx; i < end; i++) {
+      const item = sel[i] as Record<string, unknown> | undefined;
+      if (item && typeof item.id === "number" && typeof item.reason === "string") {
+        onPick({ id: item.id, reason: item.reason.slice(0, 60) });
+      }
+    }
+    lastEmittedIdx = end;
+  };
+
+  try {
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: CURATION_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.8,
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) buffer += delta;
+
+      if (chunk.usage) {
+        usage = {
+          prompt_tokens: chunk.usage.prompt_tokens ?? 0,
+          completion_tokens: chunk.usage.completion_tokens ?? 0,
+          cached_tokens: chunk.usage.prompt_tokens_details?.cached_tokens ?? 0,
+        };
+      }
+
+      if (!delta) continue;
+
+      // partial 파싱: 마지막 element는 incomplete 가능성, length-1까지만 emit
+      try {
+        const parsed = parsePartialJSON(buffer) as { selected?: unknown };
+        const sel = parsed?.selected;
+        if (Array.isArray(sel)) {
+          emitFromArray(sel, Math.max(0, sel.length - 1));
+        }
+      } catch {
+        // 다음 chunk 대기
+      }
+    }
+
+    // stream 종료 후 잔여 element emit (마지막 element 포함)
+    try {
+      const parsed = JSON.parse(buffer) as { selected?: unknown };
+      const sel = parsed?.selected;
+      if (Array.isArray(sel)) emitFromArray(sel, sel.length);
+    } catch (err) {
+      console.error("LLM stream final parse failed:", err);
+    }
+  } catch (err) {
+    console.error("LLM stream error:", err);
+  }
+
+  return usage;
+}
+
+/**
+ * getRecommendations의 streaming 변형. LLM 단계만 element 단위 emit.
+ * Phase 2 템플릿 카드는 LLM 끝난 후 한 번에 emit.
+ *
+ * 1차 PoC 단순화: 보충 enrich/filter 로직 (기존 getRecommendations의 보충 경로) 미구현.
+ * 필요 시 후속 PR로 복원. interleaveByGenre는 stream 순서 유지로 미적용.
+ */
+export async function getRecommendationsStreaming(
+  favorites: string[],
+  filter: RecommendFilter,
+  feedback: WatchFeedback | undefined,
+  exclude: string[] | undefined,
+  excludeIds: number[] | undefined,
+  savedCount: number,
+  onboardingCount: number,
+  callbacks: StreamingCallbacks,
+): Promise<void> {
+  const timings: Record<string, number> = {};
+  const mark = (key: string, t0: number) => {
+    timings[key] = (timings[key] ?? 0) + Math.round(performance.now() - t0);
+  };
+
+  // Cold start
+  if (favorites.length === 0) {
+    const t = performance.now();
+    const recs = await getColdStartRecommendations(filter, exclude);
+    mark("cold", t);
+    for (const rec of recs) callbacks.onCard(rec);
+    callbacks.onTimings(timings);
+    return;
+  }
+
+  const tMatch = performance.now();
+  const matched = await matchFavoritesToTMDB(favorites);
+  mark("match", tMatch);
+  if (matched.length === 0) {
+    callbacks.onTimings(timings);
+    return;
+  }
+
+  const matchedIdsSet = new Set([
+    ...matched.map((m) => m.id),
+    ...(excludeIds ?? []),
+  ]);
+  const excludeTitlesSet = new Set(exclude ?? []);
+
+  const tGather = performance.now();
+  const candidates = await gatherCandidates(matched, matchedIdsSet, excludeTitlesSet);
+  mark("gather", tGather);
+  if (candidates.length === 0) {
+    callbacks.onTimings(timings);
+    return;
+  }
+
+  const tEnrich = performance.now();
+  const enriched = await enrichCandidates(candidates);
+  mark("enrich", tEnrich);
+
+  const tFilter = performance.now();
+  const filtered = applyFilters(enriched, filter);
+  mark("filter", tFilter);
+
+  if (filtered.length === 0) {
+    callbacks.onTimings(timings);
+    return;
+  }
+
+  const tLlm = performance.now();
+  const usedIds = new Set<number>();
+  const usedTitles = new Set<string>();
+  let phase1Count = 0;
+
+  const usage = await curateWithLLMStreaming(
+    filtered, favorites, feedback, savedCount, onboardingCount,
+    (pick) => {
+      if (phase1Count >= 20) return;
+      const c = filtered.find((f) => f.id === pick.id);
+      if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) return;
+      usedIds.add(c.id);
+      usedTitles.add(c.item.title);
+      phase1Count += 1;
+      callbacks.onCard(buildRecommendationObject(c, pick.reason));
+    },
+  );
+  mark("llm", tLlm);
+
+  if (usage) callbacks.onUsage(usage);
+
+  // Phase 2: 템플릿 reason 30개 (LLM 끝난 후 한 번에 emit)
+  for (const c of filtered) {
+    if (usedIds.size >= 50) break;
+    if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
+    usedIds.add(c.id);
+    usedTitles.add(c.item.title);
+    callbacks.onCard(buildRecommendationObject(c, templateReason(c)));
+  }
+
+  callbacks.onTimings(timings);
 }
