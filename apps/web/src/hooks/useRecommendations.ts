@@ -10,9 +10,47 @@ import {
   getFavorites,
   addRecHistory,
 } from "@/lib/store";
+import { getAccountPrefs } from "@/lib/account-prefs";
+import { isTasteGenresEnabled, isOttWeakSignalEnabled } from "@/lib/env";
 import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
+
+/**
+ * V2 신규 입력 (P0-2). flag ON + 값이 있을 때만 fetch body에 포함.
+ * 두 flag 독립 토글. 둘 다 OFF면 빈 객체 → 기존 V1 body 그대로.
+ *
+ * 반환:
+ *   - body: fetch body에 spread할 부분 객체 (tasteGenres / subscribedOtt 또는 둘 다 없음)
+ *   - tasteGenresCount / subscribedOttCount: PostHog 이벤트 속성용 counts
+ *   - coldStartVersion: V1 = 둘 다 없음, V2 = 하나 이상 포함
+ */
+function readV2Inputs(): {
+  body: { tasteGenres?: string[]; subscribedOtt?: number[] };
+  tasteGenresCount: number;
+  subscribedOttCount: number;
+  coldStartVersion: "v1" | "v2";
+} {
+  const tasteOn = isTasteGenresEnabled();
+  const ottOn = isOttWeakSignalEnabled();
+  if (!tasteOn && !ottOn) {
+    return { body: {}, tasteGenresCount: 0, subscribedOttCount: 0, coldStartVersion: "v1" };
+  }
+  const prefs = getAccountPrefs();
+  const tasteGenres = tasteOn ? prefs.tasteGenres : [];
+  const subscribedOtt = ottOn ? prefs.subscribedOtt : [];
+  const body: { tasteGenres?: string[]; subscribedOtt?: number[] } = {};
+  if (tasteGenres.length > 0) body.tasteGenres = tasteGenres;
+  if (subscribedOtt.length > 0) body.subscribedOtt = subscribedOtt;
+  const coldStartVersion: "v1" | "v2" =
+    tasteGenres.length > 0 || subscribedOtt.length > 0 ? "v2" : "v1";
+  return {
+    body,
+    tasteGenresCount: tasteGenres.length,
+    subscribedOttCount: subscribedOtt.length,
+    coldStartVersion,
+  };
+}
 
 /** /api/recommend 응답 body의 timings → PostHog 프로퍼티 (srv_<step>_ms) */
 function timingsToProps(timings: unknown): Record<string, number> {
@@ -217,6 +255,9 @@ export function useRecommendations() {
         if (deduped.length > 0) {
           const duration_ms = Math.round(performance.now() - t0);
           const time_from_onboarding_ms = consumeOnboardingTimestamp();
+          // prefetched는 Bridge에서 미리 받았으므로 V2 입력 여부는 그 시점 상태가 정답.
+          // 여기서는 현재 시점 prefs 기준으로 PostHog 속성만 채운다 (인스트루먼트 일관성 우선).
+          const v2Pref = readV2Inputs();
           track("recommendation_loaded", {
             count: deduped.length,
             filter_type: ft,
@@ -227,6 +268,9 @@ export function useRecommendations() {
             has_feedback: false,
             favorites_count: getFavorites().length,
             prefetched: true,
+            taste_genres_count: v2Pref.tasteGenresCount,
+            subscribed_ott_count: v2Pref.subscribedOttCount,
+            cold_start_version: v2Pref.coldStartVersion,
             ...(time_from_onboarding_ms !== undefined ? { time_from_onboarding_ms } : {}),
             ...timingsToProps(prefetched.timings),
             ...usageToProps(prefetched.usage),
@@ -271,6 +315,7 @@ export function useRecommendations() {
     const seenTitles = getSeenTitles();
     const savedTitles = savedItems.map((s) => s.recommendation.title);
     const exclude = [...new Set([...seenTitles, ...savedTitles])].slice(0, 150);
+    const v2 = readV2Inputs();
     try {
       const res = await fetch("/api/recommend", {
         method: "POST",
@@ -285,6 +330,7 @@ export function useRecommendations() {
           onboardingCount: onboardingPicks.length,
           ...(hasFeedback ? { feedback } : {}),
           ...(exclude.length > 0 ? { exclude } : {}),
+          ...v2.body,
         }),
         signal: controller.signal,
       });
@@ -351,11 +397,22 @@ export function useRecommendations() {
           has_feedback: hasFeedback,
           favorites_count: favorites.length,
           streamed: isStream,
+          taste_genres_count: v2.tasteGenresCount,
+          subscribed_ott_count: v2.subscribedOttCount,
+          cold_start_version: v2.coldStartVersion,
           ...(time_from_onboarding_ms !== undefined ? { time_from_onboarding_ms } : {}),
           ...(first_card_ms !== undefined ? { srv_first_card_ms: first_card_ms } : {}),
           ...timingsToProps(timingsMeta),
           ...usageToProps(usageMeta),
         });
+        // V2 분기 진입 시 별도 이벤트 1건 (스펙 §8.3 cold_start_v2)
+        if (v2.coldStartVersion === "v2") {
+          track("cold_start_v2", {
+            taste_genres_count: v2.tasteGenresCount,
+            subscribed_ott_count: v2.subscribedOttCount,
+            favorites_count: favorites.length,
+          });
+        }
         addRecHistory(
           collected.map((r: Recommendation) => ({
             title: r.title,
@@ -438,13 +495,14 @@ export function useRecommendations() {
         ...new Set([...getSeenTitles(), ...savedItems.map((s) => s.recommendation.title), ...currentTitles]),
       ].slice(0, 200);
       const excludeIds = [...new Set([...currentIds, ...getSaved().map((s) => s.recommendation.tmdbId)])];
+      const v2Pref = readV2Inputs();
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "x-neko-streaming": "1",
         },
-        body: JSON.stringify({ favorites, filter, exclude, excludeIds }),
+        body: JSON.stringify({ favorites, filter, exclude, excludeIds, ...v2Pref.body }),
         signal: controller.signal,
       });
       if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }

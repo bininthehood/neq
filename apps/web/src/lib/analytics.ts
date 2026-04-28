@@ -68,6 +68,8 @@ export type NekoEvent =
   | "recommendation_loaded"
   | "recommendation_load_more"
   | "recommendation_failed"
+  // Onboarding V2 (Day 22, P0-2): Cold Start V2 분기 진입 카운트
+  | "cold_start_v2"
   // 카드 인터랙션
   | "card_viewed"
   | "card_swiped"

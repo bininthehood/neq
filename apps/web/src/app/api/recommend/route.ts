@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecommendations, getRecommendationsStreaming } from "@/lib/recommend";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { isTasteGenresEnabled, isOttWeakSignalEnabled } from "@/lib/env";
 
 /** 다양한 플랫폼/프록시 환경에서 클라이언트 IP를 안정적으로 추출 */
 function getClientIp(req: NextRequest): string {
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
     excludeIds: rawExcludeIds,
     savedCount: rawSavedCount,
     onboardingCount: rawOnboardingCount,
+    tasteGenres: rawTasteGenres,
+    subscribedOtt: rawSubscribedOtt,
   } = await req.json();
 
   // savedCount / onboardingCount 검증: 음수/비정수 방어
@@ -62,6 +65,24 @@ export async function POST(req: NextRequest) {
   const excludeIds = Array.isArray(rawExcludeIds)
     ? rawExcludeIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 300)
     : undefined;
+
+  // V2 (Day 22, P0-2): tasteGenres / subscribedOtt 검증 + flag 분기.
+  //   - flag OFF → 무시하고 빈 배열 (V1 동작 그대로). 클라이언트가 보내도 서버에서 차단.
+  //   - flag ON  → 보낸 값만 사용. 누락/잘못된 타입은 빈 배열로 폴백.
+  // 두 flag는 독립이므로 한 쪽만 ON일 수도 있음.
+  const tasteGenres =
+    isTasteGenresEnabled() && Array.isArray(rawTasteGenres)
+      ? rawTasteGenres
+          .filter((x: unknown): x is string => typeof x === "string")
+          .map((s: string) => s.slice(0, 30))
+          .slice(0, 20)
+      : [];
+  const subscribedOtt =
+    isOttWeakSignalEnabled() && Array.isArray(rawSubscribedOtt)
+      ? rawSubscribedOtt
+          .filter((x: unknown): x is number => typeof x === "number" && Number.isFinite(x))
+          .slice(0, 10)
+      : [];
 
   if (favorites !== undefined && !Array.isArray(favorites)) {
     return NextResponse.json(
@@ -101,6 +122,8 @@ export async function POST(req: NextRequest) {
               onUsage: (usage) => emit({ type: "usage", usage }),
             },
             useMirror,
+            tasteGenres,
+            subscribedOtt,
           );
           emit({ type: "done" });
         } catch (err) {
@@ -132,6 +155,8 @@ export async function POST(req: NextRequest) {
       savedCount,
       onboardingCount,
       useMirror,
+      tasteGenres,
+      subscribedOtt,
     );
     // 단계별 ms는 응답 body에 포함. Server-Timing 헤더는 dev tools 호환용 보존
     // (Vercel/Next.js infra가 Server-Timing 헤더를 응답에서 strip하는 동작이 관측되어 body 경유)
