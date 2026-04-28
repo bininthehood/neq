@@ -40,6 +40,56 @@ function usageToProps(usage: unknown): Record<string, number> {
   return out;
 }
 
+/** /api/recommend NDJSON stream 응답을 line별 JSON 파싱해 callback으로 전파 */
+async function consumeStreamingNDJSON(
+  response: Response,
+  callbacks: {
+    onCard: (rec: Recommendation) => void;
+    onTimings: (timings: unknown) => void;
+    onUsage: (usage: unknown) => void;
+    onError: (msg: string) => void;
+  },
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!response.body) return;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const handle = (line: string) => {
+    if (!line) return;
+    try {
+      const msg = JSON.parse(line) as { type?: string; rec?: Recommendation; timings?: unknown; usage?: unknown; message?: string };
+      if (msg.type === "card" && msg.rec) callbacks.onCard(msg.rec);
+      else if (msg.type === "timings") callbacks.onTimings(msg.timings);
+      else if (msg.type === "usage") callbacks.onUsage(msg.usage);
+      else if (msg.type === "error") callbacks.onError(msg.message ?? "stream error");
+    } catch {
+      /* malformed line, skip */
+    }
+  };
+
+  try {
+    while (true) {
+      if (signal?.aborted) {
+        await reader.cancel();
+        return;
+      }
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) handle(line.trim());
+    }
+    if (buffer.trim()) handle(buffer.trim());
+  } catch (err) {
+    if (!(err instanceof DOMException && err.name === "AbortError")) {
+      callbacks.onError(err instanceof Error ? err.message : String(err));
+    }
+  }
+}
+
 /** 세션 스토리지에서 온보딩 완료 시각을 1회성으로 꺼냄 */
 function consumeOnboardingTimestamp(): number | undefined {
   if (typeof window === "undefined") return undefined;
@@ -224,7 +274,10 @@ export function useRecommendations() {
     try {
       const res = await fetch("/api/recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-neko-streaming": "1",
+        },
         body: JSON.stringify({
           favorites,
           filter,
@@ -244,27 +297,52 @@ export function useRecommendations() {
         track("recommendation_failed", { reason: "http_error" });
         return;
       }
-      const data = await res.json();
-      const serverTimings = timingsToProps(data.timings);
-      const serverUsage = usageToProps(data.usage);
-      const rawRecs: Recommendation[] = data.recommendations ?? [];
-      // 서버 응답에서도 중복 방어 (tmdbId 기준)
+      const isStream = res.headers.get("content-type")?.includes("application/x-ndjson") ?? false;
       const seenIds = new Set<number>();
-      const newRecs = rawRecs.filter((r) => {
-        if (seenIds.has(r.tmdbId)) return false;
-        seenIds.add(r.tmdbId);
-        return true;
-      });
-      setRecommendations(newRecs, ft, fo);
-      setRecs(newRecs);
-      setLoading(false);
-      if (newRecs.length > 0) {
+      const collected: Recommendation[] = [];
+      let firstCardAt: number | null = null;
+      let timingsMeta: unknown;
+      let usageMeta: unknown;
+
+      const acceptCard = (rec: Recommendation) => {
+        if (seenIds.has(rec.tmdbId)) return;
+        seenIds.add(rec.tmdbId);
+        collected.push(rec);
+        if (firstCardAt === null) {
+          firstCardAt = performance.now();
+          setLoading(false);  // 첫 카드 도착 즉시 spinner 종료
+        }
+        // 점진 추가 (streaming) 또는 일괄 (non-streaming은 끝에 한 번)
+        if (isStream) setRecs((prev) => [...prev, rec]);
+      };
+
+      if (isStream) {
+        await consumeStreamingNDJSON(res, {
+          onCard: acceptCard,
+          onTimings: (t) => { timingsMeta = t; },
+          onUsage: (u) => { usageMeta = u; },
+          onError: (msg) => { setLoadError(msg); },
+        }, controller.signal);
+      } else {
+        // fallback: 비-stream 응답 (서버가 streaming 미지원이거나 분기 OFF인 경우)
+        const data = await res.json();
+        timingsMeta = data.timings;
+        usageMeta = data.usage;
+        const rawRecs: Recommendation[] = data.recommendations ?? [];
+        for (const r of rawRecs) acceptCard(r);
+        setRecs(collected);  // non-stream은 최종 한 번
+      }
+
+      setRecommendations(collected, ft, fo);
+      setLoading(false);  // stream 미발현(빈 응답) 보호
+      if (collected.length > 0) {
         const duration_ms = Math.round(performance.now() - t0);
         const time_from_onboarding_ms = isFirstEntry
           ? consumeOnboardingTimestamp()
           : undefined;
+        const first_card_ms = firstCardAt !== null ? Math.round(firstCardAt - t0) : undefined;
         track("recommendation_loaded", {
-          count: newRecs.length,
+          count: collected.length,
           filter_type: ft,
           filter_origin: fo,
           duration_ms,
@@ -272,14 +350,14 @@ export function useRecommendations() {
           first_entry: isFirstEntry,
           has_feedback: hasFeedback,
           favorites_count: favorites.length,
-          ...(time_from_onboarding_ms !== undefined
-            ? { time_from_onboarding_ms }
-            : {}),
-          ...serverTimings,
-          ...serverUsage,
+          streamed: isStream,
+          ...(time_from_onboarding_ms !== undefined ? { time_from_onboarding_ms } : {}),
+          ...(first_card_ms !== undefined ? { srv_first_card_ms: first_card_ms } : {}),
+          ...timingsToProps(timingsMeta),
+          ...usageToProps(usageMeta),
         });
         addRecHistory(
-          newRecs.map((r: Recommendation) => ({
+          collected.map((r: Recommendation) => ({
             title: r.title,
             tmdbId: r.tmdbId,
             posterUrl: r.posterUrl,
@@ -362,15 +440,37 @@ export function useRecommendations() {
       const excludeIds = [...new Set([...currentIds, ...getSaved().map((s) => s.recommendation.tmdbId)])];
       const res = await fetch("/api/recommend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-neko-streaming": "1",
+        },
         body: JSON.stringify({ favorites, filter, exclude, excludeIds }),
         signal: controller.signal,
       });
       if (!res.ok) { prefetchingRef.current = false; setPrefetching(false); return; }
-      const data = await res.json();
-      const serverTimings = timingsToProps(data.timings);
-      const serverUsage = usageToProps(data.usage);
-      const newRecs: Recommendation[] = data.recommendations ?? [];
+
+      const isStream = res.headers.get("content-type")?.includes("application/x-ndjson") ?? false;
+      const collected: Recommendation[] = [];
+      let timingsMeta: unknown;
+      let usageMeta: unknown;
+
+      if (isStream) {
+        // 백그라운드 prefetch는 점진 추가 의미 적음 — 모은 뒤 한 번에 stack에 추가
+        await consumeStreamingNDJSON(res, {
+          onCard: (rec) => collected.push(rec),
+          onTimings: (t) => { timingsMeta = t; },
+          onUsage: (u) => { usageMeta = u; },
+          onError: () => { /* 백그라운드 silent */ },
+        }, controller.signal);
+      } else {
+        const data = await res.json();
+        timingsMeta = data.timings;
+        usageMeta = data.usage;
+        collected.push(...((data.recommendations ?? []) as Recommendation[]));
+      }
+      const serverTimings = timingsToProps(timingsMeta);
+      const serverUsage = usageToProps(usageMeta);
+      const newRecs = collected;
       if (newRecs.length > 0) {
         setRecs((prev) => {
           const existingIds = new Set(prev.map((r) => r.tmdbId));
@@ -383,6 +483,7 @@ export function useRecommendations() {
             count: unique.length,
             duration_ms,
             favorites_count: favorites.length,
+            streamed: isStream,
             ...serverTimings,
             ...serverUsage,
           });
