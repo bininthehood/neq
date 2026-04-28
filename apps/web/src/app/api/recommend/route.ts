@@ -74,6 +74,12 @@ export async function POST(req: NextRequest) {
   // 그 외에는 기존 non-streaming 동작 유지 (회귀 위험 0).
   const useStreaming = req.headers.get("x-neko-streaming") === "1";
 
+  // Phase 3 mirror opt-in: env TMDB_MIRROR_ENABLED=true 또는 클라이언트 헤더 x-neko-mirror: 1.
+  // default OFF → prod 영향 0. staging은 헤더로 admin 호출만 분기.
+  const useMirror =
+    process.env.TMDB_MIRROR_ENABLED === "true" ||
+    req.headers.get("x-neko-mirror") === "1";
+
   if (useStreaming) {
     const stream = new ReadableStream({
       async start(controller) {
@@ -94,6 +100,7 @@ export async function POST(req: NextRequest) {
               onTimings: (timings) => emit({ type: "timings", timings }),
               onUsage: (usage) => emit({ type: "usage", usage }),
             },
+            useMirror,
           );
           emit({ type: "done" });
         } catch (err) {
@@ -123,7 +130,8 @@ export async function POST(req: NextRequest) {
       exclude,
       excludeIds,
       savedCount,
-      onboardingCount
+      onboardingCount,
+      useMirror,
     );
     // 단계별 ms는 응답 body에 포함. Server-Timing 헤더는 dev tools 호환용 보존
     // (Vercel/Next.js infra가 Server-Timing 헤더를 응답에서 strip하는 동작이 관측되어 body 경유)
