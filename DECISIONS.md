@@ -162,7 +162,7 @@ DEVLOG에 분산된 핵심 설계·제품 결정을 한 곳에 정리합니다.
   - 자체 크롤링: 법적 리스크(이용약관 위반) + 안정성 ↓
 - **영향:**
   - **UX 폴백** (W3 디자인 리빌드 통합 시점): detail에 *"OTT 정보는 일부 플랫폼(쿠팡플레이 등)이 누락될 수 있어요"* 디스클레이머 + 외부 검색 redirect
-  - **OTT 가격 정보(F2)도 동일 영역**: TMDB 미제공 + JustWatch 라이선스 동일. **가격 자체 보류**, 단 **카테고리 라벨(구독/대여/구매)은 도입 가능** (F2 P1)
+  - **OTT 가격 정보(F2)도 동일 영역**: TMDB 미제공 + JustWatch 라이선스 동일. **가격 자체 보류**. ~~카테고리 라벨(구독/대여/구매)~~ → Day 19 (4/28) 사용자 검증에서 detail UI에 어색하여 **chip 표시 제거** (`4e5eded` UI 롤백). 데이터 레이어의 `category` 필드는 미래 활용 위해 유지
   - **Deep link 전략** (F4, W5): TMDB watchLink hub 우선 + Universal Link, 한국 토종은 web 검색 fallback. 자세한 사항은 `_workspace/ott-deeplink-research.md`
   - **DAU 10K+ 도달 시 재검토**: 직접 라이선스 협상 또는 사용자 제보 supplement 테이블 옵션 5 활성화
 
