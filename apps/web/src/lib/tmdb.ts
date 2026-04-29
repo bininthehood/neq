@@ -1,4 +1,8 @@
-import { TMDB_API_KEY as API_KEY } from "./env";
+import { getTmdbApiKey } from "./env";
+
+// 모듈 평가 시 1회만 평가. tmdb.ts 사용처는 모두 server-side
+// (API routes / Server Components) 라 안전.
+const API_KEY = getTmdbApiKey();
 import type { TMDBResult } from "./types";
 
 const BASE = "https://api.themoviedb.org/3";

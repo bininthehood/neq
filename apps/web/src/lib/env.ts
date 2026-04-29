@@ -6,10 +6,21 @@ function requireEnv(name: string): string {
 
 // ─────────────────────────────────────────────
 // 서버 전용 — 누락 시 throw
+//
+// ⚠️ lazy getter로 export. 본 모듈은 클라이언트(use client) 코드에서도
+// flag 함수(isTasteGenresEnabled 등) 때문에 import되는데, top-level에서
+// requireEnv 를 평가하면 클라이언트 번들 module evaluation 시
+// process.env.TMDB_API_KEY 가 비어 있어 throw 됨 (Day 21 회귀 fix).
+// 함수로 감싸 호출 시점에만 평가되도록 함. server-only 사용처에서만 호출.
 // ─────────────────────────────────────────────
 
-export const TMDB_API_KEY = requireEnv("TMDB_API_KEY");
-export const OPENAI_API_KEY = requireEnv("OPENAI_API_KEY");
+export function getTmdbApiKey(): string {
+  return requireEnv("TMDB_API_KEY");
+}
+
+export function getOpenaiApiKey(): string {
+  return requireEnv("OPENAI_API_KEY");
+}
 
 // ─────────────────────────────────────────────
 // Feature Flags — Onboarding V2
