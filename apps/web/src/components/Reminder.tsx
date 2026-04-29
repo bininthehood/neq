@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { getSaved, getWatchReports } from "@/lib/store";
 import { IconClose } from "./Icons";
 
@@ -8,7 +8,6 @@ const REMINDER_KEY = "neq_last_reminder";
 const ONE_DAY = 24 * 60 * 60 * 1000;
 
 function computeReminder(): { show: boolean; count: number } {
-  if (typeof window === "undefined") return { show: false, count: 0 };
   const lastShown = Number(localStorage.getItem(REMINDER_KEY) ?? "0");
   if (Date.now() - lastShown < ONE_DAY) return { show: false, count: 0 };
   const saved = getSaved();
@@ -21,15 +20,20 @@ function computeReminder(): { show: boolean; count: number } {
 }
 
 export default function Reminder() {
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const initial = useMemo(() => computeReminder(), []);
-  const [show, setShow] = useState(initial.show);
-  const unwatchedCount = initial.count;
+  // SSR 시점엔 항상 null. mount 후 useEffect 에서 localStorage 읽음 → hydration mismatch 회피
+  const [show, setShow] = useState(false);
+  const [unwatchedCount, setUnwatchedCount] = useState(0);
 
-  const dismiss = () => {
+  useEffect(() => {
+    const result = computeReminder();
+    setShow(result.show);
+    setUnwatchedCount(result.count);
+  }, []);
+
+  const dismiss = useCallback(() => {
     setShow(false);
     localStorage.setItem(REMINDER_KEY, String(Date.now()));
-  };
+  }, []);
 
   if (!show) return null;
 
