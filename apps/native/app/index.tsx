@@ -24,7 +24,11 @@ import DetailSheet from '../components/DetailSheet';
 import ActionBar from '../components/ActionBar';
 import TutorialOverlay from '../components/TutorialOverlay';
 import SearchSheet from '../components/SearchSheet';
-import { fetchRecommendations } from '../lib/api';
+import {
+  fetchRecommendations,
+  prefetchRecommendations,
+  consumePrefetchedRecommendations,
+} from '../lib/api';
 import { getSaved, toggleSaved } from '../lib/store';
 import type {
   Recommendation,
@@ -100,9 +104,71 @@ export default function DiscoverScreen() {
     [],
   );
 
+  /**
+   * #17 추천 prefetch — 다음 배치를 백그라운드로 미리 받아 module-level 캐시에 저장.
+   *
+   * web `useRecommendations.prefetchNextBatch` 패턴을 단순 함수로 포팅:
+   *   - 같은 filter+favorites+savedCount 조합이면 1회만 호출
+   *   - 사용자 노출 0 — recommendation_loaded 가 아니라 recommendation_load_more 발사
+   *   - 호출자는 await 안 해도 됨
+   */
+  const triggerPrefetch = useCallback(
+    async (filter: RecommendFilter) => {
+      try {
+        const saved = await getSaved();
+        const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
+        // 현재 보여준 작품 ID 는 exclude 에 추가해 중복 회피
+        const excludeIds = recs.map((r) => r.tmdbId);
+        await prefetchRecommendations({
+          filter,
+          favorites,
+          savedCount: saved.length,
+          excludeIds,
+        });
+        // prefetch 완료 후 캐시에서 소비해 stack 끝에 누적
+        const cached = consumePrefetchedRecommendations(
+          filter,
+          favorites,
+          saved.length,
+        );
+        if (cached && cached.length > 0) {
+          setRecs((prev) => {
+            const existing = new Set(prev.map((r) => r.tmdbId));
+            const unique = cached.filter((r) => !existing.has(r.tmdbId));
+            if (unique.length === 0) return prev;
+            return [...prev, ...unique];
+          });
+        }
+      } catch {
+        // 백그라운드는 silent — 사용자 UX 영향 없음
+      }
+    },
+    [recs],
+  );
+
   useEffect(() => {
     load();
   }, [load]);
+
+  // #17 prefetch 트리거 — 남은 카드 3장 이하로 떨어지면 다음 배치 백그라운드 로드
+  // (web 의 page.tsx line 297 패턴: remaining <= 10 — native 는 stack depth 가 작으므로 3 으로 단축)
+  useEffect(() => {
+    if (state !== 'ready' || recs.length === 0) return;
+    const remaining = recs.length - topIdx;
+    if (remaining > 3) return;
+    if (topIdx === 0) return; // 첫 로드 직후 즉시 prefetch 방지
+    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterOTTs);
+    void triggerPrefetch(filter);
+  }, [
+    topIdx,
+    state,
+    recs.length,
+    filterType,
+    filterOrigin,
+    filterYear,
+    filterOTTs,
+    triggerPrefetch,
+  ]);
 
   function applyFilterChange(nextState: {
     type?: FilterType;
