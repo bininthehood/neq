@@ -8,10 +8,15 @@
    참조: stage4-prep.md, day25-aux-summary (디자인 산출물 분석)
    ───────────────────────────────────────────────────── */
 
-/* Webfonts (CDN). Pretendard via jsDelivr; Instrument Serif & Geist Mono via Google Fonts.
-   메인 세션 결정: layout.tsx 의 기존 next/font import 와 함께 유지하거나 한 쪽으로 통일. */
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css");
-@import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500;600&display=swap");
+/* Webfonts — 폰트 로드는 layout.tsx 의 next/font 또는 <link> 로 처리.
+   이유: globals.css 에서 @import "@neq/design/tokens.css" 시 Turbopack inline 결과
+   이 @import url(...) 이 tailwindcss 규칙 뒤로 밀려 CSS spec 위반 (Day 25 Day 26 회귀).
+   - Pretendard Variable: 이미 layout.tsx <head> 에서 <link> preload 중
+   - Instrument Serif, Geist Mono: Stage 4 D1 진입 시 next/font/google 로 추가 권장
+     (참조: _workspace/day25-aux-summary.md §6, _workspace/stage4-prep.md §0.5.3)
+*/
+/* @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css"); */
+/* @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500;600&display=swap"); */
 
 :root {
   /* ── Background hierarchy ─────────────────────── */
