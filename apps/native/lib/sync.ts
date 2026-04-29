@@ -1,14 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, ensureAuth, getAuthUid } from './supabase';
-import { env } from './env';
+import { env, isOnboardingV2Enabled } from './env';
 import {
   getSaved,
   getWatchReports,
   addSaved,
   addWatchReport,
   getDeviceId,
+  getAccountPrefs,
+  setAccountPrefs,
+  defaultAccountPrefs,
 } from './store';
-import type { SavedItem, WatchReport } from './types';
+import type { AccountPrefs, SavedItem, WatchReport } from './types';
 
 const LAST_SYNC_KEY = 'neq_last_sync';
 
@@ -115,6 +118,19 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += rows.length;
     }
 
+    // account_prefs (Onboarding V2 — feature flag 뒤)
+    //   flag OFF 시 column 자체를 건드리지 않으므로 V1 prod 영향 0.
+    //   web `apps/web/src/lib/sync.ts` 의 account_prefs 분기와 동일.
+    if (isOnboardingV2Enabled()) {
+      const accountPrefs = await getAccountPrefs();
+      const { error } = await supabase
+        .from('profiles')
+        .update({ account_prefs: accountPrefs })
+        .eq('id', profileId);
+
+      if (!error) pushed += 1;
+    }
+
     console.log(`[sync] pushed ${pushed} items to server`);
     return { success: true, pushed };
   } catch (err) {
@@ -180,6 +196,32 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
         if (localReportIds.has(row.tmdb_id)) continue;
         await addWatchReport(row.tmdb_id, row.reaction);
         pulled++;
+      }
+    }
+
+    // account_prefs (Onboarding V2 — feature flag 뒤)
+    //   flag OFF → column 무시 → V1 영향 0.
+    //   서버 우선 — default 와 동일하면 굳이 덮어쓰지 않음 (web 동일 패턴).
+    if (isOnboardingV2Enabled()) {
+      const { data: profileRow } = await supabase
+        .from('profiles')
+        .select('account_prefs')
+        .eq('id', profileId)
+        .single();
+
+      const row = profileRow as { account_prefs?: AccountPrefs | null } | null;
+      const serverPrefs = row?.account_prefs ?? null;
+      if (serverPrefs && typeof serverPrefs === 'object') {
+        const merged: AccountPrefs = {
+          ...defaultAccountPrefs(),
+          ...serverPrefs,
+          notificationPrefs: {
+            ...defaultAccountPrefs().notificationPrefs,
+            ...(serverPrefs.notificationPrefs ?? {}),
+          },
+        };
+        await setAccountPrefs(merged);
+        pulled += 1;
       }
     }
 

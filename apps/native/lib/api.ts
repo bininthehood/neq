@@ -27,6 +27,7 @@ import type { RecommendRequest } from '@neq/core';
  * - srv_<step>_ms: Server-Timing 헤더의 각 step (예: srv_enrich_ms, srv_llm_ms)
  * - cold_start: favorites.length === 0
  * - favorites_count, has_filter, count, ...
+ * - taste_genres_count / subscribed_ott_count / cold_start_version: V2 입력 (P0-2)
  *
  * 실패 시 `recommendation_failed` 발사.
  *
@@ -34,6 +35,10 @@ import type { RecommendRequest } from '@neq/core';
  *   favorites=[] 인데 서버가 0건 응답을 주는 cold start 함정에 대비.
  *   recs.length === 0 이고 favorites=[] 이면 `/api/trending` 으로 보강.
  *   trending 응답은 단순 schema 라 누락 필드는 안전 기본값으로 채운다.
+ *
+ * P0-2 Cold Start V2 (위임 D4b):
+ *   호출자가 body 에 tasteGenres / subscribedOtt 를 포함하면 그대로 서버에 전달.
+ *   flag OFF 또는 값이 빈 배열이면 호출자가 body 에서 제거하여 V1 동작 그대로 보존.
  */
 export async function fetchRecommendations(
   body: RecommendRequest = {},
@@ -45,6 +50,12 @@ export async function fetchRecommendations(
   const filterType = body.filter?.type ?? 'all';
   const filterOrigin = body.filter?.origin ?? 'all';
   const isColdStart = favoritesCount === 0;
+  // V2 입력 (P0-2) — body 에 포함된 값 기준으로 PostHog 속성 계산.
+  // flag 평가/prefs 읽기는 호출자(useRecommendations 또는 화면) 가 담당.
+  const tasteGenresCount = body.tasteGenres?.length ?? 0;
+  const subscribedOttCount = body.subscribedOtt?.length ?? 0;
+  const coldStartVersion: 'v1' | 'v2' =
+    tasteGenresCount > 0 || subscribedOttCount > 0 ? 'v2' : 'v1';
 
   // @neq/core 가 fetch 응답 객체를 노출하지 않으므로 timing 측정은 raw fetch 로 한다.
   // (signature/error 처리는 createApiClient 와 동일하게 유지)
@@ -108,12 +119,25 @@ export async function fetchRecommendations(
     streamed: false,
     platform: 'native',
     cold_start_fallback: coldStartFallbackUsed,
+    taste_genres_count: tasteGenresCount,
+    subscribed_ott_count: subscribedOttCount,
+    cold_start_version: coldStartVersion,
   };
   // Server-Timing 헤더 → srv_<name>_ms
   for (const [k, v] of Object.entries(serverTiming)) {
     props[`srv_${k}_ms`] = v;
   }
   track('recommendation_loaded', props);
+
+  // V2 분기 진입 시 별도 이벤트 1건 (web 의 cold_start_v2 패턴 일치)
+  if (coldStartVersion === 'v2') {
+    track('cold_start_v2', {
+      taste_genres_count: tasteGenresCount,
+      subscribed_ott_count: subscribedOttCount,
+      favorites_count: favoritesCount,
+      platform: 'native',
+    });
+  }
 
   return recs;
 }

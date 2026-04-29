@@ -11,6 +11,9 @@ export type {
   FilterType,
   FilterOrigin,
   FilterYear,
+  AccountPrefs,
+  NotificationPrefs,
+  NekoPushSubscriptionJSON,
 } from '@neq/core';
 
 export { USER_DATA_SCHEMA_VERSION } from '@neq/core';

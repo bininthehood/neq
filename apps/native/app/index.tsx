@@ -29,7 +29,9 @@ import {
   prefetchRecommendations,
   consumePrefetchedRecommendations,
 } from '../lib/api';
-import { getSaved, toggleSaved } from '../lib/store';
+import { getAccountPrefs, getSaved, toggleSaved } from '../lib/store';
+import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
+import { computeV2Inputs } from '../lib/v2-input-utils';
 import type {
   Recommendation,
   RecommendFilter,
@@ -88,10 +90,20 @@ export default function DiscoverScreen() {
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
+        // P0-2 Cold Start V2 입력 — flag ON + 값 있을 때만 body 에 포함.
+        // flag 두 개 모두 OFF 면 V1 동작 100% 동일 (body 변경 X).
+        const prefs = await getAccountPrefs();
+        const v2 = computeV2Inputs({
+          tasteGenresEnabled: isTasteGenresEnabled(),
+          ottWeakSignalEnabled: isOttWeakSignalEnabled(),
+          tasteGenres: prefs.tasteGenres,
+          subscribedOtt: prefs.subscribedOtt,
+        });
         const data = await fetchRecommendations({
           filter,
           favorites,
           savedCount: saved.length,
+          ...v2.body,
         });
         setRecs(data);
         setTopIdx(0);
@@ -119,11 +131,20 @@ export default function DiscoverScreen() {
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
         // 현재 보여준 작품 ID 는 exclude 에 추가해 중복 회피
         const excludeIds = recs.map((r) => r.tmdbId);
+        // P0-2 V2 입력 — 동일 flag/prefs 기준으로 prefetch 도 일관 유지.
+        const prefs = await getAccountPrefs();
+        const v2 = computeV2Inputs({
+          tasteGenresEnabled: isTasteGenresEnabled(),
+          ottWeakSignalEnabled: isOttWeakSignalEnabled(),
+          tasteGenres: prefs.tasteGenres,
+          subscribedOtt: prefs.subscribedOtt,
+        });
         await prefetchRecommendations({
           filter,
           favorites,
           savedCount: saved.length,
           excludeIds,
+          ...v2.body,
         });
         // prefetch 완료 후 캐시에서 소비해 stack 끝에 누적
         const cached = consumePrefetchedRecommendations(

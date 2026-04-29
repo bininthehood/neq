@@ -19,6 +19,16 @@ export interface RecommendRequest {
   savedCount?: number;
   /** 온보딩에서 선택한 초기 취향 작품 수 — 모드 판정 signal */
   onboardingCount?: number;
+  /**
+   * Cold Start V2 (P0-2) — 장르 칩 멀티 선택 (LLM 강한 신호로 사용).
+   * 서버는 NEXT_PUBLIC_TASTE_GENRES_ENABLED flag OFF 시 무시한다.
+   */
+  tasteGenres?: string[];
+  /**
+   * Cold Start V2 (P0-2) — 구독 OTT provider id (LLM 약한 신호 — 가중치).
+   * 서버는 NEXT_PUBLIC_OTT_WEAK_SIGNAL flag OFF 시 무시한다.
+   */
+  subscribedOtt?: number[];
 }
 
 export function createApiClient(baseUrl: string) {

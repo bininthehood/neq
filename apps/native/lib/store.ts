@@ -1,10 +1,19 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import type { Recommendation, SavedItem, WatchReaction, WatchReport } from './types';
+import type {
+  AccountPrefs,
+  NekoPushSubscriptionJSON,
+  NotificationPrefs,
+  Recommendation,
+  SavedItem,
+  WatchReaction,
+  WatchReport,
+} from './types';
 
 const SAVED_KEY = 'neq_saved';
 const WATCH_REPORTS_KEY = 'neq_watch_reports';
 const DEVICE_ID_KEY = 'neq_device_id';
+const ACCOUNT_PREFS_KEY = 'neq_account_prefs';
 
 async function safeGet<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -91,9 +100,125 @@ export async function getDeviceId(): Promise<string> {
   return id;
 }
 
+// ---------- account prefs (Onboarding V2 — P0-1) ----------
+//
+// 페르소나 외부의 "계정 전체" 단위 설정을 AsyncStorage에 단일 JSON 키로 저장.
+// - tasteGenres   : 장르 칩 멀티 선택 (LLM 강한 신호로 사용)
+// - subscribedOtt : 구독 OTT provider id (LLM 약한 신호 — 가중치)
+// - notificationPrefs : 4종 알림 토글 + Web Push subscription
+//
+// 키: 'neq_account_prefs' (web LocalStorage 키와 동일 — 양 플랫폼 호환).
+//
+// DECISIONS.md #23: 네이티브 알림 architecture 보류. 본 모듈은
+// `notificationPrefs.pushSubscription` 을 native 에서 발급하지 않으며
+// 항상 null 유지 (Web Push 전용).
+//
+// 스펙: _workspace/onboarding-v2-spec.md §1.2
+
+export function defaultNotificationPrefs(): NotificationPrefs {
+  return {
+    weeklyRec: false,
+    newRelease: false,
+    ottExpiry: false,
+    monthlyReport: false,
+    pushSubscription: null,
+  };
+}
+
+export function defaultAccountPrefs(): AccountPrefs {
+  return {
+    tasteGenres: [],
+    subscribedOtt: [],
+    notificationPrefs: defaultNotificationPrefs(),
+  };
+}
+
+/**
+ * AsyncStorage 의 raw 문자열을 AccountPrefs 로 안전 복원.
+ * - JSON 파싱 실패 → default
+ * - 누락된 필드 → default 로 채움 (forward-compat)
+ * - 타입 불일치 → default 필드로 fallback
+ *
+ * web `apps/web/src/lib/account-prefs.ts` 의 parseAccountPrefs 와 동일한 로직.
+ */
+function parseAccountPrefs(raw: string | null): AccountPrefs {
+  if (!raw) return defaultAccountPrefs();
+  let obj: unknown;
+  try {
+    obj = JSON.parse(raw);
+  } catch {
+    return defaultAccountPrefs();
+  }
+  if (!obj || typeof obj !== 'object') return defaultAccountPrefs();
+  const o = obj as Record<string, unknown>;
+
+  const tasteGenres = Array.isArray(o.tasteGenres)
+    ? o.tasteGenres.filter((x): x is string => typeof x === 'string')
+    : [];
+  const subscribedOtt = Array.isArray(o.subscribedOtt)
+    ? o.subscribedOtt.filter((x): x is number => typeof x === 'number')
+    : [];
+
+  const np = (o.notificationPrefs ?? {}) as Record<string, unknown>;
+  const notificationPrefs: NotificationPrefs = {
+    weeklyRec: typeof np.weeklyRec === 'boolean' ? np.weeklyRec : false,
+    newRelease: typeof np.newRelease === 'boolean' ? np.newRelease : false,
+    ottExpiry: typeof np.ottExpiry === 'boolean' ? np.ottExpiry : false,
+    monthlyReport:
+      typeof np.monthlyReport === 'boolean' ? np.monthlyReport : false,
+    pushSubscription:
+      np.pushSubscription && typeof np.pushSubscription === 'object'
+        ? (np.pushSubscription as NekoPushSubscriptionJSON)
+        : null,
+  };
+
+  return { tasteGenres, subscribedOtt, notificationPrefs };
+}
+
+export async function getAccountPrefs(): Promise<AccountPrefs> {
+  const raw = await AsyncStorage.getItem(ACCOUNT_PREFS_KEY).catch(() => null);
+  return parseAccountPrefs(raw);
+}
+
+export async function setAccountPrefs(prefs: AccountPrefs): Promise<void> {
+  await AsyncStorage.setItem(ACCOUNT_PREFS_KEY, JSON.stringify(prefs));
+}
+
+export async function updateAccountPrefs(
+  updater: (prev: AccountPrefs) => AccountPrefs,
+): Promise<void> {
+  const next = updater(await getAccountPrefs());
+  await setAccountPrefs(next);
+}
+
+export async function setTasteGenres(genres: string[]): Promise<void> {
+  await updateAccountPrefs((prev) => ({ ...prev, tasteGenres: genres }));
+}
+
+export async function setSubscribedOtt(providers: number[]): Promise<void> {
+  await updateAccountPrefs((prev) => ({ ...prev, subscribedOtt: providers }));
+}
+
+export async function updateNotificationPrefs(
+  updater: (prev: NotificationPrefs) => NotificationPrefs,
+): Promise<void> {
+  await updateAccountPrefs((prev) => ({
+    ...prev,
+    notificationPrefs: updater(prev.notificationPrefs),
+  }));
+}
+
+export async function clearAccountPrefs(): Promise<void> {
+  await AsyncStorage.removeItem(ACCOUNT_PREFS_KEY);
+}
+
 // ---------- reset ----------
 
 export async function clearAllUserData(): Promise<void> {
-  await AsyncStorage.multiRemove([SAVED_KEY, WATCH_REPORTS_KEY]);
+  await AsyncStorage.multiRemove([
+    SAVED_KEY,
+    WATCH_REPORTS_KEY,
+    ACCOUNT_PREFS_KEY,
+  ]);
   // device_id는 유지 (익명 식별자 안정성)
 }
