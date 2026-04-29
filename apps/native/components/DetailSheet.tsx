@@ -25,6 +25,7 @@ import type { Recommendation } from '../lib/types';
 import { getOTTLink, getOTTIcon } from '@neq/core';
 import { fonts } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
+import { track } from '../lib/analytics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9;
@@ -52,9 +53,19 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
   useEffect(() => {
     if (visible) {
       translateY.value = withSpring(0, { damping: 20, stiffness: 160 });
+      if (rec) {
+        track('detail_opened', {
+          tmdb_id: rec.tmdbId,
+          title: rec.title,
+          providers_count: rec.providers.length,
+          source: 'native_detail_sheet',
+        });
+      }
     } else {
       translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 280 });
     }
+    // rec 의존성은 의도적으로 제외 — visible 토글 시점에만 발사
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, translateY]);
 
   const pan = Gesture.Pan()
@@ -97,14 +108,36 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
     }
   }
 
-  function openProvider(providerName: string, watchLink: string | null) {
+  async function openProvider(providerName: string, watchLink: string | null) {
     if (!rec) return;
     // 네이티브는 항상 모바일 → 앱 딥링크 우선
     const url =
       getOTTLink(providerName, rec.title, true) ||
       watchLink ||
       `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + rec.title)}`;
-    Linking.openURL(url).catch(() => {});
+
+    // 클릭 이벤트는 실제 deeplink 시도 직전에 발사 (canOpenURL 결과와 무관하게 의도 측정)
+    track('ott_link_clicked', {
+      tmdb_id: rec.tmdbId,
+      title: rec.title,
+      provider: providerName,
+      url,
+      providers_count: rec.providers.length,
+      source: 'native_detail_sheet',
+    });
+
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        // 딥링크 미지원 시 google 검색으로 fallback (이미 watchLink가 fallback이지만 한 번 더 안전망)
+        const fallback = `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + rec.title)}`;
+        await Linking.openURL(fallback);
+      }
+    } catch {
+      // openURL 실패 — 무시 (사용자가 명시적으로 닫았거나 OS 거부)
+    }
   }
 
   if (!rec) return null;

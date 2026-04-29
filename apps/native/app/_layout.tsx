@@ -16,6 +16,8 @@ import {
 } from '@expo-google-fonts/outfit';
 import { colors } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
+import PostHogProvider from '../components/PostHogProvider';
+import { track } from '../lib/analytics';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -67,51 +69,58 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // app_open — root mount 1회 발사. PostHog 미초기화 상태에서도 큐잉되어 안전.
+  useEffect(() => {
+    track('app_open', { platform: 'native' });
+  }, []);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
-      <SafeAreaProvider>
-        <StatusBar style="light" />
-        <Tabs
-          screenOptions={{
-            headerShown: false,
-            tabBarStyle: {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              height: 72,
-              paddingTop: 8,
-            },
-            tabBarShowLabel: false,
-            sceneStyle: { backgroundColor: colors.bg },
-          }}
-        >
-          <Tabs.Screen
-            name="index"
-            options={{
-              tabBarIcon: ({ focused }) => (
-                <TabItem icon="◉" label="발견" focused={focused} />
-              ),
+    <PostHogProvider>
+      <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
+        <SafeAreaProvider>
+          <StatusBar style="light" />
+          <Tabs
+            screenOptions={{
+              headerShown: false,
+              tabBarStyle: {
+                backgroundColor: colors.surface,
+                borderTopColor: colors.border,
+                height: 72,
+                paddingTop: 8,
+              },
+              tabBarShowLabel: false,
+              sceneStyle: { backgroundColor: colors.bg },
             }}
-          />
-          <Tabs.Screen
-            name="saved"
-            options={{
-              tabBarIcon: ({ focused }) => (
-                <TabItem icon="♡" label="저장" focused={focused} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="profile"
-            options={{
-              tabBarIcon: ({ focused }) => (
-                <TabItem icon="◎" label="프로필" focused={focused} />
-              ),
-            }}
-          />
-        </Tabs>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+          >
+            <Tabs.Screen
+              name="index"
+              options={{
+                tabBarIcon: ({ focused }) => (
+                  <TabItem icon="◉" label="발견" focused={focused} />
+                ),
+              }}
+            />
+            <Tabs.Screen
+              name="saved"
+              options={{
+                tabBarIcon: ({ focused }) => (
+                  <TabItem icon="♡" label="저장" focused={focused} />
+                ),
+              }}
+            />
+            <Tabs.Screen
+              name="profile"
+              options={{
+                tabBarIcon: ({ focused }) => (
+                  <TabItem icon="◎" label="프로필" focused={focused} />
+                ),
+              }}
+            />
+          </Tabs>
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </PostHogProvider>
   );
 }

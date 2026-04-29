@@ -16,4 +16,7 @@ export const env = {
   API_BASE_URL: pick('API_BASE_URL', 'https://neko-ecru.vercel.app'),
   SUPABASE_URL: pick('SUPABASE_URL', ''),
   SUPABASE_ANON_KEY: pick('SUPABASE_ANON_KEY', ''),
+  // PostHog — 키가 비어 있으면 analytics는 no-op 처리 (개발/테스트 안전)
+  POSTHOG_KEY: pick('POSTHOG_KEY', ''),
+  POSTHOG_HOST: pick('POSTHOG_HOST', 'https://us.i.posthog.com'),
 } as const;
