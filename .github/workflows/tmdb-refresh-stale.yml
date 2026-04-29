@@ -1,0 +1,45 @@
+name: TMDB Refresh Stale
+
+on:
+  schedule:
+    # 매일 08:30 UTC (catalog-sync 08:00 UTC 직후, bulk-crawl 가 비우기 시작 전).
+    # tmdb_metadata.fetched_at < NOW() - 180 days 인 row 1000건을 큐에 추가.
+    # bulk-crawl 1h cron 이 큐 비우기 활성화된 시점부터 의미 있어짐.
+    - cron: "30 8 * * *"
+  workflow_dispatch:
+    inputs:
+      stale_days:
+        description: "stale 기준 일수 (기본 180)"
+        required: false
+        default: "180"
+      batch_size:
+        description: "1회 추가 배치 크기 (기본 1000)"
+        required: false
+        default: "1000"
+
+concurrency:
+  group: tmdb-refresh-stale
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --ignore-scripts
+
+      - name: Run tmdb-refresh-stale
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          STALE_DAYS: ${{ inputs.stale_days || '180' }}
+          BATCH_SIZE: ${{ inputs.batch_size || '1000' }}
+        run: npx tsx scripts/tmdb-refresh-stale.ts
