@@ -69,6 +69,34 @@ export interface SearchResult {
   mediaType: 'movie' | 'tv';
 }
 
+/**
+ * 인물 검색 결과 (감독/배우 등). spec §4.3 참조.
+ *
+ * - profileUrl: TMDB profile_path 기반 URL. 사진 미존재 시 null.
+ * - knownFor: TMDB person.known_for 배열에서 추출한 대표작 (최대 3개).
+ * - knownForDept: TMDB known_for_department. 'Directing' | 'Acting' | 그 외.
+ *   Directing/Acting 외 부서(Production, Writing, ...)는 클라이언트가 무시 가능.
+ */
+export interface PersonResult {
+  id: number;
+  name: string;
+  profileUrl: string | null;
+  knownFor: { title: string; year: string }[];
+  knownForDept: 'Directing' | 'Acting' | string;
+}
+
+/**
+ * grouped=1 응답. works/directors/actors 분리 (spec §4.2).
+ *
+ * recent/trending 은 클라이언트(LocalStorage / 별도 endpoint) 영역이므로
+ * 서버 응답에 포함하지 않는다.
+ */
+export interface GroupedSearchResponse {
+  works: SearchResult[];
+  directors: PersonResult[];
+  actors: PersonResult[];
+}
+
 export interface Persona {
   id: string;
   name: string;

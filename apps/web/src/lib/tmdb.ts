@@ -56,6 +56,63 @@ export async function searchMulti(query: string): Promise<TMDBResult[]> {
     }));
 }
 
+/**
+ * search/multi 의 person 결과 raw shape. known_for 는 movie/tv 작품 배열.
+ * TMDB 가 자동으로 채워주므로 추가 API 호출 불필요.
+ */
+export interface TMDBPersonRaw {
+  id: number;
+  name: string;
+  media_type: "person";
+  profile_path: string | null;
+  known_for_department?: string;
+  known_for?: Array<{
+    id: number;
+    media_type: "movie" | "tv";
+    title?: string;
+    name?: string;
+    release_date?: string;
+    first_air_date?: string;
+    poster_path: string | null;
+  }>;
+}
+
+export interface TMDBMultiGroupedRaw {
+  works: TMDBResult[];                 // movie + tv (검색 순서 보존)
+  persons: TMDBPersonRaw[];            // 모든 person (Directing/Acting 분리는 라우트 레이어 책임)
+}
+
+/**
+ * search/multi 1회 호출로 작품 + 인물을 함께 가져온다 (grouped=1 응답용).
+ *
+ * - 작품(movie/tv): 기존 searchMulti 와 동일한 6개 cap 적용.
+ * - 인물(person): 모든 결과 반환 (라우트에서 Directing/Acting 분류 후 cap).
+ *
+ * 추가 API 호출 0 — known_for / known_for_department / profile_path 모두 search/multi 응답에 포함.
+ */
+export async function searchMultiGrouped(query: string): Promise<TMDBMultiGroupedRaw> {
+  const res = await fetch(
+    `${BASE}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=ko-KR`
+  );
+  if (!res.ok) return { works: [], persons: [] };
+  const data = await res.json();
+  const all: Array<TMDBResult & { media_type?: string } | TMDBPersonRaw> = data.results ?? [];
+
+  const works = all
+    .filter((r): r is TMDBResult & { media_type?: string } =>
+      (r as { media_type?: string }).media_type === "movie" ||
+      (r as { media_type?: string }).media_type === "tv"
+    )
+    .slice(0, 6)
+    .map((r) => ({ ...r, title: r.title ?? r.name }));
+
+  const persons = all.filter((r): r is TMDBPersonRaw =>
+    (r as { media_type?: string }).media_type === "person"
+  );
+
+  return { works, persons };
+}
+
 export interface ProviderInfo {
   name: string;
   type: "flatrate" | "rent" | "buy";

@@ -8,6 +8,8 @@ export type {
   RecommendFilter,
   WatchFeedback,
   SearchResult,
+  PersonResult,
+  GroupedSearchResponse,
   UserDataExport,
   UserDataExportV2,
   Persona,
