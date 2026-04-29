@@ -8,9 +8,56 @@ interface UseSwipeGestureParams {
   filteredLength: number;
   nextCard: () => void;
   setTopIdx: React.Dispatch<React.SetStateAction<number>>;
+  /**
+   * 아래 스와이프 (down) 콜백.
+   * Stage 4 D1: swipe-stack.jsx 스펙 — 명시적 액션(save) 진입로.
+   * dragY > THRESH 시 트리거. save 흡수 모션은 SwipeCard 측에서 dragY 로 표현.
+   */
   onSwipeDown?: () => void;
+  /**
+   * 위 스와이프 (up) 콜백 — DetailSheet 열기.
+   */
   onSwipeUp?: () => void;
   onPrevCard?: () => void;
+}
+
+/**
+ * 4방향 스와이프 제스처 훅 (Stage 4 D1).
+ *
+ * 디자인 산출물 `_workspace/design-handoff/.../neko-swipe-stack.jsx` 기반:
+ *   - TAP = 8px / 300ms 임계 (탭 = DetailSheet 열기 — onSwipeUp 트리거)
+ *   - THRESH = 70px (좌/우/위/아래 모두 동일)
+ *   - 좌  = 다음 카드 (nextCard)
+ *   - 우  = 이전 카드 오버레이 (prevOverlayX)
+ *   - 위  = DetailSheet (onSwipeUp)
+ *   - 아래 = save (onSwipeDown — 트리거 시 카드 흡수 애니메이션)
+ *   - dominant axis 락: |dx| > |dy| 면 horizontal, 아니면 vertical
+ */
+export const SWIPE_THRESHOLD = 70; // swipe-stack.jsx THRESH
+export const TAP_THRESHOLD = 8; // swipe-stack.jsx TAP
+export const TAP_DURATION = 300; // swipe-stack.jsx tap dt
+
+/**
+ * 순수 판정 함수 — 단위 테스트용. hook 외부에서도 동일 임계 보장.
+ * dx/dy/dt 입력으로 4방향 + tap + none 분류.
+ */
+export type SwipeDecision = "tap" | "left" | "right" | "up" | "down" | "none";
+export function decideSwipe(dx: number, dy: number, dt: number): SwipeDecision {
+  const absX = Math.abs(dx);
+  const absY = Math.abs(dy);
+  // tap 판정: 매우 작은 이동 + 짧은 지속
+  if (absX < TAP_THRESHOLD && absY < TAP_THRESHOLD && dt < TAP_DURATION) {
+    return "tap";
+  }
+  // dominant axis
+  if (absX > absY) {
+    if (dx < -SWIPE_THRESHOLD) return "left";
+    if (dx > SWIPE_THRESHOLD) return "right";
+  } else {
+    if (dy < -SWIPE_THRESHOLD) return "up";
+    if (dy > SWIPE_THRESHOLD) return "down";
+  }
+  return "none";
 }
 
 export function useSwipeGesture({
@@ -39,6 +86,7 @@ export function useSwipeGesture({
 
   const startX = useRef(0);
   const startY = useRef(0);
+  const startT = useRef(0);
   const dragging = useRef(false);
   const dirLock = useRef<"h" | "v" | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -49,6 +97,7 @@ export function useSwipeGesture({
       if (swiping) return;
       startX.current = e.touches[0].clientX;
       startY.current = e.touches[0].clientY;
+      startT.current = Date.now();
       dragging.current = true;
       dirLock.current = null;
     },
@@ -82,8 +131,8 @@ export function useSwipeGesture({
           setDragY(0);
         }
       } else if (dirLock.current === "v") {
-        if (dy > 0) setDragY(Math.min(100, dy * 0.5));
-        else if (onSwipeUp) setDragY(Math.max(-100, dy * 0.5));
+        if (dy > 0) setDragY(Math.min(140, dy));
+        else if (onSwipeUp) setDragY(Math.max(-140, dy));
       }
     },
     [scrollLocked, filteredLength, topIdx, firstCardHint, onSwipeUp],
@@ -93,14 +142,31 @@ export function useSwipeGesture({
     if (!dragging.current) return;
     dragging.current = false;
     const dir = dirLock.current;
+    const dt = Date.now() - startT.current;
     dirLock.current = null;
     // 첫 카드 힌트 자동 해제
     if (firstCardHint) setTimeout(() => setFirstCardHint(false), 1500);
+
+    // tap 판정 (swipe-stack.jsx 패턴): |dx|<8, |dy|<8, dt<300
+    // dirLock 이 잡히지 않았거나 (10px 미만) 트리거 임계 미달이면 탭으로 처리
+    const tappable =
+      dir === null &&
+      dt < TAP_DURATION &&
+      Math.abs(dragX) < TAP_THRESHOLD &&
+      Math.abs(dragY) < TAP_THRESHOLD;
+    if (tappable) {
+      // 탭 = DetailSheet 열기 (swipe-stack.jsx)
+      onSwipeUp?.();
+      setDragX(0);
+      setDragY(0);
+      return;
+    }
+
     if (dir === "v") {
-      if (dragY > 40 && onSwipeDown) {
+      if (dragY > SWIPE_THRESHOLD && onSwipeDown) {
         vibrate(10);
         onSwipeDown();
-      } else if (dragY < -40 && onSwipeUp) {
+      } else if (dragY < -SWIPE_THRESHOLD && onSwipeUp) {
         vibrate(10);
         onSwipeUp();
       }
@@ -126,7 +192,7 @@ export function useSwipeGesture({
           setPrevOverlayX(-screenW);
           setTimeout(() => setPrevOverlayX(null), 300);
         }
-      } else if (dragX < -80) {
+      } else if (dragX < -SWIPE_THRESHOLD) {
         vibrate(10);
         nextCard();
       } else {

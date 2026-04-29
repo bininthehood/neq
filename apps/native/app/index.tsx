@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,7 @@ import {
 import { getAccountPrefs, getSaved, toggleSaved } from '../lib/store';
 import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
+import { track } from '../lib/analytics';
 import type {
   Recommendation,
   RecommendFilter,
@@ -43,7 +44,8 @@ import { colors, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const NEXT_THRESHOLD = -80;
+// Stage 4 D1 (swipe-stack.jsx): THRESH=70, TAP=8/300ms — 4방향 + tap
+const SWIPE_THRESHOLD = 70;
 const PREV_OVERLAY_TRIGGER = 0.3;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -69,8 +71,15 @@ export default function DiscoverScreen() {
 
   const [topIdx, setTopIdx] = useState(0);
   const [dragX, setDragX] = useState(0);
+  // Stage 4 D1: 위/아래 스와이프 변위
+  const [dragY, setDragY] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  // Stage 4 D1: save 흡수 모션 + flash
+  const [saveAbsorbing, setSaveAbsorbing] = useState(false);
+  const [saveFlash, setSaveFlash] = useState(false);
+  const saveBtnRef = useRef<View>(null);
+  const [saveTargetPoint, setSaveTargetPoint] = useState<{ x: number; y: number } | null>(null);
 
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>('all');
@@ -235,16 +244,64 @@ export default function DiscoverScreen() {
     setTopIdx((i) => Math.max(i - 1, 0));
   }
 
-  async function toggleLike() {
-    if (!currentRec) return;
+  /**
+   * Stage 4 D1: save 흡수 모션 트리거. (swipe-stack.jsx 패턴)
+   *  - save 버튼 좌표 measure → 카드 흡수 목표점
+   *  - flash 600ms / 흡수 480ms 동기화
+   *  - 480ms 후 다음 카드로 advance
+   *  - 이미 저장된 상태면 unsave 만 (흡수 모션 없음, flash 만)
+   */
+  async function triggerSaveAbsorption(reason: 'swipe_down' | 'button') {
+    if (!currentRec || saveAbsorbing) return;
+    const id = currentRec.tmdbId;
+    const alreadySaved = savedIds.has(id);
+
+    // save 버튼 좌표 measure (네이티브 절대 좌표)
+    if (saveBtnRef.current) {
+      saveBtnRef.current.measureInWindow((x, y, w, h) => {
+        setSaveTargetPoint({ x: x + w / 2, y: y + h / 2 });
+      });
+    }
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    if (alreadySaved) {
+      // unsave: 흡수 모션 없음
+      const nowSaved = await toggleSaved(currentRec);
+      setSavedIds((prev) => {
+        const next = new Set(prev);
+        if (nowSaved) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      track('card_unsaved', { tmdb_id: id });
+      setSaveFlash(true);
+      setTimeout(() => setSaveFlash(false), 600);
+      return;
+    }
+
+    track('card_saved', { tmdb_id: id, title: currentRec.title, source: reason });
     const nowSaved = await toggleSaved(currentRec);
     setSavedIds((prev) => {
       const next = new Set(prev);
-      if (nowSaved) next.add(currentRec.tmdbId);
-      else next.delete(currentRec.tmdbId);
+      if (nowSaved) next.add(id);
+      else next.delete(id);
       return next;
     });
+    setSaveAbsorbing(true);
+    setSaveFlash(true);
+    setTimeout(() => setSaveFlash(false), 600);
+    setTimeout(() => {
+      setSaveAbsorbing(false);
+      setSaveTargetPoint(null);
+      setTopIdx((i) => Math.min(i + 1, recs.length));
+      setDragX(0);
+      setDragY(0);
+    }, 480);
+  }
+
+  async function toggleLike() {
+    triggerSaveAbsorption('button');
   }
 
   async function handleShare() {
@@ -263,48 +320,112 @@ export default function DiscoverScreen() {
     load(filter);
   }
 
+  // Stage 4 D1: 탭 = DetailSheet 열기 (swipe-stack.jsx 패턴 — 8px/300ms)
+  // 기존 immersive 토글은 ActionBar 의 ⓘ 버튼 또는 위 스와이프 / 탭 → detail 로 통일
   const tap = Gesture.Tap()
-    .maxDuration(250)
-    .maxDistance(10)
+    .maxDuration(300)
+    .maxDistance(8)
     .onStart(() => {
-      runOnJS(setImmersive)((v) => !v);
+      runOnJS(setDetailOpen)(true);
     });
+
+  // 위 스와이프 트래킹용 헬퍼 (worklet 외부)
+  function handleSwipeUp() {
+    if (currentRec) {
+      track('card_swiped', {
+        direction: 'up',
+        tmdb_id: currentRec.tmdbId,
+        title: currentRec.title,
+      });
+    }
+    setDetailOpen(true);
+  }
+
+  function handleSwipeDown() {
+    if (currentRec) {
+      track('card_swiped', {
+        direction: 'down',
+        tmdb_id: currentRec.tmdbId,
+        title: currentRec.title,
+      });
+    }
+    void triggerSaveAbsorption('swipe_down');
+  }
+
+  function handleSwipeLeft() {
+    if (currentRec) {
+      track('card_swiped', {
+        direction: 'left',
+        tmdb_id: currentRec.tmdbId,
+        title: currentRec.title,
+      });
+    }
+    toNext();
+  }
 
   const pan = Gesture.Pan()
     .onBegin(() => {
       runOnJS(setIsDragging)(true);
     })
     .onUpdate((e) => {
-      if (e.translationX > 0 && prevRec) {
-        runOnJS(setPrevActive)(true);
-        prevOverlayX.value = -SCREEN_WIDTH + e.translationX;
-        runOnJS(setDragX)(0);
+      // Stage 4 D1: dominant axis 락 (|dx|>|dy| 면 horizontal, 아니면 vertical)
+      const absX = Math.abs(e.translationX);
+      const absY = Math.abs(e.translationY);
+      if (absX > absY) {
+        // horizontal
+        if (e.translationX > 0 && prevRec) {
+          runOnJS(setPrevActive)(true);
+          prevOverlayX.value = -SCREEN_WIDTH + e.translationX;
+          runOnJS(setDragX)(0);
+          runOnJS(setDragY)(0);
+        } else {
+          runOnJS(setPrevActive)(false);
+          runOnJS(setDragX)(e.translationX);
+          runOnJS(setDragY)(0);
+        }
       } else {
+        // vertical
         runOnJS(setPrevActive)(false);
-        runOnJS(setDragX)(e.translationX);
+        runOnJS(setDragX)(0);
+        runOnJS(setDragY)(Math.max(-140, Math.min(140, e.translationY)));
       }
     })
     .onEnd((e) => {
       runOnJS(setIsDragging)(false);
+      const absX = Math.abs(e.translationX);
+      const absY = Math.abs(e.translationY);
+      const horizontal = absX > absY;
 
-      if (e.translationX > 0 && prevRec) {
-        const progress = 1 + prevOverlayX.value / SCREEN_WIDTH;
-        if (progress > PREV_OVERLAY_TRIGGER) {
-          prevOverlayX.value = withTiming(0, { duration: 220 }, () => {
-            runOnJS(toPrev)();
-            prevOverlayX.value = -SCREEN_WIDTH;
-            runOnJS(setPrevActive)(false);
-          });
+      if (horizontal) {
+        if (e.translationX > 0 && prevRec) {
+          const progress = 1 + prevOverlayX.value / SCREEN_WIDTH;
+          if (progress > PREV_OVERLAY_TRIGGER) {
+            prevOverlayX.value = withTiming(0, { duration: 220 }, () => {
+              runOnJS(toPrev)();
+              prevOverlayX.value = -SCREEN_WIDTH;
+              runOnJS(setPrevActive)(false);
+            });
+          } else {
+            prevOverlayX.value = withTiming(-SCREEN_WIDTH, { duration: 220 }, () => {
+              runOnJS(setPrevActive)(false);
+            });
+          }
         } else {
-          prevOverlayX.value = withTiming(-SCREEN_WIDTH, { duration: 220 }, () => {
-            runOnJS(setPrevActive)(false);
-          });
+          if (e.translationX < -SWIPE_THRESHOLD) {
+            runOnJS(handleSwipeLeft)();
+          }
+          runOnJS(setDragX)(0);
+          runOnJS(setDragY)(0);
         }
       } else {
-        if (e.translationX < NEXT_THRESHOLD) {
-          runOnJS(toNext)();
+        // vertical
+        if (e.translationY < -SWIPE_THRESHOLD) {
+          runOnJS(handleSwipeUp)();
+        } else if (e.translationY > SWIPE_THRESHOLD) {
+          runOnJS(handleSwipeDown)();
         }
         runOnJS(setDragX)(0);
+        runOnJS(setDragY)(0);
       }
     });
 
@@ -406,15 +527,19 @@ export default function DiscoverScreen() {
                 .reverse()
                 .map((rec, i) => {
                   const depth = cardsToShow.length - 1 - i;
+                  const isTop = depth === 0;
                   return (
                     <SwipeCard
                       key={rec.tmdbId}
                       rec={rec}
-                      isTop={depth === 0}
+                      isTop={isTop}
                       depth={depth}
-                      dragX={depth === 0 ? dragX : 0}
+                      dragX={isTop ? dragX : 0}
+                      dragY={isTop ? dragY : 0}
                       isDragging={isDragging}
-                      immersive={depth === 0 && immersive}
+                      immersive={isTop && immersive}
+                      absorbing={isTop && saveAbsorbing}
+                      saveTargetPoint={saveTargetPoint}
                     />
                   );
                 })}
@@ -446,8 +571,11 @@ export default function DiscoverScreen() {
 
       {state === 'ready' && currentRec && (
         <ActionBar
+          ref={saveBtnRef}
           isSaved={isLiked}
           canRewind={topIdx > 0}
+          saveFlash={saveFlash}
+          savePulling={dragY > 30 && isDragging}
           onRewind={() => setTopIdx(0)}
           onShare={handleShare}
           onOpenDetail={() => setDetailOpen(true)}

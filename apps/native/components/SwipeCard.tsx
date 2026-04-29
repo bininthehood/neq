@@ -1,15 +1,17 @@
 import { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
 import { buildMetaInfo, getOTTIcon } from '@neq/core';
-import { fonts } from '@neq/design';
+import { fonts, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 
 interface Props {
@@ -17,38 +19,97 @@ interface Props {
   isTop: boolean;
   depth: number;
   dragX: number;
+  /** Stage 4 D1: 위/아래 스와이프 변위. 양수=아래(save), 음수=위(detail) */
+  dragY?: number;
   isDragging: boolean;
   immersive?: boolean;
+  /**
+   * Stage 4 D1: save 흡수 모션 트리거.
+   * `true` 가 되면 카드는 우측하단 save 버튼 위치로 scale 0.12 + 이동 + 페이드아웃.
+   */
+  absorbing?: boolean;
+  /** save 버튼 화면 좌표 (절대 위치). 흡수 목표점. 미지정 시 우측하단 기본값. */
+  saveTargetPoint?: { x: number; y: number } | null;
 }
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const SPRING_BEZIER = Easing.bezier(...easings.spring);
 
 export default function SwipeCard({
   rec,
   isTop,
   depth,
   dragX,
+  dragY = 0,
   isDragging,
   immersive = false,
+  absorbing = false,
+  saveTargetPoint,
 }: Props) {
   const animatedDepth = useSharedValue(depth);
+  const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
   useEffect(() => {
     animatedDepth.value = withSpring(depth, { damping: 14, stiffness: 180 });
   }, [depth, animatedDepth]);
 
+  useEffect(() => {
+    if (absorbing && isTop) {
+      absorbProgress.value = withTiming(1, {
+        duration: durations.steady,
+        easing: SPRING_BEZIER,
+      });
+    } else {
+      absorbProgress.value = 0;
+    }
+  }, [absorbing, isTop, absorbProgress]);
+
   const cardStyle = useAnimatedStyle(() => {
     const d = animatedDepth.value;
-    const scale = 1 - d * 0.04;
+    const baseScale = 1 - d * 0.04;
     const yOffset = d * 12;
-    // top 카드만 drag 반영, 좌 드래그만 회전 (좌=next)
-    const tx = isTop ? dragX : 0;
-    const rot = isTop && dragX < 0 ? Math.max(dragX * 0.04, -8) : 0;
+
+    // Stage 4 D1: 4방향 + save 흡수
+    // tx/ty: top 카드만 drag 반영 (좌=다음, 우는 이전 오버레이가 처리, 위=detail, 아래=save 진행)
+    let tx = isTop ? dragX : 0;
+    // 아래로 끌 때 카드가 살짝 따라감 (0.6 댐핑) — save 진입 신호
+    let ty = isTop ? dragY * 0.6 + yOffset : yOffset;
+    // 좌 드래그만 회전 (좌=next 시각 신호)
+    let rot = isTop && dragX < 0 ? Math.max(dragX * 0.04, -8) : 0;
+    let scale = baseScale;
+    let opacity = 1;
+    // 아래 끌 때 살짝 축소 (흡수 예고)
+    if (isTop && dragY > 30) {
+      scale = Math.max(0.94, 1 - (dragY - 30) * 0.0008);
+    }
+
+    // 흡수 모션 활성: 카드 중심 → save 버튼 좌표로 보간
+    if (isTop && absorbing) {
+      const target = saveTargetPoint ?? {
+        x: SCREEN_W - 48,
+        y: SCREEN_H - 80,
+      };
+      // 카드의 화면상 중심 (대략): 카드는 absolute fill — 화면 중앙 근처 가정
+      const cardCenterX = SCREEN_W / 2;
+      const cardCenterY = SCREEN_H / 2;
+      const dx = target.x - cardCenterX;
+      const dy = target.y - cardCenterY;
+      const p = absorbProgress.value;
+      tx = dx * p;
+      ty = dy * p;
+      scale = baseScale - (baseScale - 0.12) * p;
+      rot = -3 * p;
+      opacity = 1 - p;
+    }
+
     return {
       transform: [
         { translateX: tx },
-        { translateY: yOffset },
+        { translateY: ty },
         { scale },
         { rotate: `${rot}deg` },
       ],
+      opacity,
       zIndex: 10 - d,
     };
   });

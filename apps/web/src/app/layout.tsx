@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Outfit } from "next/font/google";
+import { Instrument_Serif, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import InstallBanner from "@/components/InstallBanner";
@@ -7,14 +7,25 @@ import Reminder from "@/components/Reminder";
 import PostHogProvider from "@/components/PostHogProvider";
 import { PersonaProvider } from "@/contexts/PersonaContext";
 
-const fraunces = Fraunces({
-  variable: "--font-fraunces",
+/**
+ * Stage 4 D1 — fontsV2 전환:
+ *   - display: Fraunces → Instrument Serif (큰 헤더 / hero / italic 액센트)
+ *   - data: Outfit → Geist Mono (수치 tabular / 라벨)
+ *   - body: Pretendard Variable (CSS @import 유지 — 한글 + 영문 본문/UI)
+ *
+ * 호환 보존: CSS 변수명 `--font-display` / `--font-data` 그대로 (호출처 0).
+ * `globals.css` 에서 `var(--font-display)` 사용 — 폰트만 교체.
+ */
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-instrument-serif",
   subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
   display: "swap",
 });
 
-const outfit = Outfit({
-  variable: "--font-outfit",
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
 });
@@ -76,7 +87,7 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      className={`${fraunces.variable} ${outfit.variable} h-full antialiased`}
+      className={`${instrumentSerif.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
         <link

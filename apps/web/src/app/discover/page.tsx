@@ -1,20 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   addSaved,
   removeSaved,
   getSaved,
   addSeenTitles,
-  addWatchReport,
   getWatchReports,
   hasOnboarded,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
 import { getPrimaryCountryName } from "@/lib/country-names";
-import type { Recommendation, WatchReaction } from "@/lib/types";
+import type { Recommendation } from "@/lib/types";
 import type { FilterYear } from "@/lib/discover-types";
 import BottomNav from "@/components/BottomNav";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
@@ -51,7 +50,17 @@ export default function DiscoverPage() {
     return saved ? Number(saved) : 0;
   });
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
-  const [showWatched, setShowWatched] = useState(false);
+  // Save 흡수 모션 (Stage 4 D1, swipe-stack.jsx) — 아래 스와이프 또는 save 클릭 트리거
+  const [saveAbsorbing, setSaveAbsorbing] = useState(false);
+  const [saveFlash, setSaveFlash] = useState(false);
+  /**
+   * 카드 중심 → save 버튼까지 변위 (transform translate 단위).
+   * 카드 컨테이너 ref + save 버튼 ref measure 해 차분 계산.
+   * SwipeCard 내부에서 ref-during-render 회피 위해 부모(page) 가 계산.
+   */
+  const [saveAbsorbDelta, setSaveAbsorbDelta] = useState<{ tx: number; ty: number } | null>(null);
+  const saveBtnRef = useRef<HTMLButtonElement>(null);
+  const cardContainerRef = useRef<HTMLDivElement>(null);
   const [coachDone, setCoachDone] = useState<Record<CoachStep, boolean>>({
     swipe: false,
     save: false,
@@ -92,7 +101,6 @@ export default function DiscoverPage() {
   // --- nextCard ---
   const nextCard = useCallback(() => {
     if (swipe.swipingRef.current) return;
-    setShowWatched(false);
     const cur = filtered[topIdx];
     if (cur) {
       track("card_swiped", {
@@ -155,13 +163,90 @@ export default function DiscoverPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, filtered.length, detail.openDetail]);
 
+  /**
+   * Save 흡수 모션 — Stage 4 D1, swipe-stack.jsx 패턴.
+   *  1) save 버튼 좌표 계산 → 카드의 흡수 목표점 설정
+   *  2) absorbing=true → SwipeCard 가 scale 0.12 + 좌표 이동 + 페이드아웃
+   *  3) flash=true → save 버튼 강조 (600ms)
+   *  4) ~480ms 후 카드 advance + state 리셋
+   */
+  const triggerSaveAbsorption = useCallback((reason: "swipe_down" | "button") => {
+    if (!current) return;
+    if (saveAbsorbing) return;
+    const id = current.tmdbId;
+    const alreadySaved = savedIds.has(id);
+
+    // 좌표 계산 — save 버튼 중심 vs 카드 컨테이너 중심 차분
+    if (
+      saveBtnRef.current &&
+      cardContainerRef.current &&
+      typeof window !== "undefined"
+    ) {
+      const btnRect = saveBtnRef.current.getBoundingClientRect();
+      const containerRect = cardContainerRef.current.getBoundingClientRect();
+      const cardCenterX = containerRect.left + containerRect.width / 2;
+      const cardCenterY = containerRect.top + containerRect.height / 2;
+      const targetX = btnRect.left + btnRect.width / 2;
+      const targetY = btnRect.top + btnRect.height / 2;
+      setSaveAbsorbDelta({ tx: targetX - cardCenterX, ty: targetY - cardCenterY });
+    }
+
+    vibrate(10);
+    if (alreadySaved) {
+      // 이미 저장됨 → unsave (toggle)
+      track("card_unsaved", { tmdb_id: id });
+      removeSaved(id);
+      setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; });
+      // 흡수 모션은 unsave 시에는 발사하지 않음 (저장 의미 없음). flash 만.
+      setSaveFlash(true);
+      setTimeout(() => setSaveFlash(false), 600);
+      return;
+    }
+    track("card_saved", { tmdb_id: id, title: current.title, source: reason });
+    addSaved(current);
+    setSavedIds((s) => new Set(s).add(id));
+    setCoachSaveAction(true);
+    setSaveAbsorbing(true);
+    setSaveFlash(true);
+    swipe.setSwiping(true);
+    // flash 600ms / 흡수 480ms 동기화 (swipe-stack.jsx)
+    setTimeout(() => setSaveFlash(false), 600);
+    setTimeout(() => {
+      setSaveAbsorbing(false);
+      setSaveAbsorbDelta(null);
+      setTopIdx((i) => i + 1);
+      swipe.setDragX(0);
+      swipe.setDragY(0);
+      swipe.setSwiping(false);
+      swipe.scrollRef.current?.scrollTo({ top: 0 });
+    }, 480);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, saveAbsorbing, savedIds]);
+
   const swipe = useSwipeGesture({
     topIdx,
     filteredLength: filtered.length,
     nextCard,
     setTopIdx,
-    onSwipeDown: () => setShowWatched(true),
-    onSwipeUp: () => openDetailTracked("swipe_up"),
+    onSwipeDown: () => {
+      if (!current) return;
+      track("card_swiped", {
+        direction: "down",
+        tmdb_id: current.tmdbId,
+        title: current.title,
+      });
+      triggerSaveAbsorption("swipe_down");
+    },
+    onSwipeUp: () => {
+      if (current) {
+        track("card_swiped", {
+          direction: "up",
+          tmdb_id: current.tmdbId,
+          title: current.title,
+        });
+      }
+      openDetailTracked("swipe_up");
+    },
     onPrevCard: () => {
       const cur = filtered[topIdx];
       if (cur) {
@@ -174,34 +259,10 @@ export default function DiscoverPage() {
     },
   });
 
-  const handleWatchedReaction = useCallback((reaction: WatchReaction) => {
-    if (!current) return;
-    track("watch_report_submitted", { reaction, tmdb_id: current.tmdbId });
-    vibrate(10);
-    addSaved(current); addWatchReport(current.tmdbId, reaction);
-    addSeenTitles([current.title, current.titleEn].filter(Boolean));
-    setSavedIds((s) => new Set(s).add(current.tmdbId));
-    setShowWatched(false); nextCard();
-  }, [current, nextCard]);
-
-  const handleWatchedSkip = useCallback(() => {
-    if (!current) return;
-    addSeenTitles([current.title, current.titleEn].filter(Boolean));
-    setShowWatched(false); nextCard();
-  }, [current, nextCard]);
-
   const handleCardTap = useCallback(() => {
-    if (swipe.swiping || showWatched) return;
+    if (swipe.swiping) return;
     setImmersive((prev) => !prev);
-  }, [swipe.swiping, showWatched]);
-
-  const handleNotInterested = useCallback(() => {
-    if (!current) return;
-    track("card_not_interested", { tmdb_id: current.tmdbId });
-    addSeenTitles([current.title, current.titleEn].filter(Boolean));
-    setShowWatched(false);
-    nextCard();
-  }, [current, nextCard]);
+  }, [swipe.swiping]);
 
   const handleShare = useCallback(async (r: Recommendation) => {
     const providers = r.providers.map((p) => p.name).join(", ");
@@ -227,19 +288,7 @@ export default function DiscoverPage() {
   }, []);
 
   const toggleSave = () => {
-    if (!current) return;
-    vibrate(10);
-    const id = current.tmdbId;
-    if (savedIds.has(id)) {
-      track("card_unsaved", { tmdb_id: current.tmdbId });
-      removeSaved(id);
-      setSavedIds((s) => { const n = new Set(s); n.delete(id); return n; });
-    } else {
-      track("card_saved", { tmdb_id: current.tmdbId, title: current.title });
-      addSaved(current);
-      setSavedIds((s) => new Set(s).add(id));
-      setCoachSaveAction(true); // 사용자 의도적 저장만 coach dismiss 트리거
-    }
+    triggerSaveAbsorption("button");
   };
 
   // --- effects ---
@@ -261,7 +310,7 @@ export default function DiscoverPage() {
       if (e.key === "ArrowLeft") nextCard();
       else if (e.key === "ArrowRight") swipe.prevCard();
       else if (e.key === "ArrowUp") openDetailTracked("keyboard");
-      else if (e.key === "ArrowDown" || e.key === "Escape") detail.closeDetail();
+      else if (e.key === "Escape") detail.closeDetail();
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
@@ -487,31 +536,34 @@ export default function DiscoverPage() {
       </div>
 
       <div ref={swipe.scrollRef} className="flex-1 min-h-0" style={{ overflowY: "hidden", overscrollBehavior: "none" }}>
-        <div className="relative px-3 pb-2"
+        <div ref={cardContainerRef} className="relative px-3 pb-2"
           style={{ height: "100%", touchAction: "none" }}
           onTouchStart={swipe.onTouchStart} onTouchMove={swipe.onTouchMove} onTouchEnd={swipe.onTouchEnd}>
-          {/* 아래 스와이프 오버레이 — 위에서 내려오는 커튼 */}
-          {swipe.dragY > 0 && (
+          {/* 아래 스와이프 힌트 — Stage 4 D1: save 액션 진입 신호.
+              dragY > 30 이상이면 카드가 살짝 작아지고 (SwipeCard 내부) save 버튼이 부풀음 (savePulling) */}
+          {swipe.dragY > 30 && !saveAbsorbing && (
             <div
-              className="absolute inset-x-3 top-0 bottom-2 z-20 overflow-hidden rounded-xl"
+              className="absolute inset-x-0 bottom-20 z-20 flex justify-center"
               style={{
                 pointerEvents: "none",
+                opacity: Math.min(1, (swipe.dragY - 30) / 40),
+                transition: swipe.dragging.current ? "none" : "opacity 0.25s ease-out",
               }}
             >
               <div
-                className="absolute inset-x-0 top-0 flex flex-col items-center justify-center gap-1.5 py-3"
+                className="px-3.5 py-1.5 text-xs flex items-center gap-1.5 rounded-full"
                 style={{
-                  height: `${Math.min(18, swipe.dragY * 0.4)}%`,
-                  background: "var(--bg-overlay-solid)",
-                  transition: swipe.dragging.current ? "none" : "height 0.25s cubic-bezier(0.25, 1, 0.5, 1)",
+                  background: "var(--bg-overlay-heavy)",
+                  color: "var(--accent)",
+                  border: "1px solid var(--accent-border-light)",
+                  fontFamily: "var(--font-data)",
+                  letterSpacing: "0.04em",
                 }}
               >
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                  <path d="M10 11v6" /><path d="M14 11v6" />
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 21s-7-4.5-9.5-9C0.7 8.5 2.5 4 6 4c2 0 3.5 1 4 2 0.5-1 2-2 4-2 3.5 0 5.3 4.5 3.5 8C19 16.5 12 21 12 21z"/>
                 </svg>
-                <span className="text-xs text-muted">놓으면 선택할 수 있어요</span>
+                저장
               </div>
             </div>
           )}
@@ -531,15 +583,26 @@ export default function DiscoverPage() {
           {false && (
             <div />
           )}
-          {deckCards.map((r, stackIdx) => (
-            <SwipeCard key={r.tmdbId} rec={r} isTop={stackIdx === deckCards.length - 1} depth={deckCards.length - 1 - stackIdx}
-              dragX={swipe.dragX} isDragging={swipe.dragging.current} swiping={swipe.swiping}
-              immersive={stackIdx === deckCards.length - 1 && immersive}
-              showWatched={stackIdx === deckCards.length - 1 && showWatched} onCardTap={handleCardTap}
-              onWatchedReaction={handleWatchedReaction} onWatchedSkip={handleWatchedSkip}
-              onNotInterested={handleNotInterested}
-              onCloseWatched={() => setShowWatched(false)} metaInfo={metaInfo(r)} />
-          ))}
+          {deckCards.map((r, stackIdx) => {
+            const isTop = stackIdx === deckCards.length - 1;
+            return (
+              <SwipeCard
+                key={r.tmdbId}
+                rec={r}
+                isTop={isTop}
+                depth={deckCards.length - 1 - stackIdx}
+                dragX={swipe.dragX}
+                dragY={swipe.dragY}
+                isDragging={swipe.dragging.current}
+                swiping={swipe.swiping}
+                absorbing={isTop && saveAbsorbing}
+                absorbDelta={saveAbsorbDelta}
+                immersive={isTop && immersive}
+                onCardTap={handleCardTap}
+                metaInfo={metaInfo(r)}
+              />
+            );
+          })}
           {/* 되감기 오버레이 — VHS 테이프 되감기 */}
           {rewinding && (
             <RewindOverlay
@@ -562,8 +625,15 @@ export default function DiscoverPage() {
       </div>
 
       <div className="transition-all duration-300" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 200, overflow: "hidden" }}>
-        <ActionBar isSaved={isSaved} canRewind={topIdx > 0}
-          onShare={() => current && handleShare(current)} onOpenDetail={() => openDetailTracked("action_bar")} onToggleSave={toggleSave}
+        <ActionBar
+          ref={saveBtnRef}
+          isSaved={isSaved}
+          canRewind={topIdx > 0}
+          saveFlash={saveFlash}
+          savePulling={swipe.dragY > 30 && swipe.dragging.current}
+          onShare={() => current && handleShare(current)}
+          onOpenDetail={() => openDetailTracked("action_bar")}
+          onToggleSave={toggleSave}
           onRewind={() => {
             if (topIdx === 0 || swipe.swipingRef.current || rewinding) return;
             vibrate(10);

@@ -1,5 +1,12 @@
+import { forwardRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { colors, radius, spacing } from '../lib/tokens';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+import { colors, radius, spacing, easings, durations } from '../lib/tokens';
 
 interface Props {
   isSaved: boolean;
@@ -9,17 +16,44 @@ interface Props {
   onOpenDetail: () => void;
   onRefresh: () => void;
   onToggleSave: () => void;
+  /** Stage 4 D1: save 직후 번쩍 강조 (600ms 자동 해제 호출자 책임) */
+  saveFlash?: boolean;
+  /** 사용자가 카드를 아래로 끌고 있는 중 — save 버튼 살짝 부풀음 */
+  savePulling?: boolean;
 }
 
-export default function ActionBar({
-  isSaved,
-  canRewind = false,
-  onRewind,
-  onShare,
-  onOpenDetail,
-  onRefresh,
-  onToggleSave,
-}: Props) {
+const SPRING_BEZIER = Easing.bezier(...easings.spring);
+
+const ActionBar = forwardRef<View, Props>(function ActionBar(
+  {
+    isSaved,
+    canRewind = false,
+    onRewind,
+    onShare,
+    onOpenDetail,
+    onRefresh,
+    onToggleSave,
+    saveFlash = false,
+    savePulling = false,
+  },
+  saveBtnRef,
+) {
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    const target = saveFlash ? 1.15 : savePulling ? 1.05 : 1;
+    scale.value = withTiming(target, {
+      duration: durations.quick,
+      easing: SPRING_BEZIER,
+    });
+  }, [saveFlash, savePulling, scale]);
+
+  const saveBtnAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const saveActive = isSaved || saveFlash || savePulling;
+
   return (
     <View style={styles.wrap}>
       <View style={styles.left}>
@@ -62,22 +96,30 @@ export default function ActionBar({
         </Pressable>
       </View>
 
-      <Pressable
-        style={({ pressed }) => [
+      <Animated.View
+        ref={saveBtnRef}
+        style={[
           styles.saveBtn,
-          isSaved && styles.saveBtnActive,
-          pressed && styles.pressed,
+          saveActive && styles.saveBtnActive,
+          saveFlash && styles.saveBtnFlash,
+          saveBtnAnimStyle,
         ]}
-        onPress={onToggleSave}
-        accessibilityLabel={isSaved ? '저장 해제' : '저장'}
       >
-        <Text style={[styles.saveIcon, isSaved && styles.saveIconActive]}>
-          {isSaved ? '♥' : '♡'}
-        </Text>
-      </Pressable>
+        <Pressable
+          onPress={onToggleSave}
+          accessibilityLabel={isSaved ? '저장 해제' : '저장'}
+          style={styles.saveBtnInner}
+        >
+          <Text style={[styles.saveIcon, saveActive && styles.saveIconActive]}>
+            {saveActive ? '♥' : '♡'}
+          </Text>
+        </Pressable>
+      </Animated.View>
     </View>
   );
-}
+});
+
+export default ActionBar;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -107,13 +149,24 @@ const styles = StyleSheet.create({
   saveBtn: {
     width: 56,
     height: 56,
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: colors.surfaceRaised,
     borderRadius: radius.xl,
   },
   saveBtnActive: {
     backgroundColor: colors.accent,
+  },
+  saveBtnFlash: {
+    shadowColor: colors.accent,
+    shadowOpacity: 0.6,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
+  },
+  saveBtnInner: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveIcon: {
     color: colors.textMuted,
@@ -123,6 +176,6 @@ const styles = StyleSheet.create({
     color: colors.bg,
   },
   pressed: {
-    transform: [{ scale: 0.9 }],
+    opacity: 0.7,
   },
 });

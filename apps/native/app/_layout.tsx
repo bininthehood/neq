@@ -14,6 +14,10 @@ import {
   Outfit_400Regular,
   Outfit_600SemiBold,
 } from '@expo-google-fonts/outfit';
+// Stage 4 D1: fontsV2 전환은 web 만 실 적용 (next/font Instrument Serif + Geist Mono).
+// native 는 패키지 부재로 기존 Fraunces/Outfit 호환 유지. 추후 별도 위임에서 진행:
+//   npm install @expo-google-fonts/instrument-serif @expo-google-fonts/geist-mono -w apps/native
+// 패키지 설치 후 아래에 useFonts 항목 추가하고 packages/design tokens.ts fonts 매핑 갱신.
 import { colors } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';

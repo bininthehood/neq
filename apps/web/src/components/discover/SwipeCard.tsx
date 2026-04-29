@@ -3,26 +3,37 @@
 import { useRef } from "react";
 import NextImage from "next/image";
 import type { Recommendation } from "@/lib/types";
-import type { WatchReaction } from "@/lib/types";
 import { IconStar } from "@/components/Icons";
 import { getOTTIcon } from "@/lib/ott-links";
+import { easings, durations, cubicBezierCss } from "@neq/design";
 
 interface SwipeCardProps {
   rec: Recommendation;
   isTop: boolean;
   depth: number;
   dragX: number;
+  /** 아래/위 스와이프 시 카드 Y 변위. 양수=아래(save 흡수 진행), 음수=위(detail) */
+  dragY?: number;
   isDragging: boolean;
   swiping: boolean;
-  showWatched: boolean;
+  /**
+   * save 흡수 모션 활성화 — 사용자가 아래 스와이프 임계 통과 또는 save 버튼 클릭 시.
+   * `true` 가 되면 카드는 save 버튼 위치로 scale 축소 + 이동 + 페이드아웃.
+   */
+  absorbing?: boolean;
+  /**
+   * 카드 중심 → save 버튼까지의 변위 (px, transform translate 기준).
+   * page.tsx 가 카드 컨테이너 ref + save 버튼 ref 두 개를 measure 해 차분으로 계산해 전달.
+   * `absorbing=true` 일 때만 참조.
+   */
+  absorbDelta?: { tx: number; ty: number } | null;
   immersive: boolean;
   onCardTap: () => void;
-  onWatchedReaction: (reaction: WatchReaction) => void;
-  onWatchedSkip: () => void;
-  onNotInterested: () => void;
-  onCloseWatched: () => void;
   metaInfo: string;
 }
+
+const SPRING_EASING = cubicBezierCss(easings.spring);
+const STEADY_MS = durations.steady;
 
 export default function SwipeCard({
   rec,
@@ -30,24 +41,48 @@ export default function SwipeCard({
   isTop,
   depth,
   dragX,
+  dragY = 0,
   isDragging,
   swiping,
-  showWatched,
+  absorbing = false,
+  absorbDelta,
   onCardTap,
-  onWatchedReaction,
-  onWatchedSkip,
-  onNotInterested,
-  onCloseWatched,
   metaInfo,
 }: SwipeCardProps) {
   const pointerStartRef = useRef({ x: 0, y: 0 });
   const scaleVal = 1 - depth * 0.04;
   const yOffset = depth * 12;
-  const tx = isTop ? dragX : 0;
-  const ty = yOffset; // 카드는 수직 이동하지 않음 — 아래 스와이프는 오버레이로 처리
-  const rot = isTop
+
+  const absorbActive = absorbing && isTop;
+  const absorbTx = absorbDelta?.tx ?? 0;
+  const absorbTy = absorbDelta?.ty ?? 0;
+  const absorbScale = absorbActive ? 0.12 : scaleVal;
+  const absorbOpacity = absorbActive ? 0 : 1;
+  const absorbRot = absorbActive ? -3 : 0;
+
+  // 일반 드래그 (top 카드만): X + Y 추적, X 회전
+  const baseTx = isTop ? dragX : 0;
+  const baseTy = isTop ? dragY * 0.6 + yOffset : yOffset; // 아래 끌 때 시각적으로 따라감 (0.6 댐핑)
+  const baseRot = isTop
     ? Math.sign(dragX) * Math.min(Math.abs(dragX) * 0.06, 15)
     : 0;
+  // 아래로 끌 때 살짝 축소해 흡수 예고
+  const dragScale = isTop && dragY > 30 ? Math.max(0.94, 1 - (dragY - 30) * 0.0008) : scaleVal;
+
+  const tx = absorbActive ? absorbTx : baseTx;
+  const ty = absorbActive ? absorbTy : baseTy;
+  const rotation = absorbActive ? absorbRot : baseRot;
+  const cardScale = absorbActive ? absorbScale : dragScale;
+  const cardOpacity = absorbActive ? absorbOpacity : 1;
+
+  const transition =
+    isTop && isDragging
+      ? "none"
+      : absorbActive
+        ? `transform ${STEADY_MS}ms ${SPRING_EASING}, opacity ${STEADY_MS}ms ease-out`
+        : isTop
+          ? "transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), top 0.3s ease-out, bottom 0.3s ease-out, left 0.3s ease-out, right 0.3s ease-out, border-radius 0.3s ease-out, opacity 0.3s ease-out"
+          : "transform 0.3s ease-out";
 
   return (
     <div
@@ -58,14 +93,11 @@ export default function SwipeCard({
         left: immersive ? "-12px" : "12px",
         right: immersive ? "-12px" : "12px",
         borderRadius: immersive ? 0 : "var(--radius-xl)",
-        transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rot}deg) scale(${scaleVal})`,
-        transition:
-          isTop && isDragging
-            ? "none"
-            : isTop
-              ? "transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1), top 0.3s ease-out, bottom 0.3s ease-out, left 0.3s ease-out, right 0.3s ease-out, border-radius 0.3s ease-out"
-              : "transform 0.3s ease-out",
+        transform: `translateX(${tx}px) translateY(${ty}px) rotate(${rotation}deg) scale(${cardScale})`,
+        opacity: cardOpacity,
+        transition,
         zIndex: 10 - depth,
+        transformOrigin: "center center",
       }}
     >
       {rec.posterUrl ? (
@@ -152,69 +184,6 @@ export default function SwipeCard({
             >
               {rec.reason}
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* "봤어요?" overlay — 상단에서 내려오는 방향 */}
-      {isTop && showWatched && (
-        <div
-          className="absolute inset-0 flex flex-col items-center justify-start pt-16 px-5 gap-3 z-20 rounded-xl"
-          style={{
-            background:
-              "linear-gradient(var(--bg) 30%, var(--bg-overlay-heavy) 70%, transparent)",
-          }}
-          onClick={(e) => { e.stopPropagation(); onCloseWatched(); }}
-        >
-          <div className="text-center">
-            <div className="font-display text-lg font-bold">
-              본 적 있나요?
-            </div>
-            <div className="text-xs mt-1 text-muted">
-              알려주시면 더 좋은 추천을 드릴게요
-            </div>
-          </div>
-          <div className="flex flex-wrap justify-center gap-2 mt-2">
-            {(
-              [
-                { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)", px: "px-5" },
-                { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)", px: "px-4" },
-                { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)", px: "px-4" },
-                { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none", px: "px-4" },
-              ] as const
-            ).map((r) => (
-              <button
-                key={r.key}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onWatchedReaction(r.key);
-                }}
-                className={`${r.px} py-2.5 text-sm font-medium active:scale-95 transition-transform rounded-lg`}
-                style={{ background: r.bg, color: r.color, border: r.border }}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-3 mt-1">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onWatchedSkip();
-              }}
-              className="px-4 py-2 text-xs active:scale-95 transition-transform text-muted"
-            >
-              안 봤어요
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onNotInterested();
-              }}
-              className="px-4 py-2 text-xs active:scale-95 transition-transform text-danger"
-            >
-              관심 없어요
-            </button>
           </div>
         </div>
       )}

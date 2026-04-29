@@ -60,10 +60,12 @@
   --shadow-dropdown: 0 4px 20px rgba(0,0,0,0.5);
   --shadow-toast: 0 2px 12px rgba(0,0,0,0.4);
 
-  /* Typography */
-  --font-display: var(--font-fraunces), Georgia, serif;
+  /* Typography — Stage 4 D1 fontsV2 전환:
+     display: Instrument Serif (← Fraunces), data: Geist Mono (← Outfit)
+     body: Pretendard Variable (변경 없음) */
+  --font-display: var(--font-instrument-serif), Georgia, serif;
   --font-body: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
-  --font-data: var(--font-outfit), sans-serif;
+  --font-data: var(--font-geist-mono), 'SF Mono', Menlo, monospace;
 }
 
 @theme inline {
