@@ -70,6 +70,43 @@ export interface SearchResult {
 }
 
 /**
+ * 관련 작품 카드 — DetailSheet 가로 카로셀에 사용 (시리즈 컬렉션 + 감독 작품).
+ *
+ * 단일 출처(@neq/core)에서 정의해 web/native 양쪽 동기화. spec §F3.
+ *
+ * - id: TMDB id (movie 또는 tv)
+ * - mediaType: 카드 클릭 시 다음 hydrate 호출에 필요
+ * - year: release_date / first_air_date 의 4자리. 없으면 빈 문자열
+ * - posterUrl: w185 사이즈. null 이면 fallback UI
+ */
+export interface RelatedWork {
+  id: number;
+  title: string;
+  posterUrl: string | null;
+  year: string;
+  mediaType: 'movie' | 'tv';
+}
+
+export interface RelatedWorksCollection {
+  id: number;
+  name: string;
+  works: RelatedWork[];
+}
+
+/**
+ * /api/tmdb/related 응답 형식.
+ *
+ * - collection: 시리즈/프랜차이즈 (movie 의 belongs_to_collection 유효 시). 없으면 null
+ * - directorWorks: 감독 다른 작품 (popularity desc, 자기 자신 제외, 최대 12개)
+ * - directorName: 디스플레이용 (있으면 헤더 "OOO 감독의 다른 작품")
+ */
+export interface RelatedWorksResponse {
+  collection: RelatedWorksCollection | null;
+  directorWorks: RelatedWork[];
+  directorName: string | null;
+}
+
+/**
  * 인물 검색 결과 (감독/배우 등). spec §4.3 참조.
  *
  * - profileUrl: TMDB profile_path 기반 URL. 사진 미존재 시 null.

@@ -78,6 +78,7 @@ export type NekoEvent =
   | "card_unsaved"
   | "card_not_interested"
   | "detail_opened"
+  | "detail_related_clicked"
   // 시청 리포트
   | "watch_report_submitted"
   // OTT 전환

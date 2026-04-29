@@ -301,6 +301,163 @@ export async function getTrending(
   }
 }
 
+/**
+ * TMDB /collection/{id} — 시리즈/프랜차이즈 (반지의 제왕, 스타워즈 등) 작품 묶음.
+ *
+ * /movie/{id} 응답의 `belongs_to_collection.id` 가 있을 때만 의미 있음.
+ * series(tv) 의 경우 TMDB 가 collection 개념을 제공하지 않으므로 호출처에서 movie 만 사용.
+ *
+ * 빈 결과/실패 시 null 반환 → DetailSheet 가 섹션 숨김 처리.
+ */
+export interface TMDBCollectionResponse {
+  id: number;
+  name: string;
+  parts: TMDBSimilarItem[];
+}
+
+export async function getCollection(
+  collectionId: number,
+): Promise<TMDBCollectionResponse | null> {
+  if (!collectionId || Number.isNaN(collectionId)) return null;
+  try {
+    const res = await fetch(
+      `${BASE}/collection/${collectionId}?api_key=${API_KEY}&language=ko-KR`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.id) return null;
+    const parts: TMDBSimilarItem[] = (data.parts ?? []).map(
+      (r: Record<string, unknown>) => ({
+        id: r.id as number,
+        title: (r.title ?? r.name) as string,
+        original_title: r.original_title as string | undefined,
+        original_name: r.original_name as string | undefined,
+        // collection.parts 는 movie 전용
+        media_type: 'movie' as const,
+        poster_path: (r.poster_path as string | null) ?? null,
+        vote_average: (r.vote_average as number) ?? 0,
+        overview: (r.overview as string) ?? '',
+        release_date: r.release_date as string | undefined,
+        first_air_date: r.first_air_date as string | undefined,
+        genre_ids: (r.genre_ids as number[]) ?? [],
+        popularity: r.popularity as number | undefined,
+      }),
+    );
+    return {
+      id: data.id as number,
+      name: (data.name as string) ?? '',
+      parts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TMDB /person/{id}/movie_credits 또는 /tv_credits — 인물의 출연·연출 작품.
+ *
+ * 감독 다른 작품을 얻기 위해 type='movie' 시 crew 에서 job==='Director' 만 필터링한다.
+ * series 도 동일 패턴 가능하지만 본 사용처(F3)는 detail 의 director 와 매칭하므로 type 일치.
+ *
+ * popularity desc 정렬은 호출처에서 처리.
+ */
+export interface TMDBPersonCreditsResponse {
+  id: number;
+  cast: TMDBSimilarItem[];
+  crew: (TMDBSimilarItem & { job?: string; department?: string })[];
+}
+
+export async function getPersonCredits(
+  personId: number,
+  type: 'movie' | 'series',
+): Promise<TMDBPersonCreditsResponse | null> {
+  if (!personId || Number.isNaN(personId)) return null;
+  const endpoint = type === 'series' ? 'tv_credits' : 'movie_credits';
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  try {
+    const res = await fetch(
+      `${BASE}/person/${personId}/${endpoint}?api_key=${API_KEY}&language=ko-KR`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const map = (r: Record<string, unknown>): TMDBSimilarItem => ({
+      id: r.id as number,
+      title: (r.title ?? r.name) as string,
+      original_title: r.original_title as string | undefined,
+      original_name: r.original_name as string | undefined,
+      media_type: mediaType as 'movie' | 'tv',
+      poster_path: (r.poster_path as string | null) ?? null,
+      vote_average: (r.vote_average as number) ?? 0,
+      overview: (r.overview as string) ?? '',
+      release_date: r.release_date as string | undefined,
+      first_air_date: r.first_air_date as string | undefined,
+      genre_ids: (r.genre_ids as number[]) ?? [],
+      popularity: r.popularity as number | undefined,
+    });
+
+    return {
+      id: personId,
+      cast: (data.cast ?? []).map(map),
+      crew: (data.crew ?? []).map((r: Record<string, unknown>) => ({
+        ...map(r),
+        job: (r.job as string | undefined) ?? undefined,
+        department: (r.department as string | undefined) ?? undefined,
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 작품의 belongs_to_collection.id + 감독 person id 를 한 번에 가져온다.
+ * /api/tmdb/related route 가 사용 — collection lookup 과 person credits 호출의 사전 단계.
+ *
+ * - movie 만 belongs_to_collection 지원 (TMDB 한계).
+ * - 감독 식별: /credits 의 crew[job=Director] 또는 department=Directing 첫 번째.
+ * - 결과 없으면 collectionId/personId 가 null 인 객체 반환.
+ */
+export async function getRelatedSeeds(
+  tmdbId: number,
+  type: 'movie' | 'series',
+): Promise<{
+  collectionId: number | null;
+  directorId: number | null;
+  directorName: string | null;
+}> {
+  const mediaType = type === 'series' ? 'tv' : 'movie';
+  try {
+    const [detailRes, creditsRes] = await Promise.all([
+      fetch(`${BASE}/${mediaType}/${tmdbId}?api_key=${API_KEY}&language=ko-KR`),
+      fetch(`${BASE}/${mediaType}/${tmdbId}/credits?api_key=${API_KEY}&language=ko-KR`),
+    ]);
+    if (!detailRes.ok && !creditsRes.ok) {
+      return { collectionId: null, directorId: null, directorName: null };
+    }
+    const detailData = detailRes.ok ? await detailRes.json() : null;
+    const creditsData = creditsRes.ok ? await creditsRes.json() : null;
+
+    const collectionId =
+      type === 'movie' ? (detailData?.belongs_to_collection?.id as number | undefined) ?? null : null;
+
+    interface CrewMember { id: number; name: string; job?: string; department?: string }
+    const crew: CrewMember[] = creditsData?.crew ?? [];
+    const director =
+      crew.find((c) => c.job === 'Director') ??
+      crew.find((c) => c.department === 'Directing') ??
+      null;
+
+    return {
+      collectionId: collectionId ?? null,
+      directorId: director?.id ?? null,
+      directorName: director?.name ?? null,
+    };
+  } catch {
+    return { collectionId: null, directorId: null, directorName: null };
+  }
+}
+
 export async function getTMDBRecommendations(
   tmdbId: number,
   type: "movie" | "series"

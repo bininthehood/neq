@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,11 +21,16 @@ import Animated, {
   interpolate,
   Extrapolation,
 } from 'react-native-reanimated';
-import type { Recommendation } from '../lib/types';
+import type {
+  Recommendation,
+  RelatedWork,
+  RelatedWorksResponse,
+} from '../lib/types';
 import { getOTTLink, getOTTIcon } from '@neq/core';
 import { fonts } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 import { track } from '../lib/analytics';
+import { env } from '../lib/env';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9;
@@ -47,26 +52,96 @@ function metaInfo(r: Recommendation): string {
     .join(' · ');
 }
 
-export default function DetailSheet({ rec, visible, onClose }: Props) {
+export default function DetailSheet({ rec: initialRec, visible, onClose }: Props) {
   const translateY = useSharedValue(SHEET_MAX_HEIGHT);
+  const scrollRef = useRef<ScrollView>(null);
+
+  // 관련 작품 카드 클릭 시 sheet 내부에서 rec 을 교체. F3 spec — 새 sheet 교체 단순화.
+  const [relatedRec, setRelatedRec] = useState<Recommendation | null>(null);
+  const [hydratingRelated, setHydratingRelated] = useState(false);
+  const rec = relatedRec ?? initialRec;
+
+  const [related, setRelated] = useState<RelatedWorksResponse | null>(null);
+  const [relatedLoading, setRelatedLoading] = useState(false);
 
   useEffect(() => {
     if (visible) {
       translateY.value = withSpring(0, { damping: 20, stiffness: 160 });
-      if (rec) {
+      if (initialRec) {
         track('detail_opened', {
-          tmdb_id: rec.tmdbId,
-          title: rec.title,
-          providers_count: rec.providers.length,
+          tmdb_id: initialRec.tmdbId,
+          title: initialRec.title,
+          providers_count: initialRec.providers.length,
           source: 'native_detail_sheet',
         });
       }
     } else {
       translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 280 });
+      // sheet 닫힘 → state reset
+      setRelatedRec(null);
+      setRelated(null);
     }
-    // rec 의존성은 의도적으로 제외 — visible 토글 시점에만 발사
+    // initialRec 의존성은 의도적으로 제외 — visible 토글 시점에만 발사
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, translateY]);
+
+  // 관련 작품 fetch — 화면 rec 변경 시 마다.
+  useEffect(() => {
+    if (!visible || !rec?.tmdbId) {
+      setRelated(null);
+      return;
+    }
+    let cancelled = false;
+    setRelatedLoading(true);
+    setRelated(null);
+    const type = rec.type === 'series' ? 'series' : 'movie';
+    fetch(`${env.API_BASE_URL}/api/tmdb/related?work_id=${rec.tmdbId}&type=${type}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: RelatedWorksResponse | null) => {
+        if (cancelled) return;
+        setRelated(data ?? { collection: null, directorWorks: [], directorName: null });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRelated({ collection: null, directorWorks: [], directorName: null });
+      })
+      .finally(() => {
+        if (!cancelled) setRelatedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, rec?.tmdbId, rec?.type]);
+
+  const handleRelatedClick = useCallback(
+    async (work: RelatedWork, source: 'collection' | 'director') => {
+      if (!rec) return;
+      track('detail_related_clicked', {
+        tmdb_id: rec.tmdbId,
+        related_id: work.id,
+        source,
+        title: work.title,
+      });
+      setHydratingRelated(true);
+      try {
+        const t = work.mediaType === 'tv' ? 'series' : 'movie';
+        const res = await fetch(
+          `${env.API_BASE_URL}/api/tmdb/hydrate?id=${work.id}&type=${t}`,
+        );
+        if (res.ok) {
+          const next: Recommendation = await res.json();
+          setRelatedRec(next);
+          // 새 작품으로 교체했으니 본문 스크롤 위로
+          scrollRef.current?.scrollTo({ y: 0, animated: false });
+        }
+      } catch {
+        // hydrate 실패 — 무시
+      } finally {
+        setHydratingRelated(false);
+      }
+    },
+    [rec],
+  );
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
@@ -165,6 +240,7 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
             </View>
 
             <ScrollView
+              ref={scrollRef}
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
               showsVerticalScrollIndicator={false}
@@ -252,6 +328,39 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
                 )}
               </View>
 
+              {/* 관련 작품 — F3 spec. collection (시리즈) + director 작품 가로 카로셀 */}
+              {related === null && relatedLoading && (
+                <View style={styles.relatedSkeletonRow}>
+                  {[0, 1, 2, 3].map((i) => (
+                    <View key={i} style={styles.relatedSkeletonCard} />
+                  ))}
+                </View>
+              )}
+
+              {related?.collection && related.collection.works.length > 0 && (
+                <RelatedRow
+                  label={`${related.collection.name} 시리즈`}
+                  works={related.collection.works}
+                  source="collection"
+                  disabled={hydratingRelated}
+                  onPressItem={handleRelatedClick}
+                />
+              )}
+
+              {related && related.directorWorks.length > 0 && (
+                <RelatedRow
+                  label={
+                    related.directorName
+                      ? `${related.directorName} 감독의 다른 작품`
+                      : '감독의 다른 작품'
+                  }
+                  works={related.directorWorks}
+                  source="director"
+                  disabled={hydratingRelated}
+                  onPressItem={handleRelatedClick}
+                />
+              )}
+
               <Pressable style={styles.shareBtn} onPress={handleShare}>
                 <Text style={styles.shareText}>공유하기</Text>
               </Pressable>
@@ -260,6 +369,67 @@ export default function DetailSheet({ rec, visible, onClose }: Props) {
         </GestureDetector>
       </View>
     </Modal>
+  );
+}
+
+/**
+ * 관련 작품 가로 스크롤 — neko-detail-sheet.jsx SimilarStrip 매핑.
+ * 카드 90×132, 간격 10. label 은 amber accent + uppercase tracking.
+ */
+function RelatedRow({
+  label,
+  works,
+  source,
+  disabled,
+  onPressItem,
+}: {
+  label: string;
+  works: RelatedWork[];
+  source: 'collection' | 'director';
+  disabled?: boolean;
+  onPressItem: (work: RelatedWork, source: 'collection' | 'director') => void;
+}) {
+  return (
+    <View style={styles.relatedSection}>
+      <Text style={styles.relatedSectionTitle}>{label}</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.relatedRowContent}
+      >
+        {works.map((w) => (
+          <Pressable
+            key={w.id}
+            disabled={disabled}
+            style={({ pressed }) => [
+              styles.relatedCard,
+              pressed && { opacity: 0.7 },
+              disabled && { opacity: 0.5 },
+            ]}
+            onPress={() => onPressItem(w, source)}
+          >
+            <View style={styles.relatedPosterWrap}>
+              {w.posterUrl ? (
+                <Image
+                  source={{ uri: w.posterUrl }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  transition={150}
+                />
+              ) : (
+                <View style={styles.relatedPosterFallback}>
+                  <Text style={styles.relatedPosterFallbackText}>◇</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.relatedTitle} numberOfLines={2}>
+              {w.title}
+            </Text>
+            {w.year ? <Text style={styles.relatedYear}>{w.year}</Text> : null}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -429,5 +599,68 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 14,
     fontWeight: '500',
+  },
+  // 관련 작품 (F3) — neko-detail-sheet.jsx SimilarStrip
+  relatedSkeletonRow: {
+    flexDirection: 'row',
+    gap: spacing.sm + 2,
+    marginTop: spacing.md + 4,
+  },
+  relatedSkeletonCard: {
+    width: 90,
+    height: 132,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    opacity: 0.5,
+  },
+  relatedSection: {
+    marginTop: spacing.md + 4,
+  },
+  relatedSectionTitle: {
+    color: colors.accent,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
+  },
+  relatedRowContent: {
+    gap: spacing.sm + 2,
+    paddingRight: spacing.lg, // 마지막 카드 오른쪽 여백 — 카드 부분 노출 효과
+  },
+  relatedCard: {
+    width: 90,
+  },
+  relatedPosterWrap: {
+    width: 90,
+    height: 132,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 6,
+  },
+  relatedPosterFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  relatedPosterFallbackText: {
+    color: colors.textMuted,
+    fontSize: 20,
+  },
+  relatedTitle: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '500',
+    lineHeight: 14,
+  },
+  relatedYear: {
+    color: colors.textMuted,
+    fontSize: 10,
+    marginTop: 2,
+    fontFamily: fonts.data,
   },
 });
