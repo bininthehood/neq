@@ -24,6 +24,17 @@ import { IconStar, IconSave } from "@/components/Icons";
 import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
 import { addSaved } from "@/lib/store";
 import { track } from "@/lib/analytics";
+import {
+  addRecentSearch,
+  getRecentSearches,
+  removeRecentSearch,
+  type RecentSearch,
+} from "@/lib/recent-searches";
+import {
+  isVoiceSearchSupported,
+  startVoiceRecognition,
+  type VoiceRecognitionHandle,
+} from "@/lib/voice-search";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
 import DetailSheet from "./DetailSheet";
 import type {
@@ -33,6 +44,14 @@ import type {
   GroupedSearchResponse,
 } from "@/lib/types";
 import { Illust, Button, NeqSpinner, useToast } from "@neq/design";
+
+// idle 상태에서 호출되는 trending API 응답 (apps/web/src/app/api/trending/route.ts)
+interface TrendingItem {
+  id: number;
+  title: string;
+  posterUrl: string | null;
+  year: string;
+}
 import {
   resolveSearchUiState,
   buildCategoryGroups,
@@ -96,6 +115,13 @@ export default function SearchSheet({
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
+  // D10b — Recent / Trending / Voice
+  const [recents, setRecents] = useState<RecentSearch[]>([]);
+  const [trending, setTrending] = useState<TrendingItem[]>([]);
+  const [voiceSupported, setVoiceSupported] = useState(false);
+  const [listening, setListening] = useState(false);
+  const voiceHandleRef = useRef<VoiceRecognitionHandle | null>(null);
+
   const detail = useDetailSheet();
   const toast = useToast();
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,6 +159,15 @@ export default function SearchSheet({
       if (controller.signal.aborted) return;
       setData(body);
       setIsFetching(false);
+      // D10b — 결과가 있을 때만 recent 에 기록 (0건 검색 / 오타 노이즈 제외)
+      const total =
+        (body.works?.length ?? 0) +
+        (body.directors?.length ?? 0) +
+        (body.actors?.length ?? 0);
+      if (total > 0) {
+        addRecentSearch(q);
+        setRecents(getRecentSearches());
+      }
     } catch (err) {
       if (controller.signal.aborted) return; // 정상 취소
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -170,12 +205,98 @@ export default function SearchSheet({
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (abortRef.current) abortRef.current.abort();
+      voiceHandleRef.current?.stop();
     };
   }, []);
+
+  // D10b — sheet open 시 idle 컨텐츠 (recents / trending / voice 지원) 준비
+  useEffect(() => {
+    if (!show) return;
+    setVoiceSupported(isVoiceSearchSupported());
+    setRecents(getRecentSearches());
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/trending");
+        if (!res.ok) return;
+        const body = (await res.json()) as TrendingItem[];
+        if (cancelled) return;
+        setTrending(Array.isArray(body) ? body.slice(0, 6) : []);
+      } catch {
+        // 무시 — trending 은 보조 컨텐츠
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [show]);
 
   const handleRetry = () => {
     if (query.trim().length > 0) {
       void search(query);
+    }
+  };
+
+  // D10b — Recent / Trending 칩에서 query 적용 → 즉시 검색 트리거 (debounce 우회)
+  const applyQuery = (q: string) => {
+    const trimmed = q.trim();
+    if (trimmed.length === 0) return;
+    setQuery(trimmed);
+    setSelectedWork(null);
+    setProviders([]);
+    setDetailRec(null);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    void search(trimmed);
+  };
+
+  const handleRemoveRecent = (q: string) => {
+    removeRecentSearch(q);
+    setRecents(getRecentSearches());
+    track("search_recent_removed", { query: q });
+  };
+
+  // D10b — Voice 입력
+  const handleMicClick = () => {
+    if (listening) {
+      voiceHandleRef.current?.stop();
+      return;
+    }
+    if (!voiceSupported) return;
+    setListening(true);
+    track("search_voice_started");
+    try {
+      voiceHandleRef.current = startVoiceRecognition({
+        lang: "ko-KR",
+        onResult: (transcript, isFinal) => {
+          // interim 은 input 에 표시, final 일 때 검색 트리거
+          setQuery(transcript);
+          if (isFinal) {
+            const trimmed = transcript.trim();
+            if (trimmed.length > 0) {
+              if (debounceTimerRef.current)
+                clearTimeout(debounceTimerRef.current);
+              void search(trimmed);
+              track("search_voice_completed", {
+                length: trimmed.length,
+              });
+            }
+          }
+        },
+        onError: (err) => {
+          track("search_voice_error", { error: err });
+          if (err !== "aborted" && err !== "no-speech") {
+            toast.error("음성 인식 실패");
+          }
+        },
+        onEnd: () => {
+          setListening(false);
+          voiceHandleRef.current = null;
+        },
+      });
+    } catch {
+      setListening(false);
+      toast.error("음성 인식 실패");
     }
   };
 
@@ -295,7 +416,7 @@ export default function SearchSheet({
               onChange={(e) => handleInput(e.target.value)}
               placeholder="작품, 감독, 배우"
               aria-label="검색"
-              className="w-full px-4 py-3 pr-10 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
+              className="w-full px-4 py-3 pr-20 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
               style={{ fontSize: "16px" }}
             />
             {query.length > 0 && (
@@ -305,7 +426,7 @@ export default function SearchSheet({
                   inputRef.current?.focus();
                 }}
                 aria-label="검색어 지우기"
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-1"
+                className="absolute right-10 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-1"
                 style={{
                   background: "var(--text-muted)",
                   color: "var(--surface)",
@@ -325,6 +446,44 @@ export default function SearchSheet({
                 </svg>
               </button>
             )}
+            {voiceSupported && (
+              <button
+                onClick={handleMicClick}
+                aria-label={listening ? "음성 인식 중지" : "음성으로 검색"}
+                aria-pressed={listening}
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                style={{
+                  background: listening ? "var(--accent)" : "transparent",
+                  color: listening
+                    ? "var(--surface)"
+                    : "var(--text-muted)",
+                }}
+              >
+                <svg
+                  width={14}
+                  height={16}
+                  viewBox="0 0 12 14"
+                  fill="none"
+                >
+                  <rect
+                    x="3"
+                    y="0.5"
+                    width="6"
+                    height="9"
+                    rx="3"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    fill={listening ? "currentColor" : "none"}
+                  />
+                  <path
+                    d="M1 7C1 9.76142 3.23858 12 6 12V13.5M11 7C11 9.76142 8.76142 12 6 12"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -341,9 +500,13 @@ export default function SearchSheet({
           className="flex-1 min-h-0 overflow-y-auto pb-6"
         >
           {uiState === "idle" && (
-            <div className="px-5 pt-4 text-sm text-muted">
-              작품, 감독, 배우 이름으로 검색해보세요
-            </div>
+            <IdleContent
+              listening={listening}
+              recents={recents}
+              trending={trending}
+              onApplyQuery={applyQuery}
+              onRemoveRecent={handleRemoveRecent}
+            />
           )}
 
           {uiState === "loading" && (
@@ -469,6 +632,242 @@ export default function SearchSheet({
           onShare={async () => {}}
         />
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// D10b — Idle 컨텐츠 (Recent / Trending / Voice listening)
+// ─────────────────────────────────────────────────────
+
+function IdleContent({
+  listening,
+  recents,
+  trending,
+  onApplyQuery,
+  onRemoveRecent,
+}: {
+  listening: boolean;
+  recents: RecentSearch[];
+  trending: TrendingItem[];
+  onApplyQuery: (q: string) => void;
+  onRemoveRecent: (q: string) => void;
+}) {
+  if (listening) return <VoiceListening />;
+
+  const hasContent = recents.length > 0 || trending.length > 0;
+
+  if (!hasContent) {
+    return (
+      <div className="px-5 pt-4 text-sm text-muted">
+        작품, 감독, 배우 이름으로 검색해보세요
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-4">
+      {recents.length > 0 && (
+        <section aria-label="최근 검색어">
+          <SectionHead label="Recent · 최근 검색" />
+          <div className="px-5 flex flex-wrap gap-2">
+            {recents.slice(0, 7).map((r) => (
+              <RecentChip
+                key={r.query}
+                query={r.query}
+                onApply={() => onApplyQuery(r.query)}
+                onRemove={() => onRemoveRecent(r.query)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+      {trending.length > 0 && (
+        <section aria-label="지금 떠오르는" className="mt-1">
+          <SectionHead label="Trending · 지금 떠오르는" />
+          <div className="px-5 flex flex-wrap gap-2">
+            {trending.slice(0, 6).map((t) => (
+              <TrendingChip
+                key={t.id}
+                label={t.title}
+                onApply={() => {
+                  onApplyQuery(t.title);
+                  track("search_trending_clicked", {
+                    tmdb_id: t.id,
+                    title: t.title,
+                  });
+                }}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SectionHead({ label }: { label: string }) {
+  return (
+    <div className="px-5 pt-4 pb-2">
+      <h3
+        className="text-xs font-data uppercase"
+        style={{
+          color: "var(--accent)",
+          letterSpacing: "0.12em",
+        }}
+      >
+        {label}
+      </h3>
+    </div>
+  );
+}
+
+function RecentChip({
+  query,
+  onApply,
+  onRemove,
+}: {
+  query: string;
+  onApply: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <span
+      className="inline-flex items-center rounded-full"
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+      }}
+    >
+      <button
+        onClick={onApply}
+        className="pl-3 pr-1.5 py-1.5 text-xs font-medium active:scale-[0.97] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-l-full"
+        style={{ color: "var(--text-primary)" }}
+        aria-label={`${query} 다시 검색`}
+      >
+        <span aria-hidden="true" style={{ color: "var(--text-muted)" }}>
+          ↺{" "}
+        </span>
+        {query}
+      </button>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        aria-label={`${query} 검색 기록에서 제거`}
+        className="pr-2.5 pl-1 py-1.5 active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-r-full"
+        style={{ color: "var(--text-muted)" }}
+      >
+        <svg
+          width={9}
+          height={9}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={3}
+          strokeLinecap="square"
+        >
+          <line x1="6" y1="6" x2="18" y2="18" />
+          <line x1="18" y1="6" x2="6" y2="18" />
+        </svg>
+      </button>
+    </span>
+  );
+}
+
+function TrendingChip({
+  label,
+  onApply,
+}: {
+  label: string;
+  onApply: () => void;
+}) {
+  return (
+    <button
+      onClick={onApply}
+      className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium active:scale-[0.97] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+      style={{
+        background: "var(--accent-dim)",
+        color: "var(--accent)",
+        border: "1px solid var(--accent-dim)",
+      }}
+      aria-label={`${label} 검색`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function VoiceListening() {
+  return (
+    <div
+      className="flex flex-col items-center justify-center px-6 py-12 gap-3"
+      style={{
+        background:
+          "radial-gradient(circle at center, rgba(196,163,90,0.12) 0%, transparent 70%)",
+      }}
+    >
+      <div
+        className="relative"
+        style={{ width: 120, height: 120 }}
+        aria-hidden="true"
+      >
+        {[1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className="absolute inset-0 rounded-full"
+            style={{
+              border: "1px solid var(--accent)",
+              opacity: 0.4 / i,
+              animation: `neq-voice-pulse 2s ${i * 0.4}s ease-out infinite`,
+            }}
+          />
+        ))}
+        <span
+          className="absolute flex items-center justify-center rounded-full"
+          style={{
+            inset: 30,
+            background: "var(--accent)",
+            color: "var(--surface)",
+          }}
+        >
+          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
+            <rect
+              x="6"
+              y="1"
+              width="10"
+              height="14"
+              rx="5"
+              fill="currentColor"
+            />
+            <path
+              d="M2 12C2 16.9706 6.02944 21 11 21V25M20 12C20 16.9706 15.9706 21 11 21"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+            />
+          </svg>
+        </span>
+      </div>
+      <p
+        className="font-display italic text-xl"
+        style={{ color: "var(--text-primary)" }}
+      >
+        듣는 중…
+      </p>
+      <p
+        className="text-xs text-center max-w-[220px] leading-relaxed"
+        style={{ color: "var(--text-muted)" }}
+      >
+        &ldquo;느릿한 한국 영화&rdquo; 처럼 자연스럽게 말해 보세요
+      </p>
+      <style>{`
+        @keyframes neq-voice-pulse {
+          0% { transform: scale(0.6); opacity: 0.6; }
+          100% { transform: scale(1.4); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
