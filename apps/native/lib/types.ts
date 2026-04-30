@@ -7,6 +7,8 @@ export type {
   RecommendFilter,
   WatchFeedback,
   SearchResult,
+  PersonResult,
+  GroupedSearchResponse,
   RelatedWork,
   RelatedWorksCollection,
   RelatedWorksResponse,
