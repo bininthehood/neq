@@ -6,6 +6,7 @@ import InstallBanner from "@/components/InstallBanner";
 import Reminder from "@/components/Reminder";
 import PostHogProvider from "@/components/PostHogProvider";
 import { PersonaProvider } from "@/contexts/PersonaContext";
+import { ToastProvider } from "@neq/design";
 
 /**
  * Stage 4 D1 — fontsV2 전환:
@@ -105,7 +106,9 @@ export default function RootLayout({
       <body className="h-full">
         <PostHogProvider>
           <PersonaProvider>
-            <div className="h-dvh flex flex-col">{children}</div>
+            <ToastProvider>
+              <div className="h-dvh flex flex-col">{children}</div>
+            </ToastProvider>
           </PersonaProvider>
           <InstallBanner />
           <Reminder />
