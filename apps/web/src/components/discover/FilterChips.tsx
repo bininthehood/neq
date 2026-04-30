@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import NextImage from "next/image";
 import { getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
@@ -42,6 +42,15 @@ export default function FilterChips({
     "type" | "origin" | "year" | "ott" | null
   >(null);
 
+  useEffect(() => {
+    if (!openDropdown) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenDropdown(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openDropdown]);
+
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
     recs.some((r) => r.providers.some((p) => p.name === ott)),
   );
@@ -68,57 +77,73 @@ export default function FilterChips({
       {/* chip row */}
       <div className="flex gap-2 px-4 pb-2">
         <button
+          type="button"
           onClick={() =>
             setOpenDropdown(openDropdown === "type" ? null : "type")
           }
           disabled={loading}
-          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          aria-haspopup="listbox"
+          aria-expanded={openDropdown === "type"}
+          aria-label={`유형 필터: ${TYPE_LABELS[filterType]}`}
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={chipStyle(filterType !== "all", openDropdown === "type")}
         >
           {TYPE_LABELS[filterType]}{" "}
-          <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
+          <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         <button
+          type="button"
           onClick={() =>
             setOpenDropdown(openDropdown === "origin" ? null : "origin")
           }
           disabled={loading}
-          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          aria-haspopup="listbox"
+          aria-expanded={openDropdown === "origin"}
+          aria-label={`국가 필터: ${ORIGIN_LABELS[filterOrigin]}`}
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={chipStyle(
             filterOrigin !== "all",
             openDropdown === "origin",
           )}
         >
           {ORIGIN_LABELS[filterOrigin]}{" "}
-          <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
+          <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         <button
+          type="button"
           onClick={() =>
             setOpenDropdown(openDropdown === "year" ? null : "year")
           }
           disabled={loading}
-          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95"
+          aria-haspopup="listbox"
+          aria-expanded={openDropdown === "year"}
+          aria-label={`연도 필터: ${YEAR_LABELS[filterYear]}`}
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={chipStyle(
             filterYear !== "all",
             openDropdown === "year",
           )}
         >
           {YEAR_LABELS[filterYear]}{" "}
-          <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
+          <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         {availableOTTs.length > 0 && (
           <button
+            type="button"
             onClick={() =>
               setOpenDropdown(openDropdown === "ott" ? null : "ott")
             }
-            className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1 active:scale-95"
+            aria-haspopup="listbox"
+            aria-expanded={openDropdown === "ott"}
+            aria-label={`OTT 필터: ${ottLabel}`}
+            className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
             style={chipStyle(
               filterOTTs.size > 0,
               openDropdown === "ott",
             )}
           >
             {ottLabel}{" "}
-            <span style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
+            <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
           </button>
         )}
       </div>
@@ -131,6 +156,8 @@ export default function FilterChips({
             onClick={() => setOpenDropdown(null)}
           />
           <div
+            role="listbox"
+            aria-label="필터 옵션"
             className="absolute left-3 right-3 z-30 p-3 flex flex-wrap gap-2 animate-fade-in bg-surface-raised rounded-lg"
             style={{ boxShadow: "var(--shadow-dropdown)" }}
           >
@@ -143,7 +170,8 @@ export default function FilterChips({
                     onFilterChange(t, filterOrigin);
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  type="button"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
                     background: filterType === t ? "var(--accent-dim)" : "transparent",
                     color: filterType === t ? "var(--accent)" : "var(--text-secondary)",
@@ -163,7 +191,8 @@ export default function FilterChips({
                     onFilterChange(filterType, o);
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  type="button"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
                     background: filterOrigin === o ? "var(--accent-dim)" : "transparent",
                     color: filterOrigin === o ? "var(--accent)" : "var(--text-secondary)",
@@ -184,7 +213,8 @@ export default function FilterChips({
                     onResetTopIdx();
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  type="button"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
                     background: filterYear === y ? "var(--accent-dim)" : "transparent",
                     color: filterYear === y ? "var(--accent)" : "var(--text-secondary)",
@@ -203,7 +233,8 @@ export default function FilterChips({
                     onResetTopIdx();
                     setOpenDropdown(null);
                   }}
-                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg"
+                  type="button"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
                     background: filterOTTs.size === 0 ? "var(--accent-dim)" : "transparent",
                     color: filterOTTs.size === 0 ? "var(--accent)" : "var(--text-secondary)",
@@ -230,7 +261,8 @@ export default function FilterChips({
                         onOTTChange(next);
                         onResetTopIdx();
                       }}
-                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg"
+                      type="button"
+                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                       style={{
                         background: selected ? "var(--accent-dim)" : "transparent",
                         color: selected ? "var(--accent)" : "var(--text-secondary)",
