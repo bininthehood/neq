@@ -58,12 +58,12 @@ export const colors = {
   overlayDense: 'rgba(18, 17, 14, 0.92)', // 신규
   overlaySolid: 'rgba(18, 17, 14, 0.97)', // 신규
 
-  // Category badges
-  catMovie: '#C4A35A',                // 신규
-  catSeries: '#9B8AE0',               // 신규
-  catMusic: '#E08A6C',                // 신규
-  catBook: '#7EC4A0',                 // 신규
-  catShow: '#D4A245',                 // 신규
+  // Category badges (3종 — DECISIONS.md #26, Day 26)
+  // movie = amber / series = violet / variety = coral.
+  // 음악·책은 V1 배제. show → variety 로 rename. 5종 → 3종.
+  catMovie: '#C4A35A',
+  catSeries: '#9B8AE0',
+  catVariety: '#E08A6C',
 } as const;
 
 // ─────────────────────────────────────────────────────

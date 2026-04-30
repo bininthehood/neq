@@ -64,12 +64,15 @@
 
   --text-primary-dim: rgba(237, 237, 239, 0.07);
 
-  /* ── Category colors (badges only) ────────────── */
+  /* ── Category colors (badges only) ─────────────
+     도메인 카테고리 3종 (DECISIONS.md #26, Day 26):
+     - movie   = amber (브랜드 액센트 동조)
+     - series  = violet (TV/시리즈 톤)
+     - variety = coral  (예능 — 따뜻하고 활기, 디자인 산출물 neko-data.jsx variety 색)
+     음악·책은 V1 배제. show → variety 로 rename. 5종 → 3종 정리. */
   --cat-movie:   #C4A35A;
   --cat-series:  #9B8AE0;
-  --cat-music:   #E08A6C;
-  --cat-book:    #7EC4A0;
-  --cat-show:    #D4A245;
+  --cat-variety: #E08A6C;
 
   /* ── Spacing ──────────────────────────────────── */
   --space-2xs: 2px;
