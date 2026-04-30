@@ -1,28 +1,35 @@
 /**
- * Illust — Quiet Ink 빈 상태 일러 (네이티브 포팅).
+ * Illust — Quiet Ink 빈 상태 일러스트레이션 시스템 (네이티브 포팅).
  *
- * 본 D9 1차 구현 — react-native-svg 의존성 부재 상태에서의 placeholder.
+ * D9-native (Day 26): react-native-svg 15.12.1 기반 1:1 SVG 변환.
+ * 소스: `packages/design/src/Illust.tsx` (web). 16개 SVG (editorial 8 + geometric 8).
  *
- * 현재 상태:
- *   - react-native-svg는 apps/native/package.json에 미설치 (D9 위임 prompt 명시: 설치 X, 보고만)
- *   - 본 파일은 web (`packages/design/src/Illust.tsx`)와 **동일 API**를 노출하지만,
- *     실제 SVG path 렌더링 대신 amber accent 색상 + name 라벨의 시각 placeholder를 표시.
- *   - StatusScreens 통합 시점 (Stage 4 D5 native 진입)이나 D9-native 위임에서 react-native-svg 설치 후
- *     web Illust.tsx의 SVG body를 1:1 변환하는 작업이 필요.
- *
- * 변환 규칙 (후속 위임 참조):
+ * Web → Native 매핑:
  *   <svg viewBox="0 0 200 200">  →  <Svg viewBox="0 0 200 200" width={px} height={px}>
  *   <path d="..."/>             →  <Path d="..." />
- *   <circle/>, <rect/>, <line/>, <ellipse/>  →  RN-SVG 동명 컴포넌트
- *   transform="rotate(...)" →  rotation prop or transform attribute
- *   strokeWidth, strokeLinecap 등은 동일
- *   <defs> + <filter> (letterpress) → 본 위임 스코프 외 (editorial로 fallback)
+ *   <circle/>, <rect/>, <line/>, <ellipse/>  →  <Circle/>, <Rect/>, <Line/>, <Ellipse/>
+ *   transform="rotate(α x y)"   →  동일 (RN-SVG 지원)
+ *   strokeWidth, strokeLinecap, strokeDasharray, fillOpacity, opacity → prop으로 전달
+ *   aria-label                 →  accessibilityLabel (RN 표준)
  *
- * 색상은 `apps/native/lib/tokens.ts`의 colors export 사용.
+ * letterpress / lineart fallback 정책 (web과 동일):
+ *   - 호출 시 editorial로 강제 변환 + dev 모드 콘솔 1회 경고.
+ *
+ * 색상은 web과 동일 hex (visual parity 우선). tokens.ts와는 독립 — web Illust.tsx도
+ * 일러 전용 상수로 분리했음. 토큰 변경 시 양쪽 파일 동기화 필요.
+ *
+ * Reduced motion: 정적 SVG, 모션 없음. 별도 분기 불필요.
  */
 
-import { View, Text, StyleSheet, type ViewStyle } from "react-native";
-import { colors, radius } from "../lib/tokens";
+import type { ReactNode } from "react";
+import { View, type ViewStyle } from "react-native";
+import Svg, {
+  Circle,
+  Ellipse,
+  Line,
+  Path,
+  Rect,
+} from "react-native-svg";
 
 // ─────────────────────────────────────────────────────
 // Types — web Illust와 동일
@@ -44,18 +51,42 @@ export type IllustSize = "sm" | "md" | "lg";
 
 export interface IllustProps {
   name: IllustName;
-  /** default: 'editorial' */
+  /** default: 'editorial' (phase2-brief.md §Visual style) */
   style?: IllustStyle;
   /** sm 64 / md 96 / lg 128 px (default 'md') */
   size?: IllustSize;
-  /** 스크린리더 라벨 */
+  /** 스크린리더 라벨 (생략 시 시각 숨김 처리 — 보조 일러). RN: accessibilityLabel */
   accessibilityLabel?: string;
   containerStyle?: ViewStyle;
 }
 
 // ─────────────────────────────────────────────────────
+// Color tokens — web Illust.tsx와 동일 hex
+// ─────────────────────────────────────────────────────
+
+export const ILLUST_AMBER = "#C4A35A";
+export const ILLUST_AMBER_DIM = "rgba(196,163,90,0.20)";
+export const ILLUST_INK = "#6B6C75";
+export const ILLUST_STROKE = "#3A3833";
+export const ILLUST_PAPER = "#24231E";
+export const ILLUST_BG = "#12110E";
+
+// ─────────────────────────────────────────────────────
 // Pure logic — web과 동기화
 // ─────────────────────────────────────────────────────
+
+/** size → px (컨테이너 가로/세로). SVG viewBox는 200×200 고정. */
+export function illustSizePx(size: IllustSize = "md"): number {
+  switch (size) {
+    case "sm":
+      return 64;
+    case "lg":
+      return 128;
+    case "md":
+    default:
+      return 96;
+  }
+}
 
 export const ILLUST_NAMES: readonly IllustName[] = [
   "welcome",
@@ -75,18 +106,10 @@ export const ILLUST_STYLES: readonly IllustStyle[] = [
   "lineart",
 ];
 
-export function illustSizePx(size: IllustSize = "md"): number {
-  switch (size) {
-    case "sm":
-      return 64;
-    case "lg":
-      return 128;
-    case "md":
-    default:
-      return 96;
-  }
-}
-
+/**
+ * Style fallback resolver — letterpress / lineart는 editorial로.
+ * 단위 테스트 대상.
+ */
 export function resolveIllustStyle(style: IllustStyle): IllustStyle {
   if (style === "letterpress" || style === "lineart") {
     return "editorial";
@@ -94,20 +117,692 @@ export function resolveIllustStyle(style: IllustStyle): IllustStyle {
   return style;
 }
 
-/** name → 한글 라벨. placeholder 단계에서 어떤 일러인지 시각 식별 용도. */
-const NAME_LABEL: Record<IllustName, string> = {
-  welcome: "환영",
-  emptyDiscover: "탐색 시작",
-  emptySaved: "빈 책장",
-  noResults: "결과 없음",
-  calibrating: "취향 분석",
-  error: "오류",
-  onboarding: "안내",
-  archive: "아카이브",
+// 개발 모드 1회 경고 — fallback 발생 시
+const fallbackWarned = new Set<IllustStyle>();
+
+function warnFallbackOnce(style: IllustStyle): void {
+  if (typeof process === "undefined") return;
+  if (process.env.NODE_ENV === "production") return;
+  if (fallbackWarned.has(style)) return;
+  fallbackWarned.add(style);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[Illust] style="${style}" is not implemented yet — falling back to "editorial". This warning fires once per style per session.`,
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// GEOMETRIC — 8종. 기하학적 추상.
+// ─────────────────────────────────────────────────────
+
+const GEOMETRIC: Record<IllustName, () => ReactNode> = {
+  welcome: () => (
+    <>
+      <Circle
+        cx="100"
+        cy="100"
+        r="84"
+        fill="none"
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Path
+        d="M 100 38 A 62 62 0 1 0 100 162 A 44 44 0 1 1 100 38 Z"
+        fill={ILLUST_AMBER_DIM}
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+      />
+      <Circle cx="148" cy="64" r="3" fill={ILLUST_AMBER} />
+      <Line
+        x1="22"
+        y1="172"
+        x2="178"
+        y2="172"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="square"
+      />
+    </>
+  ),
+  emptyDiscover: () => (
+    <>
+      <Rect
+        x="64"
+        y="56"
+        width="72"
+        height="100"
+        rx="2"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+        transform="rotate(-6 100 106)"
+      />
+      <Rect
+        x="64"
+        y="56"
+        width="72"
+        height="100"
+        rx="2"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+        transform="rotate(-2 100 106)"
+      />
+      <Rect
+        x="64"
+        y="56"
+        width="72"
+        height="100"
+        rx="2"
+        fill={ILLUST_BG}
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+      />
+      <Circle cx="100" cy="106" r="3" fill={ILLUST_AMBER} />
+      <Path
+        d="M 152 106 L 172 106 M 166 100 L 172 106 L 166 112"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="square"
+      />
+    </>
+  ),
+  emptySaved: () => (
+    <>
+      <Rect
+        x="36"
+        y="40"
+        width="128"
+        height="120"
+        fill="none"
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Line
+        x1="36"
+        y1="100"
+        x2="164"
+        y2="100"
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Rect
+        x="56"
+        y="56"
+        width="6"
+        height="40"
+        fill={ILLUST_AMBER}
+        transform="rotate(-8 59 76)"
+      />
+      <Rect
+        x="68"
+        y="56"
+        width="6"
+        height="40"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        transform="rotate(-3 71 76)"
+      />
+      <Circle cx="100" cy="130" r="2" fill={ILLUST_INK} />
+      <Circle cx="112" cy="130" r="2" fill={ILLUST_INK} />
+      <Circle cx="124" cy="130" r="2" fill={ILLUST_INK} />
+    </>
+  ),
+  noResults: () => (
+    <>
+      {[40, 70, 100, 130, 160].flatMap((y) =>
+        [40, 70, 100, 130, 160].map((x) => (
+          <Circle key={`${x}-${y}`} cx={x} cy={y} r="1.5" fill={ILLUST_INK} />
+        )),
+      )}
+      <Circle
+        cx="86"
+        cy="86"
+        r="36"
+        fill={ILLUST_BG}
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+      />
+      <Line
+        x1="112"
+        y1="112"
+        x2="148"
+        y2="148"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+        strokeLinecap="square"
+      />
+      <Line
+        x1="68"
+        y1="104"
+        x2="104"
+        y2="68"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="square"
+      />
+    </>
+  ),
+  calibrating: () => (
+    <>
+      <Circle
+        cx="100"
+        cy="100"
+        r="68"
+        fill="none"
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Path
+        d="M 100 32 A 68 68 0 0 1 168 100"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+        strokeLinecap="square"
+      />
+      <Line
+        x1="40"
+        y1="100"
+        x2="160"
+        y2="100"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="square"
+      />
+      <Circle cx="128" cy="100" r="3" fill={ILLUST_AMBER} />
+      <Line x1="64" y1="96" x2="64" y2="104" stroke={ILLUST_INK} strokeWidth="1" />
+      <Line
+        x1="100"
+        y1="96"
+        x2="100"
+        y2="104"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+      />
+      <Line
+        x1="136"
+        y1="96"
+        x2="136"
+        y2="104"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+      />
+    </>
+  ),
+  error: () => (
+    <>
+      <Path
+        d="M 50 50 L 150 50 L 150 100 L 100 150 L 50 150 Z"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Path
+        d="M 100 150 L 150 100 L 150 50"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+      />
+      <Path
+        d="M 50 110 L 80 100 L 75 120 L 105 110 L 100 130 L 130 120"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="square"
+      />
+      <Circle cx="160" cy="44" r="3" fill={ILLUST_AMBER} />
+    </>
+  ),
+  onboarding: () => (
+    <>
+      <Line
+        x1="40"
+        y1="170"
+        x2="160"
+        y2="170"
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Circle cx="40" cy="170" r="3" fill={ILLUST_AMBER} />
+      <Circle cx="100" cy="170" r="3" fill={ILLUST_AMBER} />
+      <Circle cx="160" cy="170" r="3" fill={ILLUST_INK} fillOpacity="0.3" />
+      <Path
+        d="M 70 60 L 130 100 L 70 140 Z"
+        fill={ILLUST_AMBER_DIM}
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.5"
+        strokeLinejoin="miter"
+      />
+      <Path
+        d="M 50 60 L 110 100 L 50 140 Z"
+        fill="none"
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+        strokeLinejoin="miter"
+      />
+    </>
+  ),
+  archive: () => (
+    <>
+      <Rect
+        x="40"
+        y="50"
+        width="120"
+        height="10"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Rect
+        x="50"
+        y="68"
+        width="100"
+        height="10"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Rect x="40" y="86" width="120" height="10" fill={ILLUST_AMBER} />
+      <Rect
+        x="58"
+        y="104"
+        width="84"
+        height="10"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Rect
+        x="40"
+        y="122"
+        width="120"
+        height="10"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Rect
+        x="64"
+        y="140"
+        width="72"
+        height="10"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_STROKE}
+        strokeWidth="1"
+      />
+      <Circle cx="170" cy="91" r="2.5" fill={ILLUST_AMBER} />
+    </>
+  ),
 };
 
 // ─────────────────────────────────────────────────────
-// Component — placeholder (react-native-svg 설치 후 SVG로 교체)
+// EDITORIAL — 8종. 잡지 일러 느낌. 손맛 있는 잉크 스팟.
+// ─────────────────────────────────────────────────────
+
+const EDITORIAL: Record<IllustName, () => ReactNode> = {
+  welcome: () => (
+    <>
+      {/* sun rising — sketchy curve */}
+      <Path
+        d="M 60 100 Q 80 60, 100 60 Q 122 60, 140 100"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 60 100 L 140 100"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      {/* horizon — hand wobble */}
+      <Path
+        d="M 22 138 Q 60 136, 100 138 T 178 138"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      {/* hatching inside sun */}
+      <Path
+        d="M 78 88 L 122 88 M 76 96 L 124 96 M 80 80 L 120 80"
+        stroke={ILLUST_AMBER}
+        strokeWidth="0.6"
+        strokeLinecap="round"
+        opacity="0.5"
+      />
+      {/* small bird mark */}
+      <Path
+        d="M 144 56 q 6 -4 12 0 q 6 -4 12 0"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  emptyDiscover: () => (
+    <>
+      {/* card outline — slightly wonky */}
+      <Path
+        d="M 70 56 L 138 60 L 134 156 L 66 152 Z"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_INK}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      {/* inner sketch lines */}
+      <Path
+        d="M 78 80 L 124 84 M 76 96 L 126 100 M 78 116 L 122 120"
+        stroke={ILLUST_INK}
+        strokeWidth="0.8"
+        strokeLinecap="round"
+        opacity="0.5"
+      />
+      {/* amber ink stamp */}
+      <Circle cx="100" cy="120" r="5" fill={ILLUST_AMBER} />
+      <Circle
+        cx="100"
+        cy="120"
+        r="9"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="0.8"
+        opacity="0.4"
+      />
+      {/* arrow swoosh */}
+      <Path
+        d="M 148 106 q 12 -4 20 0 m -6 -5 l 6 5 l -6 6"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  emptySaved: () => (
+    <>
+      {/* sketchy plank */}
+      <Path
+        d="M 30 110 L 170 116"
+        stroke={ILLUST_INK}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 30 110 L 30 130 L 170 136 L 170 116"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="0.8"
+        strokeLinecap="round"
+      />
+      {/* two leaning books */}
+      <Path
+        d="M 50 70 L 56 110 L 64 110 L 60 70 Z"
+        fill={ILLUST_AMBER}
+        stroke={ILLUST_AMBER_DIM}
+        strokeWidth="0.5"
+      />
+      <Path
+        d="M 70 76 L 76 111 L 84 111 L 78 74 Z"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+      />
+      {/* tiny sparkle */}
+      <Path
+        d="M 130 80 L 134 84 M 132 78 L 132 86"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+      {/* faint hatching for texture */}
+      <Path
+        d="M 40 130 L 46 134 M 60 132 L 66 136 M 80 134 L 86 138 M 100 134 L 106 138 M 120 134 L 126 138"
+        stroke={ILLUST_INK}
+        strokeWidth="0.5"
+        opacity="0.4"
+      />
+    </>
+  ),
+  noResults: () => (
+    <>
+      {/* page underneath */}
+      <Path
+        d="M 60 50 L 150 56 L 144 158 L 54 152 Z"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_INK}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        opacity="0.6"
+      />
+      {/* lens */}
+      <Ellipse
+        cx="100"
+        cy="92"
+        rx="32"
+        ry="30"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+      />
+      {/* handle — hand-drawn */}
+      <Path
+        d="M 124 116 q 8 8 16 18 q 4 4 8 6"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      {/* lens highlight */}
+      <Path
+        d="M 84 78 q 8 -4 16 0"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="0.8"
+        strokeLinecap="round"
+        opacity="0.6"
+      />
+      {/* nothing slash */}
+      <Path
+        d="M 84 102 q 16 -8 32 0"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  calibrating: () => (
+    <>
+      {/* balance scale beam */}
+      <Path
+        d="M 100 36 L 100 110"
+        stroke={ILLUST_INK}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 50 64 L 150 60"
+        stroke={ILLUST_INK}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      {/* left pan */}
+      <Path
+        d="M 36 64 q 14 22 28 0"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1.2"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 36 64 L 64 64"
+        stroke={ILLUST_INK}
+        strokeWidth="0.6"
+        strokeLinecap="round"
+        opacity="0.4"
+      />
+      {/* right pan — tipped, amber */}
+      <Path
+        d="M 134 64 q 14 22 28 0"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 134 64 L 162 64"
+        stroke={ILLUST_AMBER}
+        strokeWidth="0.6"
+        strokeLinecap="round"
+        opacity="0.5"
+      />
+      {/* weight in right pan */}
+      <Circle cx="148" cy="74" r="4" fill={ILLUST_AMBER} />
+      {/* base */}
+      <Path
+        d="M 76 130 L 124 130"
+        stroke={ILLUST_INK}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <Path
+        d="M 92 130 L 84 150 M 108 130 L 116 150"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  error: () => (
+    <>
+      {/* torn paper */}
+      <Path
+        d="M 50 50 L 150 50 L 150 96 L 130 100 L 140 110 L 120 116 L 132 130 L 110 134 L 124 150 L 50 150 Z"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_INK}
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      {/* hatching */}
+      <Path
+        d="M 64 70 L 116 70 M 62 84 L 112 84 M 62 96 L 100 96"
+        stroke={ILLUST_INK}
+        strokeWidth="0.7"
+        strokeLinecap="round"
+        opacity="0.4"
+      />
+      {/* exclamation */}
+      <Circle
+        cx="158"
+        cy="56"
+        r="10"
+        fill="none"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.2"
+      />
+      <Path
+        d="M 158 50 L 158 58 M 158 62 L 158 63"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  onboarding: () => (
+    <>
+      {/* footstep trail */}
+      <Path
+        d="M 36 132 q 20 -30 60 -28 q 40 2 60 -32"
+        fill="none"
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        strokeLinecap="round"
+        strokeDasharray="4 4"
+      />
+      {/* footprint marks */}
+      <Ellipse cx="48" cy="130" rx="6" ry="3" fill={ILLUST_INK} opacity="0.5" />
+      <Ellipse cx="78" cy="116" rx="6" ry="3" fill={ILLUST_INK} opacity="0.7" />
+      <Ellipse cx="110" cy="106" rx="6" ry="3" fill={ILLUST_AMBER} />
+      {/* destination flag */}
+      <Path
+        d="M 152 72 L 152 130"
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+        strokeLinecap="round"
+      />
+      <Path d="M 152 72 L 174 80 L 152 90" fill={ILLUST_AMBER} />
+      {/* glow under flag */}
+      <Ellipse cx="152" cy="132" rx="10" ry="2" fill={ILLUST_AMBER} opacity="0.3" />
+    </>
+  ),
+  archive: () => (
+    <>
+      {/* stacked polaroid cards */}
+      <Path
+        d="M 36 60 L 110 56 L 116 124 L 42 128 Z"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        transform="rotate(-8 76 92)"
+      />
+      <Path
+        d="M 60 50 L 134 54 L 130 122 L 56 118 Z"
+        fill={ILLUST_PAPER}
+        stroke={ILLUST_INK}
+        strokeWidth="1"
+        transform="rotate(2 96 86)"
+      />
+      <Path
+        d="M 84 56 L 158 58 L 156 126 L 82 124 Z"
+        fill={ILLUST_BG}
+        stroke={ILLUST_AMBER}
+        strokeWidth="1.4"
+        transform="rotate(8 120 92)"
+      />
+      {/* sketch lines inside top card */}
+      <Path
+        d="M 100 80 q 10 -4 20 0 M 96 96 q 14 -4 28 0 M 96 110 q 10 -4 20 0"
+        stroke={ILLUST_AMBER}
+        strokeWidth="0.7"
+        strokeLinecap="round"
+        opacity="0.5"
+        transform="rotate(8 120 92)"
+      />
+      {/* heart save mark */}
+      <Path
+        d="M 168 142 q -3 -4 -6 0 q -3 -4 -6 0 q 0 4 6 8 q 6 -4 6 -8 z"
+        fill={ILLUST_AMBER}
+      />
+    </>
+  ),
+};
+
+// ─────────────────────────────────────────────────────
+// Style sets
+// ─────────────────────────────────────────────────────
+
+const STYLES: Record<"editorial" | "geometric", Record<IllustName, () => ReactNode>> = {
+  editorial: EDITORIAL,
+  geometric: GEOMETRIC,
+};
+
+/**
+ * 디버그/테스트용: 주어진 (name, style) 조합이 fallback 없이 직접 정의되어 있는지 확인.
+ * letterpress / lineart는 false 반환 — 호출 시 editorial로 fallback이 일어남을 의미.
+ */
+export function illustHasNativeStyle(name: IllustName, style: IllustStyle): boolean {
+  if (style !== "editorial" && style !== "geometric") return false;
+  const set = STYLES[style];
+  return !!set[name];
+}
+
+// ─────────────────────────────────────────────────────
+// Component
 // ─────────────────────────────────────────────────────
 
 export function Illust({
@@ -117,51 +812,36 @@ export function Illust({
   accessibilityLabel,
   containerStyle,
 }: IllustProps) {
+  // letterpress / lineart fallback
+  if (style === "letterpress" || style === "lineart") {
+    warnFallbackOnce(style);
+  }
+  const resolved = resolveIllustStyle(style);
+  const set =
+    resolved === "geometric" ? STYLES.geometric : STYLES.editorial;
+  const Body = set[name];
+  if (!Body) return null;
+
   const px = illustSizePx(size);
-  resolveIllustStyle(style); // letterpress/lineart fallback (현재는 사용처 없음)
-  const label = NAME_LABEL[name] ?? name;
+
+  // RN 접근성: accessibilityLabel이 주어지면 image role + 라벨 노출, 아니면 숨김
+  const a11yProps = accessibilityLabel
+    ? {
+        accessible: true,
+        accessibilityRole: "image" as const,
+        accessibilityLabel,
+      }
+    : {
+        accessible: false,
+        accessibilityElementsHidden: true,
+        importantForAccessibility: "no-hide-descendants" as const,
+      };
 
   return (
-    <View
-      accessibilityRole="image"
-      accessibilityLabel={accessibilityLabel ?? label}
-      style={[
-        styles.container,
-        {
-          width: px,
-          height: px,
-        },
-        containerStyle,
-      ]}
-    >
-      {/* amber accent dot — "여기 일러가 들어감" 시각 신호 */}
-      <View style={[styles.accentDot, { width: px * 0.42, height: px * 0.42 }]} />
-      <Text style={[styles.label, { fontSize: Math.max(10, px * 0.11) }]}>
-        {label}
-      </Text>
+    <View style={[{ width: px, height: px }, containerStyle]} {...a11yProps}>
+      <Svg width={px} height={px} viewBox="0 0 200 200">
+        <Body />
+      </Svg>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  accentDot: {
-    backgroundColor: colors.accentDim,
-    borderRadius: 9999,
-    borderWidth: 1.5,
-    borderColor: colors.accent,
-    marginBottom: 6,
-  },
-  label: {
-    color: colors.textMuted,
-    fontWeight: "500",
-    letterSpacing: 0.2,
-  },
-});
