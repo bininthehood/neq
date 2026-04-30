@@ -526,7 +526,8 @@ export default function DiscoverPage() {
         )}
         <button
           onClick={() => { track("search_opened"); searchSheet.openDetail(); }}
-          className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform"
+          aria-label="검색 열기"
+          className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
         >
           <IconSearch size={18} color="var(--text-muted)" />
         </button>

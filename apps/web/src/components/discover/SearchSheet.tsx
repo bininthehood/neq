@@ -352,7 +352,7 @@ export default function SearchSheet({
                   inputRef.current?.focus();
                 }}
                 aria-label="검색어 지우기"
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full active:scale-90 transition-transform"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-1"
                 style={{
                   background: "var(--text-muted)",
                   color: "var(--surface)",
@@ -375,7 +375,8 @@ export default function SearchSheet({
           </div>
           <button
             onClick={onClose}
-            className="shrink-0 px-3 py-3 text-sm text-muted active:scale-95 transition-transform"
+            aria-label="검색 닫기"
+            className="shrink-0 px-3 py-3 text-sm text-muted active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
           >
             취소
           </button>
@@ -547,7 +548,9 @@ function WorksCarousel({
           <button
             key={item.id}
             onClick={() => onSelect(item)}
-            className="shrink-0 active:scale-[0.98] transition-transform"
+            aria-label={`${item.title} 선택`}
+            aria-pressed={isSelected}
+            className="shrink-0 active:scale-[0.98] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
             style={{
               width: 112,
               scrollSnapAlign: "start",
@@ -732,13 +735,14 @@ function SelectedWorkPanel({
                   href={link ?? "#"}
                   target="_blank"
                   rel="noopener noreferrer"
+                  aria-label={`${p.name}에서 ${item.title} 보기 (새 탭)`}
                   onClick={() =>
                     track("search_ott_clicked", {
                       provider: p.name,
                       tmdb_id: item.id,
                     })
                   }
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px]"
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                   style={{
                     background: "var(--surface-raised)",
                     color: "var(--text-primary)",
@@ -770,7 +774,8 @@ function SelectedWorkPanel({
         <button
           onClick={onSave}
           disabled={isSaved}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px]"
+          aria-label={isSaved ? `${item.title} 저장됨` : `${item.title} 저장하기`}
+          className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
           style={{
             background: isSaved ? "var(--surface-raised)" : "var(--accent-dim)",
             color: isSaved ? "var(--text-muted)" : "var(--accent)",
@@ -786,7 +791,8 @@ function SelectedWorkPanel({
         <button
           onClick={onOpenDetail}
           disabled={loadingDetail || !detailRec}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px] disabled:opacity-40"
+          aria-label={`${item.title} 상세보기`}
+          className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px] disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
           style={{
             background: "var(--surface-raised)",
             color: "var(--text-secondary)",

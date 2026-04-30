@@ -220,11 +220,18 @@
 }
 
 /* ─────────────────────────────────────────────────────
-   Reduced motion
+   Reduced motion — 디자인 산출물 4 항목 기준 (colors_and_type.css L213~219).
+   - animation-duration / transition-duration: 즉시 종료
+   - animation-iteration-count: 1 — infinite loop 1회로 차단 (NeqSpinner/Skeleton pulse)
+   - scroll-behavior: auto — smooth scroll 차단
    ───────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

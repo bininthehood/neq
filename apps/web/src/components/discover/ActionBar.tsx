@@ -49,7 +49,7 @@ const ActionBar = forwardRef<HTMLButtonElement, ActionBarProps>(function ActionB
             onClick={onRewind}
             disabled={!canRewind}
             aria-label="처음으로"
-            className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform disabled:opacity-30"
+            className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform disabled:opacity-30 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
           >
             <IconRewind size={17} color="var(--text-muted)" />
           </button>
@@ -78,8 +78,9 @@ const ActionBar = forwardRef<HTMLButtonElement, ActionBarProps>(function ActionB
         <button
           ref={saveBtnRef}
           onClick={onToggleSave}
-          aria-label="저장"
-          className="w-14 h-14 flex items-center justify-center active:scale-90"
+          aria-label={isSaved ? "저장 취소" : "저장"}
+          aria-pressed={isSaved}
+          className="w-14 h-14 flex items-center justify-center active:scale-90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           style={{
             background: saveActive ? "var(--accent)" : "var(--surface-raised)",
             borderRadius: "var(--radius-xl)",

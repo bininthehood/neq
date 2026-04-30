@@ -135,6 +135,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       onPointerUp,
       onPointerLeave,
       onPointerCancel,
+      onFocus,
+      onBlur,
       ...rest
     },
     ref,
@@ -171,7 +173,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           transform: "scale(1)",
           transition: `transform ${BUTTON_ACTIVE_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1), background-color 150ms cubic-bezier(0.4, 0, 0.2, 1), border-color 150ms cubic-bezier(0.4, 0, 0.2, 1)`,
           touchAction: "manipulation",
+          // focus-visible 폴백 — outline 제거(focus-visible CSS 선택자에서 보강)
+          outline: "none",
           ...style,
+        }}
+        onFocus={(e) => {
+          // focus-visible 만 outline 표시 (mouse focus는 제외)
+          if (e.currentTarget.matches(":focus-visible")) {
+            e.currentTarget.style.outline = "2px solid var(--accent)";
+            e.currentTarget.style.outlineOffset = "2px";
+          }
+          onFocus?.(e);
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.outline = "none";
+          e.currentTarget.style.outlineOffset = "0";
+          onBlur?.(e);
         }}
         onPointerDown={(e) => {
           if (!isDisabled) {
