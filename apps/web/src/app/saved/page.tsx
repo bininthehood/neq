@@ -72,9 +72,18 @@ function PosterCard({
 
   return (
     <div
-      className="relative group cursor-pointer overflow-hidden"
+      className="relative group cursor-pointer overflow-hidden rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
       style={{ height: index % 3 === 0 ? "240px" : "200px" }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${item.recommendation.title} 상세보기`}
       onClick={() => onOpen(item)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(item);
+        }
+      }}
     >
       {item.recommendation.posterUrl ? (
         <Image src={item.recommendation.posterUrl} alt={item.recommendation.title} fill className="object-cover rounded-lg" sizes="(max-width: 480px) 50vw, 200px" />
@@ -107,8 +116,10 @@ function PosterCard({
 
       {!report && !isReporting && (
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStartReport(tmdbId); }}
-          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full text-secondary"
+          aria-label={`${item.recommendation.title} 시청 리포트 작성`}
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full text-secondary focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
           style={{ backdropFilter: "blur(4px)" }}
         >
           봤어요?
@@ -117,8 +128,11 @@ function PosterCard({
 
       {report && !isReporting && (
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUndoReport(tmdbId); }}
-          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full"
+          aria-label={`${item.recommendation.title} 시청 리포트 취소`}
+          aria-pressed={true}
+          className="absolute top-1.5 left-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center px-2 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
           style={{ backdropFilter: "blur(4px)", color: REACTIONS.find((x) => x.key === report)?.color }}
           title="리포트 취소"
         >
@@ -131,6 +145,15 @@ function PosterCard({
           className="absolute inset-0 flex flex-col items-center justify-center px-3 gap-3 animate-fade-in z-10 rounded-lg"
           style={{ backdropFilter: "blur(8px)", background: "linear-gradient(var(--bg) 20%, var(--bg-overlay-heavy) 70%, transparent)" }}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancelReport();
+            }
+          }}
+          role="dialog"
+          aria-label="시청 리포트 선택"
         >
           <div className="text-center">
             <div className="font-display text-sm font-bold">본 적 있나요?</div>
@@ -145,8 +168,10 @@ function PosterCard({
             ]).map((r) => (
               <button
                 key={r.key}
+                type="button"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
-                className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform rounded-lg"
+                aria-label={`${r.label} 리포트`}
+                className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                 style={{ background: r.bg, color: r.color, border: r.border }}
               >
                 {r.label}
@@ -154,8 +179,10 @@ function PosterCard({
             ))}
           </div>
           <button
+            type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
-            className="text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted"
+            aria-label="리포트 닫기"
+            className="text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
           >
             닫기
           </button>
@@ -165,8 +192,11 @@ function PosterCard({
       <div className="absolute top-1.5 right-1.5 flex gap-1">
         {report && onArchiveToggle && (
           <button
+            type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
-            className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full"
+            aria-label={isArchived ? `${item.recommendation.title} 복원` : `${item.recommendation.title} 아카이브`}
+            aria-pressed={isArchived}
+            className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:opacity-100"
             style={{ color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
             title={isArchived ? "복원" : "아카이브"}
           >
@@ -174,8 +204,10 @@ function PosterCard({
           </button>
         )}
         <button
+          type="button"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
-          className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full"
+          aria-label={`${item.recommendation.title} 저장 취소`}
+          className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:opacity-100"
         >
           <IconClose size={12} />
         </button>
@@ -450,6 +482,21 @@ export default function SavedPage() {
     snapDetail(100);
   }, [snapDetail]);
 
+  // ESC로 detail sheet / reporting overlay 닫기
+  useEffect(() => {
+    if (!detailItem && reportingId === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (detailItem) {
+        closeDetail();
+      } else if (reportingId !== null) {
+        setReportingId(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [detailItem, reportingId, closeDetail]);
+
   const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
     detailStartY.current = e.touches[0].clientY;
     detailDragging.current = true;
@@ -529,8 +576,11 @@ export default function SavedPage() {
           <h1 className="font-display text-2xl font-bold">Saved</h1>
           {saved.length > 0 && viewFilter !== "history" && (
             <button
+              type="button"
               onClick={() => setGroupByOTT(!groupByOTT)}
-              className="text-xs active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center"
+              aria-pressed={groupByOTT}
+              aria-label={groupByOTT ? "전체 그리드 보기로 전환" : "OTT별 그룹 보기로 전환"}
+              className="text-xs active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
               style={{
                 color: "var(--accent)",
                 textDecoration: groupByOTT ? "underline" : "none",
@@ -575,12 +625,15 @@ export default function SavedPage() {
 
       {/* Filter tabs */}
       {(saved.length > 0 || history.length > 0) && (
-        <div className="flex gap-4 px-5 mt-2 mb-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-4 px-5 mt-2 mb-1 overflow-x-auto" role="tablist" aria-label="저장 필터" style={{ scrollbarWidth: "none" }}>
           {VIEW_FILTERS.map((f) => (
             <button
               key={f.key}
+              type="button"
+              role="tab"
+              aria-selected={viewFilter === f.key}
               onClick={() => setViewFilter(f.key)}
-              className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5"
+              className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
               style={{
                 background: "transparent",
                 color: viewFilter === f.key ? "var(--text-primary)" : "var(--text-muted)",
@@ -601,10 +654,13 @@ export default function SavedPage() {
 
       {/* OTT filter tabs */}
       {availableOTTs.length > 1 && viewFilter !== "history" && saved.length > 0 && (
-        <div className="flex gap-2 px-5 mt-1 mb-1 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+        <div className="flex gap-2 px-5 mt-1 mb-1 overflow-x-auto" role="tablist" aria-label="OTT 필터" style={{ scrollbarWidth: "none" }}>
           <button
+            type="button"
+            role="tab"
+            aria-selected={ottFilter === null}
             onClick={() => setOttFilter(null)}
-            className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg"
+            className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
             style={{
               background: ottFilter === null ? "var(--accent-dim)" : "transparent",
               color: ottFilter === null ? "var(--accent)" : "var(--text-muted)",
@@ -619,8 +675,12 @@ export default function SavedPage() {
             return (
               <button
                 key={name}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-label={`${name} (${count}편) ${isActive ? "선택됨" : "선택"}`}
                 onClick={() => setOttFilter(isActive ? null : name)}
-                className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg"
+                className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                 style={{
                   background: isActive ? "var(--accent-dim)" : "transparent",
                   color: isActive ? "var(--accent)" : "var(--text-muted)",
@@ -630,7 +690,7 @@ export default function SavedPage() {
                 {iconSrc && (
                   <Image
                     src={iconSrc}
-                    alt={name}
+                    alt=""
                     width={16}
                     height={16}
                     className="object-contain rounded-sm"
@@ -679,11 +739,13 @@ export default function SavedPage() {
               </div>
               <div className="flex gap-1.5 flex-shrink-0">
                 <button
+                  type="button"
                   onClick={() => {
                     track("nudge_reported", { tmdb_id: item.recommendation.tmdbId });
                     handleReport(item.recommendation.tmdbId, "good");
                   }}
-                  className="px-2.5 py-1.5 text-xs rounded-lg active:scale-95 transition-transform"
+                  aria-label={`${item.recommendation.title} 봤어요로 리포트`}
+                  className="px-2.5 py-1.5 text-xs rounded-lg active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none min-h-[44px]"
                   style={{
                     background: "var(--accent-dim)",
                     color: "var(--accent)",
@@ -692,8 +754,10 @@ export default function SavedPage() {
                   봤어요
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleDismissNudge(item.recommendation.tmdbId)}
-                  className="px-2 py-1.5 text-xs active:scale-95 transition-transform"
+                  aria-label={`${item.recommendation.title} 넛지 나중에`}
+                  className="px-2 py-1.5 text-xs active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md min-h-[44px]"
                   style={{ color: "var(--text-muted)" }}
                 >
                   나중에
@@ -749,8 +813,10 @@ export default function SavedPage() {
       {saved.length > 0 && viewFilter !== "history" && (
         <div className="mx-5 mt-1 mb-4">
           <button
+            type="button"
             onClick={handlePickTonight}
-            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform rounded-lg"
+            aria-label="오늘의 작품 무작위로 고르기"
+            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
             style={{
               background: "var(--surface)",
               boxShadow: "0 1px 8px rgba(0,0,0,0.2)",
@@ -762,7 +828,7 @@ export default function SavedPage() {
                 {pickSubtext}
               </div>
             </div>
-            <span style={{ color: "var(--accent)", fontSize: "20px" }}>&#8594;</span>
+            <span aria-hidden="true" style={{ color: "var(--accent)", fontSize: "20px" }}>&#8594;</span>
           </button>
         </div>
       )}
@@ -770,17 +836,29 @@ export default function SavedPage() {
       {/* Tonight pick */}
       {selected && viewFilter !== "history" && (
         <div
-          className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform bg-accent-dim rounded-lg"
+          className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform bg-accent-dim rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
           style={{ border: "1px solid var(--accent-border-light)" }}
+          role="button"
+          tabIndex={0}
+          aria-label={`${selected.recommendation.title} 상세보기`}
           onClick={() => { if (selected) openDetailFor(selected); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              if (selected) openDetailFor(selected);
+            }
+          }}
         >
           <div className="flex items-center justify-between mb-2">
             <div className="text-xs font-semibold uppercase tracking-wider text-accent">
               오늘의 선택
             </div>
             <button
+              type="button"
               onClick={(e) => { e.stopPropagation(); setSelected(null); }}
-              className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform -mr-1"
+              onKeyDown={(e) => { e.stopPropagation(); }}
+              aria-label="오늘의 선택 닫기"
+              className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform -mr-1 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-full"
             >
               <IconClose size={14} color="var(--text-muted)" />
             </button>
@@ -837,8 +915,17 @@ export default function SavedPage() {
                     return (
                       <div
                         key={entry.tmdbId}
-                        className="flex-shrink-0 w-16 cursor-pointer"
+                        className="flex-shrink-0 w-16 cursor-pointer rounded-md focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${entry.title}${isSaved ? " (저장됨)" : ""} 상세보기`}
                         onClick={() => handleHistoryClick(entry)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleHistoryClick(entry);
+                          }
+                        }}
                       >
                         <div className="relative w-16 h-24 overflow-hidden rounded-md">
                           {entry.posterUrl ? (
@@ -863,8 +950,11 @@ export default function SavedPage() {
                         <p className="text-xs mt-1 truncate">{entry.title}</p>
                         {!isSaved && (
                           <button
+                            type="button"
                             onClick={(e) => { e.stopPropagation(); handleResave(entry); }}
-                            className="mt-1 w-full py-1 text-xs font-medium active:scale-95 transition-transform rounded-sm"
+                            onKeyDown={(e) => { e.stopPropagation(); }}
+                            aria-label={`${entry.title} 저장`}
+                            className="mt-1 w-full py-1 text-xs font-medium active:scale-95 transition-transform rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                             style={{
                               background: "var(--surface)",
                               color: "var(--text-secondary)",
@@ -967,6 +1057,9 @@ export default function SavedPage() {
         <div
           className="fixed inset-0 z-50 flex items-end justify-center"
           onClick={closeDetail}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${detailItem.recommendation.title} 상세`}
         >
           <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
           <div
@@ -988,7 +1081,9 @@ export default function SavedPage() {
             </div>
 
             <button
-              className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center bg-surface rounded-full"
+              type="button"
+              aria-label="상세 닫기"
+              className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center bg-surface rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               onClick={closeDetail}
             >
               <IconClose size={16} color="var(--text-secondary)" />
@@ -1086,15 +1181,16 @@ export default function SavedPage() {
                       href={ottUrl ?? detailItem.recommendation.watchLink ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md"
+                      aria-label={`${p.name}에서 ${detailItem.recommendation.title} 보기 (새 탭)`}
+                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                     >
                       {(getOTTIcon(p.name) ?? p.logoUrl) ? (
-                        <Image src={(getOTTIcon(p.name) ?? p.logoUrl)!} alt={p.name} width={32} height={32} className="object-contain flex-shrink-0 rounded-sm bg-surface" unoptimized />
+                        <Image src={(getOTTIcon(p.name) ?? p.logoUrl)!} alt="" width={32} height={32} className="object-contain flex-shrink-0 rounded-sm bg-surface" unoptimized />
                       ) : (
                         <div className="w-8 h-8 flex-shrink-0 rounded-sm bg-surface" />
                       )}
                       <span className="flex-1">{p.name}</span>
-                      <span className="text-xs text-accent">열기</span>
+                      <span className="text-xs text-accent" aria-hidden="true">열기</span>
                     </a>
                   );
                 })}
@@ -1103,6 +1199,8 @@ export default function SavedPage() {
             </div>
             {/* 공유 */}
             <button
+              type="button"
+              aria-label={`${detailItem.recommendation.title} 공유하기`}
               onClick={async () => {
                 const rec = detailItem!.recommendation;
                 const shareUrl = `${window.location.origin}/share/${rec.tmdbId}?type=${rec.type}`;
@@ -1114,7 +1212,7 @@ export default function SavedPage() {
                   await navigator.clipboard.writeText(body);
                 }
               }}
-              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-lg"
+              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               style={{ background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)" }}
             >
               <IconShare size={16} color="var(--accent)" />
