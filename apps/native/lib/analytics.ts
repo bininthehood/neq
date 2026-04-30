@@ -103,6 +103,9 @@ export type NekoEvent =
   | 'onboarding_started'
   | 'onboarding_favorite_added'
   | 'onboarding_completed'
+  // Onboarding V2 (D4a, 5단계 라우팅): 단계 진입/완료 추적
+  | 'onboarding_step_viewed'
+  | 'onboarding_step_completed'
   // 추천 로드
   | 'recommendation_loaded'
   | 'recommendation_load_more'

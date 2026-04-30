@@ -7,6 +7,8 @@ import { setFavorites, setFavoritesMeta, getPersonas, addSaved } from "@/lib/sto
 import { usePersona } from "@/contexts/PersonaContext";
 import { track } from "@/lib/analytics";
 import { IconClose, IconCheck } from "@/components/Icons";
+import { isOnboardingV2Enabled } from "@/lib/env";
+import OnboardingV2Controller from "@/components/onboarding/OnboardingV2Controller";
 
 interface SearchResult {
   id: number;
@@ -31,6 +33,15 @@ const FALLBACK_SUGGESTIONS: SearchResult[] = [
 ];
 
 export default function OnboardingPage() {
+  // Onboarding V2 (D4a) — flag ON 시 5단계 라우터로 위임. flag OFF 면 V1 (이하 그대로).
+  // 회귀 0: flag default false → V1 동작 100% 보존.
+  if (isOnboardingV2Enabled()) {
+    return <OnboardingV2Controller />;
+  }
+  return <OnboardingPageV1 />;
+}
+
+function OnboardingPageV1() {
   const router = useRouter();
   const persona = usePersona();
   const [step, setStep] = useState(0);

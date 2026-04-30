@@ -1,0 +1,122 @@
+import { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, Stack } from 'expo-router';
+import { colors } from '../../lib/tokens';
+import { track } from '../../lib/analytics';
+import { getAccountPrefs } from '../../lib/store';
+import StepHeader from '../../components/onboarding/StepHeader';
+import OnboardingStepWelcome from '../../components/onboarding/OnboardingStepWelcome';
+import OnboardingStepHello from '../../components/onboarding/OnboardingStepHello';
+import OnboardingStepTaste from '../../components/onboarding/OnboardingStepTaste';
+import OnboardingStepOTT from '../../components/onboarding/OnboardingStepOTT';
+import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNotify';
+import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
+
+/**
+ * Onboarding V2 (D4a, native) — 5단계 router.
+ *
+ * 단계: welcome → hello → taste → ott → notify → /onboarding/complete
+ *  - 각 단계 진입 시 `onboarding_step_viewed` 발사
+ *  - 각 단계 완료 시 `onboarding_step_completed` (duration_ms)
+ *  - 마지막 단계 완료 시 `onboarding_completed` (전체 duration + 카운트)
+ *
+ * account_prefs 저장은 각 단계 컴포넌트 내부에서 즉시 수행 (사용자 도중 종료해도 보존).
+ *
+ * Q4=A: native Notify 단계 토글은 활성화하되 "iOS 출시 후 활성화" 라벨 + push 발급 X.
+ *
+ * 진입 경로 활성화는 본 위임 영역 외 (별도 위임).
+ *  - 현재 `apps/native/app/_layout.tsx` 는 `Tabs` 만 export 하므로 `/onboarding` 진입은
+ *    `router.push('/onboarding')` 호출 + Stack + (tabs) 그룹 재구조화가 필요.
+ *  - 본 위임은 컴포넌트/라우트 파일만 산출. 진입 활성화는 D5 페르소나 또는 W5 출시 직전.
+ */
+
+export default function OnboardingScreen() {
+  const [step, setStep] = useState(0);
+
+  const startedAtRef = useRef<number>(Date.now());
+  const stepStartRef = useRef<number>(Date.now());
+  const startedTrackedRef = useRef(false);
+  const lastViewedStepRef = useRef<number>(-1);
+
+  useEffect(() => {
+    if (startedTrackedRef.current) return;
+    startedTrackedRef.current = true;
+    track('onboarding_started');
+  }, []);
+
+  useEffect(() => {
+    if (lastViewedStepRef.current === step) return;
+    lastViewedStepRef.current = step;
+    stepStartRef.current = Date.now();
+    track('onboarding_step_viewed', { step: STEP_LABELS[step] as StepKey });
+  }, [step]);
+
+  function goNext(props?: Record<string, string | number | boolean>) {
+    const stepKey = STEP_LABELS[step];
+    const duration = Date.now() - stepStartRef.current;
+    track('onboarding_step_completed', {
+      step: stepKey,
+      duration_ms: duration,
+      ...props,
+    });
+
+    if (step < TOTAL_STEPS - 1) {
+      setStep((s) => s + 1);
+      return;
+    }
+
+    void finalize();
+  }
+
+  function goBack() {
+    if (step === 0) return;
+    setStep((s) => s - 1);
+  }
+
+  async function finalize() {
+    const prefs = await getAccountPrefs();
+    const totalDuration = Date.now() - startedAtRef.current;
+    track('onboarding_completed', {
+      duration_ms: totalDuration,
+      tasteGenres_count: prefs.tasteGenres.length,
+      subscribedOtt_count: prefs.subscribedOtt.length,
+      notify_weekly: prefs.notificationPrefs.weeklyRec,
+      notify_new_release: prefs.notificationPrefs.newRelease,
+      notify_ott_expiry: prefs.notificationPrefs.ottExpiry,
+      notify_monthly_report: prefs.notificationPrefs.monthlyReport,
+    });
+
+    router.replace('/onboarding/complete');
+  }
+
+  return (
+    <>
+      <Stack.Screen options={{ headerShown: false }} />
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StepHeader
+          current={step}
+          total={TOTAL_STEPS}
+          onBack={step > 0 ? goBack : undefined}
+        />
+
+        <View style={styles.body}>
+          {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
+          {step === 1 && (
+            <OnboardingStepHello
+              onNext={(name) => goNext({ has_nickname: name.length > 0 })}
+            />
+          )}
+          {step === 2 && <OnboardingStepTaste onNext={() => goNext()} />}
+          {step === 3 && <OnboardingStepOTT onNext={() => goNext()} />}
+          {step === 4 && <OnboardingStepNotify onNext={() => goNext()} />}
+        </View>
+      </SafeAreaView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  body: { flex: 1 },
+});
