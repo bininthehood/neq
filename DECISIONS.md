@@ -230,6 +230,49 @@ DEVLOG에 분산된 핵심 설계·제품 결정을 한 곳에 정리합니다.
 
 ---
 
+## Domain / UX
+
+### 25. Reaction picker 사용 정책 — 제스처 X / 명시 픽커 ✅ (2026-04-30, Day 26)
+- **결정:** Reaction 4종 (인생작 / 괜찮았어 / 별로였어 / 안 맞았어) 사용 **옵션 C 채택**. 단, **명시 픽커 UI에서만 허용**, 제스처 축에는 절대 부여 금지
+- **근거:**
+  - 사용자 통찰: 좌우 스와이프 = 빠른 탐색 도구, 평가가 인지 부담 ↑. 명시 픽커는 사용자가 의도를 밝히는 진입점이라 평가가 자연스러움
+  - 기존 원칙 (#1 거절 제스처 없음, 메모리 룰 §1.3) **유지** — 제스처 축은 그대로
+  - 메모리 룰 §1.4 확장 패턴 ("스와이프는 명시 액션의 시각적 진입로")의 자연스러운 후속
+  - 디자인 산출물 `motion-demos.jsx #8` Reaction 4종 활용
+- **영향:**
+  - 메모리 `feedback_swipe_ux.md` 업데이트 (제스처 = 액션 / 픽커 = 평가 두 축 분리 원칙 명문화)
+  - 구현은 별도 트랙 (**D14a — DetailSheet 통합 시**) — 본 결정은 정책만 명문화
+  - PostHog 이벤트 신규 (`reaction_picked`) — D14a 진입 시 정의
+  - V1 단계는 reaction 표시 X. V2 (DetailSheet 갱신) 시점에 도입
+- **구현 영역 명시:**
+  - **허용:** DetailSheet (시청 후 또는 시청 의향), 작품 상세 페이지, 시청 후 모달
+  - **금지:** 좌우 스와이프 오버레이, 위·아래 스와이프, 카드 표면 어디든 제스처 트리거
+- **참조:**
+  - `_workspace/d9-extras-pre-tracks.md §2.6` D14 옵션 C
+  - `_workspace/design-handoff/_incoming/neq-design-day25/motion-demos.jsx #8`
+  - DECISIONS.md #1 (거절 제스처 없음 원칙 유지)
+
+### 26. Categories 5→3 매핑 — 음악·책 제거 + show→variety (2026-04-30, Day 26)
+- **결정:** 미디어 카테고리 5종 (movie / series / music / book / show) → **3종 (movie / series / variety)**. 음악·책은 초기 런칭 배제. show → variety rename
+- **근거:**
+  - 사용자 결정: "음악·책은 초기 런칭때는 배제. 컨셉이 흐려질 것 같다" — OTT 추천 제품의 명확한 포커스
+  - 디자인 산출물 `phase2-brief.md §Categories`: 3종만 정의 (movie / series / variety)
+  - TMDB 데이터: movie/tv 만 native 지원. music/book은 처음부터 외부 데이터 통합 필요했지만 V1 미통합
+  - show → variety: TMDB는 reality/talk 도 tv 하위로 분류. variety는 한국 콘텐츠 카테고리 명명 일치
+- **영향:**
+  - `packages/core/src/types.ts` MediaType enum 정리
+  - `packages/core/src/tmdb-mapper.ts` (음악·책 제거)
+  - FilterChips 카테고리 옵션 갱신
+  - 토큰: `cat-music` / `cat-book` 제거, `cat-show` → `cat-variety` rename
+  - PostHog 이벤트 속성 (`media_type` 등) 영향 측정 필요 → D13 위임에서 처리
+  - 기존 사용자 데이터 (만약 music/book 저장 있으면) 마이그레이션 정책 검토
+- **DAU 10K+ 시 재평가 가능:** 음악·책 카테고리 추가 시 별도 데이터 통합 트랙 (TMDB 외 외부 API)
+- **참조:**
+  - `_workspace/d9-extras-pre-tracks.md §2.5` D13 상세
+  - `_workspace/design-handoff/_incoming/neq-design-day25/phase2-brief.md §Categories`
+
+---
+
 ## Appendix: 기각된 대안
 
 | 대안 | 선택 대신 한 것 | 기각 사유 |
@@ -255,3 +298,4 @@ DEVLOG에 분산된 핵심 설계·제품 결정을 한 곳에 정리합니다.
 | 2026-04-29 (Day 23) | #19, #22 | 네이티브 영역 분리 원칙 신규 결정 (#22). #19에 cross-ref 추가. day20-wrap §Stage 2 묶음 분류로 인한 우선순위 혼동 정정 |
 | 2026-04-29 (Day 24) | #23 | 네이티브 알림 architecture 결정: Expo Push 개발 테스트 단계 보류. iOS 출시 후 재검토. PWA Web Push 단일 채널 유지 |
 | 2026-04-30 (Day 26) | #24 | 플랫폼 전환 전략 — 분리 모델 유지 + 4 phase 점진 진화. RNW/풀 네이티브 전면 전환 현 시점 비채택. 출시 후 DAU 데이터 기반 재평가 |
+| 2026-04-30 (Day 26) | #25, #26 | D14 Reaction picker 옵션 C (제스처 X / 픽커 ✅). D13 Categories 5→3 (음악·책 제거 + show→variety) |
