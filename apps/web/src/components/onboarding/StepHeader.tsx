@@ -29,7 +29,7 @@ export default function StepHeader({ current, total, onBack }: StepHeaderProps) 
             type="button"
             onClick={onBack}
             aria-label="이전 단계"
-            className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
             style={{
               background: "var(--surface)",
               border: "1px solid var(--border)",

@@ -160,7 +160,7 @@ export default function OnboardingStepNotify({ onNext }: Props) {
           type="button"
           onClick={submit}
           disabled={submitting}
-          className="w-full py-4 text-base font-semibold rounded-lg transition-transform active:scale-[0.98]"
+          className="w-full py-4 text-base font-semibold rounded-lg transition-transform active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={{
             background: "var(--accent)",
             color: "var(--bg)",

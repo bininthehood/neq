@@ -130,7 +130,7 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
           type="button"
           onClick={submit}
           disabled={!hasValue}
-          className="w-full py-4 text-base font-semibold rounded-lg transition-transform active:scale-[0.98]"
+          className="w-full py-4 text-base font-semibold rounded-lg transition-transform active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={{
             background: hasValue ? "var(--accent)" : "var(--surface-raised)",
             color: hasValue ? "var(--bg)" : "var(--text-muted)",
@@ -142,7 +142,7 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
         <button
           type="button"
           onClick={skip}
-          className="w-full py-3 text-xs"
+          className="w-full py-3 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
           style={{ color: "var(--text-secondary)" }}
         >
           건너뛰기

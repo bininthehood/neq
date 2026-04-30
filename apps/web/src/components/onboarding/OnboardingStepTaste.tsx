@@ -398,7 +398,7 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
           type="button"
           onClick={handleNext}
           disabled={!canNext}
-          className="w-full py-4 text-base font-semibold rounded-lg transition-transform active:scale-[0.98]"
+          className="w-full py-4 text-base font-semibold rounded-lg transition-transform active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={{
             background: canNext ? "var(--accent)" : "var(--surface-raised)",
             color: canNext ? "var(--bg)" : "var(--text-muted)",
