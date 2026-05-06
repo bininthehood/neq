@@ -90,7 +90,7 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
           }}
         >
           <div
-            className="text-[9px] uppercase tracking-[0.1em] mb-1"
+            className="text-xs uppercase tracking-[0.1em] mb-1"
             style={{
               color: "var(--text-muted)",
               fontFamily: "var(--font-data)",
@@ -98,6 +98,8 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
           >
             Name · 이름
           </div>
+          {/* DESIGN.md autoFocus 금지 — 모바일에서 키보드 자동 팝업 방지.
+              사용자가 입력 박스를 직접 탭해서 시작하도록 둠. */}
           <input
             type="text"
             value={name}
@@ -105,7 +107,7 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
             onKeyDown={(e) => { if (e.key === "Enter" && hasValue) submit(); }}
             placeholder="예: 민지"
             maxLength={24}
-            autoFocus
+            aria-label="이름"
             className="w-full bg-transparent border-none outline-none text-lg font-medium p-0"
             style={{ color: "var(--text-primary)" }}
           />

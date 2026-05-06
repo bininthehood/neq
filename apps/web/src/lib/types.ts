@@ -7,6 +7,7 @@ export type {
   WatchReport,
   RecommendFilter,
   WatchFeedback,
+  CastMember,
   SearchResult,
   PersonResult,
   GroupedSearchResponse,

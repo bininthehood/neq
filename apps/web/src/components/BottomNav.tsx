@@ -7,6 +7,8 @@ interface Props {
   active: "discover" | "saved" | "profile";
 }
 
+// 3탭 구조. Search 는 각 페이지 헤더의 search 버튼으로 진입 (페이지별 SearchSheet 자체 마운트).
+// 사용자 cancel 시 그 페이지 컨텍스트 그대로 유지 — 페이지 이동 없이 search 진입/종료 일관.
 const TABS = [
   { key: "discover" as const, href: "/discover", label: "Discover", Icon: IconDiscover, aria: "Discover — 추천 작품 탐색" },
   { key: "saved" as const, href: "/saved", label: "Saved", Icon: IconHeart, aria: "Saved — 저장한 작품" },

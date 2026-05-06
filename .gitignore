@@ -51,3 +51,9 @@ _workspace_*/
 _brand/
 .playwright-mcp/
 .mcp.json
+
+# 디버그용 스크린샷 — repo root 에 누적되지 않도록 무시
+/*.png
+/*.jpg
+/*.jpeg
+/*.zip

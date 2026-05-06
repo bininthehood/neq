@@ -15,21 +15,30 @@ interface UseSwipeGestureParams {
    */
   onSwipeDown?: () => void;
   /**
-   * 위 스와이프 (up) 콜백 — DetailSheet 열기.
+   * DetailSheet 열기 콜백.
+   *
+   * G1-A 결정 (Handoff v2 Phase B): ↑ 스와이프 진입 제거 → **탭 단일 진입**.
+   * prop 이름은 외부 호환성을 위해 `onSwipeUp` 으로 유지하지만, 내부 호출처는
+   * tap 분기 1곳만 남음. dir === 'v' && dragY < -THRESH 분기는 삭제.
+   *
+   * 트리거 컨텍스트 (PostHog source 매핑):
+   *   - 카드 탭 (8px / 300ms 미만 dirLock 미발생) → "card_tap"
+   *   - ActionBar 버튼 → "action_bar"
+   *   - ArrowUp 키보드 → "keyboard"
    */
   onSwipeUp?: () => void;
   onPrevCard?: () => void;
 }
 
 /**
- * 4방향 스와이프 제스처 훅 (Stage 4 D1).
+ * 4방향 스와이프 제스처 훅 (Stage 4 D1, Handoff v2 G1-A 갱신).
  *
  * 디자인 산출물 `_workspace/design-handoff/.../neko-swipe-stack.jsx` 기반:
- *   - TAP = 8px / 300ms 임계 (탭 = DetailSheet 열기 — onSwipeUp 트리거)
- *   - THRESH = 70px (좌/우/위/아래 모두 동일)
+ *   - TAP = 8px / 300ms 임계 (탭 = DetailSheet 열기 — onSwipeUp 콜백)
+ *   - THRESH = 70px (좌/우/아래 동일)
  *   - 좌  = 다음 카드 (nextCard)
  *   - 우  = 이전 카드 오버레이 (prevOverlayX)
- *   - 위  = DetailSheet (onSwipeUp)
+ *   - 위  = (G1-A 이후 비활성) — DetailSheet 진입은 탭/ArrowUp/ActionBar 만
  *   - 아래 = save (onSwipeDown — 트리거 시 카드 흡수 애니메이션)
  *   - dominant axis 락: |dx| > |dy| 면 horizontal, 아니면 vertical
  */
@@ -131,11 +140,12 @@ export function useSwipeGesture({
           setDragY(0);
         }
       } else if (dirLock.current === "v") {
+        // G1-A: ↑ 스와이프 진입 제거 — 위 방향 dragY 추적도 비활성.
+        // dragY 는 아래 방향 (save) 만 추적.
         if (dy > 0) setDragY(Math.min(140, dy));
-        else if (onSwipeUp) setDragY(Math.max(-140, dy));
       }
     },
-    [scrollLocked, filteredLength, topIdx, firstCardHint, onSwipeUp],
+    [scrollLocked, filteredLength, topIdx, firstCardHint],
   );
 
   const onTouchEnd = useCallback(() => {
@@ -163,12 +173,11 @@ export function useSwipeGesture({
     }
 
     if (dir === "v") {
+      // G1-A: 위 방향 진입 제거. 아래 방향 (save) 만 처리.
       if (dragY > SWIPE_THRESHOLD && onSwipeDown) {
-        vibrate(10);
+        // 사이클 2 통일 매핑: swipe-down = light (실제 save haptic medium 은 toggleSave 가 발사)
+        vibrate("light");
         onSwipeDown();
-      } else if (dragY < -SWIPE_THRESHOLD && onSwipeUp) {
-        vibrate(10);
-        onSwipeUp();
       }
       setDragY(0);
     } else if (dir === "h") {
@@ -180,7 +189,8 @@ export function useSwipeGesture({
         if (progress > 0.3) {
           // 30%+ -> land: animate to 0, then switch topIdx
           setPrevOverlayX(0);
-          vibrate(10);
+          // 사이클 2 통일 매핑: prev card 진입 = medium
+          vibrate("medium");
           onPrevCard?.();
           setTimeout(() => {
             setTopIdx((i) => (i > 0 ? i - 1 : filteredLength - 1));
@@ -193,7 +203,8 @@ export function useSwipeGesture({
           setTimeout(() => setPrevOverlayX(null), 300);
         }
       } else if (dragX < -SWIPE_THRESHOLD) {
-        vibrate(10);
+        // 사이클 2 통일 매핑: pass(left swipe) = light
+        vibrate("light");
         nextCard();
       } else {
         setDragX(0);
@@ -212,7 +223,8 @@ export function useSwipeGesture({
     setPrevOverlayX(-w);
     requestAnimationFrame(() => {
       setPrevOverlayX(0);
-      vibrate(10);
+      // 사이클 2 통일 매핑: prev card 진입 = medium
+      vibrate("medium");
       onPrevCard?.();
       const t = setTimeout(() => {
         timersRef.current.delete(t);

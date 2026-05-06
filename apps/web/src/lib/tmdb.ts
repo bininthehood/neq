@@ -171,29 +171,67 @@ export async function getDetails(
   };
 }
 
+/**
+ * 위임 J #4 — getCredits 가 director/cast 의 person id + profile_path 까지 함께 반환.
+ *
+ * 후방 호환:
+ *  - 기존 호출자는 `{ director, cast }` 만 사용해도 됨 (string[]/string|null).
+ *  - DetailSheet/검색 진입 등 신규 사용처는 `directorMember` / `castMembers` 사용.
+ *
+ * TMDB credits 응답 1회 fetch 로 두 형태 모두 동시 매핑 — 추가 API 호출 0.
+ */
 export async function getCredits(
   id: number,
   type: "movie" | "series"
-): Promise<{ director: string | null; cast: string[] }> {
+): Promise<{
+  director: string | null;
+  cast: string[];
+  directorMember: { name: string; tmdbId: number; profileUrl: string | null } | null;
+  castMembers: { name: string; tmdbId: number; profileUrl: string | null }[];
+}> {
   const mediaType = type === "series" ? "tv" : "movie";
   const res = await fetch(
     `${BASE}/${mediaType}/${id}/credits?api_key=${API_KEY}&language=ko-KR`
   );
   const data = await res.json();
 
-  interface CrewMember { name: string; job?: string; department?: string }
-  interface CastMember { name: string }
+  interface CrewMember {
+    id: number;
+    name: string;
+    job?: string;
+    department?: string;
+    profile_path?: string | null;
+  }
+  interface CastMemberRaw {
+    id: number;
+    name: string;
+    profile_path?: string | null;
+  }
 
-  const director =
-    (data.crew ?? []).find((c: CrewMember) => c.job === "Director")?.name ??
-    (data.crew ?? []).find((c: CrewMember) => c.department === "Directing")?.name ??
+  const crew: CrewMember[] = data.crew ?? [];
+  const directorCrew =
+    crew.find((c) => c.job === "Director") ??
+    crew.find((c) => c.department === "Directing") ??
     null;
 
-  const cast = (data.cast ?? [])
-    .slice(0, 4)
-    .map((c: CastMember) => c.name);
+  const director = directorCrew?.name ?? null;
+  const directorMember = directorCrew
+    ? {
+        name: directorCrew.name,
+        tmdbId: directorCrew.id,
+        profileUrl: posterUrl(directorCrew.profile_path ?? null, "w185"),
+      }
+    : null;
 
-  return { director, cast };
+  const castRaw: CastMemberRaw[] = (data.cast ?? []).slice(0, 4);
+  const cast = castRaw.map((c) => c.name);
+  const castMembers = castRaw.map((c) => ({
+    name: c.name,
+    tmdbId: c.id,
+    profileUrl: posterUrl(c.profile_path ?? null, "w185"),
+  }));
+
+  return { director, cast, directorMember, castMembers };
 }
 
 export function posterUrl(path: string | null, size = "w500"): string | null {
@@ -404,6 +442,79 @@ export async function getPersonCredits(
         job: (r.job as string | undefined) ?? undefined,
         department: (r.department as string | undefined) ?? undefined,
       })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TMDB /person/{id}/combined_credits — 인물의 movie + tv 출연/연출 통합.
+ *
+ * 위임 J #2 — SearchSheet 인물 카드 클릭 시 그 사람 작품 리스트 표시용.
+ * single fetch 로 movie/tv 모두 받아 popularity desc 정렬·dedup 가능.
+ *
+ * 응답 cast/crew 의 각 item 은 media_type ('movie' | 'tv') 을 직접 들고 있어
+ * 호출처가 mediaType 결정에 사용 가능 (작품 카드 → hydrate 호출 시 type 매핑).
+ *
+ * 실패/404 시 null 반환 → 라우트 layer 가 빈 배열 응답.
+ */
+export interface TMDBCombinedCreditItem {
+  id: number;
+  title?: string;
+  name?: string;
+  original_title?: string;
+  original_name?: string;
+  media_type: 'movie' | 'tv';
+  poster_path: string | null;
+  vote_average: number;
+  release_date?: string;
+  first_air_date?: string;
+  popularity?: number;
+  job?: string;
+  department?: string;
+  character?: string;
+  // 위임 P #5 (2026-05-02) — 토크쇼/리얼리티 제외 필터, 주연(order 낮음) 우선 정렬에 사용.
+  genre_ids?: number[];
+  vote_count?: number;
+  order?: number;
+}
+
+export async function getPersonCombinedCredits(
+  personId: number,
+): Promise<{ cast: TMDBCombinedCreditItem[]; crew: TMDBCombinedCreditItem[] } | null> {
+  if (!personId || Number.isNaN(personId)) return null;
+  try {
+    const res = await fetch(
+      `${BASE}/person/${personId}/combined_credits?api_key=${API_KEY}&language=ko-KR`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const map = (r: Record<string, unknown>): TMDBCombinedCreditItem => ({
+      id: r.id as number,
+      title: r.title as string | undefined,
+      name: r.name as string | undefined,
+      original_title: r.original_title as string | undefined,
+      original_name: r.original_name as string | undefined,
+      media_type: (r.media_type as 'movie' | 'tv') ?? 'movie',
+      poster_path: (r.poster_path as string | null) ?? null,
+      vote_average: (r.vote_average as number) ?? 0,
+      release_date: r.release_date as string | undefined,
+      first_air_date: r.first_air_date as string | undefined,
+      popularity: r.popularity as number | undefined,
+      job: r.job as string | undefined,
+      department: r.department as string | undefined,
+      character: r.character as string | undefined,
+      // 위임 P #5 — 토크쇼 제외 / 주연 우선 정렬용 추가 필드 (구조적 호환 유지: optional).
+      genre_ids: (r.genre_ids as number[] | undefined) ?? undefined,
+      vote_count: r.vote_count as number | undefined,
+      order: r.order as number | undefined,
+    });
+
+    return {
+      cast: (data.cast ?? []).map(map),
+      crew: (data.crew ?? []).map(map),
     };
   } catch {
     return null;

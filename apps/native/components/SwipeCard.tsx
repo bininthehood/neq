@@ -8,6 +8,7 @@ import Animated, {
   withSpring,
   withTiming,
   Easing,
+  type SharedValue,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
 import { buildMetaInfo, getOTTIcon } from '@neq/core';
@@ -30,6 +31,12 @@ interface Props {
   absorbing?: boolean;
   /** save 버튼 화면 좌표 (절대 위치). 흡수 목표점. 미지정 시 우측하단 기본값. */
   saveTargetPoint?: { x: number; y: number } | null;
+  /**
+   * 사이클 2: pass dismiss worklet 곡선용 sharedValue.
+   * 0 = idle, 음수값 = 좌측 dismiss 진행. 부모(`index.tsx`)에서 `withTiming` 으로 구동.
+   * 지정 시 worklet 안에서 `dragX` 대신 이 값을 사용 (JS state 의존성 제거 → 60fps).
+   */
+  dismissX?: SharedValue<number>;
 }
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -45,6 +52,7 @@ export default function SwipeCard({
   immersive = false,
   absorbing = false,
   saveTargetPoint,
+  dismissX,
 }: Props) {
   const animatedDepth = useSharedValue(depth);
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
@@ -69,13 +77,18 @@ export default function SwipeCard({
     const baseScale = 1 - d * 0.04;
     const yOffset = d * 12;
 
+    // 사이클 2: dismissX worklet 값이 활성화 (≠0) 면 dragX 대신 사용.
+    // dismiss 도중에는 UI 스레드 useSharedValue 만으로 60fps 보간 가능.
+    const dismissActive = dismissX !== undefined && dismissX.value !== 0;
+    const effectiveDragX = dismissActive ? dismissX!.value : dragX;
+
     // Stage 4 D1: 4방향 + save 흡수
     // tx/ty: top 카드만 drag 반영 (좌=다음, 우는 이전 오버레이가 처리, 위=detail, 아래=save 진행)
-    let tx = isTop ? dragX : 0;
+    let tx = isTop ? effectiveDragX : 0;
     // 아래로 끌 때 카드가 살짝 따라감 (0.6 댐핑) — save 진입 신호
     let ty = isTop ? dragY * 0.6 + yOffset : yOffset;
     // 좌 드래그만 회전 (좌=next 시각 신호)
-    let rot = isTop && dragX < 0 ? Math.max(dragX * 0.04, -8) : 0;
+    let rot = isTop && effectiveDragX < 0 ? Math.max(effectiveDragX * 0.04, -8) : 0;
     let scale = baseScale;
     let opacity = 1;
     // 아래 끌 때 살짝 축소 (흡수 예고)

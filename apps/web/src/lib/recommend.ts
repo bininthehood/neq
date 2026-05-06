@@ -174,7 +174,14 @@ interface Candidate {
 interface EnrichedCandidate extends Candidate {
   providers: Array<{ name: string; logoUrl: string | null }>;
   watchLink: string | null;
-  credits: { director: string | null; cast: string[] };
+  // 위임 J #4 — getCredits 가 director/cast 외에 directorMember/castMembers (id+profile)
+  // 까지 동시 반환. tmdb 모듈 반환 시그니처와 일치시킨다.
+  credits: {
+    director: string | null;
+    cast: string[];
+    directorMember: { name: string; tmdbId: number; profileUrl: string | null } | null;
+    castMembers: { name: string; tmdbId: number; profileUrl: string | null }[];
+  };
   details: {
     runtime: number | null;
     seasons: number | null;
@@ -311,6 +318,11 @@ function rowToEnrichedFields(row: TmdbMetadataRow): {
     credits: {
       director: row.director,
       cast: (row.cast_names ?? []).slice(0, 4),
+      // 위임 J #4 — mirror cache (tmdb_metadata) 는 person id/profile_path 미보유.
+      // hydrate 경로(/api/tmdb/hydrate) 또는 enrichCandidates(TMDB credits API) 경로에서만
+      // directorMember/castMembers 가 채워진다. mirror 경로는 null/빈 배열 → DetailSheet 기존 fallback.
+      directorMember: null,
+      castMembers: [],
     },
     details: {
       runtime: row.runtime,
@@ -612,6 +624,10 @@ function buildRecommendationObject(
     watchLink: candidate.watchLink,
     director: candidate.credits.director,
     cast: candidate.credits.cast,
+    // 위임 J #4 — 풍부화된 cast/director (id + profile photo) 패스스루.
+    // EnrichedCandidate.credits 가 항상 두 필드를 함께 가지므로 안전.
+    directorMember: candidate.credits.directorMember,
+    castMembers: candidate.credits.castMembers,
     runtime: candidate.details.runtime,
     seasons: candidate.details.seasons,
     country: candidate.details.country,
@@ -707,12 +723,20 @@ function templateReason(c: EnrichedCandidate): string {
 
 // ---------- Cold Start ----------
 
-/** 취향 수집용 reason — 사용자가 봤을 법한 메가 히트작 */
-function coldStartReason(item: TMDBSimilarItem): string {
-  if (item.vote_average >= 8.5) return "봤다면 하트, 안 봤다면 넘겨주세요";
-  if (item.vote_average >= 8.0) return "이 작품 좋아하세요? 알려주세요";
-  if (item.media_type === "tv") return "이 시리즈 본 적 있나요?";
-  return "마음에 들면 하트를 눌러주세요";
+/**
+ * Cold start reason — favorites 없을 때(LLM 미호출) 카드의 추천 이유.
+ *
+ * 의도: 추천 "이유" 설명 (왜 이 작품이 후보인지). 사용자에게 평가를 요청하는 톤(폐기됨)이 아니라,
+ * `templateReason`과 동일한 톤(작품의 매력 한 가지를 짚는 해요체)으로 통일한다.
+ *
+ * 과거 안: 온보딩 페이지 배제 + 최초 10개 메가 히트작으로 취향 수집.
+ *   → "봤다면 하트, 안 봤다면 넘겨주세요" / "이 작품 좋아하세요? 알려주세요" 등 평가 요청형 카피
+ *   → 온보딩 V2 도입(welcome/hello/taste/ott/notify)으로 폐기. 취향 수집은 onboarding step에서 담당.
+ *
+ * 현재: cold start도 일반 추천과 동일한 "추천 이유 설명" 톤. `templateReason`을 그대로 재사용.
+ */
+function coldStartReason(c: EnrichedCandidate): string {
+  return templateReason(c);
 }
 
 /**
@@ -840,7 +864,7 @@ async function getColdStartRecommendations(
     if (results.length >= 50) break;
     if (usedTitles.has(c.item.title)) continue;
     usedTitles.add(c.item.title);
-    results.push(buildRecommendationObject(c, coldStartReason(c.item)));
+    results.push(buildRecommendationObject(c, coldStartReason(c)));
   }
 
   return results;

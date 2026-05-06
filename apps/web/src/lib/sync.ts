@@ -112,6 +112,10 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
         metadata: {
           director: s.recommendation.director,
           cast: s.recommendation.cast,
+          // 위임 J #4 — Cast 영역 인물 사진 영속화 (saved → reload 시 사진 유지).
+          // 기존 row.metadata 에 director/cast 만 있던 항목은 castMembers undefined → 클라이언트 fallback.
+          directorMember: s.recommendation.directorMember ?? null,
+          castMembers: s.recommendation.castMembers ?? [],
           runtime: s.recommendation.runtime,
           seasons: s.recommendation.seasons,
           country: s.recommendation.country,
@@ -264,6 +268,9 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
           watchLink: null,
           director: row.metadata?.director ?? null,
           cast: row.metadata?.cast ?? [],
+          // 위임 J #4 — saved 다시 읽을 때 인물 사진 복원. 구버전 row 는 undefined → 빈값.
+          directorMember: row.metadata?.directorMember ?? null,
+          castMembers: row.metadata?.castMembers ?? [],
           runtime: row.metadata?.runtime ?? null,
           seasons: row.metadata?.seasons ?? null,
           country: row.metadata?.country ?? [],

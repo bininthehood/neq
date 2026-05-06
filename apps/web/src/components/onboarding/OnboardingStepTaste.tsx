@@ -124,9 +124,9 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
   const canNext = enoughGenres && enoughFavorites;
 
   const ctaLabel = (() => {
-    if (!enoughGenres && !enoughFavorites) return "장르 3개, 작품 3개 이상 골라 주세요";
-    if (!enoughGenres) return `장르 ${MIN_GENRES - genres.size}개 더 골라 주세요`;
-    if (!enoughFavorites) return `작품 ${MIN_FAVORITES - selected.length}개 더 골라 주세요`;
+    if (!enoughGenres && !enoughFavorites) return "장르 3개, 작품 3개 이상";
+    if (!enoughGenres) return `장르 ${MIN_GENRES - genres.size}개만 더`;
+    if (!enoughFavorites) return `작품 ${MIN_FAVORITES - selected.length}개만 더`;
     return "다음";
   })();
 
@@ -182,7 +182,10 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
             <p
               className="text-[11px] tabular-nums"
               style={{
-                color: enoughGenres ? "var(--accent)" : "var(--text-muted)",
+                // 2026-05-02 amber 누적 분배 정책: 카운터 amber → primary semibold.
+                // 진행 상태는 색이 아니라 가중치로 표현.
+                color: enoughGenres ? "var(--text-primary)" : "var(--text-muted)",
+                fontWeight: enoughGenres ? 600 : 400,
                 fontFamily: "var(--font-data)",
               }}
             >
@@ -225,7 +228,9 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
             <p
               className="text-[11px] tabular-nums"
               style={{
-                color: enoughFavorites ? "var(--accent)" : "var(--text-muted)",
+                // 2026-05-02 amber 누적 분배 정책: 카운터 amber → primary semibold.
+                color: enoughFavorites ? "var(--text-primary)" : "var(--text-muted)",
+                fontWeight: enoughFavorites ? 600 : 400,
                 fontFamily: "var(--font-data)",
               }}
             >

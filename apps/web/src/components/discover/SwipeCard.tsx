@@ -1,11 +1,10 @@
 "use client";
 
 import { useRef } from "react";
-import NextImage from "next/image";
 import type { Recommendation } from "@/lib/types";
-import { IconStar } from "@/components/Icons";
-import { getOTTIcon } from "@/lib/ott-links";
 import { easings, durations, cubicBezierCss } from "@neq/design";
+import CardVariantA from "@/components/cards/CardVariantA";
+import { mapRecToWork } from "@/components/cards/types";
 
 interface SwipeCardProps {
   rec: Recommendation;
@@ -47,11 +46,16 @@ export default function SwipeCard({
   absorbing = false,
   absorbDelta,
   onCardTap,
-  metaInfo,
+  metaInfo: _metaInfo,
 }: SwipeCardProps) {
   const pointerStartRef = useRef({ x: 0, y: 0 });
   const scaleVal = 1 - depth * 0.04;
   const yOffset = depth * 12;
+
+  // GH-1 #4: variant picker 제거 — 항상 CardVariantA 시각 적용 (사용자 결정).
+  // B/C 컴포넌트는 코드 보존 (백업) 하지만 호출하지 않음.
+  // 외부 transform 컨테이너(absorb/drag 모션)는 그대로 유지하고 inner 시각은 A 풀블리드.
+  const variantWork = mapRecToWork(rec);
 
   const absorbActive = absorbing && isTop;
   const absorbTx = absorbDelta?.tx ?? 0;
@@ -86,6 +90,9 @@ export default function SwipeCard({
 
   return (
     <div
+      // 사용자 직접 테스트 #6 — hero morph origin 측정용 마커.
+      // top 카드만 morph 시작점이 됨. querySelector('[data-swipe-card-top]') 로 호출처 접근.
+      data-swipe-card-top={isTop ? "true" : undefined}
       className="absolute overflow-hidden will-change-transform"
       style={{
         top: immersive ? "-12px" : 0,
@@ -100,20 +107,15 @@ export default function SwipeCard({
         transformOrigin: "center center",
       }}
     >
-      {rec.posterUrl ? (
-        <NextImage
-          src={rec.posterUrl}
-          alt={rec.title}
-          fill
-          className="object-cover object-top"
-          sizes="(max-width: 480px) 90vw, 400px"
-          priority={isTop}
+      {/* GH-1 #4: 항상 CardVariantA 풀블리드. 자체 시각으로 타이틀/이유/OTT/카테고리/평점 모두 제공. */}
+      <div className="absolute inset-0">
+        <CardVariantA
+          work={variantWork}
+          w="100%"
+          h="100%"
+          fullbleed={immersive}
         />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center bg-surface">
-          <span className="font-display text-5xl text-muted">N</span>
-        </div>
-      )}
+      </div>
 
       {/* Tap area - pointer-based tap detection (drag-safe) */}
       {isTop && (
@@ -128,64 +130,6 @@ export default function SwipeCard({
             if (dx < 10 && dy < 10 && !swiping) onCardTap();
           }}
         />
-      )}
-
-      {/* Info overlay: render for depth 0 and 1, fade in when becoming top, hide in immersive */}
-      {depth <= 1 && (
-        <div
-          style={{
-            opacity: isTop && !immersive ? 1 : 0,
-            transition: "opacity 0.25s ease-out",
-            pointerEvents: isTop && !immersive ? "auto" : "none",
-          }}
-        >
-          <div className="absolute top-4 right-4 backdrop-blur-sm px-3 py-1.5 flex items-center gap-1.5 z-10 bg-overlay rounded-md">
-            <IconStar size={13} color="var(--accent)" />
-            <span className="font-data font-semibold text-accent">
-              {rec.rating.toFixed(1)}
-            </span>
-          </div>
-          <div className="absolute top-4 left-4 backdrop-blur-sm px-3 py-1.5 text-sm z-10 bg-overlay rounded-md">
-            {rec.type === "series" ? "시리즈" : "영화"}
-          </div>
-          <div
-            className="absolute bottom-0 left-0 right-0 p-5 pt-16 z-10"
-            style={{
-              background:
-                "linear-gradient(transparent, var(--bg-overlay-heavy) 40%, var(--bg))",
-              pointerEvents: "none",
-            }}
-          >
-            <h2 className="font-display text-3xl font-bold">{rec.title}</h2>
-            <div className="flex items-center gap-2 mt-1.5">
-              {metaInfo && (
-                <span className="text-xs text-muted">{metaInfo}</span>
-              )}
-              <div className="flex gap-1 items-center">
-                {rec.providers.slice(0, 4).map((p) => {
-                  const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
-                  return iconSrc ? (
-                    <NextImage
-                      key={p.name}
-                      src={iconSrc}
-                      alt={p.name}
-                      width={24}
-                      height={24}
-                      className="object-contain rounded-sm"
-                      unoptimized
-                    />
-                  ) : null;
-                })}
-              </div>
-            </div>
-            <div
-              className="mt-2 px-2.5 py-1.5 text-sm text-secondary"
-              style={{ background: "var(--accent-dim)", borderRadius: "var(--radius-sm)", borderLeft: "2px solid var(--accent)" }}
-            >
-              {rec.reason}
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

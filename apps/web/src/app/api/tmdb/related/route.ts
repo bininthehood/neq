@@ -3,6 +3,7 @@ import {
   getCollection,
   getPersonCredits,
   getRelatedSeeds,
+  getTMDBRecommendations,
   posterUrl,
 } from "@/lib/tmdb";
 import type { RelatedWork, RelatedWorksResponse } from "@neq/core";
@@ -13,14 +14,20 @@ import type { RelatedWork, RelatedWorksResponse } from "@neq/core";
  * GET /api/tmdb/related?work_id={id}&type={movie|series}
  *
  * 1) /movie/{id} 에서 belongs_to_collection.id 추출 + /credits 에서 감독 person id 추출 (병렬)
- * 2) collectionId 있으면 /collection/{id} 호출, directorId 있으면 /person/{id}/movie_credits|tv_credits 호출 (병렬)
+ * 2) collectionId 있으면 /collection/{id}, directorId 있으면 /person/{id}/movie_credits|tv_credits,
+ *    /movie|tv/{id}/recommendations — 3건 모두 병렬 호출 (위 단계와는 직렬)
  * 3) collection.parts 에서 자기 자신 제외
- * 4) directorWorks 는 crew[job=Director] 만 필터, 자기 자신 제외, popularity desc 정렬, top 12
+ * 4) directorWorks 는 crew[job=Director] 만 필터, 자기 자신/collection 중복 제외, popularity desc 정렬, top 12
+ * 5) recommendations 는 자기 자신/collection/directorWorks 중복 제외, popularity desc 정렬, top 8
  *
  * 응답 — RelatedWorksResponse:
- *   { collection: { id, name, works[] } | null, directorWorks: [...], directorName: string | null }
+ *   { collection, recommendations, directorWorks, directorName }
  *
  * 실패/빈 결과 graceful: 빈 응답 (200) 반환 → 클라이언트가 섹션 숨김.
+ *
+ * 사용자 직접 테스트 #4 — collection 없는 작품도 recommendations 가 채워주므로
+ * "관련 작품 비어있음" 케이스가 거의 사라진다 (예: 반지의 제왕 → 호빗 시리즈 (collection),
+ * 인터스텔라 → 그래비티/마션 (recommendations)).
  *
  * 옵션 A (직접 호출) 채택. 미러 보강(belongs_to_collection_id 컬럼)은 latency 모니터링 후 별도 결정.
  */
@@ -39,10 +46,12 @@ export async function GET(req: NextRequest) {
   // Step 1: 작품 메타에서 collectionId / directorId 동시 추출
   const seeds = await getRelatedSeeds(id, type);
 
-  // Step 2: collection + person credits 병렬 호출
-  const [collectionRes, creditsRes] = await Promise.all([
+  // Step 2: collection + person credits + recommendations 병렬 호출
+  // recommendations 는 seeds 와 무관 (work id 만 필요) 이지만 동일 단계에 묶어 latency 최소화.
+  const [collectionRes, creditsRes, recsRes] = await Promise.all([
     seeds.collectionId ? getCollection(seeds.collectionId) : Promise.resolve(null),
     seeds.directorId ? getPersonCredits(seeds.directorId, type) : Promise.resolve(null),
+    getTMDBRecommendations(id, type).catch(() => []),
   ]);
 
   // Step 3: collection.parts → RelatedWork[] 변환 + 자기 자신 제외
@@ -68,7 +77,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Step 4: 감독 작품 — crew 에서 job=Director 만, 자기 자신 제외, popularity desc, top 12
+  // Step 4: 감독 작품 — crew 에서 job=Director 만, 자기 자신/collection 중복 제외, popularity desc, top 12
   let directorWorks: RelatedWork[] = [];
   if (creditsRes) {
     const directed = creditsRes.crew.filter(
@@ -93,8 +102,39 @@ export async function GET(req: NextRequest) {
       }));
   }
 
+  // Step 5: TMDB recommendations — 자기 자신 + collection + directorWorks 모두 중복 제외, popularity desc, top 8
+  // posterUrl 없는 작품은 카로셀 fallback 으로 처리되지만, 가시 품질을 위해 우선순위 떨어뜨릴 수 있음.
+  // 현재는 popularity desc 만 적용 (TMDB 가 이미 큐레이션된 결과를 반환).
+  let recommendations: RelatedWork[] = [];
+  if (Array.isArray(recsRes) && recsRes.length > 0) {
+    const excluded = new Set<number>([id]);
+    if (collection) {
+      for (const w of collection.works) excluded.add(w.id);
+    }
+    for (const w of directorWorks) excluded.add(w.id);
+
+    const dedupMap = new Map<number, (typeof recsRes)[number]>();
+    for (const r of recsRes) {
+      if (excluded.has(r.id)) continue;
+      if (!dedupMap.has(r.id)) dedupMap.set(r.id, r);
+    }
+
+    recommendations = Array.from(dedupMap.values())
+      .sort((a, b) => (b.popularity ?? 0) - (a.popularity ?? 0))
+      .slice(0, 8)
+      .map((r) => ({
+        id: r.id,
+        title: r.title,
+        posterUrl: posterUrl(r.poster_path, "w185"),
+        year: extractYear(r.release_date, r.first_air_date),
+        // /movie/.../recommendations 는 movie, /tv/.../recommendations 는 tv 만 반환.
+        mediaType: type === "series" ? ("tv" as const) : ("movie" as const),
+      }));
+  }
+
   const body: RelatedWorksResponse = {
     collection,
+    recommendations,
     directorWorks,
     directorName: seeds.directorName,
   };

@@ -30,8 +30,12 @@ interface LoadingScreenProps extends FilterChipsPassthrough {
 export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
+      {/* 위임 R #1 (2026-05-02) — 페르소나 전환 시 로고 깜빡임 회귀 수정.
+          discover/page.tsx 헤더는 <img src="/neq-logo.png" /> 로고를 쓰는데
+          여기서만 텍스트 로고("neq,")라 페르소나 전환 → loadRecs() 로딩 진입 순간
+          이미지→텍스트로 변하며 깜빡임. 동일 이미지 로고로 통일. */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">neq,</span>
+        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
@@ -42,13 +46,22 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
           aria-label="추천을 준비하고 있어요"
         />
         <NeqSpinner size="lg" label="추천 로딩 중" />
+        {/* D7 / Round 3 v2 — L-01 말줄임 제거, accent 강조 */}
         <p
           className="text-sm text-center"
           style={{ color: "var(--text-secondary)" }}
         >
-          {filterLabel
-            ? `${filterLabel} 추천을 찾고 있어요`
-            : "오늘의 한 편을 골라드릴게요"}
+          {filterLabel ? (
+            <>
+              {filterLabel}{" "}
+              <span style={{ color: "var(--accent)" }}>고르는 중</span>
+            </>
+          ) : (
+            <>
+              오늘의 한 편,{" "}
+              <span style={{ color: "var(--accent)" }}>고르는 중</span>
+            </>
+          )}
         </p>
       </div>
       <BottomNav active="discover" />
@@ -68,20 +81,32 @@ interface ErrorScreenProps extends FilterChipsPassthrough {
 export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
+      {/* 위임 R #1 — discover/page.tsx 헤더와 동일 이미지 로고 (회귀 방지) */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">neq,</span>
+        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex flex-col items-center justify-center px-8 gap-5 text-center">
         <Illust name="error" style="editorial" size="lg" aria-label="오류 발생" />
         <div>
-          <p className="font-display text-lg font-semibold">잠시 문제가 생겼어요</p>
+          {/* D7 / Round 3 v2 — N-03 title 유지, N-04 body 정렬 */}
+          <p className="font-display text-lg font-semibold">신호가 흐릿해요.</p>
           <p
-            className="text-sm mt-1.5"
+            className="text-sm mt-1.5 leading-relaxed"
             style={{ color: "var(--text-secondary)" }}
           >
-            {error}
+            잠시 숨 고르고 다시 와 주세요.
+            <br />
+            대부분 그새 풀려 있어요.
           </p>
+          {error && error !== "신호가 흐릿해요." && (
+            <p
+              className="text-xs mt-3 font-data tracking-wider uppercase"
+              style={{ color: "var(--text-muted)", letterSpacing: "0.15em" }}
+            >
+              err · {error.length > 32 ? "network_unavailable" : error}
+            </p>
+          )}
         </div>
         <Button variant="secondary" size="md" onClick={onRetry}>
           다시 시도
@@ -121,22 +146,24 @@ export function EmptyScreen({
     ? "emptyDiscover"
     : "noResults";
 
+  // D7 / Round 3 v2 — 필터 빈 결과는 Saved 의 S-02/S-04 톤 일치
   const headline = isColdFilterTooNarrow
     ? "조건이 너무 좁아요"
     : hasFilter
-      ? "이 필터에 맞는 작품이 없어요"
+      ? "이 조건엔 아무것도"
       : "추천할 작품이 부족해요";
 
   const sub = isColdFilterTooNarrow
-    ? "먼저 전체 필터로 작품을 둘러보고 취향을 알려주세요"
+    ? "먼저 전체 필터로 둘러보고 취향을 알려 주세요"
     : hasFilter
-      ? "다른 필터를 시도해보세요"
-      : "잠시 후 다시 시도해주세요";
+      ? "필터를 조금만 느슨해 보세요"
+      : "잠시 후 다시 시도해 주세요";
 
   return (
     <div className="h-dvh flex flex-col">
+      {/* 위임 R #1 — discover/page.tsx 헤더와 동일 이미지 로고 (회귀 방지) */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">neq,</span>
+        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex flex-col items-center justify-center px-8 gap-5 text-center">

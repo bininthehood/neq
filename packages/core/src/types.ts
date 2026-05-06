@@ -10,6 +10,25 @@ export interface TMDBResult {
   genre_ids?: number[];
 }
 
+/**
+ * Cast / Director 의 풍부화된 형태 — TMDB credits 의 person id, profile_path 까지 보유.
+ *
+ * 사용자 직접 테스트 위임 J #4 — DetailSheet Cast 영역에 실제 인물 사진을 표시하기 위해
+ * 기존 `cast: string[]` / `director: string | null` 옆에 optional 로 추가.
+ *
+ * - tmdbId: TMDB person id. /person/{id} endpoint, 검색 진입 등에 활용.
+ * - profileUrl: TMDB profile_path 기반 URL (w185). 사진 미보유 시 null → 이니셜 fallback.
+ * - name: TMDB 가 ko-KR 우선 반환 (없으면 원어).
+ *
+ * sync.ts(supabase saved_items.metadata) / recommend.ts / persons-helpers.ts 등 기존
+ * `cast: string[]` 의존 코드는 변경 없음. 새 필드는 hydrate / recommend 신규 경로에서만 채워진다.
+ */
+export interface CastMember {
+  name: string;
+  tmdbId: number;
+  profileUrl: string | null;
+}
+
 export interface Recommendation {
   title: string;
   titleEn: string;
@@ -25,6 +44,17 @@ export interface Recommendation {
   watchLink: string | null;
   director: string | null;
   cast: string[];
+  /**
+   * 위임 J #4 — 풍부화된 감독 정보 (id + profile photo).
+   * 기존 `director: string | null` 와 동시에 채워진다 (string 은 호환용).
+   * 미존재 시 null/undefined → DetailSheet 가 기존 이니셜 fallback 사용.
+   */
+  directorMember?: CastMember | null;
+  /**
+   * 위임 J #4 — 풍부화된 캐스트 배열 (각 항목 id + profile photo).
+   * 기존 `cast: string[]` 와 동시에 채워진다. 길이/순서는 cast 배열과 일치 (top 4).
+   */
+  castMembers?: CastMember[];
   runtime: number | null;
   seasons: number | null;
   country: string[];
@@ -97,11 +127,20 @@ export interface RelatedWorksCollection {
  * /api/tmdb/related 응답 형식.
  *
  * - collection: 시리즈/프랜차이즈 (movie 의 belongs_to_collection 유효 시). 없으면 null
+ * - recommendations: TMDB /recommendations 결과 — 사용자 행동 기반 비슷한 작품
+ *   (자기 자신, collection, directorWorks 와 dedup. popularity desc 정렬, 최대 8개)
  * - directorWorks: 감독 다른 작품 (popularity desc, 자기 자신 제외, 최대 12개)
  * - directorName: 디스플레이용 (있으면 헤더 "OOO 감독의 다른 작품")
+ *
+ * UI 표시 우선순위 — 사용자 직접 테스트 #4:
+ *   1) collection (예: 반지의 제왕 → 호빗 시리즈 같은 프랜차이즈, 가장 가까운 관계)
+ *   2) recommendations (TMDB 사용자 행동 기반 비슷한 작품)
+ *   3) directorWorks (감독 다른 작품)
+ * 빈 배열은 호출처가 섹션 자체 hidden 처리.
  */
 export interface RelatedWorksResponse {
   collection: RelatedWorksCollection | null;
+  recommendations: RelatedWork[];
   directorWorks: RelatedWork[];
   directorName: string | null;
 }

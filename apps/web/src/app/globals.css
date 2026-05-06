@@ -66,8 +66,10 @@
 
   /* Typography — Stage 4 D1 fontsV2 전환:
      display: Instrument Serif (← Fraunces), data: Geist Mono (← Outfit)
-     body: Pretendard Variable (변경 없음) */
-  --font-display: var(--font-instrument-serif), Georgia, serif;
+     body: Pretendard Variable (변경 없음)
+     한글 fallback: 'Noto Serif KR' — CardVariantB 의 reason 인용구 등 디스플레이 세리프
+     렌더 시 한글이 Pretendard 로 떨어지는 회귀 방지 (tokens.css 와 정렬). */
+  --font-display: var(--font-instrument-serif), Georgia, 'Noto Serif KR', serif;
   --font-body: 'Pretendard Variable', Pretendard, -apple-system, sans-serif;
   --font-data: var(--font-geist-mono), 'SF Mono', Menlo, monospace;
 }
@@ -197,6 +199,15 @@ body::after {
   animation: slideDown 0.25s ease-in forwards;
 }
 
+/* DetailSheet morph (D3 — Handoff v2) — 카드 → 시트 단일 transform 보간.
+   easing/duration 은 핸드오프 정량 (450ms enter / 350ms exit) 그대로.
+   카드 위치/크기에서 시트 위치/크기로 translate 만으로 morph 표현 (FLIP simplified). */
+:root {
+  --ease-detail-morph: cubic-bezier(0.32, 0.72, 0.24, 1);
+  --duration-detail-enter: 450ms;
+  --duration-detail-exit: 350ms;
+}
+
 /* Card enter animations */
 @keyframes enterFromLeft {
   from { transform: translateX(-120%) rotate(-5deg); opacity: 0; }
@@ -208,6 +219,23 @@ body::after {
 }
 .animate-enter-left { animation: enterFromLeft 0.3s ease-out; }
 .animate-enter-right { animation: enterFromRight 0.3s ease-out; }
+
+/* Tab transition — Phase 4 Full Prototype 명세 (translateX 40px + opacity, 280ms detail-morph easing).
+   디자인 핸드오프: _workspace/.../Phase 4 - Full Prototype.html L356~364.
+   사용처: app/template.tsx — Discover ↔ Saved ↔ Profile 라우트 전환.
+   방향은 sessionStorage("neq:lastTabIdx") 로 직전 탭 인덱스 추적 후 결정.
+   회귀 #1 (위임 M, 2026-05-02): template.tsx 의 useEffect 가드가 매 remount 마다 첫 mount 분기로
+   빠져 클래스 미적용. render 시점에 prev 읽고 effect 로 갱신하는 패턴으로 수정. */
+@keyframes tabSlideInRight {
+  from { transform: translateX(40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes tabSlideInLeft {
+  from { transform: translateX(-40px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-tab-slide-right { animation: tabSlideInRight 280ms var(--ease-detail-morph); }
+.animate-tab-slide-left  { animation: tabSlideInLeft 280ms var(--ease-detail-morph); }
 
 /* Loading spinner */
 @keyframes spin {

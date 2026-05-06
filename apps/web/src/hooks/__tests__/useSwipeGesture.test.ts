@@ -3,12 +3,16 @@
  *
  * 검증 범위 (swipe-stack.jsx 패턴 — `decideSwipe` 순수 함수):
  *  - 탭 판정: |dx|<8 ∧ |dy|<8 ∧ dt<300 → "tap" (DetailSheet 열림 트리거)
- *  - 위 스와이프: dy<-70 (dominant vertical) → "up" (DetailSheet)
+ *  - 위 스와이프: dy<-70 (dominant vertical) → "up" (분류만; G1-A 이후 hook 에서 미사용)
  *  - 아래 스와이프: dy>70 (dominant vertical) → "down" (save 트리거)
  *  - 좌 스와이프: dx<-70 (dominant horizontal) → "left" (nextCard)
  *  - 우 스와이프: dx>70 (dominant horizontal) → "right" (이전 카드 오버레이)
  *  - 임계 미만 → "none" (snap back)
  *  - tap 우선: dt<300 + 미세 이동 → "tap" (방향 판정 우회)
+ *
+ * 주의: G1-A 결정 (Handoff v2 Phase B) 이후 ↑ 스와이프 진입은 제거됐지만,
+ *      `decideSwipe` 순수 분류기는 분류 결과 자체로 유효하므로 'up' 케이스를 보존.
+ *      실제 hook 처리부 (onTouchEnd) 에서는 dragY < -THRESH 분기를 삭제했음.
  *
  * 순수 함수로 분리해 React mount 없이 검증 — 모노레포 호이스트 React 버전 충돌 회피.
  */

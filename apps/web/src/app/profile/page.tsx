@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, startTransition } from "react";
+import { useState, useEffect, useRef, useCallback, startTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -13,7 +13,9 @@ import { getDeviceId } from "@/lib/device-id";
 import { track } from "@/lib/analytics";
 import { usePersona } from "@/contexts/PersonaContext";
 import BottomNav from "@/components/BottomNav";
-import { IconClose, IconCheck } from "@/components/Icons";
+import { IconClose, IconCheck, IconSearch } from "@/components/Icons";
+import SearchSheet from "@/components/discover/SearchSheet";
+import { useDetailSheet } from "@/hooks/useDetailSheet";
 
 interface MiniSearchResult {
   id: number;
@@ -34,13 +36,115 @@ const MINI_FALLBACK: MiniSearchResult[] = [
   { id: 680, title: "펄프 픽션", posterUrl: "https://image.tmdb.org/t/p/w200/d5iIlFn5s0ImszYzBPb8JPIfbXD.jpg", year: "1994" },
 ];
 
+// ──────────────────────────────────────────────────────
+// D6 helpers — 실제 데이터 기반 분포 계산 (mock 금지)
+// ──────────────────────────────────────────────────────
+interface DistributionRow {
+  label: string;
+  value: number; // 0-100
+  count: number;
+  color: string;
+}
+
+/** type (movie/series) 비중 */
+function calcTypeDistribution(
+  saved: ReturnType<typeof getSaved>,
+): DistributionRow[] {
+  if (saved.length === 0) return [];
+  let movie = 0;
+  let series = 0;
+  for (const s of saved) {
+    if (s.recommendation.type === "movie") movie += 1;
+    else if (s.recommendation.type === "series") series += 1;
+  }
+  const total = movie + series;
+  if (total === 0) return [];
+  return [
+    {
+      label: "영화",
+      value: Math.round((movie / total) * 100),
+      count: movie,
+      color: "var(--accent)",
+    },
+    {
+      label: "시리즈",
+      value: Math.round((series / total) * 100),
+      count: series,
+      color: "#9B8AE0",
+    },
+  ];
+}
+
+/** OTT(provider) 분포 — 상위 5개 */
+function calcOTTDistribution(
+  saved: ReturnType<typeof getSaved>,
+): DistributionRow[] {
+  if (saved.length === 0) return [];
+  const counts = new Map<string, number>();
+  for (const s of saved) {
+    const providers = s.recommendation.providers ?? [];
+    if (providers.length === 0) continue;
+    // 첫 provider 만 카운트 (mood 그룹과 일치)
+    const name = providers[0].name;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  if (counts.size === 0) return [];
+  const max = Math.max(...counts.values());
+  const palette = ["var(--accent)", "#9B8AE0", "#E08A6C", "#7BA08A", "#5B9BC4"];
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, count], i) => ({
+      label,
+      value: Math.round((count / max) * 100),
+      count,
+      color: palette[i] ?? "var(--text-muted)",
+    }));
+}
+
+/** 월별 시청 — 최근 12개월, 시청 리포트 reportedAt 기반 */
+function calcMonthlyWatch(reports: ReturnType<typeof getWatchReports>): {
+  buckets: { month: string; count: number; isCurrent: boolean }[];
+  total: number;
+} {
+  const now = new Date();
+  const buckets: { month: string; count: number; isCurrent: boolean }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      month: String(d.getMonth() + 1),
+      count: 0,
+      isCurrent: i === 0,
+    });
+  }
+  for (const r of reports) {
+    const reported = new Date(r.reportedAt);
+    const monthsAgo =
+      (now.getFullYear() - reported.getFullYear()) * 12 +
+      (now.getMonth() - reported.getMonth());
+    if (monthsAgo >= 0 && monthsAgo <= 11) {
+      const idx = 11 - monthsAgo;
+      buckets[idx].count += 1;
+    }
+  }
+  return {
+    buckets,
+    total: buckets.reduce((s, b) => s + b.count, 0),
+  };
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const persona = usePersona();
+  // 헤더 search 버튼 → SearchSheet 자체 마운트. cancel 시 Profile 페이지 그대로 유지.
+  const searchSheet = useDetailSheet();
+  const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
   const [mounted, setMounted] = useState(false);
   const [tasteItems, setTasteItems] = useState<string[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
+  const [savedRaw, setSavedRaw] = useState<ReturnType<typeof getSaved>>([]);
+  const [reportsRaw, setReportsRaw] = useState<ReturnType<typeof getWatchReports>>([]);
   const [deviceId, setDeviceId] = useState("");
   const [toast, setToast] = useState<{ kind: "ok" | "error"; msg: string } | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -63,6 +167,8 @@ export default function ProfilePage() {
     startTransition(() => {
       const savedItems = getSaved();
       const reports = getWatchReports();
+      setSavedRaw(savedItems);
+      setReportsRaw(reports);
       setSavedCount(savedItems.length);
       setStats(getWatchStats());
       // 취향 프로필: loved/good 작품 타이틀 (최근 순)
@@ -77,6 +183,11 @@ export default function ProfilePage() {
       setTasteItems(lovedGood);
     });
   };
+
+  // D6 — 분포 메모 (계산 비용 ↓)
+  const typeDist = useMemo(() => calcTypeDistribution(savedRaw), [savedRaw]);
+  const ottDist = useMemo(() => calcOTTDistribution(savedRaw), [savedRaw]);
+  const monthly = useMemo(() => calcMonthlyWatch(reportsRaw), [reportsRaw]);
 
   const miniSearch = useCallback(async (q: string) => {
     if (q.length < 1) { setMiniResults([]); return; }
@@ -166,9 +277,32 @@ export default function ProfilePage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 pt-6 pb-4 shrink-0">
-        <h1 className="font-display text-2xl font-bold">Profile</h1>
+      {/* Header — Discover 와 동일한 좁은 height (h-12 = 48px) 패턴. */}
+      <div className="flex items-center justify-between px-5 h-12 shrink-0">
+        <h1
+          className="font-display"
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            color: "var(--text-primary)",
+            lineHeight: 1,
+          }}
+        >
+          Profile
+        </h1>
+        <button
+          type="button"
+          onClick={() => {
+            track("search_opened");
+            setSearchInitialQuery("");
+            searchSheet.openDetail();
+          }}
+          aria-label="검색 열기"
+          className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
+        >
+          <IconSearch size={18} color="var(--text-muted)" />
+        </button>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -278,19 +412,161 @@ export default function ProfilePage() {
             className="p-4 bg-surface rounded-lg"
             style={{ boxShadow: "var(--shadow-sm)" }}
           >
-            <div className="font-data text-2xl font-bold text-accent">{stats.total}</div>
+            <div className="font-data text-2xl font-bold">{stats.total}</div>
             <div className="text-xs text-muted mt-1">시청 리포트</div>
           </div>
         </div>
         {stats.total > 0 && (
           <div className="flex gap-4 mt-3 text-xs">
-            {stats.loved > 0 && <span className="text-accent">인생작 {stats.loved}</span>}
+            {stats.loved > 0 && <span className="text-secondary">인생작 {stats.loved}</span>}
             {stats.good > 0 && <span className="text-secondary">재밌었어 {stats.good}</span>}
             {stats.meh > 0 && <span className="text-muted">그저 그래 {stats.meh}</span>}
             {stats.dropped > 0 && <span className="text-danger">포기 {stats.dropped}</span>}
           </div>
         )}
       </section>
+
+      {/* D6 — 작품 비중 (실제 saved 데이터 기반) */}
+      {typeDist.length > 0 && (
+        <section
+          className="px-5 mb-6 pt-5"
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
+        >
+          <div
+            className="font-data text-[10px] font-medium uppercase mb-3"
+            style={{ color: "var(--text-secondary)", letterSpacing: "0.12em" }}
+          >
+            Library · 작품 비중
+          </div>
+          <div className="space-y-1">
+            {typeDist.map((row) => (
+              <div key={row.label} className="flex items-center gap-2.5 py-1">
+                <div className="w-12 text-xs" style={{ color: "var(--text-primary)" }}>
+                  {row.label}
+                </div>
+                <div
+                  className="flex-1 h-1.5 overflow-hidden rounded-sm"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <div
+                    className="h-full rounded-sm transition-[width] duration-500"
+                    style={{
+                      width: `${row.value}%`,
+                      background: row.color,
+                      transitionTimingFunction: "cubic-bezier(0.16,1,0.3,1)",
+                    }}
+                  />
+                </div>
+                <div
+                  className="w-10 text-right font-data text-[10px]"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {row.value}%
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* D6 — OTT 분포 (상위 5) */}
+      {ottDist.length > 0 && (
+        <section
+          className="px-5 mb-6 pt-5"
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
+        >
+          <div
+            className="font-data text-[10px] font-medium uppercase mb-3"
+            style={{ color: "var(--text-secondary)", letterSpacing: "0.12em" }}
+          >
+            Channels · 자주 모인 OTT
+          </div>
+          <div className="space-y-1">
+            {ottDist.map((row) => (
+              <div key={row.label} className="flex items-center gap-2.5 py-1">
+                <div
+                  className="w-16 text-xs truncate"
+                  style={{ color: "var(--text-primary)" }}
+                  title={row.label}
+                >
+                  {row.label}
+                </div>
+                <div
+                  className="flex-1 h-1.5 overflow-hidden rounded-sm"
+                  style={{ background: "var(--surface)" }}
+                >
+                  <div
+                    className="h-full rounded-sm transition-[width] duration-500"
+                    style={{
+                      width: `${row.value}%`,
+                      background: row.color,
+                      transitionTimingFunction: "cubic-bezier(0.16,1,0.3,1)",
+                    }}
+                  />
+                </div>
+                <div
+                  className="w-8 text-right font-data text-[10px]"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  {row.count}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* D6 — 월별 시청 (실제 reportedAt 기반, 최근 12개월) */}
+      {monthly.total > 0 && (
+        <section
+          className="px-5 mb-6 pt-5"
+          style={{ borderTop: "1px solid var(--border-subtle)" }}
+        >
+          <div
+            className="font-data text-[10px] font-medium uppercase mb-3"
+            style={{ color: "var(--text-secondary)", letterSpacing: "0.12em" }}
+          >
+            {new Date().getFullYear()} · 월간 시청
+          </div>
+          <div className="flex items-end gap-1.5 h-20 mb-2">
+            {monthly.buckets.map((b, i) => {
+              const max = Math.max(...monthly.buckets.map((x) => x.count), 1);
+              const h = (b.count / max) * 100;
+              return (
+                <div
+                  key={i}
+                  className="flex-1 flex flex-col items-center gap-1"
+                  title={`${b.month}월 · ${b.count}편`}
+                >
+                  <div
+                    className="w-full rounded-sm"
+                    style={{
+                      height: `${Math.max(h, 4)}%`,
+                      background: b.isCurrent
+                        ? "var(--accent)"
+                        : "var(--accent-dim)",
+                      transition: "height 0.5s cubic-bezier(0.16,1,0.3,1)",
+                    }}
+                  />
+                  <div
+                    className="font-data text-[9px]"
+                    style={{
+                      color: b.isCurrent ? "var(--accent)" : "var(--text-muted)",
+                    }}
+                  >
+                    {b.month}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted leading-relaxed">
+            {new Date().getFullYear()}년 · 총{" "}
+            <span className="text-accent font-semibold">{monthly.total}편</span>{" "}
+            시청 기록
+          </p>
+        </section>
+      )}
 
       {/* 설정 */}
       <section className="px-5 mb-6">
@@ -354,7 +630,7 @@ export default function ProfilePage() {
             <div className="flex gap-2 mt-5">
               <button
                 onClick={() => setConfirmReset(false)}
-                className="flex-1 py-3 text-sm bg-surface rounded-lg text-secondary"
+                className="flex-1 py-3 min-h-[44px] text-sm bg-surface rounded-lg text-secondary"
               >
                 취소
               </button>
@@ -493,7 +769,7 @@ export default function ProfilePage() {
                   <button
                     onClick={fetchMiniTrending}
                     disabled={miniLoadingSuggestions}
-                    className="w-full mt-3 py-2 text-xs font-medium transition-colors disabled:opacity-30 text-muted active:scale-[0.98]"
+                    className="w-full mt-3 py-2 min-h-[44px] text-xs font-medium transition-colors disabled:opacity-30 text-muted active:scale-[0.98]"
                   >
                     {miniLoadingSuggestions ? "로딩..." : "다른 작품 보기"}
                   </button>
@@ -544,6 +820,19 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* SearchSheet — Profile 페이지 자체 마운트. 헤더 search 버튼으로 진입. */}
+      <SearchSheet
+        show={searchSheet.showDetail}
+        sheetY={searchSheet.detailY}
+        animating={searchSheet.detailAnimating}
+        bodyRef={searchSheet.detailBodyRef}
+        onClose={searchSheet.closeDetail}
+        onTouchStart={searchSheet.onDetailTouchStart}
+        onTouchMove={searchSheet.onDetailTouchMove}
+        onTouchEnd={searchSheet.onDetailTouchEnd}
+        initialQuery={searchInitialQuery}
+      />
 
       <BottomNav active="profile" />
     </div>

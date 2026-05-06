@@ -75,6 +75,8 @@ async function hydrate(
         watchLink: null,
         director: credits.director,
         cast: credits.cast,
+        directorMember: credits.directorMember,
+        castMembers: credits.castMembers,
         runtime: details.runtime,
         seasons: details.seasons,
         country: details.country,

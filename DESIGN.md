@@ -21,12 +21,21 @@
 4. 센터 정렬 일변도 (모든 헤딩, 설명, 카드가 text-align: center)
 5. 그라디언트 버튼
 6. `border-left: Npx solid accent` 스타일 인용 블록 (AI가 좋아하는 패턴)
+   - 예외 1: CardVariantB pull-quote 한정 (2026-05-02 Decisions Log).
+   - 예외 2: DetailSheet/Saved reason 인용구 한정 (2026-05-02 amber 누적 분배 정책 — 면 → 선 전환). 다른 컴포넌트 복제 금지.
 7. 에모지를 디자인 요소로 사용 (텍스트/아이콘으로 대체)
 8. `text-[10px]` 이하 폰트 사이즈. 최소 xs=11px.
+   - 예외: Geist Mono uppercase + letter-spacing 0.12em 이상 컨텍스트는 10px 허용 (잡지 eyebrow / 챕터 마크 / tech tag 톤).
 9. 장식용 blob, 물결 SVG 디바이더
 10. "Welcome to X", "Unlock the power of..." 류 제네릭 카피
 11. 스카이 블루 액센트 (Discord/Linear 기본 링크 느낌)
 12. 쿨 톤 다크 + 블루 조합 (개발자 도구 클리셰)
+13. amber accent 누적 과부하 (한 화면에 amber 토큰 5개 이상 동시 노출 금지)
+    - 카운트 규칙: 항상 동시에 보이는 amber 사용처를 1건으로 셈. focus-visible / transient overlay(toast, CoachMark) / CTA Save(브랜드 닻)는 카운트 제외.
+    - ChapterMark 위계: 시트/페이지의 첫 ChapterMark 1개만 amber, 나머지는 `text-secondary` (uppercase + 0.12em tracking 유지).
+    - reason 박스: 면(`bg-accent-dim`) 금지 → 선(`borderLeft 2px solid var(--accent-border)`) 강조 (anti-slop #6 예외 2 패턴).
+    - 통계 숫자: 한 그룹당 1개만 amber, 나머지는 primary.
+    - 보조 액션(공유, OTT "열기" 텍스트, Tonight 화살표 등) amber 금지 — 가중치/형태로 위계 표현.
 
 ## Typography
 - **Display/Hero:** Fraunces (optical size, weight 700-900) — 율동적인 세리프. 영화 타이틀, "오늘 뭐 볼까?" 같은 헤드라인에 사용.
@@ -188,3 +197,7 @@
 | 2026-04-07 | 디자인 시스템 고도화 | overlay 토큰 체계, 반응형 전략, 접근성 규칙, anti-slop 보강 |
 | 2026-04-15 | Quiet Ink로 전환 | Warm Cinema 완전 탈피. 4인 디자인 팀(brand/ui/motion/critic) 순차 작업 |
 | 2026-04-15 | C안 확정: 앰버 골드 + A안 폰트 | 크리틱 권고 반영. 블루→앰버(경쟁사 차별화), Fraunces 유지(개성) |
+| 2026-05-02 | anti-slop #6 예외 1건 (CardVariantB pull-quote) | borderLeft 2px solid accent를 reason 인용구에 한정 사용. variant B의 Typography-led 디자인 언어 정체성. 다른 컴포넌트 복제 금지. |
+| 2026-05-02 | DetailSheet morph ease 별도 컨텍스트 추가 | iOS sheet present 톤 위해 cubic-bezier(0.32, 0.72, 0.24, 1) 추가. 450/350ms enter/exit. 기존 motion 5종과 분리. |
+| 2026-05-02 | anti-slop #8 예외: Geist Mono uppercase 0.12em+ 10px 허용 | 잡지 eyebrow / 챕터 마크 / tech tag 톤. Profile chaptermark 4건, error.tsx eyebrow/tech tag, OfflineBanner retry CTA에 적용. uppercase + tracking으로 가독성 보전. |
+| 2026-05-02 | amber accent 누적 분배 정책 | DetailSheet/Profile에서 amber 동시 출현 9-10건 발견 → 한 화면 ≤ 4 정책. ChapterMark 첫 1개만 amber, 나머지 text-secondary uppercase 0.12em. reason 박스는 bg-accent-dim 면 → borderLeft accent 선(anti-slop #6 예외 2 추가). focus-visible / transient overlay / CTA Save는 카운트 제외. anti-slop #13 신규. |

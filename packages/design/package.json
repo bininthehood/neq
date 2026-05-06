@@ -9,5 +9,8 @@
     "./tokens": "./src/tokens.ts",
     "./tokens.css": "./src/tokens.css"
   },
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
   "license": "UNLICENSED"
 }

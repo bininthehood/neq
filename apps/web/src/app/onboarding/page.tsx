@@ -144,22 +144,24 @@ function OnboardingPageV1() {
         </p>
 
         <div className="w-full max-w-[320px] mt-12 space-y-3">
+          {/* 2026-05-02 amber 누적 분배 정책: 단계 숫자 amber 3개 동시 노출 → secondary.
+              위계는 font-display 크기로 충분. legacy 라우트라 v2 마이그레이션 후 제거 예정. */}
           <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
-            <span className="font-display text-xl text-accent shrink-0">1</span>
+            <span className="font-display text-xl text-secondary shrink-0">1</span>
             <div>
               <div className="text-sm font-semibold">좋아하는 작품 3개</div>
               <div className="text-xs mt-0.5 text-muted">당신의 취향을 알려주세요</div>
             </div>
           </div>
           <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
-            <span className="font-display text-xl text-accent shrink-0">2</span>
+            <span className="font-display text-xl text-secondary shrink-0">2</span>
             <div>
               <div className="text-sm font-semibold">숨겨진 명작 발견</div>
               <div className="text-xs mt-0.5 text-muted">알고리즘 밖의 작품을 큐레이션해요</div>
             </div>
           </div>
           <div className="flex items-start gap-3 px-4 py-3 bg-surface rounded-lg">
-            <span className="font-display text-xl text-accent shrink-0">3</span>
+            <span className="font-display text-xl text-secondary shrink-0">3</span>
             <div>
               <div className="text-sm font-semibold">하트로 저장</div>
               <div className="text-xs mt-0.5 text-muted">마음에 드는 작품을 모아보세요</div>

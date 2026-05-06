@@ -72,9 +72,16 @@ const CLOSE_THRESHOLD = SHEET_MAX_HEIGHT * 0.3;
 interface Props {
   visible: boolean;
   onClose: () => void;
+  /**
+   * 위임 O #1.2 — DetailSheet Cast 클릭 진입용.
+   * sheet 가 visible=true 로 전이될 때 query 에 자동 주입 + 즉시 검색 발사.
+   * 빈 문자열은 무시. 이전 검색 잔해 제거를 원하면 부모가 빈 문자열로 reset.
+   * (web `apps/web/src/components/discover/SearchSheet.tsx` initialQuery prop 동등.)
+   */
+  initialQuery?: string;
 }
 
-export default function SearchSheet({ visible, onClose }: Props) {
+export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
   const [query, setQuery] = useState('');
   const [data, setData] = useState<GroupedSearchResponse | null>(null);
   const [isFetching, setIsFetching] = useState(false);
@@ -174,6 +181,21 @@ export default function SearchSheet({ visible, onClose }: Props) {
       setHasError(false);
     }
   }, [visible, translateY]);
+
+  // 위임 O #1.2 — initialQuery 자동 주입.
+  // visible=true 전이 시 또는 visible 한 상태에서 initialQuery 가 바뀌면
+  // query state 채우고 즉시 search 호출. 빈 문자열은 무시.
+  // (web SearchSheet 의 initialQuery effect 와 동등.)
+  useEffect(() => {
+    if (!visible) return;
+    if (!initialQuery || initialQuery.trim().length === 0) return;
+    const q = initialQuery.trim();
+    setQuery(q);
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    void search(q);
+    // visible / initialQuery 변경 시에만 — search 는 stable callback.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialQuery]);
 
   // pan-down 으로 sheet 닫기
   const pan = Gesture.Pan()

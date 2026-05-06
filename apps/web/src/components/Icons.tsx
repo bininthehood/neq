@@ -118,6 +118,32 @@ export function IconHeart({ size = 20, color = "currentColor", className }: Icon
   );
 }
 
+/**
+ * 위임 L #6 — Saved 뷰 모드 토글 아이콘.
+ * IconGrid: 2×2 정사각 (Grid 모드)
+ * IconList: 가로 줄 3개 (List 모드)
+ */
+export function IconGrid({ size = 16, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="square" className={className}>
+      <rect x="2" y="2" width="5" height="5" />
+      <rect x="9" y="2" width="5" height="5" />
+      <rect x="2" y="9" width="5" height="5" />
+      <rect x="9" y="9" width="5" height="5" />
+    </svg>
+  );
+}
+
+export function IconList({ size = 16, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="square" className={className}>
+      <line x1="2.5" y1="3.5" x2="13.5" y2="3.5" />
+      <line x1="2.5" y1="8" x2="13.5" y2="8" />
+      <line x1="2.5" y1="12.5" x2="13.5" y2="12.5" />
+    </svg>
+  );
+}
+
 export function IconFilm({ size = 40, color = "currentColor", className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>

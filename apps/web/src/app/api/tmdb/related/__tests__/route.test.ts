@@ -11,6 +11,8 @@
  *  7) collection 과 directorWorks 중복 제거 (동일 작품 양쪽 등장 시 directorWorks 에서 제거)
  *  8) series(type=series) → /tv/{id} + person tv_credits 사용. collection 항상 null
  *  9) TMDB 4xx/5xx 모두 graceful → 빈 응답 (200) 반환
+ *  10) 사용자 직접 테스트 #4 — recommendations 필드 매핑 + popularity desc + top 8 컷
+ *  11) recommendations 가 collection/directorWorks 와 dedup (양쪽 등장 작품 제거)
  *
  * 모킹 패턴은 /api/search route 테스트와 동일 — fetchMock + vi.resetModules.
  */
@@ -263,7 +265,150 @@ describe("GET /api/tmdb/related", () => {
     const res = await GET(makeReq("work_id=999&type=movie"));
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body).toEqual({ collection: null, directorWorks: [], directorName: null });
+    expect(body).toEqual({
+      collection: null,
+      recommendations: [],
+      directorWorks: [],
+      directorName: null,
+    });
+  });
+
+  it("사용자 직접 테스트 #4 — recommendations 매핑 + popularity desc + top 8 컷", async () => {
+    // collection 없는 영화에 recommendations 만 가득 → 8개 컷 + popularity 내림차순
+    const recs = Array.from({ length: 15 }, (_, i) => ({
+      id: 5000 + i,
+      title: `비슷한작품${i}`,
+      poster_path: `/r${i}.jpg`,
+      release_date: "2018-01-01",
+      popularity: i, // 0~14
+    }));
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/movie/2000?")) {
+        return mockOk({ id: 2000, belongs_to_collection: null });
+      }
+      if (url.includes("/movie/2000/credits")) {
+        return mockOk({ crew: [] }); // 감독 없음 → directorWorks 비움
+      }
+      if (url.includes("/movie/2000/recommendations")) {
+        return mockOk({ results: recs });
+      }
+      return mockFail(404);
+    });
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=2000&type=movie"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.collection).toBeNull();
+    expect(body.directorWorks).toEqual([]);
+    expect(body.recommendations).toHaveLength(8);
+    // 가장 인기 높은 popularity=14 → id=5014
+    expect(body.recommendations[0]).toMatchObject({
+      id: 5014,
+      title: "비슷한작품14",
+      year: "2018",
+      mediaType: "movie",
+    });
+    expect(body.recommendations[0].posterUrl).toContain("w185");
+    expect(body.recommendations[0].posterUrl).toContain("/r14.jpg");
+    // 마지막 (8번째) — popularity=7
+    expect(body.recommendations[7].id).toBe(5007);
+  });
+
+  it("recommendations 가 collection/directorWorks 와 중복 제거", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/movie/3000?")) {
+        return mockOk({
+          id: 3000,
+          belongs_to_collection: { id: 2999, name: "테스트 시리즈" },
+        });
+      }
+      if (url.includes("/movie/3000/credits")) {
+        return mockOk({
+          crew: [{ id: 8888, name: "감독X", job: "Director" }],
+        });
+      }
+      if (url.includes("/collection/2999")) {
+        return mockOk({
+          id: 2999,
+          name: "테스트 시리즈",
+          parts: [
+            { id: 3000, title: "본편", release_date: "2010-01-01" },
+            { id: 3001, title: "후속편", release_date: "2012-01-01", poster_path: "/x.jpg" },
+          ] as PartRaw[],
+        });
+      }
+      if (url.includes("/person/8888/movie_credits")) {
+        return mockOk({
+          cast: [],
+          crew: [
+            { id: 4000, title: "감독다른작품", job: "Director", popularity: 50 },
+          ] as CrewMemberRaw[],
+        });
+      }
+      if (url.includes("/movie/3000/recommendations")) {
+        return mockOk({
+          results: [
+            { id: 3001, title: "후속편(중복)", popularity: 100 }, // collection 중복 → 제거
+            { id: 4000, title: "감독다른작품(중복)", popularity: 90 }, // directorWorks 중복 → 제거
+            { id: 5555, title: "유니크추천", popularity: 80, poster_path: "/u.jpg", release_date: "2020-05-05" },
+            { id: 3000, title: "자기자신(중복)", popularity: 70 }, // 자기 자신 → 제거
+          ],
+        });
+      }
+      return mockFail(404);
+    });
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=3000&type=movie"));
+    const body = await res.json();
+
+    expect(body.collection).not.toBeNull();
+    expect(body.collection.works).toHaveLength(1);
+    expect(body.collection.works[0].id).toBe(3001);
+    expect(body.directorWorks).toHaveLength(1);
+    expect(body.directorWorks[0].id).toBe(4000);
+    // recommendations — 자기 자신/collection/directorWorks 모두 dedup → 유니크만 남음
+    expect(body.recommendations).toHaveLength(1);
+    expect(body.recommendations[0]).toMatchObject({
+      id: 5555,
+      title: "유니크추천",
+      year: "2020",
+    });
+  });
+
+  it("series(type=series) recommendations: tv mediaType 으로 매핑", async () => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/tv/600?")) {
+        return mockOk({ id: 600 });
+      }
+      if (url.includes("/tv/600/credits")) {
+        return mockOk({ crew: [] });
+      }
+      if (url.includes("/tv/600/recommendations")) {
+        return mockOk({
+          results: [
+            { id: 6001, name: "비슷한시리즈", popularity: 30, first_air_date: "2021-09-01", poster_path: "/s.jpg" },
+          ],
+        });
+      }
+      return mockFail(404);
+    });
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=600&type=series"));
+    const body = await res.json();
+
+    expect(body.collection).toBeNull();
+    expect(body.recommendations).toHaveLength(1);
+    expect(body.recommendations[0]).toMatchObject({
+      id: 6001,
+      title: "비슷한시리즈",
+      year: "2021",
+      mediaType: "tv",
+    });
   });
 
   it("collection 있고 director 없음 (TV 시리즈 직접 detail 의 director 미지정 등)", async () => {

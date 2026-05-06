@@ -1,6 +1,7 @@
 export type {
   TMDBResult,
   Recommendation,
+  CastMember,
   SavedItem,
   WatchReaction,
   WatchReport,

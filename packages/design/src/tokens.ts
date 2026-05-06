@@ -179,6 +179,12 @@ export const easings = {
   move: [0.45, 0, 0.55, 1] as const,         // 대칭 가속-감속. 위치 이동, 레이아웃 변경
   spring: [0.34, 1.3, 0.64, 1] as const,     // 미세 오버슈트 30%. 카드 스냅백, 제스처 릴리즈
   soft: [0.4, 0, 0.2, 1] as const,           // Material standard. opacity, 색상, 미세 변화
+  /**
+   * DetailSheet morph 전용 (Handoff v2 D3, Phase C 정합).
+   * web globals.css `--ease-detail-morph` + apps/web `useDetailSheet.DETAIL_EASE` 와 동일.
+   * 네이티브는 spring 으로 흉내내지 말고 이 곡선 그대로 사용 — 인지 100% 정합.
+   */
+  detailMorph: [0.32, 0.72, 0.24, 1] as const,
 } as const;
 
 /**
@@ -190,6 +196,24 @@ export const durations = {
   moderate: 250,  // 페이드, 토스트, 오버레이
   steady: 350,    // 바텀시트, 카드 스냅백
   slow: 500,      // 풀스크린, 온보딩 스텝
+  /**
+   * DetailSheet morph 전용 (Handoff v2 D3, Phase C 정합).
+   * web `DETAIL_ENTER_MS=450 / DETAIL_EXIT_MS=350` 와 동일.
+   * native 의 spring 모델 (damping 20 / stiffness 160) 은 ~280ms 인지 — 100ms+ 차이.
+   * Easing.bezier + withTiming 으로 web 과 정확 일치시킴.
+   */
+  detailEnter: 450,
+  detailExit: 350,
+  /**
+   * Swipe dismiss 콜백 타이밍 (사이클 2 단일화).
+   *  - save 480ms — `feedback_swipe_ux.md` 잠금. 카드 흡수 + 다음 카드 advance.
+   *  - pass 360ms — 좌 스와이프 dismiss + 다음 카드 advance.
+   *
+   * web `apps/web/src/hooks/useRecommendations` (nextCard 콜백) 과 native
+   * `apps/native/app/index.tsx` (`PASS_DISMISS_MS`, `SAVE_ABSORB_MS`) 양쪽에서 사용.
+   */
+  swipeSaveDismiss: 480,
+  swipePassDismiss: 360,
 } as const;
 
 // 헬퍼: 웹 CSS string

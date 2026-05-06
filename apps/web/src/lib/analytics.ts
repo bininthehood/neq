@@ -103,6 +103,14 @@ export type NekoEvent =
   | "search_voice_started"
   | "search_voice_completed"
   | "search_voice_error"
+  // 위임 J — Cast / Person 검색 통합
+  | "detail_cast_clicked"
+  | "detail_to_search_person"
+  | "search_person_selected"
+  | "search_person_work_clicked"
+  | "discover_open_with_q"
+  // 위임 L #6 — Saved 뷰 모드 토글
+  | "saved_view_changed"
   // 프로필
   | "profile_viewed"
   | "data_reset"

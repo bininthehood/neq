@@ -28,6 +28,10 @@ export function getOpenaiApiKey(): string {
 // 모두 NEXT_PUBLIC_* 라 client/server 양쪽에서 평가 가능.
 // 기본값 false. 'true' 문자열일 때만 활성.
 // 스펙: _workspace/onboarding-v2-spec.md §5
+//
+// ⚠️ ONBOARDING_V2 만 예외 — 사용자 직접 테스트 (2026-05-02) 후
+// default ON 으로 전환. NEXT_PUBLIC_ONBOARDING_V2 === "0" 으로 명시
+// OFF 했을 때만 V1 폴백. V1 코드(OnboardingPageV1)는 보존 — 롤백용.
 // ─────────────────────────────────────────────
 
 function readFlag(name: string): boolean {
@@ -51,7 +55,9 @@ function readFlag(name: string): boolean {
 }
 
 export function isOnboardingV2Enabled(): boolean {
-  return readFlag("NEXT_PUBLIC_ONBOARDING_V2");
+  // default ON 정책 (2026-05-02). 명시적 "0" 만 V1 폴백.
+  // (다른 readFlag 들과 의미가 반대라 별도 로직.)
+  return process.env.NEXT_PUBLIC_ONBOARDING_V2 !== "0";
 }
 
 export function isTasteGenresEnabled(): boolean {

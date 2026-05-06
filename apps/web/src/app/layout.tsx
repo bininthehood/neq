@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import InstallBanner from "@/components/InstallBanner";
 import Reminder from "@/components/Reminder";
+import OfflineBanner from "@/components/OfflineBanner";
 import PostHogProvider from "@/components/PostHogProvider";
 import { PersonaProvider } from "@/contexts/PersonaContext";
 import { ToastProvider } from "@neq/design";
@@ -107,7 +108,10 @@ export default function RootLayout({
         <PostHogProvider>
           <PersonaProvider>
             <ToastProvider>
-              <div className="h-dvh flex flex-col">{children}</div>
+              <div className="h-dvh flex flex-col">
+                <OfflineBanner />
+                {children}
+              </div>
             </ToastProvider>
           </PersonaProvider>
           <InstallBanner />

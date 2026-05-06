@@ -14,6 +14,7 @@ import Animated, {
   useSharedValue,
   runOnJS,
   withTiming,
+  Easing,
 } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -41,12 +42,31 @@ import type {
   FilterYear,
 } from '../lib/types';
 import { colors, spacing } from '../lib/tokens';
-import { fonts } from '@neq/design';
+import { fonts, easings, durations } from '@neq/design';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// Stage 4 D1 (swipe-stack.jsx): THRESH=70, TAP=8/300ms — 4방향 + tap
+// Stage 4 D1 (swipe-stack.jsx) / G1-A (Handoff v2 Phase B+C):
+// THRESH=70, TAP=8/300ms — 좌(next)/우(prev overlay)/아래(save). ↑ 진입 제거 → 탭 단일 진입.
+//
+// 사이클 2 단일화: 콜백 타이밍은 `@neq/design` durations.swipeSaveDismiss / swipePassDismiss.
+// (feedback_swipe_ux.md 잠금: save 480ms / pass 360ms)
 const SWIPE_THRESHOLD = 70;
 const PREV_OVERLAY_TRIGGER = 0.3;
+const PASS_DISMISS_MS = durations.swipePassDismiss; // 360
+const SAVE_ABSORB_MS = durations.swipeSaveDismiss; // 480
+
+/**
+ * 사이클 2 worklet화: pass dismiss 시각 곡선.
+ *
+ * 기존: `setDragX(-SCREEN_WIDTH)` JS 스레드 setState → RN bridge → 다음 frame 적용
+ *       → 60fps 보장 어려움. qa-tester 평가에서 web CSS transition 보다 떨림 보고됨.
+ *
+ * 신규: `useSharedValue` + `withTiming(target, { easing })` 으로 UI 스레드 worklet 구동.
+ *       - duration: 360ms (durations.swipePassDismiss)
+ *       - easing: Easing.bezier(...easings.exit) — 점점 빨라지며 퇴장 (`[0.5, 0, 0.75, 0]`)
+ *       - 종료 콜백에서 runOnJS 로 nextCard 호출 + sharedValue 리셋
+ */
+const PASS_DISMISS_BEZIER = Easing.bezier(...easings.exit);
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -87,9 +107,15 @@ export default function DiscoverScreen() {
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
 
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
+  // 사이클 2: pass dismiss worklet 곡선용 sharedValue.
+  // 0 = idle, 음수값 = 좌측 dismiss 진행. SwipeCard 가 dragX 대신 이 값을 사용.
+  const dismissX = useSharedValue(0);
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // 위임 O #1.2 — DetailSheet Cast 클릭 시 SearchSheet 진입용 initialQuery.
+  // 빈 문자열 = 일반 검색 진입 (잔해 제거). 인물 이름 = Cast 클릭 진입.
+  const [searchInitialQuery, setSearchInitialQuery] = useState('');
   const [immersive, setImmersive] = useState(false);
 
   const load = useCallback(
@@ -230,8 +256,17 @@ export default function DiscoverScreen() {
   const currentRec = recs[topIdx];
   const prevRec = topIdx > 0 ? recs[topIdx - 1] : null;
 
+  /**
+   * 사이클 2 통일 매핑 (web `vibrate(...)` 와 인지 강도 정합):
+   *   - light  : pass(left swipe), tap, rewind/refresh — web vibrate('light')=8ms
+   *   - medium : save 흡수, prev card 진입             — web vibrate('medium')=14ms
+   *   - heavy  : 오류 (현재 미사용)                    — web vibrate('heavy')=24ms
+   */
   function hapticLight() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  }
+  function hapticMedium() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }
 
   function toNext() {
@@ -239,8 +274,49 @@ export default function DiscoverScreen() {
     setTopIdx((i) => Math.min(i + 1, recs.length));
   }
 
-  function toPrev() {
+  /**
+   * 사이클 2 worklet화 — pass dismiss 시각 곡선.
+   *
+   * 기존 (JS state setter):
+   *   setDragX(-SCREEN_WIDTH) 1회 호출 → React re-render → SwipeCard 의 useAnimatedStyle
+   *   re-evaluate. 변위가 한 step 으로 점프하기 때문에 RN 측 자체 transition 이 없어
+   *   사용자 인지에 "스냅" 처럼 느껴짐. qa-tester P1.
+   *
+   * 신규 (Reanimated 3 worklet):
+   *   `dismissX.value = withTiming(-SCREEN_WIDTH, { duration: 360, easing })`
+   *   UI 스레드에서 보간 — 60fps 보장. 종료 콜백에서 `runOnJS(advance)` 로 topIdx
+   *   증가 + dismissX 0 으로 리셋.
+   *
+   * 정량: durations.swipePassDismiss=360ms, easings.exit (점점 빨라지며 퇴장).
+   */
+  function advancePassIndex() {
+    setTopIdx((i) => Math.min(i + 1, recs.length));
+  }
+  function dismissThenNext() {
+    if (!recs[topIdx]) return;
+    // 사이클 2 통일 매핑: pass = light
     hapticLight();
+    setIsDragging(false);
+    setDragX(0);
+    setDragY(0);
+    // worklet 곡선 시작. 종료 후 runOnJS 콜백으로 advance + 리셋.
+    dismissX.value = withTiming(
+      -SCREEN_WIDTH,
+      { duration: PASS_DISMISS_MS, easing: PASS_DISMISS_BEZIER },
+      (finished) => {
+        'worklet';
+        if (finished) {
+          runOnJS(advancePassIndex)();
+          // 다음 카드 위에서 dismissX 가 0 이어야 정상 위치 — 즉시 리셋.
+          dismissX.value = 0;
+        }
+      },
+    );
+  }
+
+  function toPrev() {
+    // 사이클 2 통일 매핑: prev card 진입 = medium (web vibrate('medium')=14ms 와 정합)
+    hapticMedium();
     setTopIdx((i) => Math.max(i - 1, 0));
   }
 
@@ -263,7 +339,8 @@ export default function DiscoverScreen() {
       });
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    // 사이클 2 통일 매핑: save 액션 = medium (web vibrate('medium')=14ms 와 정합)
+    hapticMedium();
 
     if (alreadySaved) {
       // unsave: 흡수 모션 없음
@@ -297,7 +374,7 @@ export default function DiscoverScreen() {
       setTopIdx((i) => Math.min(i + 1, recs.length));
       setDragX(0);
       setDragY(0);
-    }, 480);
+    }, SAVE_ABSORB_MS);
   }
 
   async function toggleLike() {
@@ -320,26 +397,27 @@ export default function DiscoverScreen() {
     load(filter);
   }
 
-  // Stage 4 D1: 탭 = DetailSheet 열기 (swipe-stack.jsx 패턴 — 8px/300ms)
-  // 기존 immersive 토글은 ActionBar 의 ⓘ 버튼 또는 위 스와이프 / 탭 → detail 로 통일
-  const tap = Gesture.Tap()
-    .maxDuration(300)
-    .maxDistance(8)
-    .onStart(() => {
-      runOnJS(setDetailOpen)(true);
-    });
-
-  // 위 스와이프 트래킹용 헬퍼 (worklet 외부)
-  function handleSwipeUp() {
+  // Stage 4 D1 / G1-A (Handoff v2 Phase B+C): 탭 = DetailSheet 단일 진입.
+  // 8px / 300ms 미만 = 탭 → DetailSheet. ↑ 스와이프 진입은 제거됨.
+  // 탭 source 는 PostHog 매핑 일관 — "card_tap".
+  function handleCardTap() {
     if (currentRec) {
-      track('card_swiped', {
-        direction: 'up',
+      track('detail_opened', {
         tmdb_id: currentRec.tmdbId,
         title: currentRec.title,
+        providers_count: currentRec.providers.length,
+        source: 'card_tap',
       });
     }
     setDetailOpen(true);
   }
+
+  const tap = Gesture.Tap()
+    .maxDuration(300)
+    .maxDistance(8)
+    .onStart(() => {
+      runOnJS(handleCardTap)();
+    });
 
   function handleSwipeDown() {
     if (currentRec) {
@@ -360,7 +438,7 @@ export default function DiscoverScreen() {
         title: currentRec.title,
       });
     }
-    toNext();
+    dismissThenNext();
   }
 
   const pan = Gesture.Pan()
@@ -384,10 +462,10 @@ export default function DiscoverScreen() {
           runOnJS(setDragY)(0);
         }
       } else {
-        // vertical
+        // vertical — G1-A: ↑ 추적 제거. 아래 방향 (save) 만 dragY 로 추적.
         runOnJS(setPrevActive)(false);
         runOnJS(setDragX)(0);
-        runOnJS(setDragY)(Math.max(-140, Math.min(140, e.translationY)));
+        runOnJS(setDragY)(e.translationY > 0 ? Math.min(140, e.translationY) : 0);
       }
     })
     .onEnd((e) => {
@@ -418,10 +496,9 @@ export default function DiscoverScreen() {
           runOnJS(setDragY)(0);
         }
       } else {
-        // vertical
-        if (e.translationY < -SWIPE_THRESHOLD) {
-          runOnJS(handleSwipeUp)();
-        } else if (e.translationY > SWIPE_THRESHOLD) {
+        // vertical — G1-A (Handoff v2 Phase B+C): ↑ 진입 제거.
+        // 아래 (save) 만 처리. 위 방향 변위는 무시 → snap-back.
+        if (e.translationY > SWIPE_THRESHOLD) {
           runOnJS(handleSwipeDown)();
         }
         runOnJS(setDragX)(0);
@@ -482,7 +559,11 @@ export default function DiscoverScreen() {
         <Text style={styles.logo}>neq,</Text>
         <Pressable
           style={styles.searchIcon}
-          onPress={() => setSearchOpen(true)}
+          onPress={() => {
+            // 위임 O #1.2 — 검색 버튼으로 진입 시 initialQuery 비움 (잔해 제거).
+            setSearchInitialQuery('');
+            setSearchOpen(true);
+          }}
           hitSlop={8}
         >
           <Text style={styles.searchIconText}>⌕</Text>
@@ -540,6 +621,8 @@ export default function DiscoverScreen() {
                       immersive={isTop && immersive}
                       absorbing={isTop && saveAbsorbing}
                       saveTargetPoint={saveTargetPoint}
+                      // 사이클 2: top 카드만 worklet dismiss 곡선을 받음
+                      dismissX={isTop ? dismissX : undefined}
                     />
                   );
                 })}
@@ -588,11 +671,21 @@ export default function DiscoverScreen() {
         rec={currentRec ?? null}
         visible={detailOpen}
         onClose={() => setDetailOpen(false)}
+        onSearchPerson={(name) => {
+          // 위임 O #1.2 — Cast 클릭 → DetailSheet 닫고 SearchSheet 자동 검색.
+          // 동선: DetailSheet 닫음 → initialQuery 세팅 → SearchSheet 오픈.
+          // SearchSheet 의 visible 전이 effect 가 initialQuery 를 query 로 주입하고 검색.
+          track('detail_to_search_person', { name, from: 'discover' });
+          setDetailOpen(false);
+          setSearchInitialQuery(name);
+          setSearchOpen(true);
+        }}
       />
 
       <SearchSheet
         visible={searchOpen}
         onClose={() => setSearchOpen(false)}
+        initialQuery={searchInitialQuery}
       />
     </SafeAreaView>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   getSaved,
   removeSaved,
@@ -18,10 +18,14 @@ import type { RecHistoryEntry } from "@/lib/store";
 import type { SavedItem, WatchReaction, Recommendation } from "@/lib/types";
 import Image from "next/image";
 import BottomNav from "@/components/BottomNav";
-import { IconStar, IconClose, IconCheck, IconHeart, IconShare } from "@/components/Icons";
-import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
+import PosterFallback from "@/components/PosterFallback";
+import { IconStar, IconClose, IconCheck, IconHeart, IconGrid, IconList, IconSearch } from "@/components/Icons";
+import DetailSheet from "@/components/discover/DetailSheet";
+import SearchSheet from "@/components/discover/SearchSheet";
+import { useDetailSheet } from "@/hooks/useDetailSheet";
+import { getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
-import { getPrimaryCountryName } from "@/lib/country-names";
+import { useToast } from "@neq/design";
 
 const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string }[] = [
   { key: "loved", label: "인생작", color: "var(--accent)", bg: "var(--accent-dim)" },
@@ -31,6 +35,35 @@ const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string 
 ];
 
 type ViewFilter = "all" | "unwatched" | "watched" | "archived" | "history";
+
+/**
+ * 위임 L #6 — Saved 뷰 모드.
+ * - "grid": 기본 2열 그리드 (현재 동작)
+ * - "list": 1열 가로 카드 (작은 포스터 60×90 + 제목/메타/액션)
+ * localStorage 키: neq_saved_view (기존 컨벤션 neq_xxx 따름)
+ */
+type SavedViewMode = "grid" | "list";
+const SAVED_VIEW_KEY = "neq_saved_view";
+
+function loadSavedView(): SavedViewMode {
+  if (typeof window === "undefined") return "grid";
+  try {
+    const v = localStorage.getItem(SAVED_VIEW_KEY);
+    if (v === "list" || v === "grid") return v;
+  } catch {
+    /* ignore */
+  }
+  return "grid";
+}
+
+function persistSavedView(mode: SavedViewMode) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SAVED_VIEW_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
 
 function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
@@ -42,13 +75,6 @@ function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
       {r.label}
     </span>
   );
-}
-
-/** OTT 이름에서 그룹 키 추출 */
-function ottGroupKey(item: SavedItem): string {
-  const providers = item.recommendation.providers;
-  if (!providers || providers.length === 0) return "기타";
-  return providers[0].name;
 }
 
 function PosterCard({
@@ -73,7 +99,14 @@ function PosterCard({
   return (
     <div
       className="relative group cursor-pointer overflow-hidden rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
-      style={{ height: index % 3 === 0 ? "240px" : "200px" }}
+      style={{
+        height: index % 3 === 0 ? "240px" : "200px",
+        // CSS columns mason packing — 부모 컨테이너가 column-count:2 일 때 자식이 column-by-column 으로 자연 배치되어
+        // 좌-우 height 차이로 생기는 빈 row 공간 없이 위로 밀어 올림.
+        breakInside: "avoid",
+        marginBottom: "12px",
+        display: "block",
+      }}
       role="button"
       tabIndex={0}
       aria-label={`${item.recommendation.title} 상세보기`}
@@ -88,9 +121,7 @@ function PosterCard({
       {item.recommendation.posterUrl ? (
         <Image src={item.recommendation.posterUrl} alt={item.recommendation.title} fill className="object-cover rounded-lg" sizes="(max-width: 480px) 50vw, 200px" />
       ) : (
-        <div className="w-full h-full flex items-center justify-center text-xs p-2 text-center bg-surface rounded-lg text-muted">
-          {item.recommendation.title}
-        </div>
+        <PosterFallback title={item.recommendation.title} size="md" />
       )}
 
       {report && !isReporting && (
@@ -216,14 +247,194 @@ function PosterCard({
   );
 }
 
+/**
+ * 위임 L #6 — List 모드 카드.
+ * 가로 카드 = 포스터 60×90 + 제목/평점/OTT/리포트 + 트레일링 액션.
+ * PosterCard 와 데이터·핸들러 시그니처 동일 → 페이지가 mode 스위치만.
+ */
+function ListCard({
+  item, report, isReporting, isArchived,
+  onOpen, onReport, onUndoReport, onRemove, onStartReport, onCancelReport, onArchiveToggle,
+}: {
+  item: SavedItem;
+  report: WatchReaction | undefined;
+  isReporting: boolean;
+  isArchived?: boolean;
+  onOpen: (item: SavedItem) => void;
+  onReport: (tmdbId: number, reaction: WatchReaction) => void;
+  onUndoReport: (tmdbId: number) => void;
+  onRemove: (tmdbId: number) => void;
+  onStartReport: (tmdbId: number) => void;
+  onCancelReport: () => void;
+  onArchiveToggle?: (tmdbId: number) => void;
+}) {
+  const tmdbId = item.recommendation.tmdbId;
+  const rec = item.recommendation;
+
+  return (
+    <div
+      className="relative flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded-lg active:scale-[0.99] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
+      style={{
+        background: "var(--surface)",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.15)",
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${rec.title} 상세보기`}
+      onClick={() => onOpen(item)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen(item);
+        }
+      }}
+    >
+      <div className="relative flex-shrink-0 w-[60px] h-[90px] rounded-md overflow-hidden">
+        {rec.posterUrl ? (
+          <Image src={rec.posterUrl} alt={rec.title} fill className="object-cover" sizes="60px" />
+        ) : (
+          <PosterFallback title={rec.title} size="xs" />
+        )}
+        {report && (
+          <div className="absolute inset-0 pointer-events-none bg-overlay-light" />
+        )}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{rec.title}</div>
+        <div className="flex items-center gap-2 mt-1">
+          <span className="font-data text-xs flex items-center gap-0.5 text-muted">
+            <IconStar size={10} />{rec.rating.toFixed(1)}
+          </span>
+          {rec.runtime && rec.type === "movie" && (
+            <span className="text-xs text-muted">· {rec.runtime}분</span>
+          )}
+          {rec.type === "series" && rec.seasons && (
+            <span className="text-xs text-muted">· 시즌 {rec.seasons}</span>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 mt-1.5">
+          {report ? (
+            <ReactionLabel reaction={report} />
+          ) : (
+            rec.providers.slice(0, 3).map((p) => {
+              const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
+              return iconSrc ? (
+                <Image key={p.name} src={iconSrc} alt={p.name} width={16} height={16} className="object-contain rounded-sm" unoptimized />
+              ) : null;
+            })
+          )}
+        </div>
+      </div>
+
+      {/* 트레일링 액션 */}
+      {!isReporting && (
+        <div className="flex-shrink-0 flex items-center gap-1">
+          {!report ? (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onStartReport(tmdbId); }}
+              aria-label={`${rec.title} 시청 리포트 작성`}
+              className="min-h-[44px] px-3 text-xs font-medium active:scale-95 transition-transform rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              style={{ background: "var(--surface-raised)", color: "var(--text-secondary)" }}
+            >
+              봤어요?
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUndoReport(tmdbId); }}
+              aria-label={`${rec.title} 시청 리포트 취소`}
+              aria-pressed={true}
+              className="min-h-[44px] px-2 text-xs font-medium active:scale-95 transition-transform rounded-full flex items-center gap-1 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              style={{ background: "var(--surface-raised)", color: REACTIONS.find((x) => x.key === report)?.color }}
+              title="리포트 취소"
+            >
+              <IconCheck size={11} />
+            </button>
+          )}
+          {report && onArchiveToggle && (
+            <button
+              type="button"
+              onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
+              aria-label={isArchived ? `${rec.title} 복원` : `${rec.title} 아카이브`}
+              aria-pressed={isArchived}
+              className="w-11 h-11 flex items-center justify-center text-xs active:scale-90 transition-transform rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              style={{ color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
+              title={isArchived ? "복원" : "아카이브"}
+            >
+              {isArchived ? "↩" : "✓"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); onRemove(tmdbId); }}
+            aria-label={`${rec.title} 저장 취소`}
+            className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+            style={{ color: "var(--text-muted)" }}
+          >
+            <IconClose size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* List 모드의 reporting overlay — 카드 전체 덮기 */}
+      {isReporting && (
+        <div
+          className="absolute inset-0 flex flex-col items-center justify-center px-3 gap-2 animate-fade-in z-10 rounded-lg"
+          style={{ backdropFilter: "blur(8px)", background: "linear-gradient(var(--bg) 20%, var(--bg-overlay-heavy) 70%, transparent)" }}
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCancelReport(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancelReport();
+            }
+          }}
+          role="dialog"
+          aria-label="시청 리포트 선택"
+        >
+          <div className="text-center">
+            <div className="font-display text-sm font-bold">본 적 있나요?</div>
+          </div>
+          <div className="flex flex-wrap justify-center gap-1.5">
+            {([
+              { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)" },
+              { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" },
+              { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" },
+              { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none" },
+            ]).map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReport(tmdbId, r.key); }}
+                aria-label={`${r.label} 리포트`}
+                className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                style={{ background: r.bg, color: r.color, border: r.border }}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SavedPage() {
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [selected, setSelected] = useState<SavedItem | null>(null);
+  /**
+   * detailItem 만 페이지가 보유. detailY/detailAnimating/detailBodyRef + 모션/터치 핸들러는
+   * 사용자 직접 테스트 #4: `useDetailSheet` hook 으로 일원화 (Discover 와 동일 source).
+   * Saved 의 인라인 DetailSheet 구현 (구 1080~1260) 제거 → `DetailSheet` 컴포넌트로 통합.
+   */
   const [detailItem, setDetailItem] = useState<SavedItem | null>(null);
-  const [detailY, setDetailY] = useState(100);
-  const [detailAnimating, setDetailAnimating] = useState(false);
-  const detailStartY = useRef(0);
-  const detailDragging = useRef(false);
+  const detail = useDetailSheet();
+  // 헤더 search 버튼 → SearchSheet 자체 마운트. cancel 시 Saved 페이지 그대로 유지.
+  const searchSheet = useDetailSheet();
+  const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
@@ -232,6 +443,9 @@ export default function SavedPage() {
   const [ottFilter, setOttFilter] = useState<string | null>(null);
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
   const [history, setHistory] = useState<RecHistoryEntry[]>([]);
+  // 위임 L #6 — 뷰 모드 (grid|list). 첫 mount 시 localStorage 에서 복원.
+  const [viewMode, setViewMode] = useState<SavedViewMode>("grid");
+  const toast = useToast();
 
   // --- Nudge: 저장 후 24시간+ 미시청 작품 개별 넛지 ---
   const NUDGE_DISMISS_KEY = "neq_nudge_dismissed";
@@ -307,7 +521,15 @@ export default function SavedPage() {
   useEffect(() => {
     refreshData();
     setDismissedNudges(loadDismissedNudges());
+    // 위임 L #6 — 뷰 모드 복원
+    setViewMode(loadSavedView());
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleViewModeChange = useCallback((mode: SavedViewMode) => {
+    setViewMode(mode);
+    persistSavedView(mode);
+    track("saved_view_changed", { mode });
   }, []);
 
   const filteredSaved = useMemo(() => {
@@ -352,18 +574,35 @@ export default function SavedPage() {
       .map(([name, count]) => ({ name, count }));
   }, [filteredSaved]);
 
-  // OTT별 그룹핑
+  // OTT별 그룹핑 — 모든 availableOTTs 그룹 노출 (빈 그룹 포함, "없음" 메시지로 표시).
+  // 작품이 여러 OTT 제공 시 각 그룹에 중복 노출 → "맨 앞 OTT 만 분류" 모호함 해결.
+  // providers 가 빈 작품은 "기타" 그룹.
+  // ottFilter 활성 시 해당 OTT 그룹만 노출 (다른 그룹 hide) — 사용자 의도 명확.
   const ottGroups = useMemo(() => {
     if (!groupByOTT) return null;
     const groups: Record<string, SavedItem[]> = {};
-    for (const item of ottFilteredSaved) {
-      const key = ottGroupKey(item);
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(item);
+    for (const { name } of availableOTTs) {
+      groups[name] = [];
     }
-    // 작품 수 많은 OTT 먼저
+    for (const item of ottFilteredSaved) {
+      const providers = item.recommendation.providers;
+      if (!providers || providers.length === 0) {
+        if (!groups["기타"]) groups["기타"] = [];
+        groups["기타"].push(item);
+        continue;
+      }
+      for (const p of providers) {
+        if (!groups[p.name]) groups[p.name] = [];
+        groups[p.name].push(item);
+      }
+    }
+    // ottFilter 있으면 해당 그룹만 (없으면 빈 배열로 "없음" 메시지)
+    if (ottFilter) {
+      return [[ottFilter, groups[ottFilter] ?? []] as [string, SavedItem[]]];
+    }
+    // 작품 수 많은 OTT 먼저, 빈 그룹은 마지막
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
-  }, [ottFilteredSaved, groupByOTT]);
+  }, [ottFilteredSaved, groupByOTT, availableOTTs, ottFilter]);
 
   // 히스토리 날짜별 그룹핑
   const historyGroups = useMemo(() => {
@@ -459,28 +698,21 @@ export default function SavedPage() {
     refreshData();
   };
 
-  const snapDetail = useCallback((target: number) => {
-    setDetailAnimating(true);
-    setDetailY(target);
-    setTimeout(() => {
-      setDetailAnimating(false);
-      if (target === 100) setDetailItem(null);
-    }, 300);
-  }, []);
-
   const openDetailFor = useCallback((item: SavedItem) => {
     track("detail_opened", {
       tmdb_id: item.recommendation.tmdbId,
       source: "saved_tap",
     });
     setDetailItem(item);
-    setDetailY(100);
-    requestAnimationFrame(() => snapDetail(0));
-  }, [snapDetail]);
+    detail.openDetail();
+  }, [detail]);
 
-  const closeDetail = useCallback(() => {
-    snapDetail(100);
-  }, [snapDetail]);
+  const closeDetailWithReset = useCallback(() => {
+    detail.closeDetail();
+    // hook 의 closeDetail 내부 setTimeout(EXIT_MS) 후 showDetail false 되지만
+    // detailItem 은 페이지가 보유 → exit 모션 종료 후 함께 정리.
+    setTimeout(() => setDetailItem(null), 360);
+  }, [detail]);
 
   // ESC로 detail sheet / reporting overlay 닫기
   useEffect(() => {
@@ -488,34 +720,76 @@ export default function SavedPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (detailItem) {
-        closeDetail();
+        closeDetailWithReset();
       } else if (reportingId !== null) {
         setReportingId(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [detailItem, reportingId, closeDetail]);
+  }, [detailItem, reportingId, closeDetailWithReset]);
 
-  const onDetailTouchStart = useCallback((e: React.TouchEvent) => {
-    detailStartY.current = e.touches[0].clientY;
-    detailDragging.current = true;
-  }, []);
+  /**
+   * 사용자 직접 테스트 #7 — Saved 페이지 DetailSheet 안에서 직접 save toggle.
+   * Saved 컨텍스트라 보통 isSaved=true 상태로 진입 → "저장됨" 클릭 시 책장에서 빼냄.
+   * 다만 history 항목 hydrate 후 임시 SavedItem 으로 진입한 경우 (savedIdSet 외부) 도 있어서
+   * 양방향 토글 모두 지원.
+   */
+  const handleDetailSaveToggle = useCallback(
+    (rec: Recommendation) => {
+      const id = rec.tmdbId;
+      const isCurrentlySaved = savedIdSet.has(id);
+      if (isCurrentlySaved) {
+        track("card_unsaved", { tmdb_id: id, source: "detail_save_button" });
+        removeSaved(id);
+        toast.show("remove", {
+          ctx: { title: rec.title },
+          onAction: () => {
+            addSaved(rec);
+            refreshData();
+          },
+        });
+      } else {
+        track("card_saved", {
+          tmdb_id: id,
+          title: rec.title,
+          source: "detail_save_button",
+        });
+        addSaved(rec);
+        toast.show("save", {
+          ctx: { title: rec.title },
+          onAction: () => {
+            removeSaved(id);
+            refreshData();
+          },
+        });
+      }
+      refreshData();
+    },
+    // savedIdSet 은 saved derived → saved 의존성으로 충분.
+    // toast 는 stable. refreshData 는 매 render 새 함수지만 effect 의존성 아니므로 OK.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [saved, toast],
+  );
 
-  const onDetailTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!detailDragging.current) return;
-    const dy = e.touches[0].clientY - detailStartY.current;
-    if (dy > 0) {
-      e.preventDefault();
-      setDetailY(Math.min(100, (dy / window.innerHeight) * 120));
+  const handleDetailShare = useCallback(async (rec: Recommendation) => {
+    const shareUrl = `${window.location.origin}/share/${rec.tmdbId}?type=${rec.type}`;
+    const providers = rec.providers.map((p) => p.name).join(", ");
+    const body = `🎬 ${rec.title}\n${rec.reason}\n${
+      providers ? `📺 ${providers}` : ""
+    }\n\n${shareUrl}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: rec.title, text: body, url: shareUrl });
+        track("card_shared", { tmdb_id: rec.tmdbId, title: rec.title });
+      } catch {
+        // 사용자 취소 — 무시
+      }
+    } else {
+      await navigator.clipboard.writeText(body);
+      track("card_shared", { tmdb_id: rec.tmdbId, title: rec.title });
     }
   }, []);
-
-  const onDetailTouchEnd = useCallback(() => {
-    detailDragging.current = false;
-    if (detailY > 30) snapDetail(100);
-    else snapDetail(0);
-  }, [detailY, snapDetail]);
 
   const handlePickTonight = () => {
     if (saved.length === 0) return;
@@ -570,17 +844,120 @@ export default function SavedPage() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-      {/* Header */}
-      <div className="px-5 pt-6 pb-2">
-        <div className="flex items-center justify-between">
-          <h1 className="font-display text-2xl font-bold">Saved</h1>
+      {/* Header — Discover 와 동일한 좁은 height (h-12 = 48px) 패턴.
+          좌: H1 / 가운데: Grid/List 토글 (Discover 페르소나 chip 자리와 동일) / 우: search.
+          OTT별 보기 텍스트 버튼은 헤더 다음 줄로 분리. */}
+      <div className="flex items-center justify-between px-5 h-12 shrink-0 gap-3">
+        <h1
+          className="font-display"
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            letterSpacing: "-0.01em",
+            color: "var(--text-primary)",
+            lineHeight: 1,
+          }}
+        >
+          Saved
+        </h1>
+        {/* Grid/List 토글 — 항상 노출 (groupByOTT 모드에서도 보임). saved 있을 때만.
+            button w-11 h-11 (44, a11y 표준) + segmented padding 1 + border 1 = 48 = h-12 fit. */}
+        {saved.length > 0 && viewFilter !== "history" && (
+          <div
+            role="group"
+            aria-label="뷰 모드 전환"
+            className="flex items-center rounded-full flex-shrink-0"
+            style={{ background: "var(--surface)", padding: 1, border: "1px solid var(--border-subtle)" }}
+          >
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("grid")}
+              aria-pressed={viewMode === "grid"}
+              aria-label="그리드 보기"
+              className="w-11 h-11 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              style={{
+                background: viewMode === "grid" ? "var(--accent-dim)" : "transparent",
+                color: viewMode === "grid" ? "var(--accent)" : "var(--text-muted)",
+              }}
+            >
+              <IconGrid size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("list")}
+              aria-pressed={viewMode === "list"}
+              aria-label="리스트 보기"
+              className="w-11 h-11 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              style={{
+                background: viewMode === "list" ? "var(--accent-dim)" : "transparent",
+                color: viewMode === "list" ? "var(--accent)" : "var(--text-muted)",
+              }}
+            >
+              <IconList size={14} />
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            track("search_opened");
+            setSearchInitialQuery("");
+            searchSheet.openDetail();
+          }}
+          aria-label="검색 열기"
+          className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
+        >
+          <IconSearch size={18} color="var(--text-muted)" />
+        </button>
+      </div>
+
+      {!saved.length && (
+        <p className="px-5 pb-2 text-sm text-muted">
+          저장한 작품이 여기에 모여요
+        </p>
+      )}
+
+      {/* Filter tabs row — 좌측 VIEW_FILTERS (가로 스크롤) + 우측 OTT별 보기 토글 (underline 디자인). */}
+      {(saved.length > 0 || history.length > 0) && (
+        <div className="flex items-center justify-between gap-3 px-5 mt-2 mb-1">
+          <div
+            className="flex gap-4 overflow-x-auto flex-1 min-w-0"
+            role="tablist"
+            aria-label="저장 필터"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {VIEW_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                type="button"
+                role="tab"
+                aria-selected={viewFilter === f.key}
+                onClick={() => setViewFilter(f.key)}
+                className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
+                style={{
+                  background: "transparent",
+                  color: viewFilter === f.key ? "var(--text-primary)" : "var(--text-muted)",
+                  fontWeight: viewFilter === f.key ? 600 : 400,
+                  borderBottom: viewFilter === f.key ? "2px solid var(--accent)" : "2px solid transparent",
+                }}
+              >
+                {f.label}
+                {f.count > 0 && (
+                  <span className="font-data text-muted" style={{ fontSize: "11px" }}>
+                    {f.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* OTT별 보기 — underline 토글 (이전 디자인). saved 있고 history 아닐 때만. */}
           {saved.length > 0 && viewFilter !== "history" && (
             <button
               type="button"
               onClick={() => setGroupByOTT(!groupByOTT)}
               aria-pressed={groupByOTT}
               aria-label={groupByOTT ? "전체 그리드 보기로 전환" : "OTT별 그룹 보기로 전환"}
-              className="text-xs active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
+              className="text-xs whitespace-nowrap active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
               style={{
                 color: "var(--accent)",
                 textDecoration: groupByOTT ? "underline" : "none",
@@ -590,65 +967,6 @@ export default function SavedPage() {
               OTT별 보기
             </button>
           )}
-        </div>
-        {/* Progress bar — 안 본 작품 진행률 */}
-        {saved.length > 0 && viewFilter !== "history" && (
-          <div className="mt-2">
-            <div className="flex items-center justify-between mb-1.5">
-              <p className="text-xs text-muted">
-                저장 {saved.length}편{watchedCount > 0 && ` · 시청 ${watchedCount}편`}
-              </p>
-              {unwatchedCount > 0 && (
-                <p className="text-xs font-medium text-accent">
-                  {unwatchedCount}편 남음
-                </p>
-              )}
-            </div>
-            {watchedCount > 0 && (
-              <div className="h-1 overflow-hidden bg-surface rounded-sm">
-                <div
-                  className="h-full transition-all duration-500 bg-accent rounded-sm"
-                  style={{
-                    width: `${(watchedCount / saved.length) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-        )}
-        {!saved.length && (
-          <p className="text-sm mt-1 text-muted">
-            저장한 작품이 여기에 모여요
-          </p>
-        )}
-      </div>
-
-      {/* Filter tabs */}
-      {(saved.length > 0 || history.length > 0) && (
-        <div className="flex gap-4 px-5 mt-2 mb-1 overflow-x-auto" role="tablist" aria-label="저장 필터" style={{ scrollbarWidth: "none" }}>
-          {VIEW_FILTERS.map((f) => (
-            <button
-              key={f.key}
-              type="button"
-              role="tab"
-              aria-selected={viewFilter === f.key}
-              onClick={() => setViewFilter(f.key)}
-              className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
-              style={{
-                background: "transparent",
-                color: viewFilter === f.key ? "var(--text-primary)" : "var(--text-muted)",
-                fontWeight: viewFilter === f.key ? 600 : 400,
-                borderBottom: viewFilter === f.key ? "2px solid var(--accent)" : "2px solid transparent",
-              }}
-            >
-              {f.label}
-              {f.count > 0 && (
-                <span className="font-data text-muted" style={{ fontSize: "11px" }}>
-                  {f.count}
-                </span>
-              )}
-            </button>
-          ))}
         </div>
       )}
 
@@ -802,7 +1120,7 @@ export default function SavedPage() {
                 )}
               </div>
             </div>
-            <div className="font-data text-2xl font-bold text-accent">
+            <div className="font-data text-2xl font-bold">
               {stats.total}
             </div>
           </div>
@@ -828,7 +1146,7 @@ export default function SavedPage() {
                 {pickSubtext}
               </div>
             </div>
-            <span aria-hidden="true" style={{ color: "var(--accent)", fontSize: "20px" }}>&#8594;</span>
+            <span aria-hidden="true" style={{ color: "var(--text-secondary)", fontSize: "20px" }}>&#8594;</span>
           </button>
         </div>
       )}
@@ -898,9 +1216,10 @@ export default function SavedPage() {
         /* 히스토리 뷰 */
         <div className="pb-4">
           {history.length === 0 ? (
+            // D5 / Round 3 v2 — 책장 메타포 일관 ("쌓다" 유지, 톤만 정리)
             <div className="flex-1 flex flex-col justify-center px-8 py-12 text-muted">
               <p className="font-display text-lg font-semibold text-foreground">아직 추천 기록이 없어요</p>
-              <p className="text-sm mt-1.5">Discover에서 스와이프하면 여기 쌓여요</p>
+              <p className="text-sm mt-1.5">Discover에서 카드를 넘겨 보세요</p>
             </div>
           ) : (
             historyGroups.map((group) => (
@@ -937,9 +1256,7 @@ export default function SavedPage() {
                               sizes="64px"
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-center bg-surface text-muted p-1">
-                              {entry.title.slice(0, 4)}
-                            </div>
+                            <PosterFallback title={entry.title} size="xs" />
                           )}
                           {isSaved && (
                             <div className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full" style={{ background: "var(--accent-dim)" }}>
@@ -973,19 +1290,25 @@ export default function SavedPage() {
           )}
         </div>
       ) : saved.length === 0 ? (
+        // D5 / Round 3 v2 — S-01 "책장이 비어 있어요", S-03 "담아 보세요"
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconHeart size={32} />
-          <p className="mt-4 font-display text-lg font-semibold text-foreground">아직 저장한 작품이 없어요</p>
-          <p className="text-sm mt-1.5">Discover에서 마음에 드는 작품을 저장해보세요</p>
+          <p className="mt-4 font-display text-lg font-semibold text-foreground">책장이 비어 있어요</p>
+          <p className="text-sm mt-1.5 whitespace-pre-line">{`Discover에서 마음에 드는 걸\n하나씩 담아 보세요`}</p>
         </div>
       ) : ottFilteredSaved.length === 0 ? (
+        // D5 / Round 3 v2 — S-02 "이 조건엔 아무것도", S-04 "필터를 조금만 느슨해 보세요"
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">
-            {ottFilter ? `${ottFilter}에 해당하는 작품이 없어요` : viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
+            {ottFilter ? "이 조건엔 아무것도" : viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
           </p>
           <p className="text-sm mt-1.5">
-            {ottFilter ? "다른 OTT를 선택하거나 전체를 눌러보세요" : viewFilter === "unwatched" ? "Discover에서 새로운 작품을 찾아보세요" : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
+            {ottFilter
+              ? "필터를 조금만 느슨해 보세요"
+              : viewFilter === "unwatched"
+                ? "Discover에서 새로운 작품을 찾아보세요"
+                : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
           </p>
         </div>
       ) : groupByOTT && ottGroups ? (
@@ -1008,31 +1331,78 @@ export default function SavedPage() {
                 <span className="text-sm font-semibold">{ottName}</span>
                 <span className="text-xs font-data text-muted">{items.length}</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 px-5 auto-rows-min">
-                {items.map((item, i) => (
-                  <PosterCard
-                    key={item.recommendation.tmdbId}
-                    item={item}
-                    index={i}
-                    report={reports[item.recommendation.tmdbId]}
-                    isReporting={reportingId === item.recommendation.tmdbId}
-                    onOpen={openDetailFor}
-                    onReport={handleReport}
-                    onUndoReport={handleUndoReport}
-                    onRemove={handleRemove}
-                    onStartReport={setReportingId}
-                    onCancelReport={() => setReportingId(null)}
-                    isArchived={archivedIds.has(item.recommendation.tmdbId)}
-                    onArchiveToggle={(id) => { if (archivedIds.has(id)) { unarchiveItem(id); } else { archiveItem(id); } refreshData(); }}
-                  />
-                ))}
-              </div>
+              {/* OTT 그룹 안 작품들 — viewMode 따라 grid/list 분기.
+                  items.length === 0 (해당 OTT 에 저장된 작품 없음) 시 placeholder 메시지. */}
+              {items.length === 0 ? (
+                <p className="px-5 text-xs text-muted">
+                  이 OTT에는 저장된 작품이 없어요
+                </p>
+              ) : viewMode === "list" ? (
+                <div className="flex flex-col gap-2 px-5">
+                  {items.map((item) => (
+                    <ListCard
+                      key={item.recommendation.tmdbId}
+                      item={item}
+                      report={reports[item.recommendation.tmdbId]}
+                      isReporting={reportingId === item.recommendation.tmdbId}
+                      onOpen={openDetailFor}
+                      onReport={handleReport}
+                      onUndoReport={handleUndoReport}
+                      onRemove={handleRemove}
+                      onStartReport={setReportingId}
+                      onCancelReport={() => setReportingId(null)}
+                      isArchived={archivedIds.has(item.recommendation.tmdbId)}
+                      onArchiveToggle={(id) => { if (archivedIds.has(id)) { unarchiveItem(id); } else { archiveItem(id); } refreshData(); }}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="px-5" style={{ columnCount: 2, columnGap: 12 }}>
+                  {items.map((item, i) => (
+                    <PosterCard
+                      key={item.recommendation.tmdbId}
+                      item={item}
+                      index={i}
+                      report={reports[item.recommendation.tmdbId]}
+                      isReporting={reportingId === item.recommendation.tmdbId}
+                      onOpen={openDetailFor}
+                      onReport={handleReport}
+                      onUndoReport={handleUndoReport}
+                      onRemove={handleRemove}
+                      onStartReport={setReportingId}
+                      onCancelReport={() => setReportingId(null)}
+                      isArchived={archivedIds.has(item.recommendation.tmdbId)}
+                      onArchiveToggle={(id) => { if (archivedIds.has(id)) { unarchiveItem(id); } else { archiveItem(id); } refreshData(); }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
+      ) : viewMode === "list" ? (
+        /* 위임 L #6 — List 뷰 (1열 가로 카드). */
+        <div className="flex flex-col gap-2 px-5 pb-4">
+          {ottFilteredSaved.map((item) => (
+            <ListCard
+              key={item.recommendation.tmdbId}
+              item={item}
+              report={reports[item.recommendation.tmdbId]}
+              isReporting={reportingId === item.recommendation.tmdbId}
+              onOpen={openDetailFor}
+              onReport={handleReport}
+              onUndoReport={handleUndoReport}
+              onRemove={handleRemove}
+              onStartReport={setReportingId}
+              onCancelReport={() => setReportingId(null)}
+              isArchived={archivedIds.has(item.recommendation.tmdbId)}
+              onArchiveToggle={(id) => { if (archivedIds.has(id)) { unarchiveItem(id); } else { archiveItem(id); } refreshData(); }}
+            />
+          ))}
+        </div>
       ) : (
-        /* 기본 그리드 뷰 */
-        <div className="grid grid-cols-2 gap-3 px-5 pb-4 auto-rows-min">
+        /* 기본 그리드 뷰 — CSS columns mason packing (PosterCard height 240/200 변형 시각효과 유지하면서 빈 공간 제거). */
+        <div className="px-5 pb-4" style={{ columnCount: 2, columnGap: 12 }}>
           {ottFilteredSaved.map((item, i) => (
             <PosterCard
               key={item.recommendation.tmdbId}
@@ -1052,176 +1422,50 @@ export default function SavedPage() {
       )}
       </div>{/* 스크롤 영역 끝 */}
 
-      {/* Detail bottom sheet — 제스처 기반 */}
+      {/* Detail bottom sheet — 사용자 직접 테스트 #4 통합:
+          Discover 와 동일한 `DetailSheet` 컴포넌트 사용 (D3 풍부화: HeroLarge, №ID, ChapterMark,
+          CastRow, Synopsis→Cast→Where to watch→Related). 인라인 구현 (구 ~190 라인) 제거.
+          ReactionLabel 은 reactionBadge slot 으로 전달 (Saved 전용 배지). */}
       {detailItem && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
-          onClick={closeDetail}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${detailItem.recommendation.title} 상세`}
-        >
-          <div className="absolute inset-0" style={{ background: "var(--bg-overlay-heavy)", opacity: 1 - detailY / 100, transition: detailAnimating ? "opacity 0.3s ease-out" : "none" }} />
-          <div
-            className="relative w-full max-w-[480px] max-h-[85dvh] overflow-y-auto p-5 pb-8 bg-background"
-            style={{
-              borderRadius: "var(--radius-xl) var(--radius-xl) 0 0",
-              transform: `translateY(${detailY}%)`,
-              transition: detailAnimating ? "transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1)" : "none",
-              touchAction: "pan-y",
-            }}
-            onClick={(e) => e.stopPropagation()}
-            onTouchStart={onDetailTouchStart}
-            onTouchMove={onDetailTouchMove}
-            onTouchEnd={onDetailTouchEnd}
-          >
-            {/* Handle bar */}
-            <div className="flex justify-center mb-4">
-              <div className="w-10 h-1 rounded-full" style={{ background: "var(--border)" }} />
-            </div>
-
-            <button
-              type="button"
-              aria-label="상세 닫기"
-              className="absolute top-4 right-4 w-11 h-11 flex items-center justify-center bg-surface rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-              onClick={closeDetail}
-            >
-              <IconClose size={16} color="var(--text-secondary)" />
-            </button>
-
-            {/* 스틸컷 */}
-            {detailItem.recommendation.backdrop && (
-              <div className="relative w-full h-40 mb-4 -mt-1 overflow-hidden rounded-md">
-                <Image src={detailItem.recommendation.backdrop} alt="" fill className="object-cover" sizes="(max-width: 480px) 100vw, 480px" />
-              </div>
-            )}
-
-            {/* Poster + Title */}
-            <div className="flex gap-4">
-              {detailItem.recommendation.posterUrl && (
-                <Image
-                  src={detailItem.recommendation.posterUrl}
-                  alt={detailItem.recommendation.title}
-                  width={96}
-                  height={144}
-                  className="object-cover flex-shrink-0 rounded-md"
-                  sizes="96px"
-                />
-              )}
-              <div className="flex-1 min-w-0 pt-1">
-                <h2 className="font-display text-xl font-bold">{detailItem.recommendation.title}</h2>
-                <p className="text-sm mt-0.5 text-muted">
-                  {detailItem.recommendation.titleEn}
-                </p>
-                <p className="text-xs mt-0.5 text-muted">
-                  {[
-                    getPrimaryCountryName(detailItem.recommendation.country),
-                    detailItem.recommendation.date?.slice(0, 4),
-                    detailItem.recommendation.runtime ? `${detailItem.recommendation.runtime}분` : null,
-                    detailItem.recommendation.seasons ? `시즌 ${detailItem.recommendation.seasons}` : null,
-                  ].filter(Boolean).join(" · ")}
-                </p>
-                <div className="flex items-center gap-1.5 mt-2">
-                  <IconStar size={13} color="var(--accent)" />
-                  <span className="font-data text-sm font-semibold text-accent">{detailItem.recommendation.rating.toFixed(1)}</span>
-                </div>
-                {reports[detailItem.recommendation.tmdbId] && (
-                  <div className="mt-2">
-                    <ReactionLabel reaction={reports[detailItem.recommendation.tmdbId]} />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Reason */}
-            <div className="mt-5">
-              <div className="px-3 py-2 text-sm bg-accent-dim rounded-md">
-                {detailItem.recommendation.reason}
-              </div>
-            </div>
-
-            {/* Credits */}
-            {(detailItem.recommendation.director || detailItem.recommendation.cast?.length > 0) && (
-              <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
-                {detailItem.recommendation.director && (
-                  <div>
-                    <span className="text-xs text-muted">감독 </span>
-                    <span className="text-sm">{detailItem.recommendation.director}</span>
-                  </div>
-                )}
-                {detailItem.recommendation.cast?.length > 0 && (
-                  <div>
-                    <span className="text-xs text-muted">출연 </span>
-                    <span className="text-sm">{detailItem.recommendation.cast.join(", ")}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Overview */}
-            {detailItem.recommendation.overview && (
-              <div className="mt-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">줄거리</h3>
-                <p className="text-sm leading-relaxed text-secondary">{detailItem.recommendation.overview}</p>
-              </div>
-            )}
-
-            {/* OTT links */}
-            <div className="mt-5">
-              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-muted">시청 가능</h3>
-              {detailItem.recommendation.providers.length === 0 ? (
-                <p className="text-sm text-muted py-2">현재 한국 OTT에서 제공 정보를 찾지 못했어요</p>
-              ) : (
-              <div className="flex flex-col gap-2">
-                {detailItem.recommendation.providers.map((p) => {
-                  const ottUrl = getOTTLink(p.name, detailItem.recommendation.title);
-                  return (
-                    <a
-                      key={p.name}
-                      href={ottUrl ?? detailItem.recommendation.watchLink ?? "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`${p.name}에서 ${detailItem.recommendation.title} 보기 (새 탭)`}
-                      className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-                    >
-                      {(getOTTIcon(p.name) ?? p.logoUrl) ? (
-                        <Image src={(getOTTIcon(p.name) ?? p.logoUrl)!} alt="" width={32} height={32} className="object-contain flex-shrink-0 rounded-sm bg-surface" unoptimized />
-                      ) : (
-                        <div className="w-8 h-8 flex-shrink-0 rounded-sm bg-surface" />
-                      )}
-                      <span className="flex-1">{p.name}</span>
-                      <span className="text-xs text-accent" aria-hidden="true">열기</span>
-                    </a>
-                  );
-                })}
-              </div>
-              )}
-            </div>
-            {/* 공유 */}
-            <button
-              type="button"
-              aria-label={`${detailItem.recommendation.title} 공유하기`}
-              onClick={async () => {
-                const rec = detailItem!.recommendation;
-                const shareUrl = `${window.location.origin}/share/${rec.tmdbId}?type=${rec.type}`;
-                const providers = rec.providers.map((p) => p.name).join(", ");
-                const body = `\uD83C\uDFAC ${rec.title}\n${rec.reason}\n${providers ? `\uD83D\uDCFA ${providers}` : ""}\n\n${shareUrl}`;
-                if (navigator.share) {
-                  try { await navigator.share({ title: rec.title, text: body, url: shareUrl }); } catch {}
-                } else {
-                  await navigator.clipboard.writeText(body);
-                }
-              }}
-              className="w-full mt-4 py-3 text-sm font-medium flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-              style={{ background: "transparent", border: "1px solid var(--accent-border)", color: "var(--accent)" }}
-            >
-              <IconShare size={16} color="var(--accent)" />
-              공유하기
-            </button>
-          </div>
-        </div>
+        <DetailSheet
+          rec={detailItem.recommendation}
+          showDetail={detail.showDetail}
+          detailY={detail.detailY}
+          detailAnimating={detail.detailAnimating}
+          detailBodyRef={detail.detailBodyRef}
+          onClose={closeDetailWithReset}
+          onDetailTouchStart={detail.onDetailTouchStart}
+          onDetailTouchMove={detail.onDetailTouchMove}
+          onDetailTouchEnd={detail.onDetailTouchEnd}
+          onShare={handleDetailShare}
+          isSaved={savedIdSet.has(detailItem.recommendation.tmdbId)}
+          onToggleSave={handleDetailSaveToggle}
+          reactionBadge={
+            reports[detailItem.recommendation.tmdbId] ? (
+              <ReactionLabel reaction={reports[detailItem.recommendation.tmdbId]} />
+            ) : undefined
+          }
+          onSearchPerson={(name) => {
+            // 옵션 E — Saved 자체 SearchSheet 사용. detail 은 닫지 않고 SearchSheet 을 위에 띄움.
+            // 사용자가 cancel 하면 SearchSheet 만 닫히고 DetailSheet 그대로 노출.
+            track("detail_to_search_person", { name, from: "saved" });
+            setSearchInitialQuery(name);
+            searchSheet.openDetail();
+          }}
+        />
       )}
-
+      {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는 DetailSheet cast 클릭으로 진입. */}
+      <SearchSheet
+        show={searchSheet.showDetail}
+        sheetY={searchSheet.detailY}
+        animating={searchSheet.detailAnimating}
+        bodyRef={searchSheet.detailBodyRef}
+        onClose={searchSheet.closeDetail}
+        onTouchStart={searchSheet.onDetailTouchStart}
+        onTouchMove={searchSheet.onDetailTouchMove}
+        onTouchEnd={searchSheet.onDetailTouchEnd}
+        initialQuery={searchInitialQuery}
+      />
       <BottomNav active="saved" />
     </div>
   );

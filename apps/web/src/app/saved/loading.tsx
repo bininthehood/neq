@@ -1,11 +1,16 @@
 export default function SavedLoading() {
   return (
     <div className="h-dvh flex flex-col">
-      {/* Header */}
+      {/* Header — D5: ChapterMark eyebrow + Fraunces italic 패턴 placeholder */}
       <div className="px-5 pt-6 pb-2">
-        <div className="flex items-center justify-between">
-          <div className="h-7 w-20 animate-pulse bg-surface-raised rounded-md" />
-          <div className="h-9 w-24 animate-pulse bg-surface rounded-full" />
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            {/* eyebrow chaptermark placeholder (10px Geist Mono uppercase 톤) */}
+            <div className="h-2.5 w-28 animate-pulse bg-surface-raised rounded-sm" />
+            {/* Fraunces italic 3xl 헤딩 placeholder */}
+            <div className="h-8 w-40 animate-pulse bg-surface-raised rounded-md" />
+          </div>
+          <div className="h-9 w-24 animate-pulse bg-surface rounded-full shrink-0" />
         </div>
         {/* Progress bar placeholder */}
         <div className="mt-2">

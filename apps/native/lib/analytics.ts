@@ -121,6 +121,11 @@ export type NekoEvent =
   | 'card_not_interested'
   | 'detail_opened'
   | 'detail_related_clicked'
+  // 위임 O — Cast 클릭 → 검색 진입
+  | 'detail_cast_clicked'
+  | 'detail_to_search_person'
+  // 위임 O — Saved 뷰 모드 토글
+  | 'saved_view_changed'
   // 시청 리포트
   | 'watch_report_submitted'
   // OTT 전환
