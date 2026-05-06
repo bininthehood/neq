@@ -1,4 +1,16 @@
 
+## 탐색 비용 절감
+
+코드베이스가 크기 때문에 grep/Read/Glob 시 다음 경로는 기본 제외:
+
+- `_design-handoff/` — Claude Design 정본 prototype (HTML/JSX, 5.2M). 시각 정본 확인 외 진입 금지.
+- `_workspace/`, `_workspace_*` — 에이전트 산출물 누적 (1.7M). 일반 개발 시 탐색 제외.
+- `apps/web/.next/`, `apps/web/dist/`, `apps/web/coverage/` — 빌드 산출물.
+- `node_modules/`, `.git/` — 자명.
+- repo root 의 `*.png` — 임시 디버그 스크린샷.
+
+탐색 진입점 / 거대 파일 책임은 `CODEMAP.md` 참조 — 어디부터 읽을지 1줄로 안내.
+
 ## Skill routing
 
 When the user's request matches an available skill, ALWAYS invoke it using the Skill
