@@ -326,6 +326,7 @@ export function useRecommendations() {
         headers: {
           "Content-Type": "application/json",
           "x-neko-streaming": "1",
+          "x-neko-mirror": "1",
         },
         body: JSON.stringify({
           favorites,
@@ -509,6 +510,7 @@ export function useRecommendations() {
         headers: {
           "Content-Type": "application/json",
           "x-neko-streaming": "1",
+          "x-neko-mirror": "1",
         },
         body: JSON.stringify({ favorites, filter, exclude, excludeIds, ...v2Pref.body }),
         signal: controller.signal,
