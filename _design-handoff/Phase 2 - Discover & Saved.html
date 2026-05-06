@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Phase 2 — Discover & Saved</title>
+<link rel="stylesheet" href="system/colors_and_type.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&display=swap"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #0B0A07; color: #EDEDEF; font-family: 'Pretendard Variable', sans-serif; }
+  * { box-sizing: border-box; }
+  @keyframes neko-fade { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes neko-rise { from { transform: translateY(40%); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+  @keyframes neko-pulse { 0%,100% { opacity: 0.5 } 50% { opacity: 1 } }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="illustrations.jsx"></script>
+<script type="text/babel" src="neko-poster.jsx"></script>
+<script type="text/babel" src="neko-data.jsx"></script>
+<script type="text/babel" src="neko-card-variants.jsx"></script>
+<script type="text/babel" src="neko-swipe-stack.jsx"></script>
+<script type="text/babel" src="neko-saved-screen.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS_P2 = /*EDITMODE-BEGIN*/{
+  "showHints": true
+}/*EDITMODE-END*/;
+
+const W = window;
+
+// ─── Phone frame helper ──────────────────────────────────
+function PhoneFrame({ children, w = 380, h = 760 }) {
+  return (
+    <div style={{
+      width: w, height: h, background: '#12110E',
+      borderRadius: 36, border: '1px solid #2E2D27',
+      overflow: 'hidden', position: 'relative',
+      boxShadow: '0 24px 80px rgba(0,0,0,0.5), inset 0 0 0 4px #1A1916',
+    }}>
+      {/* Status bar */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0, right: 0, height: 44,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 22px', zIndex: 100, pointerEvents: 'none',
+      }}>
+        <span style={{ fontFamily: 'Geist Mono', fontSize: 12, fontWeight: 600, color: '#EDEDEF' }}>9:41</span>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', color: '#EDEDEF', fontSize: 11 }}>
+          <span>●●●●</span><span>􀙇</span><span>􀛨</span>
+        </div>
+      </div>
+      <div style={{ paddingTop: 44, height: '100%', position: 'relative' }}>
+        {children}
+      </div>
+      {/* Tab bar */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, height: 64,
+        background: 'rgba(11,10,7,0.85)', backdropFilter: 'blur(12px)',
+        borderTop: '1px solid #1F1E1A',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-around',
+        zIndex: 50,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: '#C4A35A' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="9"/><path d="M16 8 L13 13 L8 16 L11 11 Z" fill="currentColor"/>
+          </svg>
+          <span style={{ fontFamily: 'Pretendard Variable', fontSize: 10, fontWeight: 600 }}>Discover</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, color: '#6B6C75' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M12 21s-7-4.5-9.5-9C0.7 8.5 2.5 4 6 4c2 0 3.5 1 4 2 0.5-1 2-2 4-2 3.5 0 5.3 4.5 3.5 8C19 16.5 12 21 12 21z"/>
+          </svg>
+          <span style={{ fontFamily: 'Pretendard Variable', fontSize: 10 }}>Saved</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Discover artboard with swipe stack ──────────────────
+function DiscoverArtboard({ variant }) {
+  const Card = W.NekoCards[variant];
+  const works = W.NekoData.WORKS;
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#12110E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ transform: 'scale(1)' }}>
+        <W.NekoSwipeStack works={works} CardComponent={Card} w={300} h={460}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── Saved artboard inside phone ─────────────────────────
+function SavedArtboard({ filterEmpty }) {
+  return (
+    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B0A07' }}>
+      <PhoneFrame>
+        <W.NekoSavedScreen filterEmpty={filterEmpty}/>
+      </PhoneFrame>
+    </div>
+  );
+}
+
+// ─── Empty state card ────────────────────────────────────
+function EmptyStateCard({ illust, title, body, action }) {
+  return (
+    <div style={{
+      width: '100%', height: '100%', background: '#12110E',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      padding: 32, textAlign: 'center',
+    }}>
+      <div style={{ marginBottom: 20 }}>
+        <W.NekoIllust name={illust} style="auto" size={180}/>
+      </div>
+      <div style={{ fontFamily: 'Fraunces, serif', fontStyle: 'italic', fontSize: 24, color: '#EDEDEF', letterSpacing: '-0.015em', marginBottom: 10, lineHeight: 1.2 }}>
+        {title}
+      </div>
+      <div style={{ fontFamily: 'Pretendard Variable', fontSize: 13, color: '#8E8F9A', lineHeight: 1.55, maxWidth: 260, whiteSpace: 'pre-line', marginBottom: action ? 18 : 0 }}>
+        {body}
+      </div>
+      {action && (
+        <button style={{
+          padding: '10px 18px', borderRadius: 8,
+          background: '#C4A35A', color: '#12110E', border: 'none',
+          fontFamily: 'Pretendard Variable', fontSize: 13, fontWeight: 600,
+          cursor: 'pointer',
+        }}>{action}</button>
+      )}
+    </div>
+  );
+}
+
+// 8 empty-state scenarios
+const EMPTY_SCENARIOS = [
+  { id: 'discover-zero', illust: 'noResults',     title: '추천이 비어 있어요',   body: '필터를 조금 풀어 볼까요?\n조건이 너무 좁은 것 같아요',     action: '필터 조정' },
+  { id: 'discover-loading', illust: 'calibrating',title: '취향을 읽고 있어요',    body: '잠시만요, 첫 추천을 준비 중이에요' },
+  { id: 'discover-error', illust: 'error',        title: '연결이 끊겼어요',      body: '네트워크를 확인하고 다시 시도해 주세요',                  action: '다시 시도' },
+  { id: 'saved-empty',    illust: 'emptySaved',   title: '저장한 작품이 없어요', body: 'Discover에서 마음에 드는 작품을\n아래로 스와이프해 저장해 보세요' },
+  { id: 'saved-filter',   illust: 'emptyDiscover',title: '필터에 맞는 게 없어요',body: '다른 OTT나 작품 유형을 골라 보세요',                       action: '필터 초기화' },
+  { id: 'search-empty',   illust: 'noResults',    title: '검색 결과가 없어요',   body: '다른 단어로 다시 검색해 보세요' },
+  { id: 'onboard-search', illust: 'onboarding',   title: '5개를 더 골라 주세요', body: '취향 픽 5개로 첫 추천이 더 정확해져요' },
+  { id: 'watch-report',   illust: 'archive',      title: '아직 본 작품이 없어요',body: '시청 완료 표시를 하면\n월간 리포트가 생겨요' },
+];
+
+// ─── App ─────────────────────────────────────────────────
+function App() {
+  const [t, setTweak] = W.useTweaks(TWEAK_DEFAULTS_P2);
+  return (
+    <>
+      <W.DesignCanvas>
+        {/* Section 1 — Card variants */}
+        <W.DCSection id="cards" title="Discover Card Variants" subtitle="3가지 변형 — 같은 데이터 / 다른 시각 위계. 각 카드를 4방향 스와이프 또는 탭해 보세요.">
+          <W.DCArtboard id="card-a" label="A · 포스터 강조" width={460} height={620}>
+            <DiscoverArtboard variant="A"/>
+          </W.DCArtboard>
+          <W.DCArtboard id="card-b" label="B · 타이포 강조" width={460} height={620}>
+            <DiscoverArtboard variant="B"/>
+          </W.DCArtboard>
+          <W.DCArtboard id="card-c" label="C · 시네마틱" width={460} height={620}>
+            <DiscoverArtboard variant="C"/>
+          </W.DCArtboard>
+        </W.DCSection>
+
+        {/* Section 2 — Saved screen */}
+        <W.DCSection id="saved" title="Saved Screen" subtitle="OTT별 그룹핑 + 필터. 카로셀 스크롤, 시청 상태 시각 구분.">
+          <W.DCArtboard id="saved-default" label="기본 — OTT별 그룹핑" width={440} height={820}>
+            <SavedArtboard filterEmpty={false}/>
+          </W.DCArtboard>
+          <W.DCArtboard id="saved-empty" label="빈 상태 (폴백)" width={440} height={820}>
+            <SavedArtboard filterEmpty={true}/>
+          </W.DCArtboard>
+        </W.DCSection>
+
+        {/* Section 3 — Empty state gallery */}
+        <W.DCSection id="empty" title="Empty States × 8" subtitle="Quiet Ink 일러스트(Style A · Geometric)로 8개 시나리오 — 각각 정확한 감정 톤과 액션.">
+          {EMPTY_SCENARIOS.map(s => (
+            <W.DCArtboard key={s.id} id={s.id} label={s.title} width={320} height={460}>
+              <EmptyStateCard illust={s.illust} title={s.title} body={s.body} action={s.action}/>
+            </W.DCArtboard>
+          ))}
+        </W.DCSection>
+
+        <W.DCPostIt top={40} left={40} rotate={-3} width={240}>
+          2단계 — Discover 카드 3변형 + Saved 화면 + 빈 상태 8종.
+          폰트: Fraunces (헤더) + Pretendard (한글).
+          드래그해서 4방향 스와이프 모션 확인.
+        </W.DCPostIt>
+      </W.DesignCanvas>
+
+      <W.TweaksPanel title="Tweaks">
+        <W.TweakSection label="Hints"/>
+        <W.TweakToggle label="방향 힌트 표시" value={t.showHints}
+          onChange={(v) => setTweak('showHints', v)}/>
+      </W.TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

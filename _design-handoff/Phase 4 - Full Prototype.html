@@ -1,0 +1,401 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Phase 4 — Full Prototype</title>
+<link rel="stylesheet" href="system/colors_and_type.css"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #1a1815; color: #EDEDEF; font-family: 'Pretendard Variable', system-ui, sans-serif; min-height: 100vh; }
+  *, *::before, *::after { box-sizing: border-box; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="illustrations.jsx"></script>
+<script type="text/babel" src="neko-poster.jsx"></script>
+<script type="text/babel" src="neko-data.jsx"></script>
+<script type="text/babel" src="neko-card-variants.jsx"></script>
+<script type="text/babel" src="neko-prototype-swipe.jsx"></script>
+<script type="text/babel" src="neko-saved-screen.jsx"></script>
+<script type="text/babel" src="neko-search-screen.jsx"></script>
+<script type="text/babel" src="neko-detail-sheet.jsx"></script>
+<script type="text/babel" src="neko-onboarding.jsx"></script>
+<script type="text/babel" src="neko-profile.jsx"></script>
+<script type="text/babel" src="neko-toast.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const { IOSDevice, NekoSearchScreen, NekoSavedScreen, NekoProfileScreen, NekoDetailSheet, NekoOnboarding, NekoCards, NekoData, NekoPrototypeSwipeStack, useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle, TweakColor } = window;
+
+const TWEAK_DEFAULTS_P4 = /*EDITMODE-BEGIN*/{
+  "showOnboarding": false,
+  "darkBg": "#1a1815"
+}/*EDITMODE-END*/;
+
+// Round 1 confirmed: card variant A only.
+const CARD_VARIANT = 'A';
+
+const COLORS = {
+  bg: '#0B0A07', surface: '#12110E', surface2: '#1A1812',
+  ink: '#EDEDEF', inkDim: '#8E8F9A', inkMute: '#6B6C75',
+  hair: '#2A2823', amber: '#C4A35A', amberDim: 'rgba(196,163,90,0.15)',
+};
+
+// ─────────────────────────────────────────────────────────────
+// Discover screen — Quiet Ink home with swipe stack
+// ─────────────────────────────────────────────────────────────
+function DiscoverScreen({ onDetail, onSave, onOpenSearch }) {
+  const Card = NekoCards[CARD_VARIANT];
+  const works = NekoData.WORKS;
+  const SwipeStack = NekoPrototypeSwipeStack;
+
+  return (
+    <div style={{
+      width: '100%', height: '100%',
+      background: COLORS.bg,
+      display: 'flex', flexDirection: 'column',
+      borderRadius: 'inherit', overflow: 'hidden',
+    }}>
+      {/* Header */}
+      <div style={{
+        padding: '14px 22px 10px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      }}>
+        <div>
+          <div style={{
+            fontFamily: 'Geist Mono, ui-monospace, monospace', fontSize: 9,
+            color: COLORS.amber, letterSpacing: '0.18em',
+            textTransform: 'uppercase', marginBottom: 2,
+          }}>2025 · Vol. 18 — May</div>
+          <div style={{
+            fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+            fontSize: 26, color: COLORS.ink, letterSpacing: '-0.01em', lineHeight: 1,
+          }}>또 넷플릭스 켤 거예요?</div>
+        </div>
+        <div onClick={onOpenSearch} style={{
+          width: 36, height: 36, borderRadius: 18,
+          background: COLORS.surface, border: `1px solid ${COLORS.hair}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="6" cy="6" r="4.5" stroke={COLORS.inkDim} strokeWidth="1.4"/>
+            <path d="M9.5 9.5L13 13" stroke={COLORS.inkDim} strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      {/* Sub-meta — Witty tone */}
+      <div style={{
+        padding: '0 22px 10px',
+        fontFamily: 'Pretendard Variable', fontSize: 11.5, color: COLORS.inkMute,
+      }}>
+        또 30분 스크롤하고 닫을 건가요? 오늘은 5선만 보세요.
+      </div>
+
+      {/* Swipe stack — fills */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+        <SwipeStack
+          works={works} CardComponent={Card}
+          w={300} h={460}
+          onDetail={onDetail} onSave={onSave}
+        />
+      </div>
+
+      {/* Bottom cue */}
+      <div style={{
+        padding: '8px 22px 12px', textAlign: 'center',
+        fontFamily: 'Geist Mono, ui-monospace, monospace', fontSize: 9,
+        color: COLORS.inkMute, letterSpacing: '0.1em',
+      }}>탭 상세 · ↓ 저장 · ← 다음 · → 이전</div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Tab Bar — bottom nav
+// ─────────────────────────────────────────────────────────────
+function TabBar({ active, onChange }) {
+  const tabs = [
+    { id: 'discover', label: 'Discover', icon: TabIconDiscover },
+    { id: 'search',   label: 'Search',   icon: TabIconSearch },
+    { id: 'saved',    label: 'Saved',    icon: TabIconSaved },
+    { id: 'profile',  label: 'Profile',  icon: TabIconProfile },
+  ];
+  return (
+    <div style={{
+      position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 80,
+      paddingBottom: 28, paddingTop: 8,
+      background: 'linear-gradient(to top, rgba(11,10,7,0.98) 60%, rgba(11,10,7,0.85) 90%, rgba(11,10,7,0))',
+      backdropFilter: 'blur(20px)',
+      display: 'flex', justifyContent: 'space-around', alignItems: 'center',
+      pointerEvents: 'auto',
+    }}>
+      {tabs.map(t => {
+        const Icon = t.icon;
+        const isActive = active === t.id;
+        return (
+          <div key={t.id} onClick={() => onChange(t.id)}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              padding: '6px 10px', borderRadius: 8, cursor: 'pointer',
+              opacity: isActive ? 1 : 0.5,
+              transition: 'opacity 0.2s',
+            }}>
+            <Icon active={isActive} color={isActive ? COLORS.amber : COLORS.ink}/>
+            <div style={{
+              fontFamily: 'Geist Mono, ui-monospace, monospace',
+              fontSize: 9, letterSpacing: '0.08em',
+              color: isActive ? COLORS.amber : COLORS.inkDim,
+              textTransform: 'uppercase',
+            }}>{t.label}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── tab icons ───
+function TabIconDiscover({ active, color }) {
+  return active
+    ? <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke={color} strokeWidth="1.5"/><circle cx="10" cy="10" r="2" fill={color}/></svg>
+    : <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7.5" stroke={color} strokeWidth="1.4"/><path d="M13 7L11 11L7 13L9 9L13 7Z" stroke={color} strokeWidth="1.2" strokeLinejoin="round"/></svg>;
+}
+function TabIconSearch({ color }) {
+  return <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke={color} strokeWidth="1.5"/><path d="M13.5 13.5L17 17" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>;
+}
+function TabIconSaved({ active, color }) {
+  return <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 3h10v15l-5-3.5L5 18V3z" stroke={color} strokeWidth="1.5" strokeLinejoin="round" fill={active ? color : 'none'} fillOpacity={active ? 0.18 : 0}/></svg>;
+}
+function TabIconProfile({ color }) {
+  return <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.2" stroke={color} strokeWidth="1.5"/><path d="M3.5 17C4.5 13.8 7 12 10 12s5.5 1.8 6.5 5" stroke={color} strokeWidth="1.5" strokeLinecap="round"/></svg>;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Toast — provided by neko-toast.jsx (NekoToastHost / useNekoToast)
+// ─────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────
+// Detail overlay — slides up from bottom
+// ─────────────────────────────────────────────────────────────
+function DetailOverlay({ workId, variant, onClose }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    if (workId) {
+      requestAnimationFrame(() => setMounted(true));
+    } else {
+      setMounted(false);
+    }
+  }, [workId]);
+
+  if (!workId) return null;
+  return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 100,
+      transform: mounted ? 'translateY(0)' : 'translateY(100%)',
+      opacity: mounted ? 1 : 0,
+      transition: 'transform 450ms cubic-bezier(0.32,0.72,0.24,1), opacity 250ms',
+      borderRadius: 'inherit', overflow: 'hidden',
+    }}>
+      <NekoDetailSheet
+        workId={workId}
+        variant={variant}
+        onClose={() => {
+          setMounted(false);
+          setTimeout(onClose, 350);
+        }}
+      />
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// App — the full prototype shell
+// ─────────────────────────────────────────────────────────────
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS_P4);
+  const [tab, setTab]                       = useState('discover');
+  const [detailWorkId, setDetailWorkId]     = useState(null);
+  const [showOnboarding, setShowOnboarding] = useState(tweaks.showOnboarding);
+  const [savedIds, setSavedIds]             = useState(['past-lives', 'oldboy', 'first-cow']);
+  const [toast, showToast, dismissToast]    = window.useNekoToast();
+  const [tabAnim, setTabAnim]               = useState({ from: null, to: 'discover' });
+
+  // Sync onboarding tweak → state
+  useEffect(() => { setShowOnboarding(tweaks.showOnboarding); }, [tweaks.showOnboarding]);
+
+  function handleSave(work) {
+    if (savedIds.includes(work.id)) return;
+    setSavedIds(ids => [...ids, work.id]);
+    showToast('save', {
+      ctx: { title: work.title },
+      onAction: () => {
+        setSavedIds(ids => ids.filter(id => id !== work.id));
+      },
+    });
+  }
+  function handlePass(work) {
+    showToast('pass', {
+      ctx: { title: work.title },
+      onAction: () => { /* return to deck — placeholder */ },
+    });
+  }
+  function handleRemoveFromSaved(work) {
+    setSavedIds(ids => ids.filter(id => id !== work.id));
+    showToast('remove', {
+      ctx: { title: work.title },
+      onAction: () => {
+        setSavedIds(ids => ids.includes(work.id) ? ids : [...ids, work.id]);
+      },
+    });
+  }
+  function handleDetail(work) {
+    setDetailWorkId(work.id);
+  }
+  function handleTabChange(id) {
+    if (id === tab) return;
+    setTabAnim({ from: tab, to: id });
+    setTab(id);
+  }
+
+  // Round 1 confirmed: Detail variant B — 하단 FAB.
+  const detailVariant = detailWorkId
+    ? { hero: 'blur', history: 'timeline', save: 'fab' }
+    : null;
+
+  // Tab transition direction
+  const tabOrder = ['discover', 'search', 'saved', 'profile'];
+  const fromIdx = tabAnim.from ? tabOrder.indexOf(tabAnim.from) : -1;
+  const toIdx   = tabOrder.indexOf(tabAnim.to);
+  const slideDir = fromIdx < 0 ? 0 : (toIdx > fromIdx ? 1 : -1);
+
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '24px', background: tweaks.darkBg,
+      flexDirection: 'column', gap: 20,
+    }}>
+      {/* Header strip */}
+      <div style={{
+        textAlign: 'center', maxWidth: 700,
+        fontFamily: 'Geist Mono, ui-monospace, monospace', fontSize: 10,
+        color: '#666', letterSpacing: '0.1em', textTransform: 'uppercase',
+      }}>
+        Phase 4 · Full Integrated Prototype — neko · 4 tabs · clickable detail · onboarding
+      </div>
+
+      <IOSDevice width={402} height={874} dark={true}>
+        <div style={{
+          position: 'relative', width: '100%', height: '100%',
+          overflow: 'hidden', background: COLORS.bg,
+        }}>
+          {/* Active tab content */}
+          <div key={tab} style={{
+            position: 'absolute', inset: 0,
+            paddingTop: 48, paddingBottom: 70,
+            animation: slideDir !== 0
+              ? `slide-${slideDir > 0 ? 'in-right' : 'in-left'} 280ms cubic-bezier(0.32,0.72,0.24,1)`
+              : undefined,
+          }}>
+            {tab === 'discover' && (
+              <DiscoverScreen
+                onDetail={handleDetail}
+                onSave={handleSave}
+                onOpenSearch={() => handleTabChange('search')}
+              />
+            )}
+            {tab === 'search' && (
+              <NekoSearchScreen variant="grouped" initialState="intro"/>
+            )}
+            {tab === 'saved' && (
+              <NekoSavedScreen/>
+            )}
+            {tab === 'profile' && (
+              <NekoProfileScreen/>
+            )}
+          </div>
+
+          {/* Tab bar */}
+          <TabBar active={tab} onChange={handleTabChange}/>
+
+          {/* Toast */}
+          <window.NekoToastHost toast={toast} onDismiss={dismissToast}/>
+
+          {/* Detail overlay */}
+          <DetailOverlay
+            workId={detailWorkId}
+            variant={detailVariant}
+            onClose={() => setDetailWorkId(null)}
+          />
+
+          {/* Onboarding overlay */}
+          {showOnboarding && (
+            <div style={{ position: 'absolute', inset: 0, zIndex: 200, borderRadius: 'inherit', overflow: 'hidden' }}>
+              <NekoOnboarding
+                variant="editorial"
+                onComplete={() => {
+                  setShowOnboarding(false);
+                  setTweak('showOnboarding', false);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      </IOSDevice>
+
+      <style>{`
+        @keyframes slide-in-right {
+          from { transform: translateX(40px); opacity: 0; }
+          to   { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes slide-in-left {
+          from { transform: translateX(-40px); opacity: 0; }
+          to   { transform: translateX(0); opacity: 1; }
+        }
+        @keyframes toast-rise {
+          from { transform: translateX(-50%) translateY(8px); opacity: 0; }
+          to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+        }
+      `}</style>
+
+      {/* Help */}
+      <div style={{
+        maxWidth: 480, fontSize: 11, lineHeight: 1.6,
+        color: '#888', fontFamily: 'Pretendard Variable', textAlign: 'center',
+      }}>
+        Discover에서 카드를 <b style={{color:'#C4A35A'}}>탭</b>해 상세 시트 열기 · <b style={{color:'#C4A35A'}}>↓ 드래그</b>로 저장 · 하단 탭으로 전환 · 우상단 Tweaks로 카드 변형 / 온보딩 토글
+      </div>
+
+      {/* Tweaks Panel — Round 1 이후 동적 설정만 남김 */}
+      <TweaksPanel>
+        <TweakSection label="Flow"/>
+        <TweakToggle
+          label="온보딩 표시"
+          value={tweaks.showOnboarding}
+          onChange={v => setTweak('showOnboarding', v)}
+        />
+        <TweakSection label="Background"/>
+        <TweakColor
+          label="Stage bg"
+          value={tweaks.darkBg}
+          onChange={v => setTweak('darkBg', v)}
+        />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

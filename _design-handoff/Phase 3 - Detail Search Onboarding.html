@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Phase 3 — Detail / Search / Onboarding</title>
+<link rel="stylesheet" href="system/colors_and_type.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&display=swap"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #0B0A07; color: #EDEDEF; font-family: 'Pretendard Variable', sans-serif; }
+  * { box-sizing: border-box; }
+  ::-webkit-scrollbar { display: none; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="illustrations.jsx"></script>
+<script type="text/babel" src="neko-poster.jsx"></script>
+<script type="text/babel" src="neko-data.jsx"></script>
+<script type="text/babel" src="neko-detail-sheet.jsx"></script>
+<script type="text/babel" src="neko-search-screen.jsx"></script>
+<script type="text/babel" src="neko-onboarding.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS_P3 = /*EDITMODE-BEGIN*/{
+  "showHints": true
+}/*EDITMODE-END*/;
+
+const W = window;
+
+// ─── Phone frame ──────────────────────────────────
+function PhoneFrame({ children, w = 380, h = 760 }) {
+  return (
+    <div style={{
+      width: w, height: h, background: '#12110E',
+      borderRadius: 36, border: '1px solid #2E2D27',
+      overflow: 'hidden', position: 'relative',
+      boxShadow: '0 24px 80px rgba(0,0,0,0.5), inset 0 0 0 4px #1A1916',
+    }}>
+      {/* notch */}
+      <div style={{
+        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+        width: 110, height: 28, borderRadius: 14, background: '#000', zIndex: 50,
+      }}/>
+      <div style={{
+        position: 'absolute', inset: 6, borderRadius: 30, overflow: 'hidden',
+        background: '#0B0A07',
+      }}>{children}</div>
+    </div>
+  );
+}
+
+// ─── Hero-morph artboard (animated card → sheet) ──────────
+function HeroMorphArtboard() {
+  const [open, setOpen] = React.useState(false);
+  const work = window.NekoData.WORKS.find(w => w.id === 'past-lives');
+  const cat = window.NekoData.CATS[work.cat];
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#0B0A07', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      <PhoneFrame w={360} h={720}>
+        {/* card view */}
+        <div style={{
+          width: '100%', height: '100%', position: 'relative',
+          padding: '60px 24px 24px',
+        }}>
+          <div style={{
+            fontFamily: 'Geist Mono, ui-monospace, monospace', fontSize: 10,
+            color: '#C4A35A', letterSpacing: '0.12em', textTransform: 'uppercase',
+            marginBottom: 14,
+          }}>Today · 오늘의 한 편</div>
+
+          {/* The poster card — morphs into sheet */}
+          <div onClick={() => setOpen(true)} style={{
+            position: open ? 'absolute' : 'relative',
+            top: open ? 0 : 'auto', left: open ? 0 : 'auto',
+            width: open ? '100%' : '100%',
+            height: open ? '100%' : 'auto',
+            aspectRatio: open ? 'auto' : '3/4',
+            borderRadius: open ? 0 : 12,
+            overflow: 'hidden',
+            cursor: 'pointer',
+            transition: 'all 450ms cubic-bezier(0.32, 0.72, 0.24, 1)',
+            zIndex: open ? 100 : 1,
+            border: open ? 'none' : '1px solid #2A2823',
+            boxShadow: open ? 'none' : '0 12px 32px rgba(0,0,0,0.4)',
+          }}>
+            {!open ? (
+              <>
+                <img src={work.poster} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'linear-gradient(to bottom, transparent 50%, rgba(11,10,7,0.85) 100%)',
+                }}/>
+                <div style={{ position: 'absolute', bottom: 16, left: 16, right: 16 }}>
+                  <div style={{
+                    fontFamily: 'Pretendard Variable', fontSize: 18, fontWeight: 700,
+                    color: '#EDEDEF', lineHeight: 1.2,
+                  }}>{work.title}</div>
+                  <div style={{
+                    fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+                    fontSize: 12, color: '#8E8F9A', marginTop: 2,
+                  }}>{work.titleEn} · {work.year}</div>
+                </div>
+              </>
+            ) : (
+              <window.NekoDetailSheet workId="past-lives" variant={{ hero: 'large', history: 'calendar', save: 'top' }}/>
+            )}
+          </div>
+
+          {!open && (
+            <div style={{
+              position: 'absolute', bottom: 24, left: 24, right: 24,
+              fontFamily: 'Pretendard Variable', fontSize: 11, color: '#6B6C75',
+              textAlign: 'center',
+            }}>탭해서 상세 보기 ↓</div>
+          )}
+
+          {open && (
+            <div onClick={() => setOpen(false)} style={{
+              position: 'absolute', top: 14, left: 14, zIndex: 200,
+              width: 32, height: 32, borderRadius: 16,
+              background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 18, cursor: 'pointer',
+            }}>‹</div>
+          )}
+        </div>
+      </PhoneFrame>
+    </div>
+  );
+}
+
+// ─── Static phone wrappers ────────────────────────────────
+function DetailArtboard({ variant }) {
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#0B0A07', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <PhoneFrame w={360} h={720}>
+        <window.NekoDetailSheet workId="past-lives" variant={variant}/>
+      </PhoneFrame>
+    </div>
+  );
+}
+
+function SearchArtboard({ variant, initialState }) {
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#0B0A07', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <PhoneFrame w={360} h={720}>
+        <window.NekoSearchScreen variant={variant} initialState={initialState}/>
+      </PhoneFrame>
+    </div>
+  );
+}
+
+function OnboardingArtboard({ variant, initialStep }) {
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#0B0A07', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <PhoneFrame w={360} h={720}>
+        <window.NekoOnboarding variant={variant} initialStep={initialStep}/>
+      </PhoneFrame>
+    </div>
+  );
+}
+
+// ─── App ──────────────────────────────────────────────────
+function App() {
+  const [t, setTweak] = W.useTweaks(TWEAK_DEFAULTS_P3);
+  return (
+    <W.DesignCanvas>
+      {/* SECTION 1 — DETAIL SHEET */}
+      <W.DCSection
+        id="detail"
+        title="Detail Sheet — Hero Morph"
+        subtitle="Apple Music식 morph로 카드 → 시트가 확장. 표준 1 + 새로움 1. 첫 카드는 인터랙티브 (탭해서 morph 확인)."
+      >
+        <W.DCArtboard id="detail-morph" label="Hero Morph (interactive)" width={460} height={820}>
+          <HeroMorphArtboard/>
+        </W.DCArtboard>
+        <W.DCArtboard id="detail-standard" label="A · 표준 (large hero, calendar, top save)" width={460} height={820}>
+          <DetailArtboard variant={{ hero: 'large', history: 'calendar', save: 'top' }}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="detail-novel" label="B · 살짝 새로움 (blur bg, timeline, FAB)" width={460} height={820}>
+          <DetailArtboard variant={{ hero: 'blur', history: 'timeline', save: 'fab' }}/>
+        </W.DCArtboard>
+      </W.DCSection>
+
+      {/* SECTION 2 — SEARCH */}
+      <W.DCSection
+        id="search"
+        title="Search — Inline Entry, Grouping, Voice"
+        subtitle="Discover 상단의 검색 바. 인트로 / 결과 그룹핑 / 음성 / 빈 상태 — 표준 1 + 실험적 1."
+      >
+        <W.DCArtboard id="search-intro" label="Intro (Recent + Trending + Browse)" width={460} height={820}>
+          <SearchArtboard variant="grouped" initialState="intro"/>
+        </W.DCArtboard>
+        <W.DCArtboard id="search-grouped" label="A · Grouped Results (작품/감독/배우)" width={460} height={820}>
+          <SearchArtboard variant="grouped" initialState="results"/>
+        </W.DCArtboard>
+        <W.DCArtboard id="search-classic" label="B · Classic Mixed Results" width={460} height={820}>
+          <SearchArtboard variant="classic" initialState="results"/>
+        </W.DCArtboard>
+        <W.DCArtboard id="search-voice" label="Voice Listening" width={460} height={820}>
+          <SearchArtboard variant="grouped" initialState="voice"/>
+        </W.DCArtboard>
+        <W.DCArtboard id="search-empty" label="Empty Result" width={460} height={820}>
+          <SearchArtboard variant="grouped" initialState="empty"/>
+        </W.DCArtboard>
+      </W.DCSection>
+
+      {/* SECTION 3 — ONBOARDING */}
+      <W.DCSection
+        id="onboarding"
+        title="Onboarding — 5 Steps × 2 Variants"
+        subtitle="Welcome → Hello → Taste (장르 칩 멀티) → OTT → Notify. 변형 A: 클래식 진행바 / 변형 B: 에디토리얼 챕터 마크."
+      >
+        {/* Variant A row */}
+        <W.DCArtboard id="ob-a-1" label="A · 01 Welcome" width={400} height={760}>
+          <OnboardingArtboard variant="classic" initialStep={0}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-a-2" label="A · 02 Intro" width={400} height={760}>
+          <OnboardingArtboard variant="classic" initialStep={1}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-a-3" label="A · 03 Taste" width={400} height={760}>
+          <OnboardingArtboard variant="classic" initialStep={2}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-a-4" label="A · 04 OTT" width={400} height={760}>
+          <OnboardingArtboard variant="classic" initialStep={3}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-a-5" label="A · 05 Notify" width={400} height={760}>
+          <OnboardingArtboard variant="classic" initialStep={4}/>
+        </W.DCArtboard>
+
+        {/* Variant B row */}
+        <W.DCArtboard id="ob-b-1" label="B · 01 Welcome (editorial)" width={400} height={760}>
+          <OnboardingArtboard variant="editorial" initialStep={0}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-b-2" label="B · 02 Intro (editorial)" width={400} height={760}>
+          <OnboardingArtboard variant="editorial" initialStep={1}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-b-3" label="B · 03 Taste (editorial)" width={400} height={760}>
+          <OnboardingArtboard variant="editorial" initialStep={2}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-b-4" label="B · 04 OTT (editorial)" width={400} height={760}>
+          <OnboardingArtboard variant="editorial" initialStep={3}/>
+        </W.DCArtboard>
+        <W.DCArtboard id="ob-b-5" label="B · 05 Notify (editorial)" width={400} height={760}>
+          <OnboardingArtboard variant="editorial" initialStep={4}/>
+        </W.DCArtboard>
+      </W.DCSection>
+
+      <W.DCPostIt top={40} left={40} rotate={-3} width={260}>
+        3단계 — 작품 상세(Hero Morph) · 검색 · 온보딩 5단계.
+        Detail Sheet 첫 카드를 탭해서 morph 확인.
+        검색은 그룹핑 vs 클래식 비교, 빈 상태/음성 포함.
+      </W.DCPostIt>
+    </W.DesignCanvas>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

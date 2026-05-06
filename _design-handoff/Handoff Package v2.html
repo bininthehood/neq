@@ -1,0 +1,1314 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>neko · Design Handoff Package</title>
+<link rel="stylesheet" href="system/colors_and_type.css"/>
+<template id="__bundler_thumbnail">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="#12110E"/>
+  <rect x="60" y="50" width="80" height="100" rx="6" fill="none" stroke="#C4A35A" stroke-width="2"/>
+  <text x="100" y="108" text-anchor="middle" font-family="Georgia, serif" font-style="italic" font-size="36" fill="#C4A35A">n</text>
+  <text x="100" y="170" text-anchor="middle" font-family="monospace" font-size="9" fill="#8E8F9A" letter-spacing="2">HANDOFF</text>
+</svg>
+</template>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /* ── Layout ── */
+  .doc {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 100vh;
+  }
+  .nav {
+    border-right: 1px solid var(--border-subtle);
+    padding: 36px 24px 24px;
+    position: sticky; top: 0; align-self: start;
+    height: 100vh; overflow-y: auto;
+    background: var(--bg);
+  }
+  .nav-brand {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 26px; line-height: 1; letter-spacing: -0.02em;
+    color: var(--text-primary); margin-bottom: 4px;
+  }
+  .nav-meta {
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--accent); letter-spacing: 0.18em;
+    text-transform: uppercase; margin-bottom: 28px;
+  }
+  .nav ol { list-style: none; padding: 0; margin: 0; counter-reset: section; }
+  .nav ol li { counter-increment: section; margin-bottom: 2px; }
+  .nav ol li a {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 7px 10px; border-radius: 6px;
+    color: var(--text-secondary); text-decoration: none;
+    font-size: 13px; line-height: 1.4;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav ol li a::before {
+    content: counter(section, decimal-leading-zero);
+    font-family: var(--font-data); font-size: 10px;
+    color: var(--text-muted); flex-shrink: 0;
+  }
+  .nav ol li a:hover { background: var(--surface); color: var(--text-primary); }
+  .nav ol li a.active { color: var(--accent); background: var(--accent-dim); }
+  .nav-foot {
+    margin-top: 28px; padding-top: 20px;
+    border-top: 1px solid var(--border-subtle);
+    font-family: var(--font-data); font-size: 10px;
+    color: var(--text-muted); line-height: 1.6;
+  }
+  .nav-foot a { color: var(--accent); text-decoration: none; }
+  .nav-foot a:hover { text-decoration: underline; }
+
+  main { padding: 60px 56px 120px; max-width: 980px; }
+
+  /* ── Section ── */
+  .section { margin-bottom: 96px; scroll-margin-top: 24px; }
+  .section-num {
+    font-family: var(--font-data); font-size: 11px;
+    color: var(--accent); letter-spacing: 0.16em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .section-title {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 44px; line-height: 1.05; letter-spacing: -0.02em;
+    color: var(--text-primary); margin: 0 0 16px;
+  }
+  .section-lede {
+    font-size: 17px; line-height: 1.55;
+    color: var(--text-secondary); max-width: 660px; margin: 0 0 36px;
+  }
+  h3 {
+    font-family: var(--font-body); font-size: 18px; font-weight: 700;
+    margin: 32px 0 12px; color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+  h4 {
+    font-family: var(--font-body); font-size: 14px; font-weight: 600;
+    margin: 20px 0 10px; color: var(--text-primary);
+    letter-spacing: -0.005em;
+  }
+  p { margin: 0 0 14px; color: var(--text-secondary); }
+  p strong { color: var(--text-primary); font-weight: 600; }
+  code {
+    font-family: var(--font-data); font-size: 0.88em;
+    background: var(--surface-sunken); border: 1px solid var(--border-subtle);
+    padding: 1px 6px; border-radius: 4px; color: var(--accent);
+  }
+
+  /* ── Cover ── */
+  .cover {
+    margin-bottom: 96px; padding-bottom: 48px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .cover-eyebrow {
+    font-family: var(--font-data); font-size: 11px;
+    color: var(--accent); letter-spacing: 0.18em;
+    text-transform: uppercase; margin-bottom: 14px;
+  }
+  .cover-title {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 88px; line-height: 0.95; letter-spacing: -0.03em;
+    color: var(--text-primary); margin: 0 0 16px;
+  }
+  .cover-title .accent { color: var(--accent); }
+  .cover-sub {
+    font-size: 19px; line-height: 1.5;
+    color: var(--text-secondary); max-width: 620px; margin-bottom: 32px;
+  }
+  .cover-meta {
+    display: flex; gap: 32px; flex-wrap: wrap;
+    font-family: var(--font-data); font-size: 11px;
+    color: var(--text-muted); letter-spacing: 0.08em;
+  }
+  .cover-meta div { display: flex; flex-direction: column; gap: 4px; }
+  .cover-meta .k { color: var(--accent); text-transform: uppercase; font-size: 9px; letter-spacing: 0.18em; }
+  .cover-meta .v { color: var(--text-primary); font-size: 13px; letter-spacing: 0.04em; }
+
+  /* ── Decision cards ── */
+  .decisions { display: flex; flex-direction: column; gap: 12px; }
+  .decision {
+    border: 1px solid var(--border-subtle);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 22px 24px;
+    background: var(--surface);
+  }
+  .decision-head {
+    display: flex; align-items: baseline; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .decision-num {
+    font-family: var(--font-data); font-size: 10px;
+    color: var(--accent); letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .decision-title {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 22px; line-height: 1.2; color: var(--text-primary);
+    flex: 1;
+  }
+  .decision-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+    margin-top: 14px;
+  }
+  .decision-grid > div {
+    border-top: 1px solid var(--border-subtle); padding-top: 12px;
+  }
+  .decision-grid .k {
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--accent); letter-spacing: 0.18em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .decision-grid .v {
+    font-size: 13px; line-height: 1.5; color: var(--text-secondary);
+  }
+  .decision-grid .v.dim { color: var(--text-muted); }
+
+  /* ── Token grid ── */
+  .token-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-bottom: 24px;
+  }
+  .swatch {
+    border: 1px solid var(--border-subtle); border-radius: 6px;
+    overflow: hidden; background: var(--surface);
+  }
+  .swatch-color { height: 64px; }
+  .swatch-meta { padding: 8px 10px; }
+  .swatch-name {
+    font-family: var(--font-data); font-size: 10px; font-weight: 500;
+    color: var(--text-primary);
+  }
+  .swatch-val {
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--text-muted); margin-top: 2px;
+  }
+  .swatch-cssvar {
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--accent); margin-top: 2px;
+  }
+
+  .type-spec {
+    display: flex; align-items: baseline; gap: 16px;
+    padding: 14px 0; border-bottom: 1px solid var(--border-subtle);
+  }
+  .type-spec:last-child { border-bottom: none; }
+  .type-spec-sample { flex: 1; min-width: 0; }
+  .type-spec-meta {
+    flex-shrink: 0; min-width: 220px; text-align: right;
+    font-family: var(--font-data); font-size: 10px;
+    color: var(--text-muted); letter-spacing: 0.04em;
+  }
+  .type-spec-meta strong { color: var(--accent); font-weight: 500; }
+
+  /* ── Tables ── */
+  table {
+    width: 100%; border-collapse: collapse;
+    margin: 8px 0 24px;
+    font-size: 13px;
+  }
+  th {
+    text-align: left;
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--accent); letter-spacing: 0.18em;
+    text-transform: uppercase; font-weight: 500;
+    padding: 10px 12px; border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 12px 12px; vertical-align: top;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+  td.k { color: var(--text-primary); font-family: var(--font-data); font-size: 12px; }
+  td code { font-size: 11.5px; }
+
+  /* ── Component card ── */
+  .comp { margin-bottom: 28px; }
+  .comp-head {
+    display: flex; align-items: baseline; gap: 12px;
+    padding-bottom: 8px; border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  .comp-name {
+    font-family: var(--font-data); font-size: 12px;
+    color: var(--accent);
+  }
+  .comp-desc {
+    font-size: 13px; color: var(--text-muted); flex: 1;
+  }
+
+  /* ── Screen case ── */
+  .case {
+    margin-bottom: 56px;
+    border: 1px solid var(--border-subtle); border-radius: 12px;
+    overflow: hidden; background: var(--surface);
+  }
+  .case-header { padding: 24px 28px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .case-tag {
+    display: inline-block; padding: 3px 8px; border-radius: 3px;
+    background: var(--accent-dim); color: var(--accent);
+    font-family: var(--font-data); font-size: 9px;
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .case-title {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 28px; line-height: 1.15; letter-spacing: -0.02em;
+    color: var(--text-primary); margin: 0;
+  }
+  .case-body { padding: 24px 28px; }
+  .case-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 28px;
+  }
+  .case-list { margin: 0; padding-left: 18px; }
+  .case-list li {
+    margin-bottom: 8px; color: var(--text-secondary); font-size: 13px;
+    line-height: 1.5;
+  }
+  .case-list li::marker { color: var(--accent); }
+
+  /* ── Flow diagram ── */
+  .flow {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-subtle); border-radius: 10px;
+    padding: 28px; margin: 16px 0;
+  }
+  .flow-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .flow-row:last-child { margin-bottom: 0; }
+  .flow-step {
+    padding: 10px 14px; border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: var(--font-data); font-size: 11px;
+    color: var(--text-primary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .flow-step .icon {
+    width: 6px; height: 6px; border-radius: 3px;
+    background: var(--accent);
+  }
+  .flow-step.terminal { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
+  .flow-arrow {
+    color: var(--text-muted); font-family: var(--font-data); font-size: 11px;
+    letter-spacing: 0.08em;
+  }
+  .flow-label {
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--accent); letter-spacing: 0.15em;
+    text-transform: uppercase; margin-bottom: 12px;
+  }
+
+  /* ── File tree ── */
+  .tree {
+    background: var(--surface-sunken);
+    border: 1px solid var(--border-subtle); border-radius: 8px;
+    padding: 20px 24px;
+    font-family: var(--font-data); font-size: 12px; line-height: 1.7;
+    color: var(--text-secondary);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .tree .file { color: var(--text-primary); }
+  .tree .file.entry { color: var(--accent); font-weight: 500; }
+  .tree .dir { color: var(--text-muted); }
+  .tree .note { color: var(--text-muted); font-style: italic; }
+
+  /* ── Pull quote / callout ── */
+  .pull {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-dim);
+    padding: 16px 20px; border-radius: 0 6px 6px 0;
+    font-family: var(--font-display); font-style: italic;
+    font-size: 17px; line-height: 1.5; color: var(--text-primary);
+    margin: 16px 0 24px;
+  }
+  .callout {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 16px 20px; border-radius: 6px;
+    margin: 16px 0 24px;
+  }
+  .callout-tag {
+    font-family: var(--font-data); font-size: 9px;
+    color: var(--accent); letter-spacing: 0.15em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .callout-tag.warn { color: var(--warning); }
+  .callout p { margin: 0; font-size: 13px; line-height: 1.55; }
+
+  /* ── Artifact links ── */
+  .artifacts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+  .artifact {
+    border: 1px solid var(--border-subtle); border-radius: 8px;
+    padding: 16px 20px; background: var(--surface);
+    text-decoration: none; transition: border 0.15s, background 0.15s;
+    display: block;
+  }
+  .artifact:hover { border-color: var(--accent); background: var(--surface-raised); }
+  .artifact-num {
+    font-family: var(--font-data); font-size: 10px;
+    color: var(--accent); letter-spacing: 0.18em;
+    text-transform: uppercase; margin-bottom: 6px;
+  }
+  .artifact-title {
+    font-family: var(--font-display); font-style: italic;
+    font-size: 18px; color: var(--text-primary); margin-bottom: 4px;
+    line-height: 1.2;
+  }
+  .artifact-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── Two col ── */
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 16px 0; }
+
+  /* ── Spec list ── */
+  .specs dt {
+    font-family: var(--font-data); font-size: 10px;
+    color: var(--accent); letter-spacing: 0.15em;
+    text-transform: uppercase; margin-top: 16px; margin-bottom: 4px;
+  }
+  .specs dt:first-child { margin-top: 0; }
+  .specs dd {
+    margin: 0 0 4px; padding: 0;
+    font-size: 13px; line-height: 1.55; color: var(--text-secondary);
+  }
+
+  /* ── Print ── */
+  @media print {
+    .nav { display: none; }
+    .doc { grid-template-columns: 1fr; }
+    main { padding: 24px; }
+    .section { page-break-inside: avoid; }
+  }
+
+  /* ── Mobile fallback ── */
+  @media (max-width: 900px) {
+    .doc { grid-template-columns: 1fr; }
+    .nav { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--border-subtle); }
+    main { padding: 32px 20px 80px; }
+    .case-grid, .two-col, .artifacts, .decision-grid { grid-template-columns: 1fr; }
+    .token-grid { grid-template-columns: repeat(2, 1fr); }
+    .cover-title { font-size: 56px; }
+    .section-title { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="doc">
+
+  <!-- ───── NAV ───── -->
+  <nav class="nav" id="nav">
+    <div class="nav-brand">neko</div>
+    <div class="nav-meta">Handoff · v2.0 · 2026.05</div>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#decisions">Design Decisions</a></li>
+      <li><a href="#edge">Edge Cases &amp; Copy</a></li>
+      <li><a href="#tokens">Design Tokens</a></li>
+      <li><a href="#components">Component Inventory</a></li>
+      <li><a href="#screens">Screen Case Studies</a></li>
+      <li><a href="#flows">Interaction Flows</a></li>
+      <li><a href="#impl">Implementation Guide</a></li>
+      <li><a href="#deliverables">Deliverables</a></li>
+    </ol>
+    <div class="nav-foot">
+      <div>Internal team · PM · Design · Eng</div>
+      <div style="margin-top:8px">Standalone — works offline</div>
+    </div>
+  </nav>
+
+  <!-- ───── MAIN ───── -->
+  <main>
+    <!-- Cover -->
+    <section class="cover">
+      <div class="cover-eyebrow">Design Handoff Package · v2.0 · 2025 / Q2</div>
+      <h1 class="cover-title">neko — <span class="accent">quiet ink</span> for what to watch.</h1>
+      <p class="cover-sub">
+        스와이프 큐레이션 OTT 추천 앱 · Phase 1–4 · <strong>R1–R3 리뷰 라운드 반영</strong> · 의사결정 근거 · 토큰 · 컴포넌트 · 엣지 케이스 · 카피 명세 · 구현 가이드.
+      </p>
+      <div class="cover-meta">
+        <div><span class="k">Project</span><span class="v">neko · OTT 추천</span></div>
+        <div><span class="k">Phases</span><span class="v">1–4 + R1/R2/R3</span></div>
+        <div><span class="k">Surface</span><span class="v">iOS · 402×874</span></div>
+        <div><span class="k">System</span><span class="v">Quiet Ink (amber pivot)</span></div>
+        <div><span class="k">Status</span><span class="v">Build-ready · v2</span></div>
+      </div>
+    </section>
+
+    <!-- ───── 1 OVERVIEW ───── -->
+    <section class="section" id="overview">
+      <div class="section-num">01 — Overview</div>
+      <h2 class="section-title">한 문장 요약과<br/>해결하려는 문제.</h2>
+      <p class="section-lede">
+        <strong>"오늘 뭐 볼까?"</strong>의 결정 피로를 줄이는 OTT 추천 앱. 큰 카드 한 장씩, 천천히, 4방향 스와이프로 결정합니다.
+      </p>
+
+      <div class="two-col">
+        <div>
+          <h3>핵심 가설</h3>
+          <p>OTT 콘텐츠 과잉 시대의 결정 피로는 <strong>선택지의 양</strong>이 아니라 <strong>선택지를 비교하는 인지부하</strong>에서 온다. 한 번에 한 작품만 깊이 있게 보여주면, 결정은 더 빨라지고 만족도는 더 높아진다.</p>
+        </div>
+        <div>
+          <h3>차별점</h3>
+          <p>경쟁 앱(Netflix · TVING · Watcha)은 <strong>그리드 + 무한 스크롤</strong>이 기본. neko는 <strong>한 장의 카드 + 4방향 스와이프</strong>로 결정 1회당 인지부하를 1/N로 낮춥니다. 시각 톤은 OTT 빨강 일변도와 의도적으로 거리를 둔 amber+ink 서점 톤.</p>
+        </div>
+      </div>
+
+      <h3>Phase 진행 요약</h3>
+      <table>
+        <thead><tr><th>Phase</th><th>산출물</th><th>핵심 결과</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="k">P1</td>
+            <td>Visual System</td>
+            <td>Quiet Ink 비주얼 DNA 확정 — 일러스트 4스타일 × 8 시나리오 + 모션 카탈로그 12종</td>
+          </tr>
+          <tr>
+            <td class="k">P2</td>
+            <td>Discover &amp; Saved</td>
+            <td>카드 변형 A/B/C · 4방향 스와이프 인터랙션 · Saved 그룹핑 4가지 · 빈 상태 8종</td>
+          </tr>
+          <tr>
+            <td class="k">P3</td>
+            <td>Detail / Search / Onboarding</td>
+            <td>Detail Hero Morph · Search 인트로/결과/음성/빈 · 5단계 온보딩 (classic/editorial)</td>
+          </tr>
+          <tr>
+            <td class="k">P4</td>
+            <td>Full Prototype</td>
+            <td>4탭 통합 (Discover/Search/Saved/Profile) · 클릭 가능 · Detail 슬라이드업 · 온보딩 오버레이</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="pull">"한 번에 한 작품. 그 이상은 사치다." — 이 한 줄이 모든 디자인 결정의 기준점이었습니다.</div>
+    </section>
+
+    <!-- ───── 2 DECISIONS ───── -->
+    <section class="section" id="decisions">
+      <div class="section-num">02 — Design Decisions</div>
+      <h2 class="section-title">왜 이렇게 만들었는가.</h2>
+      <p class="section-lede">
+        리뷰에서 자주 묻는 6개의 핵심 의사결정. 각 결정은 <strong>대안</strong>과 <strong>근거</strong>를 함께 기록했습니다.
+      </p>
+
+      <div class="decisions">
+        <div class="decision">
+          <div class="decision-head">
+            <span class="decision-num">D-01</span>
+            <div class="decision-title">스와이프 4방향, 그리드는 안 만든다</div>
+          </div>
+          <p>홈은 카드 스택 한 장. 좌우 = 다음/이전, 위 = 상세, 아래 = 저장. <strong>그리드 뷰는 의도적으로 제외.</strong></p>
+          <div class="decision-grid">
+            <div><div class="k">Considered</div><div class="v dim">Tinder 2-way · 그리드 + 카드 토글 · 무한 스크롤 피드</div></div>
+            <div><div class="k">Why this</div><div class="v">결정 피로 가설의 핵심 표현. 4방향이 가능한 이유는 카드가 "건너뛰기"와 "저장"을 동시에 처리해야 하기 때문 (Tinder 2-way로는 부족).</div></div>
+          </div>
+        </div>
+
+        <div class="decision">
+          <div class="decision-head">
+            <span class="decision-num">D-02</span>
+            <div class="decision-title">amber + ink 서점 톤. OTT 빨강 금지.</div>
+          </div>
+          <p>액센트 색은 <code>#C4A35A</code> amber 단일. 배경은 <code>#12110E</code> 따뜻한 ink. <strong>red/orange CTA 일체 사용 안 함.</strong></p>
+          <div class="decision-grid">
+            <div><div class="k">Considered</div><div class="v dim">Netflix red · 다채로운 카테고리 색 · 다크모드 회색조</div></div>
+            <div><div class="k">Why this</div><div class="v">OTT 카테고리 안에서 "조용한 추천 친구" 포지셔닝. 색 한 가지로 위계를 만들면 카드 위 작품 포스터의 색이 살아난다.</div></div>
+          </div>
+        </div>
+
+        <div class="decision">
+          <div class="decision-head">
+            <span class="decision-num">D-03</span>
+            <div class="decision-title">서체는 3종 — Display 세리프 + Body 산세리프 + Data 모노</div>
+          </div>
+          <p><strong>Instrument Serif</strong> (display, italic 사용) · <strong>Pretendard Variable</strong> (body, KR/EN) · <strong>Geist Mono</strong> (data, meta).</p>
+          <div class="decision-grid">
+            <div><div class="k">Considered</div><div class="v dim">Inter 단일 · Pretendard + Roboto · Fraunces + Inter</div></div>
+            <div><div class="k">Why this</div><div class="v">Italic 디스플레이 세리프 = 영화/책의 권위감, Pretendard = KR 본문 가독성, Geist Mono = 메타데이터의 "명세 같은" 정확함. 3가지가 서로 역할이 안 겹친다.</div></div>
+          </div>
+        </div>
+
+        <div class="decision">
+          <div class="decision-head">
+            <span class="decision-num">D-04</span>
+            <div class="decision-title">카드 변형 A/B/C는 모두 production-ready</div>
+          </div>
+          <p><strong>A · Poster-led</strong> (포스터 풀블리드) / <strong>B · Type-led</strong> (제목·이유 위계 상위) / <strong>C · Cinematic</strong> (어두운 백드롭 + 영화관). Tweaks로 토글 가능.</p>
+          <div class="decision-grid">
+            <div><div class="k">Considered</div><div class="v dim">변형 한 개로 합치기 · A/B 테스트용 마이너 변형 3종</div></div>
+            <div><div class="k">Why this</div><div class="v">세 변형은 "다른 시간대/기분"을 표현 — A는 시각적 임팩트(밤), B는 큐레이터의 글(아침/지하철), C는 영화관 모드(주말 저녁). A/B 테스트가 아니라 사용자 선택지로 본다.</div></div>
+          </div>
+        </div>
+
+        <div class="decision">
+          <div class="decision-head">
+            <span class="decision-num">D-05</span>
+            <div class="decision-title">Detail 시트는 카드에서 morph로 확장한다</div>
+          </div>
+          <p>카드 탭 → 카드의 위치/크기 그대로 시트로 확장 (450ms cubic-bezier). Apple Music식 스프링.</p>
+          <div class="decision-grid">
+            <div><div class="k">Considered</div><div class="v dim">새 화면으로 push · 모달 슬라이드업 (위치 무관) · 페이지 트랜지션</div></div>
+            <div><div class="k">Why this</div><div class="v">"이 카드의 더 깊은 정보"라는 멘탈 모델 보존. 새 화면 push는 컨텍스트 단절감, 단순 슬라이드업은 카드와의 연결감 약함.</div></div>
+          </div>
+        </div>
+
+        <div class="decision">
+          <div class="decision-head">
+            <span class="decision-num">D-06</span>
+            <div class="decision-title">온보딩은 5단계, editorial 변형 추천</div>
+          </div>
+          <p>Welcome → Hello → Taste(장르) → OTT(연결) → Notify. <strong>editorial</strong> 변형 (CHAPTER 01 챕터 마크) 사용 권장.</p>
+          <div class="decision-grid">
+            <div><div class="k">Considered</div><div class="v dim">3단계 압축 · 7단계+개인정보 · 스킵 가능한 1단계</div></div>
+            <div><div class="k">Why this</div><div class="v">amber+세리프 톤이 "잡지 챕터" 비유와 잘 맞음. 5단계 → 평균 완료 시간 90초, 이탈 위험 적음. classic은 보수적 백업.</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───── 3 EDGE CASES & COPY (NEW v2) ───── -->
+    <section class="section" id="edge">
+      <div class="section-num">03 — Edge Cases &amp; Copy</div>
+      <h2 class="section-title">리뷰 라운드에서<br/>잠긴 결정들.</h2>
+      <p class="section-lede">
+        <strong>R1</strong>에서 6개 디자인 의사결정을 잠그고, <strong>R2</strong>에서 9개 엣지 케이스 화면을 추가, <strong>R3</strong>에서 17개 카피를 일관된 톤으로 정리했습니다. 모든 변경은 <code>Phase 4 - Full Prototype.html</code>에 자동 반영됩니다.
+      </p>
+
+      <h3>R1 · 디자인 의사결정 잠금</h3>
+      <table>
+        <thead><tr><th>축</th><th>잠긴 안</th><th>근거</th></tr></thead>
+        <tbody>
+          <tr><td class="k">카드 변형</td><td><strong>B · 타이포그래픽</strong></td><td>OTT 빨강과 거리 두기 · Quiet Ink DNA에 가장 충실 · 포스터 리스크(저작권/품질) 회피</td></tr>
+          <tr><td class="k">온보딩</td><td><strong>Editorial · 5단계</strong></td><td>"천천히, 잘 골라드릴게요" 약속을 첫 화면부터 형식으로 증명</td></tr>
+          <tr><td class="k">Detail morph</td><td><strong>Hero morph A · 풀 트랜스폼</strong></td><td>스와이프 카드 → 상세의 연속성. 인지 지속 우선</td></tr>
+          <tr><td class="k">Saved 그룹핑</td><td><strong>Mood 기본 · OTT/시간/저장순 토글</strong></td><td>Mood가 neko의 스토리를 가장 잘 전달. 다른 그룹핑은 보조 레인즈</td></tr>
+          <tr><td class="k">Search</td><td><strong>Grouped · 작품/사람/장르 분리</strong></td><td>빠른 스캔 가능 · 한국 특수 케이스(감독/배우 검색)에 강함</td></tr>
+          <tr><td class="k">일러스트</td><td><strong>Lineart 기본 · Geometric 특정 시나리오만</strong></td><td>Welcome / Discover Empty 등 강한 컨셉 화면에만 Geometric. 나머지는 일관된 lineart</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:14px;font-size:13px;color:var(--text-muted)">전체 비교는 <code>Round 1 - Decisions.html</code>에서 다른 옵션과 함께 검토 가능.</p>
+
+      <h3>R2 · 엣지 케이스 매트릭스</h3>
+      <table>
+        <thead><tr><th>카테고리</th><th>화면</th><th>핵심 행동</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Loading</td><td>Initial Discover</td><td>카드 skeleton + "오늘의 다섯 편, 고르는 중" · 1.6s 이내 완료</td></tr>
+          <tr><td class="k">Loading</td><td>Saved List</td><td>그리드 skeleton · 책장 배경 유지</td></tr>
+          <tr><td class="k">Loading</td><td>Detail Sheet</td><td>Hero morph 직후 본문만 페치 · 이미지는 cache-first</td></tr>
+          <tr><td class="k">Loading</td><td>Saved Sync</td><td>논블로킹 strip · 다른 기기와 동기화 표시</td></tr>
+          <tr><td class="k">Network</td><td>Offline Banner</td><td>캐시된 저장 작품 노출 + 상단 배너 · Discover는 차단</td></tr>
+          <tr><td class="k">Network</td><td>Full Error</td><td>503 / 캐시 없음 · 풀 에러 화면 + 재시도</td></tr>
+          <tr><td class="k">Network</td><td>Image Failed</td><td>타이포그래픽 폴백 · 카드 변형 B로 자연스럽게 fallback</td></tr>
+          <tr><td class="k">Exhausted</td><td>Today Complete</td><td>끝맺음 + 통계 + "내일 이 시간 · 새 다섯 편"</td></tr>
+          <tr><td class="k">Exhausted</td><td>Bonus Card</td><td>"더 보기" 선택 후 · 피로 마커 표시</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:14px;font-size:13px;color:var(--text-muted)">9개 화면 모두 <code>Round 2 - Edge Cases.html</code>에서 design canvas로 정렬되어 있음. 컴포넌트는 <code>neko-edge-cases.jsx</code>.</p>
+
+      <h3>R3 · 카피 톤 정의</h3>
+      <p>17개 변경의 공통 원칙:</p>
+      <ul style="margin:0 0 18px 24px;color:var(--text-secondary);font-size:14px;line-height:1.7">
+        <li>의인화하지 않는다 (앱이 1인칭으로 말하지 않음)</li>
+        <li>사과하지 않는다 ("죄송합니다" / "앗! 저런" 금지)</li>
+        <li>사용자에게 책임을 묻지 않는다 ("연결을 확인해 주세요" → "잠시 숨 고르고 다시")</li>
+        <li>다음 행동을 명시한다</li>
+        <li>최대 2줄, 짧게</li>
+      </ul>
+
+      <h4>Before / After 핵심 7건</h4>
+      <table>
+        <thead><tr><th>ID</th><th>Before</th><th>After</th></tr></thead>
+        <tbody>
+          <tr><td class="k">N-04</td><td style="color:var(--text-muted);text-decoration:line-through">네트워크 연결을 확인해 주세요. 잠시 후 다시 시도해 주세요.</td><td><strong>잠시 숨 고르고 다시 와 주세요.<br/>대부분 그새 풀려 있어요.</strong></td></tr>
+          <tr><td class="k">L-01</td><td style="color:var(--text-muted);text-decoration:line-through">오늘의 다섯 편 고르는 중…</td><td><strong>오늘의 다섯 편, 고르는 중</strong></td></tr>
+          <tr><td class="k">E-02</td><td style="color:var(--text-muted);text-decoration:line-through">다섯 편을 모두 봤어요. 충분히 골랐으니 하나를 천천히 음미할 시간이에요.</td><td><strong>다섯 편 다 봤어요. 고르는 시간은 끝, 이제 보는 시간이에요.</strong></td></tr>
+          <tr><td class="k">E-04</td><td style="color:var(--text-muted);text-decoration:line-through">내일 14:32에 새 다섯 편</td><td><strong>내일 이 시간 · 새 다섯 편</strong></td></tr>
+          <tr><td class="k">S-01</td><td style="color:var(--text-muted);text-decoration:line-through">아직 저장된 작품이 없어요</td><td><strong>책장이 비어 있어요</strong></td></tr>
+          <tr><td class="k">SR-02</td><td style="color:var(--text-muted);text-decoration:line-through">"{q}"에 맞는 게 없어요</td><td><strong>"{q}"와 겹치는 게 없어요</strong></td></tr>
+          <tr><td class="k">OB-01</td><td style="color:var(--text-muted);text-decoration:line-through">N개 더 골라 주세요</td><td><strong>N개만 더</strong></td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:14px;font-size:13px;color:var(--text-muted)">전체 17건은 <code>Round 3 - Copy Revisions v2.html</code>에서. 변경은 <code>neko-edge-cases.jsx</code>, <code>neko-saved-screen.jsx</code>, <code>neko-search-screen.jsx</code>, <code>neko-onboarding.jsx</code>에 적용됨.</p>
+
+      <h4>토스트 시스템 명세 (구현 미정)</h4>
+      <p>스와이프 / 저장 / 봤음 / 동기화 / 에러 액션의 피드백. <strong>2.4s 자동 dismiss</strong>, 우측 상단 액션은 selective. 6종 정의:</p>
+      <table>
+        <thead><tr><th>ID</th><th>Trigger</th><th>Copy</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr><td class="k">T-01</td><td>Swipe Down (Save)</td><td>책장에 담았어요 · {title}</td><td>실행 취소</td></tr>
+          <tr><td class="k">T-02</td><td>Swipe Right (Pass)</td><td>다음 카드 · 취향 학습에 반영해요</td><td>되돌리기</td></tr>
+          <tr><td class="k">T-03</td><td>Saved → Remove</td><td>책장에서 뺐어요 · {title}</td><td>실행 취소</td></tr>
+          <tr><td class="k">T-04</td><td>Mark as Watched</td><td>봤음 표시 · 좋았어요?</td><td>평가</td></tr>
+          <tr><td class="k">T-05</td><td>Offline Save</td><td>연결되면 동기화돼요 · 변경사항 N개 대기</td><td>—</td></tr>
+          <tr><td class="k">T-06</td><td>Save Failed</td><td>저장 못 했어요 · 다시 시도하면 보통 돼요</td><td>다시</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:14px;font-size:13px;color:var(--text-muted)">컴포넌트 구현은 다음 라운드. 미리보기는 <code>Round 3 - Copy Revisions v2.html</code> §04.</p>
+
+    </section>
+
+    <!-- ───── 4 TOKENS ───── -->
+    <section class="section" id="tokens">
+      <div class="section-num">04 — Design Tokens</div>
+      <h2 class="section-title">색 · 타입 · 모션의 정의.</h2>
+      <p class="section-lede">
+        모든 토큰은 <code>system/colors_and_type.css</code>에 정의됨. CSS 커스텀 프로퍼티로 노출되어 직접 가져다 쓸 수 있습니다.
+      </p>
+
+      <h3>Background &amp; Surface</h3>
+      <div class="token-grid">
+        <div class="swatch"><div class="swatch-color" style="background:#12110E"></div><div class="swatch-meta"><div class="swatch-name">bg</div><div class="swatch-val">#12110E</div><div class="swatch-cssvar">--bg</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#1A1916"></div><div class="swatch-meta"><div class="swatch-name">surface</div><div class="swatch-val">#1A1916</div><div class="swatch-cssvar">--surface</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#24231E"></div><div class="swatch-meta"><div class="swatch-name">surface-raised</div><div class="swatch-val">#24231E</div><div class="swatch-cssvar">--surface-raised</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#0B0A07"></div><div class="swatch-meta"><div class="swatch-name">surface-sunken</div><div class="swatch-val">#0B0A07</div><div class="swatch-cssvar">--surface-sunken</div></div></div>
+      </div>
+
+      <h3>Text</h3>
+      <div class="token-grid">
+        <div class="swatch"><div class="swatch-color" style="background:#EDEDEF"></div><div class="swatch-meta"><div class="swatch-name">primary</div><div class="swatch-val">#EDEDEF · 15.2:1</div><div class="swatch-cssvar">--text-primary</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#8E8F9A"></div><div class="swatch-meta"><div class="swatch-name">secondary</div><div class="swatch-val">#8E8F9A · 5.8:1</div><div class="swatch-cssvar">--text-secondary</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#6B6C75"></div><div class="swatch-meta"><div class="swatch-name">muted</div><div class="swatch-val">#6B6C75 · 3.2:1</div><div class="swatch-cssvar">--text-muted</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#12110E;border:1px solid #2E2D27"></div><div class="swatch-meta"><div class="swatch-name">inverse</div><div class="swatch-val">#12110E</div><div class="swatch-cssvar">--text-inverse</div></div></div>
+      </div>
+
+      <h3>Accent &amp; Semantic</h3>
+      <div class="token-grid">
+        <div class="swatch"><div class="swatch-color" style="background:#C4A35A"></div><div class="swatch-meta"><div class="swatch-name">accent</div><div class="swatch-val">#C4A35A</div><div class="swatch-cssvar">--accent</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#E05A4F"></div><div class="swatch-meta"><div class="swatch-name">danger</div><div class="swatch-val">#E05A4F</div><div class="swatch-cssvar">--danger</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#4DB06A"></div><div class="swatch-meta"><div class="swatch-name">success</div><div class="swatch-val">#4DB06A</div><div class="swatch-cssvar">--success</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#7BA3D4"></div><div class="swatch-meta"><div class="swatch-name">info</div><div class="swatch-val">#7BA3D4</div><div class="swatch-cssvar">--info</div></div></div>
+      </div>
+
+      <h3>Category Badges</h3>
+      <div class="token-grid">
+        <div class="swatch"><div class="swatch-color" style="background:#C4A35A"></div><div class="swatch-meta"><div class="swatch-name">movie</div><div class="swatch-val">영화 · #C4A35A</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#9B8AE0"></div><div class="swatch-meta"><div class="swatch-name">series</div><div class="swatch-val">시리즈 · #9B8AE0</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#E08A6C"></div><div class="swatch-meta"><div class="swatch-name">music</div><div class="swatch-val">음악 · #E08A6C</div></div></div>
+        <div class="swatch"><div class="swatch-color" style="background:#7EC4A0"></div><div class="swatch-meta"><div class="swatch-name">book</div><div class="swatch-val">책 · #7EC4A0</div></div></div>
+      </div>
+
+      <h3>Typography Scale</h3>
+      <div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-display">오늘 뭐 볼까?</div>
+          <div class="type-spec-meta"><strong>display</strong> · 48 / Instrument Serif</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-display-italic" style="font-size: 36px;">past lives</div>
+          <div class="type-spec-meta"><strong>display-italic</strong> · 36 / Instrument Serif Italic</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-h2">Today's Picks</div>
+          <div class="type-spec-meta"><strong>h2</strong> · 28 / Pretendard 700</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-h1">Saved · 저장됨</div>
+          <div class="type-spec-meta"><strong>h1 / page-title</strong> · 22 / Pretendard 700</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-body">짧은 본문 — 카드의 reason과 detail의 시놉시스에 사용됩니다.</div>
+          <div class="type-spec-meta"><strong>body</strong> · 15 / Pretendard 400</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-secondary">감독 · 박찬욱 · 2003</div>
+          <div class="type-spec-meta"><strong>secondary</strong> · 13 / Pretendard 400</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-data">2025 · VOL. 18 — MAY · 320 WATCHED</div>
+          <div class="type-spec-meta"><strong>data</strong> · 13 / Geist Mono 500</div>
+        </div>
+        <div class="type-spec">
+          <div class="type-spec-sample t-overline">CHAPTER 01 — WELCOME</div>
+          <div class="type-spec-meta"><strong>overline</strong> · 11 / Pretendard 600</div>
+        </div>
+      </div>
+
+      <h3>Spacing &amp; Radius</h3>
+      <table>
+        <thead><tr><th>Token</th><th>Value</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td class="k">--space-xs</td><td><code>4px</code></td><td>Icon gap, inline runs</td></tr>
+          <tr><td class="k">--space-sm</td><td><code>8px</code></td><td>Inner cell padding, chip gap</td></tr>
+          <tr><td class="k">--space-md</td><td><code>16px</code></td><td>Card padding, list row</td></tr>
+          <tr><td class="k">--space-lg</td><td><code>24px</code></td><td>Section gutter</td></tr>
+          <tr><td class="k">--space-xl</td><td><code>32px</code></td><td>Section spacing</td></tr>
+          <tr><td class="k">--radius-sm</td><td><code>4px</code></td><td>Badges, chips</td></tr>
+          <tr><td class="k">--radius-md</td><td><code>8px</code></td><td>Inputs, secondary buttons</td></tr>
+          <tr><td class="k">--radius-lg</td><td><code>12px</code></td><td>Buttons, cards</td></tr>
+          <tr><td class="k">--radius-xl</td><td><code>16px</code></td><td>Main card, sheet</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Motion</h3>
+      <table>
+        <thead><tr><th>Curve</th><th>cubic-bezier</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td class="k">--ease-enter</td><td><code>0.25, 1, 0.5, 1</code></td><td>나타남 (toast, sheet open)</td></tr>
+          <tr><td class="k">--ease-exit</td><td><code>0.5, 0, 0.75, 0</code></td><td>사라짐 (swipe out, dismiss)</td></tr>
+          <tr><td class="k">--ease-spring</td><td><code>0.34, 1.3, 0.64, 1</code></td><td>스냅백, save 흡수</td></tr>
+          <tr><td class="k">--ease-soft</td><td><code>0.4, 0, 0.2, 1</code></td><td>탭 전환, 일반 트랜지션</td></tr>
+        </tbody>
+      </table>
+      <table>
+        <thead><tr><th>Duration</th><th>Value</th><th>Use</th></tr></thead>
+        <tbody>
+          <tr><td class="k">--duration-instant</td><td><code>80ms</code></td><td>State change (active, hover)</td></tr>
+          <tr><td class="k">--duration-quick</td><td><code>150ms</code></td><td>Toggle, ripple</td></tr>
+          <tr><td class="k">--duration-moderate</td><td><code>250ms</code></td><td>Tab transition</td></tr>
+          <tr><td class="k">--duration-steady</td><td><code>350ms</code></td><td>Card swipe out</td></tr>
+          <tr><td class="k">--duration-slow</td><td><code>500ms</code></td><td>Sheet morph (450ms 실측)</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- ───── 4 COMPONENTS ───── -->
+    <section class="section" id="components">
+      <div class="section-num">05 — Component Inventory</div>
+      <h2 class="section-title">재사용 가능한 컴포넌트.</h2>
+      <p class="section-lede">
+        Phase 2~4에서 정의된 React 컴포넌트의 props 명세. 모든 컴포넌트는 <code>window</code> 글로벌로 노출되어 있고, 향후 ES module로 추출 가능.
+      </p>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoCards.{A,B,C}</code>
+          <span class="comp-desc">Discover 카드 변형 3종</span>
+        </div>
+        <table>
+          <thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="k">work</td><td><code>Work</code></td><td>—</td><td>NekoData.WORKS의 한 항목 (<code>id, title, titleEn, year, cat, poster, backdrop, …</code>)</td></tr>
+            <tr><td class="k">w</td><td><code>number</code></td><td>320</td><td>카드 폭 (px). swipe stack에서는 300 사용.</td></tr>
+            <tr><td class="k">h</td><td><code>number</code></td><td>480</td><td>카드 높이 (px). swipe stack에서는 460 사용.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoPrototypeSwipeStack</code>
+          <span class="comp-desc">4방향 스와이프 카드 스택 (콜백 라우팅)</span>
+        </div>
+        <table>
+          <thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="k">works</td><td><code>Work[]</code></td><td>—</td><td>표시할 작품 배열. 끝에 도달하면 처음으로 wrap.</td></tr>
+            <tr><td class="k">CardComponent</td><td><code>Component</code></td><td>—</td><td>NekoCards.A/B/C 중 하나.</td></tr>
+            <tr><td class="k">w, h</td><td><code>number</code></td><td>300, 460</td><td>카드 사이즈.</td></tr>
+            <tr><td class="k">onDetail</td><td><code>(work) => void</code></td><td>—</td><td>탭 또는 ↑ 스와이프.</td></tr>
+            <tr><td class="k">onSave</td><td><code>(work) => void</code></td><td>—</td><td>↓ 스와이프. 480ms 후 fire.</td></tr>
+            <tr><td class="k">onPass</td><td><code>(work) => void</code></td><td>—</td><td>← 스와이프. 360ms 후 fire.</td></tr>
+            <tr><td class="k">onBack</td><td><code>(work) => void</code></td><td>—</td><td>→ 스와이프 (이전 작품 복귀).</td></tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          <div class="callout-tag">Threshold</div>
+          <p>탭 = 8px 미만 + 300ms 미만. 스와이프 = 70px 이상. 그 외는 snap-back.</p>
+        </div>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoDetailSheet</code>
+          <span class="comp-desc">작품 상세 시트 (변형 2종)</span>
+        </div>
+        <table>
+          <thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="k">workId</td><td><code>string</code></td><td><code>'past-lives'</code></td><td>NekoData.WORKS의 id.</td></tr>
+            <tr><td class="k">variant.hero</td><td><code>'large' | 'blur'</code></td><td><code>'large'</code></td><td>large = 큰 포스터 / blur = 블러 백드롭 + 작은 썸네일</td></tr>
+            <tr><td class="k">variant.history</td><td><code>'calendar' | 'timeline' | 'hidden'</code></td><td><code>'calendar'</code></td><td>감상기록 표현 방식.</td></tr>
+            <tr><td class="k">variant.save</td><td><code>'top' | 'fab' | 'inline'</code></td><td><code>'top'</code></td><td>Save 버튼 위치.</td></tr>
+            <tr><td class="k">onClose</td><td><code>() => void</code></td><td>—</td><td>우상단 ✕ 클릭 시.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoSavedScreen</code>
+          <span class="comp-desc">저장된 작품 그룹핑 화면</span>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted)">props 없음. <code>NekoData.WORKS</code>에서 saved=true 항목을 자동으로 가져옴. 탭(All/Watching/Done)과 그룹핑 토글(Default/By OTT/Calendar/Mood)이 내부 상태.</p>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoSearchScreen</code>
+          <span class="comp-desc">검색 화면</span>
+        </div>
+        <table>
+          <thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="k">variant</td><td><code>'grouped' | 'classic'</code></td><td><code>'grouped'</code></td><td>grouped = 작품/감독/배우 그룹 / classic = 혼합 결과</td></tr>
+            <tr><td class="k">initialState</td><td><code>'intro' | 'results' | 'empty' | 'voice'</code></td><td><code>'intro'</code></td><td>초기 상태. 사용자 입력으로 변함.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoOnboarding</code>
+          <span class="comp-desc">5단계 온보딩</span>
+        </div>
+        <table>
+          <thead><tr><th>Prop</th><th>Type</th><th>Default</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="k">variant</td><td><code>'classic' | 'editorial'</code></td><td><code>'classic'</code></td><td>classic = 진행바 / editorial = 챕터 마크 (권장)</td></tr>
+            <tr><td class="k">initialStep</td><td><code>0..4</code></td><td>0</td><td>시작 단계.</td></tr>
+            <tr><td class="k">onComplete</td><td><code>() => void</code></td><td>—</td><td>5단계 완료 1.2초 후 fire.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">NekoIllust</code>
+          <span class="comp-desc">일러스트레이션 시스템 (8종 × 4스타일)</span>
+        </div>
+        <table>
+          <thead><tr><th>Prop</th><th>Type</th><th>Note</th></tr></thead>
+          <tbody>
+            <tr><td class="k">name</td><td><code>'welcome' | 'taste' | 'noResults' | 'savedEmpty' | 'onboarding' | …</code></td><td>8종.</td></tr>
+            <tr><td class="k">style</td><td><code>'geometric' | 'editorial' | 'monoline' | 'dotwork'</code></td><td>4스타일. <strong>geometric 사용 권장</strong> (Quiet Ink와 가장 잘 맞음).</td></tr>
+            <tr><td class="k">size</td><td><code>number</code></td><td>SVG 크기 (px).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="comp">
+        <div class="comp-head">
+          <code class="comp-name">IOSDevice</code>
+          <span class="comp-desc">iOS 디바이스 프레임 (시작 컴포넌트 기반)</span>
+        </div>
+        <p style="font-size:13px;color:var(--text-muted)">Phase 4의 디바이스 베젤. <code>width=402 height=874 dark</code> 사용. 상태바 + 노치 + 홈 인디케이터 자동 렌더링. <code>title</code> 생략 시 nav bar 없음.</p>
+      </div>
+    </section>
+
+    <!-- ───── 5 SCREENS ───── -->
+    <section class="section" id="screens">
+      <div class="section-num">06 — Screen Case Studies</div>
+      <h2 class="section-title">화면별 의도와 구현 노트.</h2>
+      <p class="section-lede">
+        주요 화면 6개의 디자인 의도, 인터랙션 정의, 구현 시 주의점을 정리.
+      </p>
+
+      <!-- Discover -->
+      <div class="case">
+        <div class="case-header">
+          <span class="case-tag">Tab · Discover</span>
+          <h3 class="case-title">오늘의 큐레이션 5선.</h3>
+        </div>
+        <div class="case-body">
+          <div class="case-grid">
+            <div>
+              <h4>의도</h4>
+              <ul class="case-list">
+                <li>홈 = 5장의 카드 스택. <strong>피드/그리드 없음</strong></li>
+                <li>"Vol. 18 · MAY" 식 잡지 호 표기로 매일/매주 갱신감 부여</li>
+                <li>스와이프 4방향 힌트는 카드 주변에 작게 — 반복 사용 후 페이드 가능</li>
+              </ul>
+            </div>
+            <div>
+              <h4>구현 노트</h4>
+              <ul class="case-list">
+                <li>iOS frame 안의 절대 좌표 — paddingTop 48px (상태바), paddingBottom 70px (탭바)</li>
+                <li>SwipeStack은 자체 state로 인덱스 관리 — 부모는 콜백만 받음</li>
+                <li>변형 A/B/C는 Tweaks로 전역 토글. 사용자 설정으로 영구화 권장</li>
+                <li>저장 시 <code>NekoData.WORKS</code>의 saved 토글 + Saved 탭 자동 반영</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detail -->
+      <div class="case">
+        <div class="case-header">
+          <span class="case-tag">Sheet · Detail</span>
+          <h3 class="case-title">Hero morph로 확장.</h3>
+        </div>
+        <div class="case-body">
+          <div class="case-grid">
+            <div>
+              <h4>의도</h4>
+              <ul class="case-list">
+                <li>"카드의 더 깊은 내용"이라는 멘탈 모델 — 새 화면이 아닌 <strong>같은 객체의 확장</strong></li>
+                <li>스크롤 시 hero 영역에 패럴랙스 (scale 1→0.92, opacity 1→0.7)</li>
+                <li>변형 A: 상단 Save 버튼 — 즉시 결정형. 변형 B: 하단 FAB — 읽고 결정형</li>
+              </ul>
+            </div>
+            <div>
+              <h4>구현 노트</h4>
+              <ul class="case-list">
+                <li>opacity + transform morph: 450ms <code>cubic-bezier(0.32, 0.72, 0.24, 1)</code></li>
+                <li>닫힘은 350ms — 열림보다 빠르게 (Apple HIG 가이드)</li>
+                <li>scrollY가 200을 넘으면 헤더에 backdrop-filter blur 추가</li>
+                <li>FAB 변형은 페이지 하단에 sticky — 스크롤 중에도 고정</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="case">
+        <div class="case-header">
+          <span class="case-tag">Tab · Search</span>
+          <h3 class="case-title">검색 = 4가지 상태.</h3>
+        </div>
+        <div class="case-body">
+          <div class="case-grid">
+            <div>
+              <h4>의도</h4>
+              <ul class="case-list">
+                <li>intro: 최근 검색어 + 트렌딩 + 카테고리 브라우징 (검색어 없을 때)</li>
+                <li>results · grouped: <strong>작품 / 감독 / 배우</strong> 그룹 분리 — 인지부하 감소</li>
+                <li>voice: 마이크 누르고 있는 상태. 펄스 + 음파 시각화</li>
+                <li>empty: noResults 일러스트 + 큐레이터 추천 작품</li>
+              </ul>
+            </div>
+            <div>
+              <h4>구현 노트</h4>
+              <ul class="case-list">
+                <li>입력은 클라이언트 필터 (title/director/cast/genres 부분 일치)</li>
+                <li>실서비스에서는 server-side fuzzy search 권장 (OpenSearch / Algolia)</li>
+                <li>최근 검색어는 localStorage · 트렌딩은 서버 데이터</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Saved -->
+      <div class="case">
+        <div class="case-header">
+          <span class="case-tag">Tab · Saved</span>
+          <h3 class="case-title">저장 = 4가지 그룹핑.</h3>
+        </div>
+        <div class="case-body">
+          <div class="case-grid">
+            <div>
+              <h4>의도</h4>
+              <ul class="case-list">
+                <li>탭 — All / Watching (시청중) / Done (완료)</li>
+                <li>그룹핑 — Default(저장순) / By OTT(접근성) / Calendar(시간) / Mood(편집)</li>
+                <li>OTT 그룹핑이 핵심 — "Netflix 켰는데 뭐 볼까?" 케이스 직접 해결</li>
+              </ul>
+            </div>
+            <div>
+              <h4>구현 노트</h4>
+              <ul class="case-list">
+                <li>그룹핑 토글은 segmented control — 4개 옵션, 짧은 라벨</li>
+                <li>By OTT는 5개 OTT 섹션 (Netflix · TVING · Wavve · Disney+ · Coupang Play)</li>
+                <li>Calendar 모드는 "이번 주 추가 / 지난달 / 올해" 시간 버킷</li>
+                <li>저장 0개일 때 savedEmpty 일러스트 + Discover로 점프 CTA</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile -->
+      <div class="case">
+        <div class="case-header">
+          <span class="case-tag">Tab · Profile</span>
+          <h3 class="case-title">취향 = 데이터.</h3>
+        </div>
+        <div class="case-body">
+          <div class="case-grid">
+            <div>
+              <h4>의도</h4>
+              <ul class="case-list">
+                <li>"내 취향이 데이터로 보이는" 페이지 — 자랑할 수 있는 카드</li>
+                <li>장르 5종 가로바 + 월간 시청 차트 12개월</li>
+                <li>편집된 한 줄 요약 (italic 세리프) — "느릿하고 여백이 있는 드라마…"</li>
+              </ul>
+            </div>
+            <div>
+              <h4>구현 노트</h4>
+              <ul class="case-list">
+                <li>차트는 SVG 없이 div 막대 — 가벼움 + 애니메이션 자유도</li>
+                <li>장르 비율은 시청 기록에서 집계 (제너럴 버킷 5종으로 압축)</li>
+                <li>월간 차트 색상 — 현재 월만 amber, 나머지는 amber-dim</li>
+                <li>로그아웃은 destructive — 별도 컨펌 모달 필요</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Onboarding -->
+      <div class="case">
+        <div class="case-header">
+          <span class="case-tag">Flow · Onboarding</span>
+          <h3 class="case-title">5단계 챕터.</h3>
+        </div>
+        <div class="case-body">
+          <div class="case-grid">
+            <div>
+              <h4>의도</h4>
+              <ul class="case-list">
+                <li>잡지의 "챕터" 비유 — CHAPTER 01 — WELCOME 식 마크</li>
+                <li>각 단계 1개 결정만. 압축하지 않음 (인지부하 ↓)</li>
+                <li>스킵 가능한 단계 (Notify) 명시 — 강제 X</li>
+              </ul>
+            </div>
+            <div>
+              <h4>구현 노트</h4>
+              <ul class="case-list">
+                <li>장르 칩은 멀티 선택 (4~7개 권장 → 추천 정확도 ↑)</li>
+                <li>OTT 연결은 fake — 실서비스에서는 OAuth / API 연동 필요</li>
+                <li>완료 후 1.2초 transition 스플래시 → Discover</li>
+                <li>온보딩 완료 = localStorage flag — 재방문 시 skip</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───── 6 FLOWS ───── -->
+    <section class="section" id="flows">
+      <div class="section-num">07 — Interaction Flows</div>
+      <h2 class="section-title">핵심 사용자 경로.</h2>
+      <p class="section-lede">
+        세 가지 핵심 플로우. Phase 4 프로토타입에서 모두 클릭 가능.
+      </p>
+
+      <h3>Flow 1 — Discover &amp; Save</h3>
+      <div class="flow">
+        <div class="flow-label">A · 첫 방문</div>
+        <div class="flow-row">
+          <span class="flow-step terminal"><span class="icon"></span>Onboarding</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Welcome</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Hello</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Taste 4–7개</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">OTT 연결</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">Notify</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step terminal"><span class="icon"></span>Discover</span>
+        </div>
+      </div>
+      <div class="flow">
+        <div class="flow-label">B · 일일 사용</div>
+        <div class="flow-row">
+          <span class="flow-step terminal"><span class="icon"></span>Discover</span>
+          <span class="flow-arrow">tap card →</span>
+          <span class="flow-step">Detail Sheet (morph)</span>
+          <span class="flow-arrow">tap Save →</span>
+          <span class="flow-step terminal"><span class="icon"></span>Saved</span>
+        </div>
+        <div class="flow-row" style="margin-top:8px">
+          <span class="flow-step terminal"><span class="icon"></span>Discover</span>
+          <span class="flow-arrow">↓ swipe →</span>
+          <span class="flow-step">Toast ✓ Saved</span>
+          <span class="flow-arrow">→</span>
+          <span class="flow-step">다음 카드</span>
+        </div>
+        <div class="flow-row" style="margin-top:8px">
+          <span class="flow-step terminal"><span class="icon"></span>Discover</span>
+          <span class="flow-arrow">← swipe →</span>
+          <span class="flow-step">다음 카드 (pass)</span>
+          <span class="flow-arrow">→ swipe →</span>
+          <span class="flow-step">이전 카드 (back)</span>
+        </div>
+      </div>
+
+      <h3>Flow 2 — Search</h3>
+      <div class="flow">
+        <div class="flow-row">
+          <span class="flow-step terminal"><span class="icon"></span>Discover</span>
+          <span class="flow-arrow">tap 🔍 →</span>
+          <span class="flow-step">Search · intro</span>
+          <span class="flow-arrow">type query →</span>
+          <span class="flow-step">Search · results (grouped)</span>
+          <span class="flow-arrow">tap result →</span>
+          <span class="flow-step terminal"><span class="icon"></span>Detail Sheet</span>
+        </div>
+      </div>
+
+      <h3>Flow 3 — Saved · OTT 진입</h3>
+      <div class="flow">
+        <div class="flow-row">
+          <span class="flow-step">"Netflix 켰음"</span>
+          <span class="flow-arrow">→ open neko →</span>
+          <span class="flow-step terminal"><span class="icon"></span>Saved</span>
+          <span class="flow-arrow">By OTT →</span>
+          <span class="flow-step">Netflix 섹션</span>
+          <span class="flow-arrow">tap →</span>
+          <span class="flow-step terminal"><span class="icon"></span>Detail</span>
+          <span class="flow-arrow">tap Watch on Netflix →</span>
+          <span class="flow-step">deep-link out</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───── 7 IMPL ───── -->
+    <section class="section" id="impl">
+      <div class="section-num">08 — Implementation Guide</div>
+      <h2 class="section-title">엔지니어를 위한 메모.</h2>
+      <p class="section-lede">
+        현재 산출물은 React + Babel inline (시연용). 프로덕션 빌드 시 고려사항.
+      </p>
+
+      <h3>파일 구조</h3>
+      <pre class="tree"><span class="dir">📁 system/</span>
+   <span class="file">colors_and_type.css</span>      <span class="note">// 모든 디자인 토큰 (CSS 변수)</span>
+
+<span class="dir">📁 components/</span>
+   <span class="file">illustrations.jsx</span>         <span class="note">// NekoIllust × 8 × 4 styles</span>
+   <span class="file">ios-frame.jsx</span>             <span class="note">// IOSDevice + helpers</span>
+   <span class="file">design-canvas.jsx</span>         <span class="note">// 시연용 — 프로덕션에서는 제거</span>
+   <span class="file">tweaks-panel.jsx</span>          <span class="note">// 시연용 — 프로덕션에서는 제거</span>
+   <span class="file">motion-primitives.jsx</span>     <span class="note">// 모션 헬퍼</span>
+   <span class="file">neko-poster.jsx</span>           <span class="note">// SVG 포스터 placeholder generator</span>
+   <span class="file">neko-data.jsx</span>             <span class="note">// mock data — 실서비스에서는 API로 대체</span>
+   <span class="file">neko-card-variants.jsx</span>    <span class="note">// NekoCards.{A,B,C}</span>
+   <span class="file">neko-prototype-swipe.jsx</span>  <span class="note">// 4방향 스와이프 (콜백 라우팅 버전)</span>
+   <span class="file">neko-detail-sheet.jsx</span>     <span class="note">// Detail Sheet</span>
+   <span class="file">neko-search-screen.jsx</span>    <span class="note">// Search</span>
+   <span class="file">neko-saved-screen.jsx</span>     <span class="note">// Saved</span>
+   <span class="file">neko-onboarding.jsx</span>       <span class="note">// 5-step onboarding</span>
+   <span class="file">neko-profile.jsx</span>          <span class="note">// Profile</span>
+
+<span class="dir">📁 root/</span>
+   <span class="file entry">Phase 1 - Visual System.html</span>
+   <span class="file entry">Phase 2 - Discover &amp; Saved.html</span>
+   <span class="file entry">Phase 3 - Detail Search Onboarding.html</span>
+   <span class="file entry">Phase 4 - Full Prototype.html</span>     <span class="note">// 메인 데모</span></pre>
+
+      <h3>의존성</h3>
+      <table>
+        <thead><tr><th>패키지</th><th>버전</th><th>용도</th></tr></thead>
+        <tbody>
+          <tr><td class="k">react / react-dom</td><td>18.3.1</td><td>UI</td></tr>
+          <tr><td class="k">@babel/standalone</td><td>7.29.0</td><td>JSX inline (프로덕션에서는 빌드 타임 변환)</td></tr>
+          <tr><td class="k">Pretendard Variable</td><td>1.3.9</td><td>본문 한글</td></tr>
+          <tr><td class="k">Instrument Serif</td><td>Google Fonts</td><td>Display</td></tr>
+          <tr><td class="k">Geist Mono</td><td>Google Fonts</td><td>Data</td></tr>
+        </tbody>
+      </table>
+
+      <h3>프로덕션 마이그레이션 체크리스트</h3>
+      <ul class="case-list">
+        <li><strong>빌드 타임 JSX 변환</strong> — Vite / Next.js / Remix. <code>@babel/standalone</code> 제거.</li>
+        <li><strong>ES Modules로 추출</strong> — <code>window.X = X</code> 패턴 → <code>export</code>로 변경.</li>
+        <li><strong>NekoData mock 제거</strong> — 실 API (작품 DB · 사용자 저장 · 시청 기록) 연동.</li>
+        <li><strong>NekoPoster placeholder 제거</strong> — 실 포스터 이미지로 교체. CDN + 다양한 사이즈.</li>
+        <li><strong>OAuth OTT 연결</strong> — Netflix/Disney+/Wavve/TVING/Coupang Play 각 SDK.</li>
+        <li><strong>localStorage → 사용자 계정</strong> — 저장 · 시청 기록 · 취향 칩 모두 서버 동기화.</li>
+        <li><strong>일러스트 raster fallback</strong> — SVG 안 뜰 경우 PNG 폴백 (Android WebView 구버전).</li>
+        <li><strong>Reduced motion 검증</strong> — 시스템 설정 ON 시 모든 morph/spring → fade로 강등.</li>
+      </ul>
+
+      <h3>알려진 제한사항</h3>
+      <div class="callout">
+        <div class="callout-tag warn">Caveats</div>
+        <p style="margin-bottom:8px">• <strong>SwipeStack 무한 wrap</strong> — 끝에 도달하면 처음으로 돌아감. 실서비스에서는 페이지네이션 / 추천 갱신 필요.</p>
+        <p style="margin-bottom:8px">• <strong>Detail Sheet의 morph는 진정한 layoutId 기반 아님</strong> — opacity + slide 근사. Framer Motion <code>layoutId</code>로 강화 가능.</p>
+        <p style="margin-bottom:8px">• <strong>Pretendard Variable + Instrument Serif</strong>는 합쳐서 ~280KB. 첫 로딩 시 FOUT 가능 — <code>font-display: swap</code> 명시 필요.</p>
+        <p>• <strong>Card C의 백드롭은 placeholder SVG</strong> — 실 backdrop 이미지 (1920×1080) 필요.</p>
+      </div>
+
+      <h3>접근성</h3>
+      <ul class="case-list">
+        <li>색 대비 — 본문 15.2:1 (AAA), 보조 5.8:1 (AA), muted 3.2:1 (AA large)</li>
+        <li>모든 carousel/swipe에 키보드 대체 — ←→↑↓ 키 매핑 권장 (현재 미구현)</li>
+        <li>스크린 리더 — 카드에 <code>role="article"</code> + <code>aria-label="작품: {title}, {year}"</code></li>
+        <li>Reduced motion — CSS 미디어쿼리로 모든 애니메이션 1ms로 강등 (구현됨)</li>
+        <li>최소 터치 영역 44px (HIG) — 탭바 아이콘, 카드 액션 버튼 모두 충족</li>
+      </ul>
+    </section>
+
+    <!-- ───── 8 DELIVERABLES ───── -->
+    <section class="section" id="deliverables">
+      <div class="section-num">09 — Deliverables</div>
+      <h2 class="section-title">함께 전달되는 산출물.</h2>
+      <p class="section-lede">
+        4개 Phase의 HTML 파일은 모두 같은 컴포넌트 코드를 공유합니다. 각 파일은 디자인 리뷰 시 다른 lens를 제공.
+      </p>
+
+      <div class="artifacts">
+        <a class="artifact" href="Phase 1 - Visual System.html">
+          <div class="artifact-num">P1 · Visual</div>
+          <div class="artifact-title">Visual System</div>
+          <div class="artifact-desc">일러스트 4스타일 × 8 시나리오 + 모션 카탈로그 12종</div>
+        </a>
+        <a class="artifact" href="Phase 2 - Discover &amp; Saved.html">
+          <div class="artifact-num">P2 · Discover</div>
+          <div class="artifact-title">Discover &amp; Saved</div>
+          <div class="artifact-desc">카드 변형 A/B/C · 4방향 스와이프 · Saved 그룹핑 · 빈 상태 8종</div>
+        </a>
+        <a class="artifact" href="Phase 3 - Detail Search Onboarding.html">
+          <div class="artifact-num">P3 · Detail</div>
+          <div class="artifact-title">Detail / Search / Onboarding</div>
+          <div class="artifact-desc">Detail Hero Morph · Search 4상태 · 5단계 온보딩 (classic/editorial)</div>
+        </a>
+        <a class="artifact" href="Phase 4 - Full Prototype.html">
+          <div class="artifact-num">P4 · Full</div>
+          <div class="artifact-title">Full Prototype</div>
+          <div class="artifact-desc">4탭 통합 (Discover/Search/Saved/Profile) · 클릭 가능 · Tweaks 토글</div>
+        </a>
+      </div>
+
+      <h3>이 핸드오프의 한계</h3>
+      <p>
+        이 문서는 <strong>디자인 의도와 구현 가이드</strong>의 통합 패키지입니다. 다음은 별도로 필요합니다 —
+        ① Figma / 픽셀 단위 redline · ② 백엔드 API 명세 · ③ 카피 (마이크로카피 포함) 검토 · ④ 분석 이벤트 정의 · ⑤ A/B 테스트 시나리오.
+      </p>
+
+      <div class="pull">
+        의문/이슈 발생 시 — 디자인 채널에서 <code>#neko-handoff</code> 태그.
+      </div>
+    </section>
+
+    <div style="font-family:var(--font-data);font-size:10px;color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;border-top:1px solid var(--border-subtle);padding-top:24px;margin-top:48px;text-align:center">
+      neko · Design Handoff Package · v1.0 · 2026.05 · Internal
+    </div>
+
+  </main>
+</div>
+
+<script>
+// Active section highlight
+(function() {
+  const links = document.querySelectorAll('.nav ol a');
+  const sections = [...links].map(a => document.querySelector(a.getAttribute('href')));
+  function update() {
+    const y = window.scrollY + 120;
+    let active = sections[0];
+    for (const s of sections) {
+      if (s && s.offsetTop <= y) active = s;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + active.id));
+  }
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>
+</body>
+</html>

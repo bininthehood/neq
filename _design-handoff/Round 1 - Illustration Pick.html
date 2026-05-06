@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>R1 — Illustration Pick</title>
+<link rel="stylesheet" href="system/colors_and_type.css"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #0B0A07; color: #EDEDEF; font-family: 'Pretendard Variable', system-ui, sans-serif; min-height: 100vh; }
+  *, *::before, *::after { box-sizing: border-box; }
+  #root { min-height: 100vh; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="illustrations.jsx"></script>
+
+<script type="text/babel">
+const { useState } = React;
+const { NekoIllust, NekoIllusts, NekoIllustStyles, useTweaks, TweaksPanel, TweakSection, TweakRadio } = window;
+
+const TWEAK_DEFAULTS_R1ILL = /*EDITMODE-BEGIN*/{
+  "lockedStyle": "lineart",
+  "showAll": true
+}/*EDITMODE-END*/;
+
+const SCENARIOS = Object.keys(NekoIllusts);
+
+const STYLE_NOTES = {
+  geometric: {
+    title: 'Geometric',
+    sub: '기하 도형 + 1px 라인',
+    char: '냉정 · 시스템적 · OS-tier',
+    fit: '아카이브 · 시스템 알림에 강함',
+  },
+  editorial: {
+    title: 'Editorial',
+    sub: '핸드드로잉 + 스케치 해칭',
+    char: '따뜻 · 책 삽화풍 · neko 톤',
+    fit: '온보딩 · 빈 상태 · 일러스트가 의미를 더하는 곳',
+  },
+  letterpress: {
+    title: 'Letterpress',
+    sub: '활판 인쇄 블록 + 그레인',
+    char: '강한 인상 · 텍스처 · 빈티지',
+    fit: '마일스톤 · 챕터 표지 · 임팩트 모먼트',
+  },
+  lineart: {
+    title: 'Lineart',
+    sub: '단일 두께 가는 라인 · 채움 없음',
+    char: '미니멀 · 가벼움 · iconic',
+    fit: '메뉴 · 작은 스팟 · 반복 사용',
+  },
+};
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS_R1ILL);
+  const [hovered, setHovered] = useState(null);
+
+  return (
+    <div style={{ minHeight: '100vh', padding: '60px 40px 120px', maxWidth: 1400, margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 56, maxWidth: 720 }}>
+        <div style={{
+          fontFamily: 'Geist Mono, monospace', fontSize: 11,
+          color: '#C4A35A', letterSpacing: '0.18em',
+          textTransform: 'uppercase', marginBottom: 14,
+        }}>Round 1 · 의사결정</div>
+        <div style={{
+          fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+          fontSize: 56, lineHeight: 1.05, letterSpacing: '-0.02em',
+          color: '#EDEDEF', marginBottom: 20,
+        }}>일러스트레이션 — <span style={{color:'#C4A35A'}}>한 가지 스타일</span>로 통일.</div>
+        <div style={{
+          fontSize: 16, lineHeight: 1.6, color: '#8E8F9A',
+        }}>
+          4가지 스타일을 8개 시나리오에 동일하게 적용해 비교합니다. 우측 Tweaks에서 한 스타일을 선택하면, 그 스타일만 강조되고 나머지는 흐려집니다. 결정한 스타일은 핸드오프 v2에서 단일 스타일로 고정됩니다.
+        </div>
+      </div>
+
+      {/* Style legend cards */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12,
+        marginBottom: 56,
+      }}>
+        {NekoIllustStyles.map(s => {
+          const isLocked = tweaks.lockedStyle === s;
+          const note = STYLE_NOTES[s];
+          return (
+            <div key={s}
+              onClick={() => setTweak('lockedStyle', s)}
+              style={{
+                padding: 20, borderRadius: 12,
+                border: isLocked ? '1.5px solid #C4A35A' : '1px solid #2E2D27',
+                background: isLocked ? 'rgba(196,163,90,0.06)' : '#12110E',
+                cursor: 'pointer',
+                transition: 'border 0.18s, background 0.18s',
+              }}>
+              <div style={{
+                fontFamily: 'Geist Mono, monospace', fontSize: 10,
+                color: isLocked ? '#C4A35A' : '#6B6C75',
+                letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8,
+              }}>0{NekoIllustStyles.indexOf(s)+1}{isLocked && ' · 선택됨'}</div>
+              <div style={{
+                fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+                fontSize: 24, color: '#EDEDEF', letterSpacing: '-0.015em', marginBottom: 6,
+              }}>{note.title}</div>
+              <div style={{ fontSize: 12, color: '#8E8F9A', marginBottom: 14 }}>{note.sub}</div>
+              <div style={{
+                fontFamily: 'Geist Mono, monospace', fontSize: 9,
+                color: '#C4A35A', letterSpacing: '0.15em',
+                textTransform: 'uppercase', marginBottom: 4,
+              }}>특성</div>
+              <div style={{ fontSize: 12, color: '#EDEDEF', lineHeight: 1.5, marginBottom: 12 }}>{note.char}</div>
+              <div style={{
+                fontFamily: 'Geist Mono, monospace', fontSize: 9,
+                color: '#C4A35A', letterSpacing: '0.15em',
+                textTransform: 'uppercase', marginBottom: 4,
+              }}>적합</div>
+              <div style={{ fontSize: 12, color: '#EDEDEF', lineHeight: 1.5 }}>{note.fit}</div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Comparison grid — 8 rows × 4 styles */}
+      <div style={{
+        border: '1px solid #2E2D27', borderRadius: 12, overflow: 'hidden',
+        background: '#0B0A07',
+      }}>
+        {/* Header row */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '200px repeat(4, 1fr)',
+          borderBottom: '1px solid #2E2D27',
+          background: '#12110E',
+        }}>
+          <div style={{
+            padding: '14px 20px',
+            fontFamily: 'Geist Mono, monospace', fontSize: 9,
+            color: '#6B6C75', letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+          }}>시나리오</div>
+          {NekoIllustStyles.map(s => {
+            const isLocked = tweaks.lockedStyle === s;
+            return (
+              <div key={s} style={{
+                padding: '14px 20px', textAlign: 'center',
+                borderLeft: '1px solid #2E2D27',
+                background: isLocked ? 'rgba(196,163,90,0.06)' : 'transparent',
+              }}>
+                <div style={{
+                  fontFamily: 'Geist Mono, monospace', fontSize: 9,
+                  color: isLocked ? '#C4A35A' : '#6B6C75',
+                  letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 2,
+                }}>0{NekoIllustStyles.indexOf(s)+1}</div>
+                <div style={{
+                  fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+                  fontSize: 18, color: isLocked ? '#C4A35A' : '#EDEDEF',
+                }}>{STYLE_NOTES[s].title}</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Body rows */}
+        {SCENARIOS.map((scn, sIdx) => {
+          const meta = NekoIllusts[scn];
+          return (
+            <div key={scn} style={{
+              display: 'grid', gridTemplateColumns: '200px repeat(4, 1fr)',
+              borderBottom: sIdx === SCENARIOS.length - 1 ? 'none' : '1px solid #2E2D27',
+              minHeight: 200,
+            }}>
+              {/* Scenario label */}
+              <div style={{
+                padding: '20px', display: 'flex', flexDirection: 'column',
+                justifyContent: 'center', borderRight: '1px solid #2E2D27',
+                background: '#12110E',
+              }}>
+                <div style={{
+                  fontFamily: 'Geist Mono, monospace', fontSize: 9,
+                  color: '#6B6C75', letterSpacing: '0.15em',
+                  textTransform: 'uppercase', marginBottom: 6,
+                }}>0{sIdx+1} · {scn}</div>
+                <div style={{
+                  fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+                  fontSize: 22, color: '#EDEDEF', letterSpacing: '-0.015em',
+                  lineHeight: 1.15, marginBottom: 8,
+                }}>{meta.kr}</div>
+                <div style={{ fontSize: 11, color: '#6B6C75', lineHeight: 1.5 }}>{meta.context}</div>
+              </div>
+              {/* Style cells */}
+              {NekoIllustStyles.map(s => {
+                const isLocked = tweaks.lockedStyle === s;
+                const isOther = !isLocked;
+                return (
+                  <div key={s}
+                    onMouseEnter={() => setHovered(`${scn}-${s}`)}
+                    onMouseLeave={() => setHovered(null)}
+                    style={{
+                      padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      borderLeft: '1px solid #2E2D27',
+                      background: isLocked ? 'rgba(196,163,90,0.04)' : '#0B0A07',
+                      opacity: isOther ? 0.32 : 1,
+                      transition: 'opacity 0.2s',
+                    }}>
+                    <NekoIllust name={scn} style={s} size={140}/>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer guidance */}
+      <div style={{
+        marginTop: 56, padding: 24, borderRadius: 10,
+        border: '1px solid #2E2D27', background: '#12110E',
+        maxWidth: 720,
+      }}>
+        <div style={{
+          fontFamily: 'Geist Mono, monospace', fontSize: 9,
+          color: '#C4A35A', letterSpacing: '0.18em',
+          textTransform: 'uppercase', marginBottom: 10,
+        }}>추천</div>
+        <div style={{
+          fontFamily: 'Fraunces, serif', fontStyle: 'italic',
+          fontSize: 22, color: '#EDEDEF', lineHeight: 1.3, marginBottom: 14,
+        }}>Editorial — neko의 'quiet ink' 톤과 가장 잘 맞습니다.</div>
+        <div style={{ fontSize: 13, color: '#8E8F9A', lineHeight: 1.6 }}>
+          핸드드로잉 텍스처가 amber+ink 서점 톤과 어울리고, "큐레이터의 짧은 노트" 같은 정서를 일러스트에서 그대로 잇습니다. Geometric은 너무 시스템적, Letterpress는 임팩트는 있지만 8곳에 모두 쓰기엔 무겁고, Lineart는 작은 사이즈에 강하지만 main 빈 상태처럼 큰 자리에서는 빈약합니다.
+          <br/><br/>
+          물론 다른 선택도 가능합니다 — Tweaks에서 직접 바꿔보고 결정하세요.
+        </div>
+      </div>
+
+      {/* Tweaks Panel */}
+      <TweaksPanel>
+        <TweakSection label="Locked Style"/>
+        <TweakRadio
+          label=""
+          value={tweaks.lockedStyle}
+          onChange={v => setTweak('lockedStyle', v)}
+          options={NekoIllustStyles.map(s => ({ value: s, label: STYLE_NOTES[s].title }))}
+        />
+      </TweaksPanel>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

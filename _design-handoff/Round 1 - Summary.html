@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>R1 — Decisions Locked</title>
+<link rel="stylesheet" href="system/colors_and_type.css"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #0B0A07; color: #EDEDEF; font-family: 'Pretendard Variable', system-ui, sans-serif; min-height: 100vh; }
+  *, *::before, *::after { box-sizing: border-box; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 60px 40px 120px; }
+  .eyebrow {
+    font-family: 'Geist Mono', monospace; font-size: 11; color: #C4A35A;
+    letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 14px;
+  }
+  h1 {
+    font-family: 'Fraunces', serif; font-style: italic; font-weight: 400;
+    font-size: 64px; line-height: 1; letter-spacing: -0.025em; color: #EDEDEF;
+    margin: 0 0 20px;
+  }
+  h1 .accent { color: #C4A35A; }
+  .lede {
+    font-size: 17px; line-height: 1.6; color: #8E8F9A; max-width: 680px;
+    margin: 0 0 56px;
+  }
+  h2 {
+    font-family: 'Pretendard Variable', sans-serif;
+    font-size: 22px; font-weight: 700; letter-spacing: -0.015em;
+    color: #EDEDEF; margin: 56px 0 18px;
+  }
+  /* Decision cards */
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card {
+    border: 1px solid #2A2823; border-radius: 12px; padding: 22px 24px;
+    background: #12110E;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .card-num {
+    font-family: 'Geist Mono', monospace; font-size: 10px; color: #C4A35A;
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  .card-q {
+    font-size: 13px; color: #8E8F9A; font-weight: 500;
+  }
+  .card-a {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 26px; line-height: 1.2; letter-spacing: -0.02em;
+    color: #EDEDEF;
+  }
+  .card-a .accent { color: #C4A35A; }
+  .card-note {
+    font-size: 12px; color: #6B6C75; line-height: 1.55; margin-top: 2px;
+  }
+  .card.confirmed { border-left: 3px solid #C4A35A; padding-left: 21px; }
+  .card.pending { border-left: 3px solid #D4A245; padding-left: 21px; }
+
+  /* Edge case priority list */
+  .edge-list {
+    border: 1px solid #2A2823; border-radius: 10px;
+    background: #12110E; overflow: hidden;
+  }
+  .edge-row {
+    display: grid; grid-template-columns: 60px 1fr 100px;
+    padding: 18px 22px; align-items: center;
+    border-bottom: 1px solid #2A2823;
+  }
+  .edge-row:last-child { border-bottom: none; }
+  .edge-num {
+    font-family: 'Geist Mono', monospace; font-size: 11px; color: #C4A35A;
+    letter-spacing: 0.18em;
+  }
+  .edge-title {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 20px; color: #EDEDEF; letter-spacing: -0.015em;
+  }
+  .edge-note {
+    font-size: 12px; color: #8E8F9A; margin-top: 4px;
+  }
+  .edge-tag {
+    text-align: right;
+    font-family: 'Geist Mono', monospace; font-size: 9px;
+    color: #6B6C75; letter-spacing: 0.15em; text-transform: uppercase;
+  }
+
+  /* Next round */
+  .next {
+    border: 1px solid #2A2823; border-radius: 12px;
+    background: linear-gradient(135deg, rgba(196,163,90,0.04), transparent);
+    padding: 28px 32px; margin-top: 56px;
+  }
+  .next-eyebrow {
+    font-family: 'Geist Mono', monospace; font-size: 10px; color: #C4A35A;
+    letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .next-title {
+    font-family: 'Fraunces', serif; font-style: italic;
+    font-size: 36px; line-height: 1.1; color: #EDEDEF; margin-bottom: 12px;
+  }
+  .next-body {
+    font-size: 14px; color: #8E8F9A; line-height: 1.6;
+  }
+  .next-actions {
+    display: flex; gap: 8px; margin-top: 24px; flex-wrap: wrap;
+  }
+  .pill {
+    padding: 8px 14px; border-radius: 8px;
+    border: 1px solid #2A2823; background: #1A1812;
+    font-size: 12px; color: #EDEDEF; text-decoration: none;
+    transition: border 0.15s, background 0.15s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .pill:hover { border-color: #C4A35A; background: #24231E; }
+  .pill .num {
+    font-family: 'Geist Mono', monospace; font-size: 9px;
+    color: #C4A35A; letter-spacing: 0.15em;
+  }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    h1 { font-size: 44px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Round 1 · Decisions</div>
+  <h1>의사결정 <span class="accent">잠금</span>.</h1>
+  <p class="lede">
+    9개 항목 컨펌 완료. 카드 변형 / 온보딩 / Detail / Saved / Search / 스와이프 방향 / 카피 톤 확정. 일러스트 스타일은 비교 페이지에서 직접 결정. 다음 라운드는 엣지 케이스 디자인.
+  </p>
+
+  <h2>확정된 결정</h2>
+  <div class="grid">
+    <div class="card confirmed">
+      <div class="card-num">D-01 · 확정</div>
+      <div class="card-q">Discover 카드 변형</div>
+      <div class="card-a">A · <span class="accent">Poster-led</span></div>
+      <div class="card-note">포스터가 주인공. B(Type) / C(Cinematic)는 폐기. 단일 변형으로 단순화.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-02 · 확정</div>
+      <div class="card-q">온보딩 변형</div>
+      <div class="card-a"><span class="accent">Editorial</span> · 챕터 마크</div>
+      <div class="card-note">CHAPTER 01–05. classic(진행바)은 폐기. neko의 잡지 톤과 일치.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-03 · 확정</div>
+      <div class="card-q">Detail Sheet — Save 위치</div>
+      <div class="card-a">하단 <span class="accent">FAB</span> · 읽고 결정</div>
+      <div class="card-note">상단 Save(즉시 결정형)는 폐기. 읽고 충분히 음미한 뒤 저장하는 흐름 우선.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-04 · 확정</div>
+      <div class="card-q">Saved 기본 그룹핑</div>
+      <div class="card-a"><span class="accent">Mood</span> · 감정 그룹</div>
+      <div class="card-note">"천천히 음미하는" / "잔잔한 위로" / "짜릿한 긴장" 등 6개 mood. OTT/Calendar/Default도 토글로 가능.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-05 · 확정</div>
+      <div class="card-q">Search 결과 표시</div>
+      <div class="card-a"><span class="accent">Grouped</span> · 작품/감독/배우</div>
+      <div class="card-note">classic(혼합 리스트)은 폐기. 인지부하 ↓.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-06 · 확정</div>
+      <div class="card-q">스와이프 방향</div>
+      <div class="card-a"><span class="accent">3방향</span> · ← Pass · → Back · ↓ Save</div>
+      <div class="card-note">↑ Detail 제거. 상세 진입은 <strong>탭 onlyJ</strong>으로 단순화. 학습 부담 ↓.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-07 · 확정</div>
+      <div class="card-q">카피 톤</div>
+      <div class="card-a"><span class="accent">Witty</span> · 재치</div>
+      <div class="card-note">"또 넷플릭스 켤 거예요?"식. Round 3에서 마이크로카피 일괄 작업.</div>
+    </div>
+
+    <div class="card confirmed">
+      <div class="card-num">D-08 · 확정</div>
+      <div class="card-q">일러스트레이션 스타일</div>
+      <div class="card-a"><span class="accent">Lineart</span> · 미니멀 선화</div>
+      <div class="card-note">기본은 Lineart. 예외: <strong>#01 Welcome / #02 Empty Discover</strong>는 Geometric (시작 화면 임팩트). illustrations.jsx의 ILLUST_STYLE_MAP으로 관리.</div>
+    </div>
+
+    <div class="card confirmed" style="grid-column: span 2">
+      <div class="card-num">D-09 · 확정</div>
+      <div class="card-q">엣지 케이스 우선순위 (Round 2 작업 범위)</div>
+      <div class="card-a">로딩 · <span class="accent">네트워크 오류</span> · 추천 소진</div>
+      <div class="card-note">3가지에 집중. OTT 미연결 / 토큰만료 / 서버오류 등은 Round 2 후속 라운드로.</div>
+    </div>
+  </div>
+
+  <h2>Round 2 — 엣지 케이스 작업 범위</h2>
+  <div class="edge-list">
+    <div class="edge-row">
+      <div class="edge-num">01</div>
+      <div>
+        <div class="edge-title">로딩 상태</div>
+        <div class="edge-note">초기 진입 / 카드 다음 페이지 / Detail 시트 / Saved 동기화 — skeleton + spinner 시스템</div>
+      </div>
+      <div class="edge-tag">Loading</div>
+    </div>
+    <div class="edge-row">
+      <div class="edge-num">02</div>
+      <div>
+        <div class="edge-title">네트워크 오류 / 오프라인</div>
+        <div class="edge-note">이미지/메타 로딩 실패 · 오프라인 배너 · 재시도 액션 · 캐시된 카드 보여주기</div>
+      </div>
+      <div class="edge-tag">Network</div>
+    </div>
+    <div class="edge-row">
+      <div class="edge-num">03</div>
+      <div>
+        <div class="edge-title">오늘의 5선 다 봤을 때</div>
+        <div class="edge-note">"내일 다시 만나요" 또는 "더 보기" CTA — 결정 피로 가설을 지키면서 끝맺음</div>
+      </div>
+      <div class="edge-tag">Exhausted</div>
+    </div>
+  </div>
+
+  <h2>적용 결과</h2>
+  <p style="font-size:14px;color:#8E8F9A;line-height:1.6;max-width:680px">
+    Phase 4 풀 프로토타입에 변경사항이 반영됐습니다. 카드 변형 토글은 Tweaks에서 제거 (단일 A 고정), 헤더 카피는 witty 톤("또 넷플릭스 켤 거예요?"), 스와이프 힌트는 3방향, Detail은 FAB 변형, Saved 기본은 Mood 그룹.
+  </p>
+
+  <div class="next">
+    <div class="next-eyebrow">Next</div>
+    <div class="next-title">Round 2 — 엣지 케이스 화면.</div>
+    <div class="next-body">
+      위 3가지 우선순위에 집중해 화면을 추가합니다. 디자인 시스템(amber+ink)을 유지하면서 에러/로딩/소진 상태가 평소 화면과 톤이 끊어지지 않도록.
+    </div>
+    <div class="next-actions">
+      <a class="pill" href="Round 1 - Illustration Pick.html"><span class="num">P1</span>일러스트 비교 →</a>
+      <a class="pill" href="Phase 4 - Full Prototype.html"><span class="num">P4</span>적용된 프로토타입 →</a>
+      <a class="pill" href="Handoff Package.html"><span class="num">HD</span>핸드오프 v1 (참고) →</a>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

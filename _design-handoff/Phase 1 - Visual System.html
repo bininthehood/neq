@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Neko · Phase 1 — Visual System</title>
+<link rel="stylesheet" href="system/colors_and_type.css">
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f0eee9; }
+  body { font-family: 'Pretendard Variable', system-ui, sans-serif; }
+  /* shared keyframes used across motion demos */
+  @keyframes moveX { from { transform: translateX(0); } to { transform: translateX(var(--moveTo, 200px)); } }
+  @keyframes growX { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes nekoPulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.08); }
+    100% { transform: scale(1); }
+  }
+  @keyframes nekoSkeletonPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+  @keyframes nekoSpin { to { transform: rotate(360deg); } }
+  @keyframes nekoOrbitPulse {
+    0%, 100% { opacity: 0.4; transform: rotate(var(--r, 0)) translateY(-22px) scale(0.7); }
+    50%      { opacity: 1;   transform: rotate(var(--r, 0)) translateY(-22px) scale(1); }
+  }
+  @keyframes nekoReactionEnter {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* film grain overlay — applied only to artboard inner backgrounds via .neko-grain */
+  .neko-grain { position: relative; }
+  .neko-grain::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+    opacity: 0.035; mix-blend-mode: overlay;
+  }
+</style>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="illustrations.jsx"></script>
+<script type="text/babel" src="motion-primitives.jsx"></script>
+<script type="text/babel" src="motion-demos.jsx"></script>
+</head>
+
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "speedMul": 1,
+  "accent": "amber",
+  "grain": true
+}/*EDITMODE-END*/;
+
+// Accent override — applied at root via inline <style>
+function AccentOverride({ accent }) {
+  if (accent === 'amber') return null;
+  // 'blue' — Quiet Ink original spec
+  return <style>{`
+    :root {
+      --accent: #6C9CFC;
+      --accent-hover: #88B0FF;
+      --accent-strong: #5680D8;
+      --accent-dim: rgba(108, 156, 252, 0.12);
+      --accent-border: rgba(108, 156, 252, 0.25);
+    }
+  `}</style>;
+}
+
+// ── Artboard: illustration card ─────────────────────────
+function IllustArtboard({ name, style, grain }) {
+  const def = window.NekoIllusts[name];
+  return (
+    <div className={grain ? 'neko-grain' : ''} style={{
+      width: '100%', height: '100%', background: '#12110E',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      position: 'relative', padding: 24,
+    }}>
+      <div style={{ marginBottom: 20 }}>
+        <window.NekoIllust name={name} style={style} size={200}/>
+      </div>
+      <div style={{ textAlign: 'center', maxWidth: 220 }}>
+        <div style={{ fontFamily: 'Instrument Serif', fontSize: 22, color: '#EDEDEF', lineHeight: 1.2 }}>{def.en}</div>
+        <div style={{ fontFamily: 'Pretendard Variable', fontSize: 13, color: '#EDEDEF', fontWeight: 600, marginTop: 4, letterSpacing: '-0.01em' }}>{def.kr}</div>
+        <div style={{ fontFamily: 'Pretendard Variable', fontSize: 11, color: '#6B6C75', marginTop: 8, lineHeight: 1.5 }}>{def.context}</div>
+      </div>
+      <div style={{ position: 'absolute', top: 14, left: 16, fontFamily: 'Geist Mono', fontSize: 10, color: '#3A3833', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        {String(Object.keys(window.NekoIllusts).indexOf(name) + 1).padStart(2, '0')}
+      </div>
+      <div style={{ position: 'absolute', top: 14, right: 16, fontFamily: 'Geist Mono', fontSize: 9, color: '#C4A35A', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {style}
+      </div>
+    </div>
+  );
+}
+
+// ── Easings: 5 cubic-bezier cards in a single artboard ──
+function EasingsArtboard({ speedMul }) {
+  const { EASINGS, EasingCard } = window.NekoMotion;
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#12110E', padding: 20, overflow: 'auto' }}>
+      <div style={{ fontFamily: 'Instrument Serif', fontSize: 22, color: '#EDEDEF', marginBottom: 4 }}>Easing curves</div>
+      <div style={{ fontFamily: 'Pretendard Variable', fontSize: 11, color: '#6B6C75', marginBottom: 16 }}>5개 cubic-bezier · 클릭해서 재생</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {EASINGS.map(e => <EasingCard key={e.name} ease={e} speedMul={speedMul}/>)}
+      </div>
+    </div>
+  );
+}
+
+// ── Durations: 5 duration cards in a single artboard ────
+function DurationsArtboard({ speedMul }) {
+  const { DURATIONS, DurationCard } = window.NekoMotion;
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#12110E', padding: 20, overflow: 'auto' }}>
+      <div style={{ fontFamily: 'Instrument Serif', fontSize: 22, color: '#EDEDEF', marginBottom: 4 }}>Duration scale</div>
+      <div style={{ fontFamily: 'Pretendard Variable', fontSize: 11, color: '#6B6C75', marginBottom: 16 }}>80 / 150 / 250 / 350 / 500ms · 클릭 재생</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {DURATIONS.map(d => <DurationCard key={d.name} dur={d} speedMul={speedMul}/>)}
+      </div>
+    </div>
+  );
+}
+
+// ── Component demo artboard wrapper ─────────────────────
+function DemoArtboard({ children }) {
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#12110E', padding: 14, display: 'flex', flexDirection: 'column' }}>
+      {children}
+    </div>
+  );
+}
+
+function App() {
+  const [t, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+  const speedMul = t.speedMul || 1;
+  const D = window.NekoMotionDemos;
+
+  // illustration list
+  const illustNames = Object.keys(window.NekoIllusts);
+
+  return (
+    <>
+      <AccentOverride accent={t.accent}/>
+
+      <window.DesignCanvas>
+        {/* ── Sections: Illustrations × 4 styles ──────── */}
+        <window.DCSection id="illusts-geometric" title="Style A — Geometric" subtitle="기하학적 미니멀. 도형, 호, 선만. 갤러리 포스터 무드. (기존 Quiet Ink)">
+          {illustNames.map((n) => (
+            <window.DCArtboard key={`g-${n}`} id={`g-${n}`} label={`${window.NekoIllusts[n].en} · ${window.NekoIllusts[n].kr}`} width={300} height={400}>
+              <IllustArtboard name={n} style="geometric" grain={t.grain}/>
+            </window.DCArtboard>
+          ))}
+        </window.DCSection>
+
+        <window.DCSection id="illusts-editorial" title="Style B — Editorial Spot" subtitle="손맛 있는 잉크 스팟 일러스트. 신문 칼럼 삽화 무드. 약간 비대칭, 해칭.">
+          {illustNames.map((n) => (
+            <window.DCArtboard key={`e-${n}`} id={`e-${n}`} label={`${window.NekoIllusts[n].en} · ${window.NekoIllusts[n].kr}`} width={300} height={400}>
+              <IllustArtboard name={n} style="editorial" grain={t.grain}/>
+            </window.DCArtboard>
+          ))}
+        </window.DCSection>
+
+        <window.DCSection id="illusts-letterpress" title="Style C — Letterpress" subtitle="활자체 + 잉크 번짐 + 종이 결. 빈티지 인쇄소 무드. 텍스처 강함.">
+          {illustNames.map((n) => (
+            <window.DCArtboard key={`l-${n}`} id={`l-${n}`} label={`${window.NekoIllusts[n].en} · ${window.NekoIllusts[n].kr}`} width={300} height={400}>
+              <IllustArtboard name={n} style="letterpress" grain={t.grain}/>
+            </window.DCArtboard>
+          ))}
+        </window.DCSection>
+
+        <window.DCSection id="illusts-lineart" title="Style D — Line Art" subtitle="얇은 단색 선화만. 가장 미니멀, 환원적. 도형 없음, 선만.">
+          {illustNames.map((n) => (
+            <window.DCArtboard key={`n-${n}`} id={`n-${n}`} label={`${window.NekoIllusts[n].en} · ${window.NekoIllusts[n].kr}`} width={300} height={400}>
+              <IllustArtboard name={n} style="lineart" grain={t.grain}/>
+            </window.DCArtboard>
+          ))}
+        </window.DCSection>
+
+        {/* ── Section: Motion tokens ───────────────────── */}
+        <window.DCSection id="tokens" title="Motion Tokens" subtitle="이징 + 듀레이션. 클릭해서 재생.">
+          <window.DCArtboard id="easings" label="Easings · 5 curves" width={380} height={760}>
+            <EasingsArtboard speedMul={speedMul}/>
+          </window.DCArtboard>
+          <window.DCArtboard id="durations" label="Durations · 5 steps" width={380} height={620}>
+            <DurationsArtboard speedMul={speedMul}/>
+          </window.DCArtboard>
+        </window.DCSection>
+
+        {/* ── Section: Component demos ─────────────────── */}
+        <window.DCSection id="demos" title="Micro-interactions" subtitle="실제 컴포넌트 모션. 드래그 / 클릭 / 호버 인터랙션.">
+          <window.DCArtboard id="swipe" label="카드 스와이프" width={360} height={460}>
+            <DemoArtboard><D.SwipeDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="sheet" label="바텀시트" width={360} height={460}>
+            <DemoArtboard><D.SheetDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="toast" label="토스트" width={360} height={420}>
+            <DemoArtboard><D.ToastDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="save" label="Save 버튼 펄스" width={360} height={440}>
+            <DemoArtboard><D.SaveDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="skeleton" label="스켈레톤 / 스피너" width={360} height={440}>
+            <DemoArtboard><D.SkeletonDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="tabs" label="탭 크로스페이드" width={360} height={440}>
+            <DemoArtboard><D.TabDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="button" label="버튼 active" width={360} height={420}>
+            <DemoArtboard><D.ButtonDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+          <window.DCArtboard id="reaction" label="Reaction picker" width={360} height={440}>
+            <DemoArtboard><D.ReactionDemo speedMul={speedMul}/></DemoArtboard>
+          </window.DCArtboard>
+        </window.DCSection>
+
+        <window.DCPostIt top={40} left={40} rotate={-3} width={220}>
+          1단계 — 비주얼 시스템.
+          일러스트 4가지 스타일 비교 (8 names × 4 styles = 32).
+          가로로 같은 스타일, 세로로 같은 이름끼리 보면서 고르기.
+        </window.DCPostIt>
+      </window.DesignCanvas>
+
+      <window.TweaksPanel title="Tweaks">
+        <window.TweakSection label="Visual style"/>
+        <window.TweakRadio label="Accent"
+          value={t.accent}
+          options={['amber', 'blue']}
+          onChange={(v) => setTweak('accent', v)}/>
+        <window.TweakToggle label="Film grain"
+          value={t.grain}
+          onChange={(v) => setTweak('grain', v)}/>
+
+        <window.TweakSection label="Motion"/>
+        <window.TweakRadio label="Speed"
+          value={String(speedMul)}
+          options={[
+            { value: '0.5', label: '0.5×' },
+            { value: '1',   label: '1×' },
+            { value: '2',   label: '2×' },
+          ]}
+          onChange={(v) => setTweak('speedMul', Number(v))}/>
+      </window.TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
