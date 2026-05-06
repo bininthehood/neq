@@ -83,9 +83,10 @@ const ActionBar = forwardRef<HTMLButtonElement, ActionBarProps>(function ActionB
           className="w-14 h-14 flex items-center justify-center active:scale-90 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
           style={{
             background: saveActive ? "var(--accent)" : "var(--surface-raised)",
+            border: `1.5px solid ${saveActive ? "var(--accent)" : "var(--border)"}`,
             borderRadius: "var(--radius-xl)",
             transform: `scale(${saveScale})`,
-            transition: `transform ${QUICK_MS}ms ${SPRING_EASING}, background 200ms ease, box-shadow 200ms ease`,
+            transition: `transform ${QUICK_MS}ms ${SPRING_EASING}, background 200ms ease, border-color 200ms ease, box-shadow 200ms ease`,
             boxShadow: saveFlash
               ? "0 0 32px rgba(196,163,90,0.6), 0 4px 16px rgba(0,0,0,0.4)"
               : "0 4px 16px rgba(0,0,0,0.3)",

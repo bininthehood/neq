@@ -887,9 +887,9 @@ export default function SavedPage() {
         <h1
           className="font-display"
           style={{
-            fontSize: 20,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
+            fontSize: 28,
+            fontWeight: 500,
+            letterSpacing: "-0.025em",
             color: "var(--text-primary)",
             lineHeight: 1,
           }}
@@ -986,9 +986,10 @@ export default function SavedPage() {
                 style={{
                   background: viewFilter === f.key ? "var(--accent)" : "transparent",
                   color: viewFilter === f.key ? "var(--text-inverse)" : "var(--text-muted)",
-                  fontWeight: viewFilter === f.key ? 600 : 400,
+                  fontWeight: viewFilter === f.key ? 600 : 500,
                   borderRadius: "9999px",
                   padding: "6px 12px",
+                  border: `1px solid ${viewFilter === f.key ? "var(--accent)" : "var(--border)"}`,
                 }}
               >
                 {f.label}
@@ -1013,7 +1014,8 @@ export default function SavedPage() {
               aria-label={groupByOTT ? "전체 그리드 보기로 전환" : "OTT별 그룹 보기로 전환"}
               className="text-xs whitespace-nowrap active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
               style={{
-                color: "var(--accent)",
+                color: "var(--text-secondary)",
+                fontWeight: groupByOTT ? 600 : 500,
                 textDecoration: groupByOTT ? "underline" : "none",
                 textUnderlineOffset: "3px",
               }}
@@ -1032,11 +1034,13 @@ export default function SavedPage() {
             role="tab"
             aria-selected={ottFilter === null}
             onClick={() => setOttFilter(null)}
-            className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+            className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
             style={{
               background: ottFilter === null ? "var(--accent)" : "transparent",
               color: ottFilter === null ? "var(--text-inverse)" : "var(--text-muted)",
-              fontWeight: ottFilter === null ? 600 : 400,
+              fontWeight: ottFilter === null ? 600 : 500,
+              borderRadius: 8,
+              border: `1px solid ${ottFilter === null ? "var(--accent)" : "var(--border)"}`,
             }}
           >
             전체
@@ -1052,11 +1056,13 @@ export default function SavedPage() {
                 aria-selected={isActive}
                 aria-label={`${name} (${count}편) ${isActive ? "선택됨" : "선택"}`}
                 onClick={() => setOttFilter(isActive ? null : name)}
-                className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                 style={{
                   background: isActive ? "var(--accent)" : "transparent",
                   color: isActive ? "var(--text-inverse)" : "var(--text-muted)",
-                  fontWeight: isActive ? 600 : 400,
+                  fontWeight: isActive ? 600 : 500,
+                  borderRadius: 8,
+                  border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
                 }}
               >
                 {iconSrc && (
