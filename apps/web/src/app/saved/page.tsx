@@ -1141,7 +1141,7 @@ export default function SavedPage() {
       )}
 
       {/* Watch Stats */}
-      {stats.total > 0 && viewFilter === "watched" && (
+      {stats.total > 0 && (viewFilter === "watched" || viewFilter === "archived") && (
         <div className="mx-5 mt-2 mb-3">
           <div
             className="p-3 flex items-center gap-3 rounded-lg"
@@ -1181,8 +1181,8 @@ export default function SavedPage() {
         </div>
       )}
 
-      {/* Tonight banner */}
-      {saved.length > 0 && viewFilter !== "history" && (
+      {/* Tonight banner — '안 보았/탐색 중' 컨텍스트 (all / unwatched) 에서만 노출. */}
+      {saved.length > 0 && (viewFilter === "all" || viewFilter === "unwatched") && (
         <div className="mx-5 mt-1 mb-4">
           <button
             type="button"
