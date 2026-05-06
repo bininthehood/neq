@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * SearchSheet — D10 grouped 카로셀 리뉴얼.
+ * SearchSheet — D10 grouped 카로셀 리뉴얼 (orchestrator).
  *
  * `/api/search?grouped=1` 응답 (`{ works, directors, actors }`) 기반으로
  * 카테고리별 가로 스크롤 카로셀을 렌더한다.
@@ -16,13 +16,17 @@
  * 디바운싱 200ms — 빠른 입력 시 이전 fetch는 AbortController 로 취소.
  *
  * 호환성: 기존 props API 그대로 (호출처 회귀 0).
+ *
+ * 2026-05-06 구조 분할 — search/ 하위로 sub-component 모듈화.
+ *   - SearchInput.tsx       — input + voice + cancel
+ *   - SearchEmpty.tsx       — Idle / Loading / Empty / Error 4 상태
+ *   - SearchResults.tsx     — uiState=ok 카로셀 + dim/floating panel + (Works|People)Carousel
+ *   - SelectedWorkPanel.tsx — 작품 선택 panel (OTT/Save/Detail)
+ *   - SelectedPersonPanel.tsx — 인물 panel (작품 그리드 + nestedWorkPanel)
+ * 본 파일은 state + debounce/abort fetch + DetailSheet 진입 + props 내림 만 담당.
  */
 
-import { Fragment, useState, useRef, useCallback, useEffect } from "react";
-import Image from "next/image";
-import { IconStar, IconSave } from "@/components/Icons";
-import PosterFallback from "@/components/PosterFallback";
-import { getOTTLink, getOTTIcon } from "@/lib/ott-links";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { addSaved, removeSaved } from "@/lib/store";
 import { track } from "@/lib/analytics";
 import { shareRecommendation } from "@/lib/share";
@@ -45,15 +49,7 @@ import type {
   PersonResult,
   GroupedSearchResponse,
 } from "@/lib/types";
-import { Illust, Button, NeqSpinner, useToast } from "@neq/design";
-
-// idle 상태에서 호출되는 trending API 응답 (apps/web/src/app/api/trending/route.ts)
-interface TrendingItem {
-  id: number;
-  title: string;
-  posterUrl: string | null;
-  year: string;
-}
+import { useToast } from "@neq/design";
 import {
   resolveSearchUiState,
   buildCategoryGroups,
@@ -62,6 +58,16 @@ import {
   type SearchUiInput,
   type CategoryGroup,
 } from "@neq/core";
+import SearchInput from "./search/SearchInput";
+import {
+  IdleContent,
+  LoadingState,
+  ErrorState,
+  EmptyState,
+  type TrendingItem,
+} from "./search/SearchEmpty";
+import SearchResults from "./search/SearchResults";
+import { type ProviderInfo } from "./search/SelectedWorkPanel";
 
 // ─────────────────────────────────────────────────────
 // 순수 로직 re-export (D10n: packages/core/src/search.ts 로 추출 — web/native 공용).
@@ -74,11 +80,6 @@ export {
   SEARCH_DEBOUNCE_MS,
 };
 export type { SearchUiState, SearchUiInput, CategoryGroup };
-
-interface ProviderInfo {
-  name: string;
-  logoUrl: string | null;
-}
 
 interface SearchSheetProps {
   show: boolean;
@@ -569,6 +570,15 @@ export default function SearchSheet({
       : "none";
   const backdropOpacity = hasPainted ? 1 - sheetY / 100 : 1;
 
+  const dismissSelection = () => {
+    setSelectedWork(null);
+    setProviders([]);
+    setDetailRec(null);
+    setSelectedPerson(null);
+    setPersonWorks([]);
+    setPersonWorksError(false);
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end">
       {/* backdrop */}
@@ -602,92 +612,19 @@ export default function SearchSheet({
         </div>
 
         {/* search input + close */}
-        <div className="flex items-center gap-2 px-4 pb-3 shrink-0">
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => handleInput(e.target.value)}
-              placeholder="작품, 감독, 배우"
-              aria-label="검색"
-              className="w-full px-4 py-3 pr-20 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"
-              style={{ fontSize: "16px" }}
-            />
-            {query.length > 0 && (
-              <button
-                onClick={() => {
-                  handleInput("");
-                  inputRef.current?.focus();
-                }}
-                aria-label="검색어 지우기"
-                className="absolute right-10 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-full active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-1"
-                style={{
-                  background: "var(--text-muted)",
-                  color: "var(--surface)",
-                }}
-              >
-                <svg
-                  width={10}
-                  height={10}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={3}
-                  strokeLinecap="square"
-                >
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                </svg>
-              </button>
-            )}
-            {voiceSupported && (
-              <button
-                onClick={handleMicClick}
-                aria-label={listening ? "음성 인식 중지" : "음성으로 검색"}
-                aria-pressed={listening}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-                style={{
-                  background: listening ? "var(--accent)" : "transparent",
-                  color: listening
-                    ? "var(--surface)"
-                    : "var(--text-muted)",
-                }}
-              >
-                <svg
-                  width={14}
-                  height={16}
-                  viewBox="0 0 12 14"
-                  fill="none"
-                >
-                  <rect
-                    x="3"
-                    y="0.5"
-                    width="6"
-                    height="9"
-                    rx="3"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    fill={listening ? "currentColor" : "none"}
-                  />
-                  <path
-                    d="M1 7C1 9.76142 3.23858 12 6 12V13.5M11 7C11 9.76142 8.76142 12 6 12"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            aria-label="검색 닫기"
-            className="shrink-0 px-3 py-3 text-sm text-muted active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
-          >
-            취소
-          </button>
-        </div>
+        <SearchInput
+          ref={inputRef}
+          query={query}
+          voiceSupported={voiceSupported}
+          listening={listening}
+          onChange={handleInput}
+          onClear={() => {
+            handleInput("");
+            inputRef.current?.focus();
+          }}
+          onMicClick={handleMicClick}
+          onClose={onClose}
+        />
 
         {/* body */}
         <div
@@ -704,269 +641,34 @@ export default function SearchSheet({
             />
           )}
 
-          {uiState === "loading" && (
-            <div className="flex items-center justify-center py-12">
-              <NeqSpinner size="md" label="검색 중" />
-            </div>
-          )}
+          {uiState === "loading" && <LoadingState />}
 
-          {uiState === "error" && (
-            <div className="flex flex-col items-center justify-center px-8 py-12 gap-4 text-center">
-              <Illust
-                name="error"
-                style="editorial"
-                size="lg"
-                aria-label="검색 오류"
-              />
-              <p
-                className="text-sm"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                검색 중 문제가 생겼어요
-              </p>
-              <Button variant="secondary" size="md" onClick={handleRetry}>
-                다시 시도
-              </Button>
-            </div>
-          )}
+          {uiState === "error" && <ErrorState onRetry={handleRetry} />}
 
-          {uiState === "empty" && (
-            // D7 / Round 3 v2 — SR-02 "맞는" → "겹치는", SR-03 행동 가이드 추가
-            <div className="flex flex-col items-center justify-center px-8 py-12 gap-4 text-center">
-              <Illust
-                name="noResults"
-                style="editorial"
-                size="lg"
-                aria-label="검색 결과 없음"
-              />
-              <div>
-                <p className="font-display text-lg">
-                  &quot;{query.trim()}&quot;와 겹치는 게 없어요
-                </p>
-                <p
-                  className="text-sm mt-1.5 leading-relaxed"
-                  style={{ color: "var(--text-secondary)" }}
-                >
-                  단어를 조금 바꿔 보세요.
-                  <br />
-                  <span style={{ color: "var(--accent)" }}>
-                    감독 이름이나 분위기
-                  </span>
-                  도 좋아요
-                </p>
-              </div>
-            </div>
-          )}
+          {uiState === "empty" && <EmptyState query={query} />}
 
           {uiState === "ok" && data && (
-            // 위임 Q (2026-05-02) — 작품/인물 선택 시 floating panel + scoped dim 패턴.
-            // 사용자 피드백: "정보 섹션 레이아웃이 선택한 작품 밑으로 공중에 띄워주고,
-            // 후방은 반투명 레이아웃으로 덮으면 직관적일것같아요."
-            //
-            // 채택: Inline panel + per-section dim (옵션 B 강화).
-            //   - 선택된 항목이 속한 group section 바로 아래에 패널을 inline 렌더 →
-            //     "이 카드 → 이 정보" 시각 인접성 자연 확보 (좌표 측정 X, 가로 스크롤 호환)
-            //   - 비활성 그룹에 dim overlay (per-section scope) → 후방 반투명 덮음
-            //   - dim 클릭 시 선택 해제 (popover-style dismiss)
-            //   - 진입 모션: panel fadeIn + 8px translateY → 0 (200ms, --ease-detail-morph)
-            //   - prefers-reduced-motion 은 globals.css 전역 규칙으로 즉시 적용됨
-            (() => {
-              const hasSelection = !!(selectedWork || selectedPerson);
-              // 우선순위: selectedPerson 활성 시 인물 panel 그룹 → 인물 panel 안에서 작품 선택해도
-              // 인물 panel 자체는 활성 유지. selectedWork 만 있을 때만 "works" 그룹 활성.
-              // 이 우선순위 변경으로 인물 panel 내부에 SelectedWorkPanel 을 nested 표시 가능.
-              const activeGroupKey: "works" | "directors" | "actors" | null =
-                selectedPerson
-                  ? selectedPerson.knownForDept === "Directing"
-                    ? "directors"
-                    : "actors"
-                  : selectedWork
-                    ? "works"
-                    : null;
-              const dismissSelection = () => {
-                setSelectedWork(null);
-                setProviders([]);
-                setDetailRec(null);
-                setSelectedPerson(null);
-                setPersonWorks([]);
-                setPersonWorksError(false);
-              };
-              return (
-                <div className="space-y-4 pt-2 relative min-h-full">
-                  {groups.map((g) => {
-                    const isActive = g.key === activeGroupKey;
-                    const isDimmed = hasSelection && !isActive;
-                    return (
-                      <section
-                        key={g.key}
-                        aria-label={`${g.label} 검색 결과 ${g.count}건`}
-                        className="relative"
-                        style={{
-                          // 활성 섹션은 dim 위로, 비활성은 dim 가려짐
-                          zIndex: isActive ? 2 : 0,
-                        }}
-                      >
-                        {/* 2026-05-02 사용자 직접 테스트 D-2 #3:
-                            검색 결과 좌우 padding px-5 (20px) → px-6 (24px = --space-lg).
-                            사용자가 "왼쪽 margin이 없어서 화면에 너무 붙어있는 느낌"이라
-                            한 단계 더 여유. SelectedWorkPanel mx-6 와 정합. */}
-                        <div
-                          className="flex items-baseline justify-between px-6 pt-2 pb-2"
-                          style={{
-                            opacity: isDimmed ? 0.35 : 1,
-                            transition: "opacity 180ms var(--ease-detail-morph)",
-                          }}
-                        >
-                          <h3
-                            className="text-xs font-data uppercase tracking-widest"
-                            style={{
-                              color: "var(--accent)",
-                              letterSpacing: "0.12em",
-                            }}
-                          >
-                            {g.label}
-                          </h3>
-                          <span
-                            className="text-xs font-data"
-                            style={{ color: "var(--text-muted)" }}
-                          >
-                            {g.count}
-                          </span>
-                        </div>
-
-                        <div
-                          style={{
-                            opacity: isDimmed ? 0.35 : 1,
-                            transition:
-                              "opacity 180ms var(--ease-detail-morph)",
-                            // 비활성 섹션은 클릭 차단 — dim 클릭으로만 닫히게
-                            pointerEvents: isDimmed ? "none" : "auto",
-                          }}
-                          aria-hidden={isDimmed || undefined}
-                        >
-                          {g.key === "works" && (
-                            <WorksCarousel
-                              items={data.works}
-                              selectedId={selectedWork?.id ?? null}
-                              onSelect={handleSelectWork}
-                            />
-                          )}
-
-                          {g.key === "directors" && (
-                            <PeopleCarousel
-                              items={data.directors}
-                              selectedId={selectedPerson?.id ?? null}
-                              onSelect={handleSelectPerson}
-                            />
-                          )}
-                          {g.key === "actors" && (
-                            <PeopleCarousel
-                              items={data.actors}
-                              selectedId={selectedPerson?.id ?? null}
-                              onSelect={handleSelectPerson}
-                            />
-                          )}
-                        </div>
-
-                        {/* 위임 Q — 활성 그룹 바로 아래에 floating panel inline */}
-                        {isActive && selectedWork && g.key === "works" && (
-                          <div className="search-floating-panel">
-                            <SelectedWorkPanel
-                              item={selectedWork}
-                              providers={providers}
-                              loadingProviders={loadingProviders}
-                              loadingDetail={loadingDetail}
-                              detailRec={detailRec}
-                              isSaved={savedIds.has(selectedWork.id)}
-                              onSave={() => handleSave(selectedWork)}
-                              onOpenDetail={() => {
-                                if (detailRec) detail.openDetail();
-                              }}
-                            />
-                          </div>
-                        )}
-                        {isActive && selectedPerson && g.key !== "works" && (
-                          <div className="search-floating-panel">
-                            <SelectedPersonPanel
-                              person={selectedPerson}
-                              works={personWorks}
-                              loading={personWorksLoading}
-                              error={personWorksError}
-                              selectedWorkId={selectedWork?.id ?? null}
-                              onSelectWork={(item) => {
-                                // 인물 panel 유지 + 작품 panel (SelectedWorkPanel) 을 nested 표시.
-                                // handleSelectWork 가 selectedWork 세팅 + provider/detail fetch 처리.
-                                // 사용자는 OTT/save 카드 (SelectedWorkPanel) 를 먼저 보고, OPEN 버튼으로 detail 진입.
-                                // (track 호출은 SelectedPersonPanel 내부에서 이미 처리)
-                                void handleSelectWork(item);
-                              }}
-                              nestedWorkPanel={
-                                selectedWork ? (
-                                  <SelectedWorkPanel
-                                    item={selectedWork}
-                                    providers={providers}
-                                    loadingProviders={loadingProviders}
-                                    loadingDetail={loadingDetail}
-                                    detailRec={detailRec}
-                                    isSaved={savedIds.has(selectedWork.id)}
-                                    onSave={() => handleSave(selectedWork)}
-                                    onOpenDetail={() => {
-                                      if (detailRec) detail.openDetail();
-                                    }}
-                                  />
-                                ) : null
-                              }
-                            />
-                          </div>
-                        )}
-                      </section>
-                    );
-                  })}
-
-                  {/* dim overlay — 활성 섹션 외부 클릭 시 선택 해제.
-                      활성 섹션은 z-index 2, dim 은 z-index 1, 비활성은 z-index 0.
-                      dim 은 overflow-y-auto 컨테이너 안에서 absolute inset-0 으로 덮어
-                      세로 스크롤 시에도 모든 비활성 콘텐츠를 덮음. */}
-                  {hasSelection && (
-                    <button
-                      type="button"
-                      onClick={dismissSelection}
-                      aria-label="선택 해제"
-                      className="search-dim-overlay"
-                    />
-                  )}
-
-                  <style>{`
-                    /* panel 을 layout flow 안에 배치 — scroll body 가 panel 높이를 정상 인식.
-                       활성 section 자체 zIndex:2 stacking context 안 → dim(zIndex:1) 위 자동 표시.
-                       다음 section 을 밀게 되지만 dim 이 그 영역을 가리므로 시각적으로 동일.
-                       이 결정의 효과: 인물 panel 안 nested SelectedWorkPanel 이 길어져도 scroll 로 끝까지 접근 가능 — absolute 일 때는 scroll body 가 panel 높이를 모르고 잘렸음. */
-                    .search-floating-panel {
-                      position: relative;
-                      animation: searchPanelEnter 200ms var(--ease-detail-morph);
-                    }
-                    .search-dim-overlay {
-                      position: absolute;
-                      inset: 0;
-                      z-index: 1;
-                      background: var(--bg-overlay);
-                      border: 0;
-                      padding: 0;
-                      cursor: pointer;
-                      animation: searchDimEnter 180ms var(--ease-detail-morph);
-                    }
-                    @keyframes searchPanelEnter {
-                      from { opacity: 0; transform: translateY(8px); }
-                      to   { opacity: 1; transform: translateY(0); }
-                    }
-                    @keyframes searchDimEnter {
-                      from { opacity: 0; }
-                      to   { opacity: 1; }
-                    }
-                  `}</style>
-                </div>
-              );
-            })()
+            <SearchResults
+              data={data}
+              groups={groups}
+              selectedWork={selectedWork}
+              selectedPerson={selectedPerson}
+              providers={providers}
+              loadingProviders={loadingProviders}
+              loadingDetail={loadingDetail}
+              detailRec={detailRec}
+              personWorks={personWorks}
+              personWorksLoading={personWorksLoading}
+              personWorksError={personWorksError}
+              savedIds={savedIds}
+              onSelectWork={handleSelectWork}
+              onSelectPerson={handleSelectPerson}
+              onDismissSelection={dismissSelection}
+              onSave={handleSave}
+              onOpenDetail={() => {
+                if (detailRec) detail.openDetail();
+              }}
+            />
           )}
         </div>
       </div>
@@ -1035,789 +737,6 @@ export default function SearchSheet({
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// D10b — Idle 컨텐츠 (Recent / Trending / Voice listening)
-// 2026-05-02 사용자 직접 테스트 D-2 #2: Browse 카테고리(BROWSE_CATEGORIES) 영역 철회.
-// 디자인은 좋았으나 기능상 불필요하다는 사용자 피드백으로 제거.
-// ─────────────────────────────────────────────────────
-
-function IdleContent({
-  listening,
-  recents,
-  trending,
-  onApplyQuery,
-  onRemoveRecent,
-}: {
-  listening: boolean;
-  recents: RecentSearch[];
-  trending: TrendingItem[];
-  onApplyQuery: (q: string) => void;
-  onRemoveRecent: (q: string) => void;
-}) {
-  if (listening) return <VoiceListening />;
-
-  return (
-    <div className="pb-4">
-      {recents.length > 0 && (
-        <section aria-label="최근 검색어">
-          <SectionHead label="Recent · 최근 검색" />
-          <div className="px-5 flex flex-wrap gap-2">
-            {recents.slice(0, 7).map((r) => (
-              <RecentChip
-                key={r.query}
-                query={r.query}
-                onApply={() => onApplyQuery(r.query)}
-                onRemove={() => onRemoveRecent(r.query)}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-      {trending.length > 0 && (
-        <section aria-label="지금 떠오르는" className="mt-1">
-          <SectionHead label="Trending · 지금 떠오르는" />
-          <div className="px-5 flex flex-wrap gap-2">
-            {trending.slice(0, 6).map((t) => (
-              <TrendingChip
-                key={t.id}
-                label={t.title}
-                onApply={() => {
-                  onApplyQuery(t.title);
-                  track("search_trending_clicked", {
-                    tmdb_id: t.id,
-                    title: t.title,
-                  });
-                }}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {recents.length === 0 && trending.length === 0 && (
-        <div className="px-5 pt-4 text-sm text-muted">
-          작품, 감독, 배우 이름으로 검색해보세요
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SectionHead({ label }: { label: string }) {
-  // 2026-05-02 amber 누적 분배 정책: ChapterMark 첫 1개만 amber, 나머지는 primary.
-  // SearchSheet TRENDING/RECENT 헤더는 보조 위계라 색→가중치(semibold)로 위계 표현.
-  return (
-    <div className="px-5 pt-4 pb-2">
-      <h3
-        className="text-xs font-data uppercase"
-        style={{
-          color: "var(--text-primary)",
-          fontWeight: 600,
-          letterSpacing: "0.12em",
-        }}
-      >
-        {label}
-      </h3>
-    </div>
-  );
-}
-
-function RecentChip({
-  query,
-  onApply,
-  onRemove,
-}: {
-  query: string;
-  onApply: () => void;
-  onRemove: () => void;
-}) {
-  return (
-    <span
-      className="inline-flex items-center rounded-full"
-      style={{
-        background: "var(--surface)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      <button
-        onClick={onApply}
-        className="pl-3 pr-1.5 py-1.5 text-xs font-medium active:scale-[0.97] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-l-full"
-        style={{ color: "var(--text-primary)" }}
-        aria-label={`${query} 다시 검색`}
-      >
-        <span aria-hidden="true" style={{ color: "var(--text-muted)" }}>
-          ↺{" "}
-        </span>
-        {query}
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onRemove();
-        }}
-        aria-label={`${query} 검색 기록에서 제거`}
-        className="pr-2.5 pl-1 py-1.5 active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-r-full"
-        style={{ color: "var(--text-muted)" }}
-      >
-        <svg
-          width={9}
-          height={9}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={3}
-          strokeLinecap="square"
-        >
-          <line x1="6" y1="6" x2="18" y2="18" />
-          <line x1="18" y1="6" x2="6" y2="18" />
-        </svg>
-      </button>
-    </span>
-  );
-}
-
-function TrendingChip({
-  label,
-  onApply,
-}: {
-  label: string;
-  onApply: () => void;
-}) {
-  return (
-    <button
-      onClick={onApply}
-      className="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-medium active:scale-[0.97] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-      style={{
-        background: "var(--accent-dim)",
-        color: "var(--accent)",
-        border: "1px solid var(--accent-dim)",
-      }}
-      aria-label={`${label} 검색`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function VoiceListening() {
-  return (
-    <div
-      className="flex flex-col items-center justify-center px-6 py-12 gap-3"
-      style={{
-        background:
-          "radial-gradient(circle at center, rgba(196,163,90,0.12) 0%, transparent 70%)",
-      }}
-    >
-      <div
-        className="relative"
-        style={{ width: 120, height: 120 }}
-        aria-hidden="true"
-      >
-        {[1, 2, 3].map((i) => (
-          <span
-            key={i}
-            className="absolute inset-0 rounded-full"
-            style={{
-              border: "1px solid var(--accent)",
-              opacity: 0.4 / i,
-              animation: `neq-voice-pulse 2s ${i * 0.4}s ease-out infinite`,
-            }}
-          />
-        ))}
-        <span
-          className="absolute flex items-center justify-center rounded-full"
-          style={{
-            inset: 30,
-            background: "var(--accent)",
-            color: "var(--surface)",
-          }}
-        >
-          <svg width="22" height="26" viewBox="0 0 22 26" fill="none">
-            <rect
-              x="6"
-              y="1"
-              width="10"
-              height="14"
-              rx="5"
-              fill="currentColor"
-            />
-            <path
-              d="M2 12C2 16.9706 6.02944 21 11 21V25M20 12C20 16.9706 15.9706 21 11 21"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
-      </div>
-      <p
-        className="font-display italic text-xl"
-        style={{ color: "var(--text-primary)" }}
-      >
-        듣는 중…
-      </p>
-      <p
-        className="text-xs text-center max-w-[220px] leading-relaxed"
-        style={{ color: "var(--text-muted)" }}
-      >
-        &ldquo;토요일 느릿한 한국 영화&rdquo; 처럼 말해 보세요
-      </p>
-      <style>{`
-        @keyframes neq-voice-pulse {
-          0% { transform: scale(0.6); opacity: 0.6; }
-          100% { transform: scale(1.4); opacity: 0; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// 카로셀 — 작품
-// ─────────────────────────────────────────────────────
-
-function WorksCarousel({
-  items,
-  selectedId,
-  onSelect,
-}: {
-  items: SearchResult[];
-  selectedId: number | null;
-  onSelect: (item: SearchResult) => void;
-}) {
-  return (
-    // 2026-05-02 사용자 직접 테스트 D-2 #3: px-5 → px-6 (24px) — 첫 카드 좌측 여유.
-    // scroll-snap-align: start 가 padding-left 를 무시하고 첫 카드를 left=0 에 붙이는
-    // 문제(브라우저 기본 동작)를 scrollPaddingLeft 24px 로 해결 — snap 기준점을 24px 안쪽으로.
-    <div
-      className="flex gap-3 px-6 pb-1 overflow-x-auto"
-      style={{
-        scrollSnapType: "x mandatory",
-        scrollPaddingLeft: 24,
-        scrollbarWidth: "none",
-        WebkitOverflowScrolling: "touch",
-      }}
-    >
-      {items.map((item) => {
-        const isSelected = selectedId === item.id;
-        return (
-          <button
-            key={item.id}
-            onClick={() => onSelect(item)}
-            aria-label={`${item.title} 선택`}
-            aria-pressed={isSelected}
-            className="shrink-0 active:scale-[0.98] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
-            style={{
-              width: 112,
-              scrollSnapAlign: "start",
-            }}
-          >
-            <div
-              className="relative rounded-md overflow-hidden"
-              style={{
-                width: 112,
-                aspectRatio: "2 / 3",
-                background: "var(--surface)",
-                border: isSelected
-                  ? "1.5px solid var(--accent)"
-                  : "1px solid var(--border)",
-                transition: "border-color 150ms",
-              }}
-            >
-              {item.posterUrl ? (
-                <Image
-                  src={item.posterUrl}
-                  alt={item.title}
-                  fill
-                  sizes="112px"
-                  className="object-cover"
-                />
-              ) : (
-                <PosterFallback title={item.title} size="sm" />
-              )}
-            </div>
-            <div className="mt-2 text-left">
-              <div
-                className="text-xs font-medium truncate"
-                style={{ color: "var(--text-primary)" }}
-              >
-                {item.title}
-              </div>
-              <div
-                className="flex items-center gap-1.5 mt-0.5 text-[10px]"
-                style={{ color: "var(--text-muted)" }}
-              >
-                <span>{item.mediaType === "tv" ? "시리즈" : "영화"}</span>
-                {item.year && <span>·</span>}
-                {item.year && <span>{item.year}</span>}
-                {item.rating > 0 && (
-                  <>
-                    <span>·</span>
-                    <span className="flex items-center gap-0.5 font-data">
-                      <IconStar size={9} color="var(--text-secondary)" />
-                      {item.rating.toFixed(1)}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// 카로셀 — 인물 (감독 / 배우 공용)
-// ─────────────────────────────────────────────────────
-
-function PeopleCarousel({
-  items,
-  selectedId,
-  onSelect,
-}: {
-  items: PersonResult[];
-  selectedId: number | null;
-  onSelect: (person: PersonResult) => void;
-}) {
-  return (
-    // 2026-05-02 사용자 직접 테스트 D-2 #3: px-5 → px-6 — WorksCarousel 와 동일.
-    // scrollPaddingLeft 24px 로 snap 기준점을 padding 안쪽으로 조정 (첫 카드 left=0 방지).
-    <div
-      className="flex gap-3 px-6 pb-1 overflow-x-auto"
-      style={{
-        scrollSnapType: "x mandatory",
-        scrollPaddingLeft: 24,
-        scrollbarWidth: "none",
-        WebkitOverflowScrolling: "touch",
-      }}
-    >
-      {items.map((p) => (
-        <PersonCard
-          key={p.id}
-          person={p}
-          isSelected={selectedId === p.id}
-          onSelect={() => onSelect(p)}
-        />
-      ))}
-    </div>
-  );
-}
-
-function PersonCard({
-  person,
-  isSelected,
-  onSelect,
-}: {
-  person: PersonResult;
-  isSelected: boolean;
-  onSelect: () => void;
-}) {
-  const knownForText =
-    person.knownFor.length > 0
-      ? person.knownFor.map((k) => k.title).join(", ")
-      : null;
-  return (
-    // 위임 J #2 — 카드 자체가 button. 클릭 시 작품 패널 토글.
-    // isSelected 시 amber 1.5px 보더로 활성 표현 (WorksCarousel 와 동일 패턴).
-    // amber 누적 정책: 카로셀 카드 보더는 일시적/단일 활성이므로 ≤4 카운트 영향 미미.
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={isSelected}
-      aria-label={`${person.name} ${
-        person.knownForDept === "Directing" ? "감독" : "배우"
-      } 작품 보기`}
-      className="shrink-0 flex flex-col items-center text-center active:scale-[0.97] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
-      style={{ width: 96, scrollSnapAlign: "start" }}
-    >
-      <div
-        className="rounded-full overflow-hidden"
-        style={{
-          width: 72,
-          height: 72,
-          background: "var(--surface)",
-          border: isSelected
-            ? "1.5px solid var(--accent)"
-            : "1px solid var(--border)",
-          transition: "border-color 150ms",
-        }}
-      >
-        {person.profileUrl ? (
-          <Image
-            src={person.profileUrl}
-            alt={person.name}
-            width={72}
-            height={72}
-            className="object-cover w-full h-full"
-            sizes="72px"
-          />
-        ) : (
-          <div
-            className="w-full h-full flex items-center justify-center font-display text-2xl"
-            style={{ color: "var(--accent)" }}
-          >
-            {person.name.charAt(0)}
-          </div>
-        )}
-      </div>
-      <div
-        className="mt-2 text-xs font-medium truncate w-full"
-        style={{ color: "var(--text-primary)" }}
-      >
-        {person.name}
-      </div>
-      {knownForText && (
-        <div
-          className="text-[10px] mt-0.5 truncate w-full"
-          style={{ color: "var(--text-muted)" }}
-          title={knownForText}
-        >
-          {knownForText}
-        </div>
-      )}
-    </button>
-  );
-}
-
-/**
- * SelectedPersonPanel — 선택된 인물의 작품 리스트 (위임 J #2).
- *
- * 구조: 인물 이름/역할(감독·배우) + 작품 그리드 (3열, 포스터 + title + year).
- * 작품 카드 클릭 → 호출처가 handleSelectWork 로 전이 (그 작품 상세 패널 띄움).
- *
- * 안티-슬랍 #3 균일 그리드 우려: 3열 grid 사용하지만 SearchSheet 내부 보조 패널이라
- * 화면 전체 비율로 보면 비대칭 (위 카로셀, 아래 그리드). 이 정도는 수용.
- */
-function SelectedPersonPanel({
-  person,
-  works,
-  loading,
-  error,
-  selectedWorkId,
-  onSelectWork,
-  nestedWorkPanel,
-}: {
-  person: PersonResult;
-  works: SearchResult[];
-  loading: boolean;
-  error: boolean;
-  /** 현재 선택된 작품 id — 카드에 amber border highlight 로 표시. */
-  selectedWorkId?: number | null;
-  onSelectWork: (item: SearchResult) => void;
-  /** 선택된 작품의 SelectedWorkPanel — 작품 그리드 아래 nested 렌더. 호출처가 인스턴스 생성. */
-  nestedWorkPanel?: React.ReactNode;
-}) {
-  const roleLabel =
-    person.knownForDept === "Directing" ? "감독" : "배우";
-  return (
-    // 위임 S 옵션 B-1: SelectedWorkPanel 와 동일한 시각 연결 단서.
-    // border-top amber-border-light → 선택 인물 카드의 amber 1.5px 외곽선과 색 계열 동기.
-    <div
-      className="mx-6 mt-2 p-4 rounded-lg space-y-3"
-      style={{
-        background: "var(--surface)",
-        borderTop: "1px solid var(--accent-border-light)",
-        borderRight: "1px solid var(--border)",
-        borderBottom: "1px solid var(--border)",
-        borderLeft: "1px solid var(--border)",
-      }}
-      aria-label={`${person.name} ${roleLabel} 작품 목록`}
-    >
-      <div className="flex items-baseline justify-between">
-        <div>
-          <div
-            className="text-[11px] font-data uppercase"
-            style={{
-              color: "var(--text-muted)",
-              letterSpacing: "0.12em",
-            }}
-          >
-            {roleLabel}
-          </div>
-          <div
-            className="text-base font-medium"
-            style={{ color: "var(--text-primary)" }}
-          >
-            {person.name}
-          </div>
-        </div>
-      </div>
-
-      {loading && (
-        <div className="flex items-center justify-center py-8">
-          <NeqSpinner size="sm" label="작품 불러오는 중" />
-        </div>
-      )}
-
-      {!loading && error && (
-        <div
-          className="text-xs py-3"
-          style={{ color: "var(--text-secondary)" }}
-        >
-          작품 정보를 불러오지 못했어요
-        </div>
-      )}
-
-      {!loading && !error && works.length === 0 && (
-        <div
-          className="text-xs py-3"
-          style={{ color: "var(--text-muted)" }}
-        >
-          공개된 작품이 없어요
-        </div>
-      )}
-
-      {!loading && !error && works.length > 0 && (() => {
-        // works 를 3개씩 row 로 분할 → 선택 작품이 속한 row 바로 다음에 nestedWorkPanel 을
-        // grid-column: 1 / -1 (full row span) 으로 끼워 넣음.
-        // 의도: WorksCarousel 처럼 "선택한 카드 바로 아래" 시각 인접성. 그리드 끝에 떨어지지 않음.
-        const ROW_SIZE = 3;
-        const selectedIdx = selectedWorkId
-          ? works.findIndex((w) => w.id === selectedWorkId)
-          : -1;
-        const selectedRowIdx = selectedIdx >= 0 ? Math.floor(selectedIdx / ROW_SIZE) : -1;
-        const rows: SearchResult[][] = [];
-        for (let i = 0; i < works.length; i += ROW_SIZE) {
-          rows.push(works.slice(i, i + ROW_SIZE));
-        }
-        return (
-          <div className="grid grid-cols-3 gap-2.5">
-            {rows.map((row, rowIdx) => (
-              <Fragment key={`row-${rowIdx}`}>
-                {row.map((w) => {
-                  const isSelected = selectedWorkId === w.id;
-                  return (
-                    <button
-                      key={`${w.id}-${w.mediaType}`}
-                      type="button"
-                      onClick={() => {
-                        track("search_person_work_clicked", {
-                          person_id: person.id,
-                          tmdb_id: w.id,
-                        });
-                        onSelectWork(w);
-                      }}
-                      aria-label={`${w.title} 상세 보기${isSelected ? " (선택됨)" : ""}`}
-                      aria-current={isSelected ? "true" : undefined}
-                      className="text-left active:scale-[0.97] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
-                      style={{
-                        // 선택 작품 있을 때 비선택 카드 dim → 검색 시 dim overlay 와 동일 시각 위계.
-                        // 선택 + panel 의 시각 무게 살리고, 비선택 클릭은 그대로 가능 (갈아탐).
-                        opacity: selectedWorkId && !isSelected ? 0.35 : 1,
-                        transition: "opacity 180ms var(--ease-detail-morph)",
-                      }}
-                    >
-                      <div
-                        className="relative rounded-md overflow-hidden"
-                        style={{
-                          aspectRatio: "2 / 3",
-                          background: "var(--surface-raised)",
-                          // 선택 작품: amber 1.5px border + 약한 amber-dim 외곽 → "이 작품의 카드가 아래 떠있음" 단서.
-                          border: isSelected
-                            ? "1.5px solid var(--accent)"
-                            : "1px solid var(--border)",
-                          boxShadow: isSelected
-                            ? "0 0 0 3px var(--accent-dim)"
-                            : "none",
-                          transition:
-                            "border-color 180ms var(--ease-detail-morph), box-shadow 180ms var(--ease-detail-morph)",
-                        }}
-                      >
-                        {w.posterUrl ? (
-                          <Image
-                            src={w.posterUrl}
-                            alt={w.title}
-                            fill
-                            sizes="100px"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <PosterFallback title={w.title} size="sm" />
-                        )}
-                      </div>
-                      <div
-                        className="mt-1 text-[11px] font-medium leading-tight line-clamp-2"
-                        style={{ color: "var(--text-primary)" }}
-                      >
-                        {w.title}
-                      </div>
-                      {w.year && (
-                        <div
-                          className="font-data text-[10px] mt-0.5"
-                          style={{ color: "var(--text-muted)" }}
-                        >
-                          {w.year}
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-                {/* 선택 작품의 row 바로 뒤에 nestedWorkPanel 을 full-row 로 끼움.
-                    -mx-4 로 인물 panel 의 p-4 padding 까지 확장 → panel 자체가 인물 panel edge 까지 차지. */}
-                {rowIdx === selectedRowIdx && nestedWorkPanel && (
-                  <div style={{ gridColumn: "1 / -1" }} className="-mx-4">
-                    {nestedWorkPanel}
-                  </div>
-                )}
-              </Fragment>
-            ))}
-          </div>
-        );
-      })()}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────
-// 선택된 작품 상세 패널 (저장 / 상세 진입 / OTT)
-// ─────────────────────────────────────────────────────
-
-function SelectedWorkPanel({
-  item,
-  providers,
-  loadingProviders,
-  loadingDetail,
-  detailRec,
-  isSaved,
-  onSave,
-  onOpenDetail,
-}: {
-  item: SearchResult;
-  providers: ProviderInfo[];
-  loadingProviders: boolean;
-  loadingDetail: boolean;
-  detailRec: Recommendation | null;
-  isSaved: boolean;
-  onSave: () => void;
-  onOpenDetail: () => void;
-}) {
-  return (
-    // 2026-05-02 사용자 직접 테스트 D-2 #3: mx-5 → mx-6 — 카로셀 px-6 와 정합
-    // 위임 S 옵션 B-1: 카드 ↔ panel 시각 연결 단서.
-    //   - border-top: 1px var(--accent-border-light) → 선택 카드의 amber 1.5px 보더 색 계열과 동기.
-    //     선택 카드 외곽선이 amber → 그 아래 panel 상단도 같은 계열의 hairline → "이 카드 → 이 정보" 인지.
-    //   - 나머지 3면은 var(--border) 로 유지 (subtle, 시각 무게중심을 상단으로).
-    //   - DESIGN.md anti-slop 정책: borderLeft accent 인용 패턴 외 신규 X. border-top 은 hairline 1px
-    //     으로 장식이 아닌 연결 단서. amber-border-light(15% alpha) 라 강한 amber 면적 누적 X.
-    <div
-      className="mx-6 mt-2 p-4 rounded-lg space-y-3"
-      style={{
-        background: "var(--surface)",
-        borderTop: "1px solid var(--accent-border-light)",
-        borderRight: "1px solid var(--border)",
-        borderBottom: "1px solid var(--border)",
-        borderLeft: "1px solid var(--border)",
-      }}
-      aria-label={`${item.title} 상세 액션`}
-    >
-      {loadingProviders ? (
-        <div className="text-xs text-muted py-2">OTT 조회 중...</div>
-      ) : providers.length > 0 ? (
-        <div>
-          <div className="text-xs text-muted mb-2">시청 가능한 OTT</div>
-          <div className="flex flex-wrap gap-2">
-            {providers.map((p) => {
-              const link = getOTTLink(p.name, item.title);
-              const icon = getOTTIcon(p.name) ?? p.logoUrl;
-              return (
-                <a
-                  key={p.name}
-                  href={link ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${p.name}에서 ${item.title} 보기 (새 탭)`}
-                  onClick={() =>
-                    track("search_ott_clicked", {
-                      provider: p.name,
-                      tmdb_id: item.id,
-                    })
-                  }
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg active:scale-95 transition-transform min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-                  style={{
-                    background: "var(--surface-raised)",
-                    color: "var(--text-primary)",
-                  }}
-                >
-                  {icon && (
-                    <Image
-                      src={icon}
-                      alt={p.name}
-                      width={20}
-                      height={20}
-                      className="object-contain rounded-sm"
-                      unoptimized
-                    />
-                  )}
-                  {p.name}
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div className="text-xs text-muted py-1">
-          한국에서 이용 가능한 OTT가 없어요
-        </div>
-      )}
-
-      <div className="flex gap-2">
-        <button
-          onClick={onSave}
-          aria-label={isSaved ? `${item.title} 저장 해제` : `${item.title} 저장하기`}
-          aria-pressed={isSaved}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px] focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-          style={
-            // DetailSheet save 버튼과 동일 패턴 — 시각·동작 일관.
-            isSaved
-              ? {
-                  background: "var(--surface-raised)",
-                  border: "1px solid var(--accent-border)",
-                  color: "var(--accent)",
-                }
-              : {
-                  background: "var(--accent)",
-                  border: "1px solid var(--accent)",
-                  color: "var(--bg)",
-                }
-          }
-        >
-          <IconSave
-            size={16}
-            color={isSaved ? "var(--accent)" : "var(--bg)"}
-            filled={isSaved}
-          />
-          {isSaved ? "저장됨" : "저장하기"}
-        </button>
-        <button
-          onClick={onOpenDetail}
-          disabled={loadingDetail || !detailRec}
-          aria-label={`${item.title} 상세보기`}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-lg active:scale-[0.98] transition-all min-h-[44px] disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-          style={{
-            background: "var(--surface-raised)",
-            color: "var(--text-secondary)",
-          }}
-        >
-          상세
-          <svg
-            width={12}
-            height={12}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2.5}
-            strokeLinecap="square"
-          >
-            <polyline points="9 6 15 12 9 18" />
-          </svg>
-        </button>
-      </div>
     </div>
   );
 }
