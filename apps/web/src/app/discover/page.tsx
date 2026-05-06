@@ -183,9 +183,11 @@ export default function DiscoverPage() {
       rec.prefetchNextBatch();
     }
 
-    // 마지막 카드 → 스와이프 애니메이션 후 새 배치 로드
-    // pass 콜백 타이밍 360ms — Handoff v2 Phase C 정량 (feedback_swipe_ux.md):
-    // 사용자 잠금 결정 — save 480ms / pass 360ms.
+    // 마지막 카드 → 자동 추가 로드 (무한 append, 발굴 컨셉).
+    // 이전: refreshRecommendations + setTopIdx(0) → 새 배치가 들어왔어도 prev recs 와
+    // 합쳐지면서 첫 카드로 회귀하는 회귀 버그 (B3). prefetchNextBatch 는 dedupe 후
+    // append 하므로 topIdx 가 이어지면 자연스럽게 새 카드 노출.
+    // pass 콜백 타이밍 360ms — Handoff v2 Phase C 정량 (feedback_swipe_ux.md).
     if (topIdx >= filtered.length - 1) {
       swipe.setSwiping(true);
       swipe.setDragX(-600);
@@ -193,12 +195,10 @@ export default function DiscoverPage() {
       const t = setTimeout(() => {
         swipe.timersRef.current.delete(t);
         swipe.setDragX(0); swipe.setDragY(0); swipe.setSwiping(false);
-        // 새 배치 로드 — topIdx를 0으로 먼저 세팅하고 로딩 시작
-        // (로딩 중엔 LoadingScreen이 표시됨)
         if (!rec.loading && !rec.prefetching) {
-          rec.refreshRecommendations();
+          rec.prefetchNextBatch();
         }
-        setTopIdx(0);
+        setTopIdx((i) => i + 1);
       }, 360);
       swipe.timersRef.current.add(t);
       return;
@@ -583,6 +583,15 @@ export default function DiscoverPage() {
     // 온보딩 완료했거나 saved 있으면 cold start 아님 → 필터 좁음 메시지 대신 일반 empty 메시지
     const isCold = !hasOnboarded() && getSaved().length === 0;
     return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
+  }
+  // topIdx 가 stack 끝을 넘긴 상태 (B3 fix 후 무한 추가 로드 흐름).
+  // prefetch 진행 중이면 LoadingScreen, 아니면 EmptyScreen.
+  if (topIdx >= filtered.length) {
+    if (rec.prefetching) {
+      return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+    }
+    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterOTTs.size > 0;
+    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();

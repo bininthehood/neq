@@ -457,7 +457,11 @@ export function useRecommendations() {
   };
 
   const refreshRecommendations = async () => {
+    // localStorage 캐시 + React state 둘 다 비워야 새 추천이 깨끗하게 노출됨.
+    // setRecs([]) 누락 시 streaming append 가 기존 recs 뒤로 붙어 setTopIdx(0)
+    // 시점에 옛 첫 카드가 그대로 보임 (B1: 새로고침 무반응 / B3: 끝 도달 시 회귀).
     setRecommendations([], filterType, filterOrigin);
+    setRecs([]);
     await loadRecs(filterType, filterOrigin, filterYear, filterOTTs);
   };
 
