@@ -6,6 +6,14 @@ import Image from "next/image";
 import { IconClose, IconCheck } from "@/components/Icons";
 import { getOTTIcon } from "@/lib/ott-links";
 
+type SortBy = "saved" | "title" | "rating";
+
+const SORT_OPTIONS: { key: SortBy; label: string; desc: string }[] = [
+  { key: "saved", label: "저장순", desc: "최근 저장한 작품 먼저" },
+  { key: "title", label: "가나다순", desc: "제목 오름차순" },
+  { key: "rating", label: "평점순", desc: "평점 높은 작품 먼저" },
+];
+
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -14,6 +22,8 @@ type Props = {
   groupByOTT: boolean;
   setGroupByOTT: (v: boolean) => void;
   availableOTTs: { name: string; count: number }[];
+  sortBy: SortBy;
+  setSortBy: (v: SortBy) => void;
 };
 
 const ANIM_MS = 240;
@@ -26,6 +36,8 @@ export default function SavedFilterSheet({
   groupByOTT,
   setGroupByOTT,
   availableOTTs,
+  sortBy,
+  setSortBy,
 }: Props) {
   const [mounted, setMounted] = useState(open);
   const [visible, setVisible] = useState(false);
@@ -53,7 +65,7 @@ export default function SavedFilterSheet({
   if (!mounted) return null;
   if (typeof document === "undefined") return null;
 
-  const hasActive = ottFilter !== null || groupByOTT;
+  const hasActive = ottFilter !== null || groupByOTT || sortBy !== "saved";
   const groupDisabled = ottFilter !== null;
 
   // template.tsx 의 animate-tab-slide wrapper 가 stacking context 를 만들어
@@ -118,6 +130,7 @@ export default function SavedFilterSheet({
                 onClick={() => {
                   setOttFilter(null);
                   setGroupByOTT(false);
+                  setSortBy("saved");
                 }}
                 className="text-xs px-2 h-11 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
                 style={{ color: "var(--text-secondary)", fontWeight: 500 }}
@@ -236,6 +249,68 @@ export default function SavedFilterSheet({
               </ul>
             </section>
           )}
+
+          <section
+            className="pt-2 mt-2"
+            style={{ borderTop: "1px solid var(--border-subtle)" }}
+          >
+            <div
+              className="font-data uppercase mt-3 mb-1"
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.12em",
+                color: "var(--text-secondary)",
+              }}
+            >
+              정렬
+            </div>
+            <ul className="flex flex-col">
+              {SORT_OPTIONS.map((opt, i) => {
+                const isActive = sortBy === opt.key;
+                return (
+                  <li
+                    key={opt.key}
+                    style={
+                      i > 0
+                        ? { borderTop: "1px solid var(--border-subtle)" }
+                        : undefined
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSortBy(opt.key)}
+                      aria-pressed={isActive}
+                      aria-label={`${opt.label} ${isActive ? "선택됨" : "선택"}`}
+                      className="w-full flex items-center justify-between gap-3 py-3 px-1 active:scale-[0.99] transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md min-h-[44px]"
+                    >
+                      <span className="flex flex-col items-start min-w-0">
+                        <span
+                          className="text-sm"
+                          style={{
+                            color: isActive
+                              ? "var(--accent)"
+                              : "var(--text-primary)",
+                            fontWeight: isActive ? 600 : 500,
+                          }}
+                        >
+                          {opt.label}
+                        </span>
+                        <span
+                          className="text-xs mt-0.5"
+                          style={{ color: "var(--text-muted)" }}
+                        >
+                          {opt.desc}
+                        </span>
+                      </span>
+                      {isActive && (
+                        <IconCheck size={16} color="var(--accent)" />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
 
           <section
             className="pt-2 mt-2"

@@ -66,6 +66,51 @@ function persistSavedView(mode: SavedViewMode) {
   }
 }
 
+/**
+ * Saved 정렬.
+ * - "saved": 저장순 (savedAt desc) — 디폴트
+ * - "title": 가나다 (한글 locale)
+ * - "rating": 평점 (rating desc)
+ * localStorage 키: neq_saved_sort
+ */
+export type SavedSort = "saved" | "title" | "rating";
+const SAVED_SORT_KEY = "neq_saved_sort";
+
+function loadSavedSort(): SavedSort {
+  if (typeof window === "undefined") return "saved";
+  try {
+    const v = localStorage.getItem(SAVED_SORT_KEY);
+    if (v === "saved" || v === "title" || v === "rating") return v;
+  } catch {
+    /* ignore */
+  }
+  return "saved";
+}
+
+function persistSavedSort(sort: SavedSort) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SAVED_SORT_KEY, sort);
+  } catch {
+    /* ignore */
+  }
+}
+
+function sortSavedItems(items: SavedItem[], sort: SavedSort): SavedItem[] {
+  if (sort === "title") {
+    return [...items].sort((a, b) =>
+      a.recommendation.title.localeCompare(b.recommendation.title, "ko"),
+    );
+  }
+  if (sort === "rating") {
+    return [...items].sort(
+      (a, b) => (b.recommendation.rating ?? 0) - (a.recommendation.rating ?? 0),
+    );
+  }
+  // "saved" — savedAt desc (최근 저장 우선)
+  return [...items].sort((a, b) => b.savedAt - a.savedAt);
+}
+
 function ReactionLabel({ reaction }: { reaction: WatchReaction }) {
   const r = REACTIONS.find((x) => x.key === reaction)!;
   return (
@@ -449,6 +494,7 @@ export default function SavedPage() {
   // preview 모드 hero 작품 id. 카드 탭으로 변경. 첫 진입 시 첫 작품 자동 선택 (effect 처리).
   const [selectedPreviewId, setSelectedPreviewId] = useState<number | null>(null);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<SavedSort>("saved");
   const toast = useToast();
 
   // --- Nudge: 저장 후 24시간+ 미시청 작품 개별 넛지 ---
@@ -527,6 +573,7 @@ export default function SavedPage() {
     setDismissedNudges(loadDismissedNudges());
     // 위임 L #6 — 뷰 모드 복원
     setViewMode(loadSavedView());
+    setSortBy(loadSavedSort());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -567,17 +614,27 @@ export default function SavedPage() {
     );
   }, [filteredSaved, ottFilter]);
 
-  // preview 모드 hero 자동 선택 — selectedPreviewId 가 ottFilteredSaved 안에 없으면 첫 작품으로.
-  // ottFilter 변경, viewFilter 변경 등으로 목록 변경 시 자동 보정.
+  const sortedSaved = useMemo(
+    () => sortSavedItems(ottFilteredSaved, sortBy),
+    [ottFilteredSaved, sortBy],
+  );
+
+  const handleSortChange = useCallback((s: SavedSort) => {
+    setSortBy(s);
+    persistSavedSort(s);
+  }, []);
+
+  // preview 모드 hero 자동 선택 — selectedPreviewId 가 sortedSaved 안에 없으면 첫 작품으로.
+  // ottFilter / viewFilter / sort 변경 등으로 목록 변경 시 자동 보정.
   useEffect(() => {
     if (viewMode !== "preview") return;
-    if (ottFilteredSaved.length === 0) return;
+    if (sortedSaved.length === 0) return;
     const exists = selectedPreviewId !== null
-      && ottFilteredSaved.some((item) => item.recommendation.tmdbId === selectedPreviewId);
+      && sortedSaved.some((item) => item.recommendation.tmdbId === selectedPreviewId);
     if (!exists) {
-      setSelectedPreviewId(ottFilteredSaved[0].recommendation.tmdbId);
+      setSelectedPreviewId(sortedSaved[0].recommendation.tmdbId);
     }
-  }, [viewMode, ottFilteredSaved, selectedPreviewId]);
+  }, [viewMode, sortedSaved, selectedPreviewId]);
 
   // ottFilter 활성 시 OTT 그룹핑 자동 해제 (그룹 토글 hide 와 동기화).
   useEffect(() => {
@@ -609,7 +666,7 @@ export default function SavedPage() {
     for (const { name } of availableOTTs) {
       groups[name] = [];
     }
-    for (const item of ottFilteredSaved) {
+    for (const item of sortedSaved) {
       const providers = item.recommendation.providers;
       if (!providers || providers.length === 0) {
         if (!groups["기타"]) groups["기타"] = [];
@@ -627,7 +684,7 @@ export default function SavedPage() {
     }
     // 작품 수 많은 OTT 먼저, 빈 그룹은 마지막
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
-  }, [ottFilteredSaved, groupByOTT, availableOTTs, ottFilter]);
+  }, [sortedSaved, groupByOTT, availableOTTs, ottFilter]);
 
   // 히스토리 날짜별 그룹핑
   const historyGroups = useMemo(() => {
@@ -1032,7 +1089,7 @@ export default function SavedPage() {
               >
                 <polyline points="6 9 12 15 18 9" />
               </svg>
-              {(ottFilter !== null || groupByOTT) && (
+              {(ottFilter !== null || groupByOTT || sortBy !== "saved") && (
                 <span
                   aria-hidden
                   style={{
@@ -1476,8 +1533,8 @@ export default function SavedPage() {
            hero 클릭 → DetailSheet 진입. hero 우측상단 봤어요 reaction 진입 (PosterCard 패턴). */
         (() => {
           const heroItem =
-            ottFilteredSaved.find((item) => item.recommendation.tmdbId === selectedPreviewId)
-            ?? ottFilteredSaved[0];
+            sortedSaved.find((item) => item.recommendation.tmdbId === selectedPreviewId)
+            ?? sortedSaved[0];
           const heroRec = heroItem.recommendation;
           const heroId = heroRec.tmdbId;
           const heroReport = reports[heroId];
@@ -1645,7 +1702,7 @@ export default function SavedPage() {
                 role="listbox"
                 aria-label="작품 목록"
               >
-                {ottFilteredSaved.map((item) => {
+                {sortedSaved.map((item) => {
                   const id = item.recommendation.tmdbId;
                   const isActive = id === selectedPreviewId;
                   return (
@@ -1697,7 +1754,7 @@ export default function SavedPage() {
       ) : viewMode === "list" ? (
         /* 위임 L #6 — List 뷰 (1열 가로 카드). */
         <div className="flex flex-col gap-2 px-5 pb-4">
-          {ottFilteredSaved.map((item) => (
+          {sortedSaved.map((item) => (
             <ListCard
               key={item.recommendation.tmdbId}
               item={item}
@@ -1717,7 +1774,7 @@ export default function SavedPage() {
       ) : (
         /* 기본 그리드 뷰 — CSS columns mason packing (PosterCard height 240/200 변형 시각효과 유지하면서 빈 공간 제거). */
         <div className="px-5 pb-4" style={{ columnCount: 2, columnGap: 12 }}>
-          {ottFilteredSaved.map((item, i) => (
+          {sortedSaved.map((item, i) => (
             <PosterCard
               key={item.recommendation.tmdbId}
               item={item}
@@ -1779,6 +1836,8 @@ export default function SavedPage() {
         groupByOTT={groupByOTT}
         setGroupByOTT={setGroupByOTT}
         availableOTTs={availableOTTs}
+        sortBy={sortBy}
+        setSortBy={handleSortChange}
       />
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는 DetailSheet cast 클릭으로 진입. */}
       <SearchSheet
