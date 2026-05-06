@@ -21,6 +21,7 @@ import PosterFallback from "@/components/PosterFallback";
 import { IconStar, IconClose, IconCheck, IconHeart, IconGrid, IconList, IconSearch, IconPreview, IconArchive } from "@/components/Icons";
 import DetailSheet from "@/components/discover/DetailSheet";
 import SearchSheet from "@/components/discover/SearchSheet";
+import SavedFilterSheet from "@/components/saved/SavedFilterSheet";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
 import { getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
@@ -447,6 +448,7 @@ export default function SavedPage() {
   const [viewMode, setViewMode] = useState<SavedViewMode>("grid");
   // preview 모드 hero 작품 id. 카드 탭으로 변경. 첫 진입 시 첫 작품 자동 선택 (effect 처리).
   const [selectedPreviewId, setSelectedPreviewId] = useState<number | null>(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const toast = useToast();
 
   // --- Nudge: 저장 후 24시간+ 미시청 작품 개별 넛지 ---
@@ -1001,87 +1003,105 @@ export default function SavedPage() {
               </button>
             ))}
           </div>
-          {/* OTT별 보기 — underline 토글. saved 있고 history 아니고 preview 아니고 ottFilter null 일 때만 노출.
-              preview 모드는 단일 hero, ottFilter 활성 시 단일 그룹이라 OTT 그룹핑 의미 약함 → 자동 hide. */}
+          {/* 필터 트리거 — OTT 선택 + OTT별 그룹화 토글을 모두 sheet 안으로 격하 (Letterboxd 패턴).
+              availableOTTs >= 2 일 때만 의미 있음 (단일 OTT 환경에선 필터 자체 비활성). */}
           {saved.length > 0
             && viewFilter !== "history"
-            && viewMode !== "preview"
-            && !ottFilter && (
+            && availableOTTs.length > 1 && (
             <button
               type="button"
-              onClick={() => setGroupByOTT(!groupByOTT)}
-              aria-pressed={groupByOTT}
-              aria-label={groupByOTT ? "전체 그리드 보기로 전환" : "OTT별 그룹 보기로 전환"}
-              className="text-xs whitespace-nowrap active:scale-95 transition-all duration-200 min-h-[44px] px-1 flex items-center flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
+              onClick={() => setFilterSheetOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={filterSheetOpen}
+              aria-label="필터 열기"
+              className="text-xs whitespace-nowrap active:scale-95 transition-all duration-200 min-h-[44px] px-2 flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md relative"
               style={{
                 color: "var(--text-secondary)",
-                fontWeight: groupByOTT ? 600 : 500,
-                textDecoration: groupByOTT ? "underline" : "none",
-                textUnderlineOffset: "3px",
+                fontWeight: 500,
               }}
             >
-              OTT별 보기
+              필터
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="square"
+                aria-hidden
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              {(ottFilter !== null || groupByOTT) && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 4,
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: "var(--accent)",
+                  }}
+                />
+              )}
             </button>
           )}
         </div>
       )}
 
-      {/* OTT filter tabs */}
-      {availableOTTs.length > 1 && viewFilter !== "history" && saved.length > 0 && (
-        <div className="flex gap-2 px-5 mt-1 mb-1 overflow-x-auto" role="tablist" aria-label="OTT 필터" style={{ scrollbarWidth: "none" }}>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={ottFilter === null}
-            onClick={() => setOttFilter(null)}
-            className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-            style={{
-              background: ottFilter === null ? "var(--accent)" : "transparent",
-              color: ottFilter === null ? "var(--text-inverse)" : "var(--text-muted)",
-              fontWeight: ottFilter === null ? 600 : 500,
-              borderRadius: 8,
-              border: `1px solid ${ottFilter === null ? "var(--accent)" : "var(--border)"}`,
-            }}
-          >
-            전체
-          </button>
-          {availableOTTs.map(({ name, count }) => {
-            const isActive = ottFilter === name;
-            const iconSrc = getOTTIcon(name);
+      {/* 활성 필터 chip — OTT 또는 그룹화 적용 시에만 노출. 즉시 제거 가능. */}
+      {(ottFilter !== null || groupByOTT) && viewFilter !== "history" && (
+        <div className="flex flex-wrap gap-2 px-5 mt-1 mb-1">
+          {ottFilter !== null && (() => {
+            const iconSrc = getOTTIcon(ottFilter);
             return (
               <button
-                key={name}
                 type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-label={`${name} (${count}편) ${isActive ? "선택됨" : "선택"}`}
-                onClick={() => setOttFilter(isActive ? null : name)}
-                className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                onClick={() => setOttFilter(null)}
+                aria-label={`${ottFilter} 필터 제거`}
+                className="text-xs whitespace-nowrap active:scale-95 transition-all min-h-[32px] px-2.5 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-full"
                 style={{
-                  background: isActive ? "var(--accent)" : "transparent",
-                  color: isActive ? "var(--text-inverse)" : "var(--text-muted)",
-                  fontWeight: isActive ? 600 : 500,
-                  borderRadius: 8,
-                  border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+                  background: "var(--accent-dim)",
+                  color: "var(--accent)",
+                  fontWeight: 600,
+                  border: "1px solid var(--accent-border-light)",
                 }}
               >
                 {iconSrc && (
                   <Image
                     src={iconSrc}
                     alt=""
-                    width={16}
-                    height={16}
+                    width={14}
+                    height={14}
                     className="object-contain rounded-sm"
                     unoptimized
                   />
                 )}
-                {name}
-                <span className="font-data" style={{ fontSize: "11px", opacity: isActive ? 0.75 : 0.6 }}>
-                  {count}
-                </span>
+                {ottFilter}
+                <IconClose size={12} color="currentColor" />
               </button>
             );
-          })}
+          })()}
+          {groupByOTT && (
+            <button
+              type="button"
+              onClick={() => setGroupByOTT(false)}
+              aria-label="OTT별 그룹화 해제"
+              className="text-xs whitespace-nowrap active:scale-95 transition-all min-h-[32px] px-2.5 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-full"
+              style={{
+                background: "var(--accent-dim)",
+                color: "var(--accent)",
+                fontWeight: 600,
+                border: "1px solid var(--accent-border-light)",
+              }}
+            >
+              OTT별 그룹화
+              <IconClose size={12} color="currentColor" />
+            </button>
+          )}
         </div>
       )}
 
@@ -1748,6 +1768,16 @@ export default function SavedPage() {
           }}
         />
       )}
+      {/* 필터 sheet — OTT 선택 + OTT별 그룹화 토글. Row 2 OTT chips 폐기 후 격하 위치. */}
+      <SavedFilterSheet
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        ottFilter={ottFilter}
+        setOttFilter={setOttFilter}
+        groupByOTT={groupByOTT}
+        setGroupByOTT={setGroupByOTT}
+        availableOTTs={availableOTTs}
+      />
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는 DetailSheet cast 클릭으로 진입. */}
       <SearchSheet
         show={searchSheet.showDetail}
