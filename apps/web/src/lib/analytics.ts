@@ -118,11 +118,6 @@ export type NekoEvent =
   | "persona_switched"
   | "persona_created"
   | "persona_deleted"
-  // 넛지
-  | "nudge_shown"
-  | "nudge_reported"
-  | "nudge_dismissed"
-  | "reentry_nudge_shown"
   // 온보딩 브릿지 & 코치마크
   | "bridge_shown"
   | "bridge_completed"

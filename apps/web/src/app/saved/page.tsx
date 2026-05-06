@@ -470,7 +470,6 @@ function ListCard({
 
 export default function SavedPage() {
   const [saved, setSaved] = useState<SavedItem[]>([]);
-  const [selected, setSelected] = useState<SavedItem | null>(null);
   /**
    * detailItem 만 페이지가 보유. detailY/detailAnimating/detailBodyRef + 모션/터치 핸들러는
    * 사용자 직접 테스트 #4: `useDetailSheet` hook 으로 일원화 (Discover 와 동일 source).
@@ -497,61 +496,6 @@ export default function SavedPage() {
   const [sortBy, setSortBy] = useState<SavedSort>("saved");
   const toast = useToast();
 
-  // --- Nudge: 저장 후 24시간+ 미시청 작품 개별 넛지 ---
-  const NUDGE_DISMISS_KEY = "neq_nudge_dismissed";
-  const [dismissedNudges, setDismissedNudges] = useState<Set<number>>(new Set());
-
-  const loadDismissedNudges = useCallback((): Set<number> => {
-    if (typeof window === "undefined") return new Set();
-    try {
-      const raw = localStorage.getItem(NUDGE_DISMISS_KEY);
-      if (!raw) return new Set();
-      const parsed = JSON.parse(raw) as Array<{ id: number; until: number }>;
-      const now = Date.now();
-      const valid = parsed.filter((p) => p.until > now);
-      localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify(valid));
-      return new Set(valid.map((p) => p.id));
-    } catch {
-      return new Set();
-    }
-  }, []);
-
-  const nudgeItems = useMemo(() => {
-    const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
-    return saved
-      .filter(
-        (s) =>
-          !reports[s.recommendation.tmdbId] &&
-          !archivedIds.has(s.recommendation.tmdbId) &&
-          now - s.savedAt > ONE_DAY &&
-          !dismissedNudges.has(s.recommendation.tmdbId)
-      )
-      .slice(0, 2);
-  }, [saved, reports, archivedIds, dismissedNudges]);
-
-  // Track nudge shown
-  useEffect(() => {
-    for (const item of nudgeItems) {
-      track("nudge_shown", { tmdb_id: item.recommendation.tmdbId });
-    }
-  }, [nudgeItems]);
-
-  const handleDismissNudge = useCallback((tmdbId: number) => {
-    track("nudge_dismissed", { tmdb_id: tmdbId });
-    try {
-      const raw = localStorage.getItem(NUDGE_DISMISS_KEY);
-      const parsed = raw
-        ? (JSON.parse(raw) as Array<{ id: number; until: number }>)
-        : [];
-      parsed.push({ id: tmdbId, until: Date.now() + 48 * 60 * 60 * 1000 });
-      localStorage.setItem(NUDGE_DISMISS_KEY, JSON.stringify(parsed));
-    } catch {
-      // ignore
-    }
-    setDismissedNudges((prev) => new Set(prev).add(tmdbId));
-  }, []);
-
   const refreshData = () => {
     // 한 번만 읽고 Map으로 변환 (O(n))
     setSaved(getSaved());
@@ -570,7 +514,6 @@ export default function SavedPage() {
 
   useEffect(() => {
     refreshData();
-    setDismissedNudges(loadDismissedNudges());
     // 위임 L #6 — 뷰 모드 복원
     setViewMode(loadSavedView());
     setSortBy(loadSavedSort());
@@ -767,7 +710,6 @@ export default function SavedPage() {
     const prevReport = reports[tmdbId];
     removeSaved(tmdbId);
     removeWatchReport(tmdbId);
-    if (selected?.recommendation.tmdbId === tmdbId) setSelected(null);
     if (reportingId === tmdbId) setReportingId(null);
     refreshData();
     if (target) {
@@ -886,48 +828,10 @@ export default function SavedPage() {
     }
   }, []);
 
-  const handlePickTonight = () => {
-    if (saved.length === 0) return;
-    const unwatched = saved.filter((s) => !reports[s.recommendation.tmdbId]);
-    const pool = unwatched.length > 0 ? unwatched : saved;
-
-    const hour = new Date().getHours();
-    const isLateNight = hour >= 22 || hour < 6;
-    const isWeekend = [0, 6].includes(new Date().getDay());
-
-    // 가중치: 늦은 밤 → 짧은 영화 우선, 주말 → 시리즈 우선
-    const weighted = pool.map((item) => {
-      let weight = 1;
-      const rec = item.recommendation;
-      if (isLateNight && rec.type === "movie" && rec.runtime && rec.runtime < 120) weight += 2;
-      if (isWeekend && rec.type === "series") weight += 2;
-      if (!isLateNight && !isWeekend) weight = 1; // 평일 낮 = 균등
-      return { item, weight };
-    });
-
-    const totalWeight = weighted.reduce((sum, w) => sum + w.weight, 0);
-    let random = Math.random() * totalWeight;
-    for (const { item, weight } of weighted) {
-      random -= weight;
-      if (random <= 0) { setSelected(item); return; }
-    }
-    setSelected(pool[0]);
-  };
-
   const archivedCount = archivedIds.size;
   const activeItems = saved.filter((s) => !archivedIds.has(s.recommendation.tmdbId));
   const watchedCount = activeItems.filter((s) => reports[s.recommendation.tmdbId]).length;
   const unwatchedCount = activeItems.length - watchedCount;
-
-  const pickSubtext = (() => {
-    const hour = new Date().getHours();
-    const isLateNight = hour >= 22 || hour < 6;
-    const isWeekend = [0, 6].includes(new Date().getDay());
-    if (isLateNight) return "짧은 영화 위주로 골라드릴게요";
-    if (isWeekend) return "주말이니까 시리즈도 좋아요";
-    if (unwatchedCount > 0) return `안 본 ${unwatchedCount}편 중 하나를 골라드릴게요`;
-    return "저장한 작품 중에서 하나 골라드릴게요";
-  })();
 
   const VIEW_FILTERS: { key: ViewFilter; label: string; count: number }[] = [
     { key: "all", label: "전체", count: activeItems.length },
@@ -1161,67 +1065,6 @@ export default function SavedPage() {
         </div>
       )}
 
-      {/* Individual nudge cards — 저장 후 24시간 이상, 미시청 작품 개별 넛지 */}
-      {nudgeItems.length > 0 && viewFilter !== "history" && (
-        <div className="mx-5 mb-3">
-          {nudgeItems.map((item) => (
-            <div
-              key={item.recommendation.tmdbId}
-              className="flex items-center gap-3 p-3 mb-2 rounded-lg"
-              style={{
-                background: "var(--surface)",
-                boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
-              }}
-            >
-              {item.recommendation.posterUrl && (
-                <Image
-                  src={item.recommendation.posterUrl}
-                  alt={item.recommendation.title}
-                  width={40}
-                  height={60}
-                  className="rounded-md object-cover flex-shrink-0"
-                  sizes="40px"
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">
-                  {item.recommendation.title}
-                </div>
-                <div className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                  봤어요?
-                </div>
-              </div>
-              <div className="flex gap-1.5 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    track("nudge_reported", { tmdb_id: item.recommendation.tmdbId });
-                    handleReport(item.recommendation.tmdbId, "good");
-                  }}
-                  aria-label={`${item.recommendation.title} 봤어요로 리포트`}
-                  className="px-2.5 py-1.5 text-xs rounded-lg active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none min-h-[44px]"
-                  style={{
-                    background: "var(--accent-dim)",
-                    color: "var(--accent)",
-                  }}
-                >
-                  봤어요
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleDismissNudge(item.recommendation.tmdbId)}
-                  aria-label={`${item.recommendation.title} 넛지 나중에`}
-                  className="px-2 py-1.5 text-xs active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md min-h-[44px]"
-                  style={{ color: "var(--text-muted)" }}
-                >
-                  나중에
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Watch Stats */}
       {stats.total > 0 && (viewFilter === "watched" || viewFilter === "archived") && (
         <div className="mx-5 mt-2 mb-3">
@@ -1258,89 +1101,6 @@ export default function SavedPage() {
             </div>
             <div className="font-data text-2xl font-bold">
               {stats.total}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Tonight banner — '안 보았/탐색 중' 컨텍스트 (all / unwatched) 에서만 노출. */}
-      {saved.length > 0 && (viewFilter === "all" || viewFilter === "unwatched") && (
-        <div className="mx-5 mt-1 mb-4">
-          <button
-            type="button"
-            onClick={handlePickTonight}
-            aria-label="오늘의 작품 무작위로 고르기"
-            className="w-full p-4 flex items-center justify-between active:scale-[0.98] transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)]"
-            style={{
-              background: "var(--surface)",
-              boxShadow: "0 1px 8px rgba(0,0,0,0.2)",
-            }}
-          >
-            <div className="text-left">
-              <div className="font-display font-semibold">오늘 뭐 볼까?</div>
-              <div className="text-xs mt-0.5 text-muted">
-                {pickSubtext}
-              </div>
-            </div>
-            <span aria-hidden="true" style={{ color: "var(--text-secondary)", fontSize: "20px" }}>&#8594;</span>
-          </button>
-        </div>
-      )}
-
-      {/* Tonight pick */}
-      {selected && viewFilter !== "history" && (
-        <div
-          className="mx-5 mb-4 p-4 animate-fade-in cursor-pointer active:scale-[0.98] transition-transform bg-accent-dim rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
-          style={{ border: "1px solid var(--accent-border-light)" }}
-          role="button"
-          tabIndex={0}
-          aria-label={`${selected.recommendation.title} 상세보기`}
-          onClick={() => { if (selected) openDetailFor(selected); }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
-              e.preventDefault();
-              if (selected) openDetailFor(selected);
-            }
-          }}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-xs font-semibold uppercase tracking-wider text-accent">
-              오늘의 선택
-            </div>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setSelected(null); }}
-              onKeyDown={(e) => { e.stopPropagation(); }}
-              aria-label="오늘의 선택 닫기"
-              className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform -mr-1 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-full"
-            >
-              <IconClose size={14} color="var(--text-muted)" />
-            </button>
-          </div>
-          <div className="flex gap-3">
-            {selected.recommendation.posterUrl && (
-              <Image
-                src={selected.recommendation.posterUrl}
-                alt={selected.recommendation.title}
-                width={64}
-                height={96}
-                className="object-cover flex-shrink-0 rounded-md"
-                sizes="64px"
-              />
-            )}
-            <div>
-              <div className="font-display font-bold text-lg">{selected.recommendation.title}</div>
-              <div className="text-sm mt-1 text-secondary">
-                {selected.recommendation.reason}
-              </div>
-              <div className="flex gap-1 mt-2">
-                {selected.recommendation.providers.slice(0, 3).map((p) => {
-                  const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
-                  return iconSrc ? (
-                    <Image key={p.name} src={iconSrc} alt={p.name} width={24} height={24} className="object-contain rounded-sm bg-surface" unoptimized />
-                  ) : null;
-                })}
-              </div>
             </div>
           </div>
         </div>

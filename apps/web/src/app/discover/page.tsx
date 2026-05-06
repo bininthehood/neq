@@ -8,7 +8,6 @@ import {
   removeSaved,
   getSaved,
   addSeenTitles,
-  getWatchReports,
   hasOnboarded,
 } from "@/lib/store";
 import { vibrate } from "@/lib/haptics";
@@ -77,7 +76,6 @@ export default function DiscoverPage() {
   // (피드백 #2 — 탭은 DetailSheet 진입으로 단일화). state 자체는 다른 곳에서
   // 참조 중이라 false 고정 상수로 유지. 향후 다른 트리거(long-press 등) 도입 시 setter 부활.
   const [immersive] = useState(false);
-  const [reentryNudge, setReentryNudge] = useState<string | null>(null);
   const [rewinding, setRewinding] = useState(false);
 
   const rec = useRecommendations();
@@ -518,33 +516,6 @@ export default function DiscoverPage() {
     });
   }, []);
 
-  // 재진입 넛지: 어제 저장한 미시청 작품이 있으면 토스트 표시
-  useEffect(() => {
-    if (!mounted) return;
-    if (typeof sessionStorage === "undefined") return;
-    if (sessionStorage.getItem("neq_reentry_nudge_shown")) return;
-
-    const savedItems = getSaved();
-    const reportsList = getWatchReports();
-    const reportedIds = new Set(reportsList.map((r) => r.tmdbId));
-    const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000;
-
-    const candidate = savedItems.find(
-      (s) =>
-        !reportedIds.has(s.recommendation.tmdbId) &&
-        now - s.savedAt > ONE_DAY
-    );
-
-    if (candidate) {
-      setReentryNudge(candidate.recommendation.title);
-      sessionStorage.setItem("neq_reentry_nudge_shown", "1");
-      track("reentry_nudge_shown", { tmdb_id: candidate.recommendation.tmdbId });
-      const t = setTimeout(() => setReentryNudge(null), 5000);
-      return () => clearTimeout(t);
-    }
-  }, [mounted]);
-
   // --- shared props ---
   const chipsProps = {
     filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterOTTs: rec.filterOTTs,
@@ -897,29 +868,6 @@ export default function DiscoverPage() {
           >
             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--accent)" }} />
             첫 번째 작품이에요
-          </div>
-        </div>
-      )}
-      {/* 재진입 넛지 토스트 */}
-      {reentryNudge && (
-        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center animate-fade-in">
-          <div
-            className="px-4 py-2.5 text-sm rounded-lg flex items-center gap-2 cursor-pointer active:scale-[0.98] transition-transform"
-            style={{
-              background: "var(--surface-raised)",
-              color: "var(--text-primary)",
-              boxShadow: "var(--shadow-toast)",
-            }}
-            onClick={() => {
-              router.push("/saved");
-              setReentryNudge(null);
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-              style={{ background: "var(--accent)" }}
-            />
-            {reentryNudge} 봤어요?
           </div>
         </div>
       )}
