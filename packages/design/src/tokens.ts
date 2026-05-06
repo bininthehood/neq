@@ -198,12 +198,12 @@ export const durations = {
   slow: 500,      // 풀스크린, 온보딩 스텝
   /**
    * DetailSheet morph 전용 (Handoff v2 D3, Phase C 정합).
-   * web `DETAIL_ENTER_MS=450 / DETAIL_EXIT_MS=350` 와 동일.
-   * native 의 spring 모델 (damping 20 / stiffness 160) 은 ~280ms 인지 — 100ms+ 차이.
+   * exit 은 enter 의 절반 미만 — swipe-down 직후 morph 축소-확장이 길면 jank 로 인지됨.
+   * native 의 spring 모델 (damping 20 / stiffness 160) 은 ~280ms 인지.
    * Easing.bezier + withTiming 으로 web 과 정확 일치시킴.
    */
   detailEnter: 450,
-  detailExit: 350,
+  detailExit: 180,
   /**
    * Swipe dismiss 콜백 타이밍 (사이클 2 단일화).
    *  - save 480ms — `feedback_swipe_ux.md` 잠금. 카드 흡수 + 다음 카드 advance.

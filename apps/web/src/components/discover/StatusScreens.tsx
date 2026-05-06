@@ -24,7 +24,6 @@ interface LoadingScreenProps extends FilterChipsPassthrough {
 
 /**
  * Discover 첫 로딩 / 추천 계산 중.
- * D9 매핑: <Illust name="calibrating"> + <NeqSpinner size="lg">
  */
 export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
   return (
@@ -38,14 +37,7 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
       </div>
       <FilterChips {...chips} />
       <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
-        <Illust
-          name="calibrating"
-          style="editorial"
-          size="lg"
-          aria-label="추천을 준비하고 있어요"
-        />
         <NeqSpinner size="lg" label="추천 로딩 중" />
-        {/* D7 / Round 3 v2 — L-01 말줄임 제거, accent 강조 */}
         <p
           className="text-sm text-center"
           style={{ color: "var(--text-secondary)" }}
