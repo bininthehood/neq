@@ -1572,19 +1572,22 @@ export default function SavedPage() {
                     봤어요?
                   </button>
                 )}
-                {heroReport && !heroIsReporting && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(heroId); }}
-                    aria-label={`${heroRec.title} 시청 리포트 취소`}
-                    aria-pressed={true}
-                    className="absolute top-2 right-2 min-h-[44px] px-3 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none flex items-center gap-1"
-                    style={{ backdropFilter: "blur(4px)", color: REACTIONS.find((x) => x.key === heroReport)?.color }}
-                    title="리포트 취소"
-                  >
-                    <IconCheck size={12} /> 시청
-                  </button>
-                )}
+                {heroReport && !heroIsReporting && (() => {
+                  const reaction = REACTIONS.find((x) => x.key === heroReport);
+                  return (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(heroId); }}
+                      aria-label={`${heroRec.title} 시청 리포트 (${reaction?.label}) 취소`}
+                      aria-pressed={true}
+                      className="absolute top-2 right-2 min-h-[44px] px-3 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none flex items-center gap-1"
+                      style={{ backdropFilter: "blur(4px)", color: reaction?.color }}
+                      title="리포트 취소"
+                    >
+                      <IconCheck size={12} /> {reaction?.label}
+                    </button>
+                  );
+                })()}
                 {/* reporting overlay — PosterCard 패턴 hero 적용 */}
                 {heroIsReporting && (
                   <div
