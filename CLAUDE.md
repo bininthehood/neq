@@ -146,3 +146,42 @@ neko/
 | 2026-04-07 | 초기 구성 | 전체 | neq 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |
 | 2026-04-15 | 디자인 팀 추가 | 디자인 | Warm Cinema 탈피 + 고유 디자인 언어 구축 |
 | 2026-04-15 | 네이티브 전환 시작 | 전체 | PWA → Expo RN. frontend-builder, qa-tester 확장 |
+
+## TMDB Mirror 인프라
+
+**목표:** `/api/recommend` 의 enrich 단계 (LLM 응답 → TMDB API hydrate, 4.8~12.3s 소요) 를
+DB 미러로 치환해 ~100ms 로 단축. 활성화는 opt-in (현재 default OFF).
+
+**스토리지 (`supabase/migrations/20260424_tmdb_mirror.sql`):**
+- `tmdb_catalog`     — TMDB Daily ID Export (전체 universe, ~1.4M)
+- `tmdb_metadata`    — 작품 detail + credits + providers 병합 (180일 TTL, providers는 30일 TTL 분리)
+- `tmdb_crawl_queue` — bulk crawl 대기열 (priority/failed_count 기반 pull)
+
+**파이프라인 — GitHub Actions 5종 (Vercel cron 아님):**
+
+| Workflow (`.github/workflows/`) | 스케줄 (UTC) | 스크립트 (`scripts/`) | 역할 |
+|---|---|---|---|
+| `tmdb-catalog-sync.yml` | 매일 08:00 | `tmdb-catalog-sync.ts` | TMDB Daily ID Export → `tmdb_catalog` upsert |
+| `tmdb-initial-crawl.yml` | manual (1회성) | `tmdb-initial-crawl.ts` | catalog 전체 → 큐 적재 |
+| `tmdb-bulk-crawl.yml` | 6시간 간격 (`15 */6 * * *`) | `tmdb-bulk-crawl.ts` | 큐 pull → metadata upsert (providers 포함) |
+| `tmdb-refresh-stale.yml` | 매일 08:30 | `tmdb-refresh-stale.ts` | 180일+ stale row → 큐에 추가 |
+| `tmdb-providers-snapshot.yml` | 매일 18:00 | (workflow 내장) | providers 변동 snapshot 보관 |
+
+**활성화 분기 (`apps/web/src/app/api/recommend/route.ts`):**
+```ts
+const useMirror =
+  process.env.TMDB_MIRROR_ENABLED === "true" ||
+  req.headers.get("x-neko-mirror") === "1";
+```
+
+**알려진 이슈 (활성화 전 해결 필요):**
+- `tmdb_metadata.providers IS NULL` 비율 ~77% (87,975 / 113,666 — 2026-05-06 기준)
+- `tmdb_crawl_queue` 비어있음 (0 row) — initial crawl 후 큐 idle 상태
+- providers null 행은 `refresh-stale` 의 180일 트리거 안 잡힘 (모두 fresh 적재)
+- 활성화 시 LLM 추천의 ~80% 가 providers 없는 mirror hit 으로 필터아웃 → 추천량 4~5배 감소 위험
+
+**활성화 절차 (필수 사전 작업 후):**
+1. providers backfill — `providers IS NULL` 87,975 행 큐 재적재 후 bulk-crawl 완주
+2. coverage 확인 — providers filled ≥ 90% 타겟
+3. staging 검증 — `x-neko-mirror: 1` 헤더로 부분 트래픽 분기
+4. prod 활성화 — Vercel env `TMDB_MIRROR_ENABLED=true`
