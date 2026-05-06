@@ -161,6 +161,38 @@
 - **Duration:** 1400ms loop, --ease-soft
 - **Reduced motion:** 정적 amber fill (애니메이션 정지)
 
+## Iconography
+- **Source of truth:** `_design-handoff/` (Claude Design `neq-design-v2` bundle, 2026-04-29).
+  - 정본: `_design-handoff/Phase 4 - Full Prototype.html` (line 169-182, `TabIcon*` 함수).
+  - 후속 카피 수정: `_design-handoff/Round 3 - Copy Revisions.html` (텍스트 중심, 아이콘 변경 없음).
+  - 처음 읽을 곳: `_design-handoff/HANDOFF_README.md` (claude.ai/design 출처 안내 + 우선순위).
+- **Color:** `currentColor` 위임. 호출부에서 `--text-*` 또는 `--accent` 결정. 아이콘 자체는 색 모름.
+- **viewBox:** 핸드오프 정본은 **20×20** (BottomNav 4종). 그 외 기존 아이콘은 24×24 / 16×16 유지.
+- **Active variant:** Discover / Bookmark 는 `active?: boolean` prop. 다른 탭 아이콘(Search/User)은 단일 형태.
+
+### 5 디자인 원칙
+1. **Uniform thin stroke** — `strokeWidth={1.5}` 기준. thick-thin contrast 금지(잡음).
+2. **Round terminals** — `strokeLinecap="round"` 기본. square 는 X 표 같은 의도적 직각 컷에만.
+3. **Single-form silhouette** — 한 형태로 즉시 인지(diamond / bookmark / lens). 장식 tick / serif terminal 금지.
+4. **Color 위임** — `currentColor`. 컴포넌트는 색 모름. `--accent` 위치는 호출부 판단.
+5. **Quiet weight** — 포스터 아트가 주인공. 아이콘은 잉크처럼 옅게 배경에 스며든다.
+
+### 적용 매핑 (BottomNav + Search)
+| 아이콘 | 핸드오프 위치 | 패턴 |
+|--------|---------------|------|
+| Discover (active) | Phase 4 L171 | circle r=7.5 stroke 1.5 + 중앙 small dot r=2 fill (focus 인지) |
+| Discover (inactive) | Phase 4 L172 | circle r=7.5 stroke 1.4 + diamond `M13 7L11 11L7 13L9 9L13 7Z` stroke 1.2 (방향 모티프) |
+| Bookmark (Saved) | Phase 4 L178 | bookmark `M5 3h10v15l-5-3.5L5 18V3z` stroke 1.5 round, active 시 fill opacity 0.18 |
+| Search (헤더 버튼) | Phase 4 L175 | circle r=6 stroke 1.5 + path `M13.5 13.5L17 17` stroke 1.5 round (viewBox 20×20) |
+| User (Profile) | Phase 4 L181 | head circle r=3.2 stroke 1.5 + body arc stroke 1.5 round |
+
+**구조 차이 메모:** 핸드오프(Phase 4)는 4탭 (Discover/Search/Saved/Profile). 코드는 3탭 — `Search`
+는 별도 탭 대신 각 페이지 헤더 버튼 + SearchSheet 모델로 의도적 분기. 시각 토큰만 핸드오프 그대로.
+
+### 정렬 대상 (별도 PR 후보)
+IconHeart(saved 내부 reaction badge) / IconSave / Close / Refresh / Detail / Share / Star / Pass 등 나머지는 기존 패턴 유지.
+세부 일제 통합은 별도 작업 — 본 PR 범위는 BottomNav 4 아이콘 + IconSearch 정본화만.
+
 ## Interaction Model
 
 ### Discover 스와이프 (불변식)
@@ -211,3 +243,4 @@
 | 2026-05-02 | amber accent 누적 분배 정책 | DetailSheet/Profile에서 amber 동시 출현 9-10건 발견 → 한 화면 ≤ 4 정책. ChapterMark 첫 1개만 amber, 나머지 text-secondary uppercase 0.12em. reason 박스는 bg-accent-dim 면 → borderLeft accent 선(anti-slop #6 예외 2 추가). focus-visible / transient overlay / CTA Save는 카운트 제외. anti-slop #13 신규. |
 | 2026-05-06 | 칩 selected = solid amber fill + inverse text | 좌측 borderLeft strip 패턴이 anti-slop #6 예외 2(reason 인용구 한정) 정책 위반 중. fill 전환으로 정합성 회복. accent #C4A35A 위 #12110E 텍스트 대비 ~12:1 (AAA). FilterChips, Saved 필터 칩 일괄. |
 | 2026-05-06 | 로딩 인터랙션 = Fraunces 타이포 morph (C안 옵션 A) | 기존 3-dot 회전은 클래식 라인/기하학. Quiet Ink 정체성 보존하면서 활력 가미 = pop art 향. NeqSpinner 1곳 수정 → StatusScreens / FirstLoadingSkeleton / SearchSheet / Button(loading state) 자동 반영. |
+| 2026-05-06 | Iconography = uniform stroke 1.5 round (`_design-handoff/Phase 4 - Full Prototype.html`) | Claude Design `neq-design-v2` bundle 의 Phase 4 정본 적용. 5 원칙(uniform thin / round / single-form / color 위임 / quiet weight). Discover/Bookmark active variant + Search/User. **Saved 탭 = Heart → Bookmark 변경** (정본 모티프). 두 차례 잘못된 출처 적용 후 정정: (1) `_brand/icon-prototype.html` serif terminal → 삭제, (2) `neq-design.zip`(v1, Phase 1-3) → 삭제하고 `neq-design-v2`(Phase 1-4 + Round 1-3 + Handoff Package) 풀어 `_design-handoff/` 통합. |

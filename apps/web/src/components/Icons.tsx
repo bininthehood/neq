@@ -100,15 +100,45 @@ export function IconStar({ size = 14, color = "currentColor", className }: IconP
   );
 }
 
-export function IconDiscover({ size = 20, color = "currentColor", className }: IconProps) {
+// 핸드오프 (_design-handoff/Phase 4 - Full Prototype.html L171-172) — active variant 두 가지.
+//   active: 외곽 circle r=7.5 stroke 1.5 + 중앙 small dot fill (focus 인지)
+//   inactive: 외곽 circle r=7.5 stroke 1.4 + diamond stroke 1.2 (방향 모티프)
+export function IconDiscover({ size = 20, color = "currentColor", className, active = false }: IconProps & { active?: boolean }) {
+  if (active) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 20 20" fill="none" className={className}>
+        <circle cx="10" cy="10" r="7.5" stroke={color} strokeWidth={1.5} />
+        <circle cx="10" cy="10" r="2" fill={color} />
+      </svg>
+    );
+  }
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <circle cx="12" cy="12" r="10" />
-      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill={color} stroke="none" />
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" className={className}>
+      <circle cx="10" cy="10" r="7.5" stroke={color} strokeWidth={1.4} />
+      <path d="M13 7L11 11L7 13L9 9L13 7Z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" />
     </svg>
   );
 }
 
+// 핸드오프 (_design-handoff/Phase 4 L178) — Saved 탭은 Heart 가 아니라 Bookmark.
+// active 시 fillOpacity 0.18 으로 안쪽 살짝 채움.
+export function IconBookmark({ size = 20, color = "currentColor", className, active = false }: IconProps & { active?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" className={className}>
+      <path
+        d="M5 3h10v15l-5-3.5L5 18V3z"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        fill={active ? color : "none"}
+        fillOpacity={active ? 0.18 : 0}
+      />
+    </svg>
+  );
+}
+
+// IconHeart 는 saved/page.tsx 의 작은 reaction badge (size 8) + 빈 상태 hero (size 32) 에서
+// 사용 중. BottomNav 는 IconBookmark 로 분리 (Phase 4 정본). Heart 자체는 그대로 보존.
 export function IconHeart({ size = 20, color = "currentColor", className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
@@ -219,20 +249,22 @@ export function IconSwipe({ size = 24, color = "currentColor", className }: Icon
   );
 }
 
+// 핸드오프 (_design-handoff/Phase 4 L181) — head r=3.2 + body arc round.
 export function IconUser({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
-      <circle cx="12" cy="8" r="4" stroke={color} strokeWidth={1.2} />
-      <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke={color} strokeWidth={2} strokeLinecap="square" />
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" className={className}>
+      <circle cx="10" cy="7" r="3.2" stroke={color} strokeWidth={1.5} />
+      <path d="M3.5 17C4.5 13.8 7 12 10 12s5.5 1.8 6.5 5" stroke={color} strokeWidth={1.5} strokeLinecap="round" fill="none" />
     </svg>
   );
 }
 
+// 핸드오프 (_design-handoff/Phase 4 L175) — lens r=6 + handle path round, viewBox 20×20.
 export function IconSearch({ size = 20, color = "currentColor", className }: IconProps) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>
-      <circle cx="10.5" cy="10.5" r="7.5" stroke={color} strokeWidth={1.2} />
-      <line x1="16" y1="16" x2="21.5" y2="21.5" stroke={color} strokeWidth={2.5} strokeLinecap="square" />
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" className={className}>
+      <circle cx="9" cy="9" r="6" stroke={color} strokeWidth={1.5} />
+      <path d="M13.5 13.5L17 17" stroke={color} strokeWidth={1.5} strokeLinecap="round" fill="none" />
     </svg>
   );
 }

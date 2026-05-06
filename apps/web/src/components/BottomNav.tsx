@@ -2,15 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { IconDiscover, IconHeart, IconUser } from "./Icons";
+import { IconDiscover, IconBookmark, IconUser } from "./Icons";
+import type { ComponentType } from "react";
 
 type TabKey = "discover" | "saved" | "profile";
+type TabIconProps = { size?: number; color?: string; className?: string; active?: boolean };
 
-// 3탭 구조. Search 는 각 페이지 헤더의 search 버튼으로 진입 (페이지별 SearchSheet 자체 마운트).
-// 사용자 cancel 시 그 페이지 컨텍스트 그대로 유지 — 페이지 이동 없이 search 진입/종료 일관.
-const TABS: ReadonlyArray<{ key: TabKey; href: string; label: string; Icon: typeof IconDiscover; aria: string }> = [
+// 3탭 구조. 핸드오프(_design-handoff/Phase 4)는 4탭(Search 별도)이지만 코드에선 search 가
+// 헤더 버튼 + sheet 진입 모델 — 의도적 분기. Saved 탭 아이콘은 핸드오프 정본대로 Bookmark.
+const TABS: ReadonlyArray<{ key: TabKey; href: string; label: string; Icon: ComponentType<TabIconProps>; aria: string }> = [
   { key: "discover", href: "/discover", label: "Discover", Icon: IconDiscover, aria: "Discover — 추천 작품 탐색" },
-  { key: "saved", href: "/saved", label: "Saved", Icon: IconHeart, aria: "Saved — 저장한 작품" },
+  { key: "saved", href: "/saved", label: "Saved", Icon: IconBookmark, aria: "Saved — 저장한 작품" },
   { key: "profile", href: "/profile", label: "Profile", Icon: IconUser, aria: "Profile — 내 정보" },
 ];
 
@@ -59,7 +61,7 @@ export default function BottomNav() {
             }}
           >
             <span className="active:scale-95 transition-transform">
-              <Icon size={20} />
+              <Icon size={20} active={isActive} />
             </span>
             <span>{label}</span>
             {/* 활성 indicator — fade only (translate/scale 없음) */}

@@ -25,6 +25,11 @@ All font choices, colors, spacing, and aesthetic direction are defined there.
 Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
+**Design handoff source of truth:** `_design-handoff/` (Claude Design `neq-design-v2` bundle).
+- 첫 reading: `_design-handoff/HANDOFF_README.md`.
+- 정본 prototype: `_design-handoff/Phase 4 - Full Prototype.html` + `Round 3 - Copy Revisions.html`.
+- 새 컴포넌트/아이콘 추가 시 반드시 이 디렉토리부터 확인. 외부 zip / 다른 prototype 디렉토리는 신뢰하지 말 것.
+
 ## 하네스: neq OTT 추천 PWA
 
 **목표:** OTT 콘텐츠 발굴 PWA의 추천 엔진, UI/UX, 데이터 레이어를 에이전트 팀으로 개발·개선·검증
