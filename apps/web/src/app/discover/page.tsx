@@ -949,7 +949,7 @@ export default function DiscoverPage() {
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}
         onDetailTouchStart={detail.onDetailTouchStart} onDetailTouchMove={detail.onDetailTouchMove}
         onDetailTouchEnd={detail.onDetailTouchEnd} onShare={handleShare}
-        isSaved={savedIds.has(current.tmdbId)} onToggleSave={handleDetailSaveToggle}
+        savedIds={savedIds} onToggleSave={handleDetailSaveToggle}
         morphRect={detail.morphRect} morphPhase={detail.morphPhase}
         onSearchPerson={handleSearchPersonFromDetail} />}
       <SearchSheet

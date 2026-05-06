@@ -1752,7 +1752,7 @@ export default function SavedPage() {
           onDetailTouchMove={detail.onDetailTouchMove}
           onDetailTouchEnd={detail.onDetailTouchEnd}
           onShare={handleDetailShare}
-          isSaved={savedIdSet.has(detailItem.recommendation.tmdbId)}
+          savedIds={savedIdSet}
           onToggleSave={handleDetailSaveToggle}
           reactionBadge={
             reports[detailItem.recommendation.tmdbId] ? (

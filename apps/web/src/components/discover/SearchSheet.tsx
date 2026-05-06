@@ -984,7 +984,7 @@ export default function SearchSheet({
           /* save / share — Discover/Saved 의 DetailSheet 와 동일 동선.
              save: addSaved/removeSaved + savedIds state 동기화 + toast.
              share: lib/share.ts shareRecommendation (navigator.share 또는 clipboard 폴백). */
-          isSaved={savedIds.has(detailRec.tmdbId)}
+          savedIds={savedIds}
           onToggleSave={(rec) => {
             const id = rec.tmdbId;
             if (savedIds.has(id)) {

@@ -28,11 +28,12 @@ interface DetailSheetProps {
   onShare: (rec: Recommendation) => void;
   /**
    * 사용자 직접 테스트 #7 — DetailSheet 안에서 직접 저장/저장 해제 가능.
-   * - isSaved: 현재 저장 상태 (호출처 page 가 store 와 동기화해 prop 으로 전달)
-   * - onToggleSave: 클릭 시 호출. toast 발사/store 변경/savedIds 업데이트는 호출처 책임.
+   * - savedIds: 저장된 tmdbId Set. DetailSheet 내부에서 현재 displayed rec
+   *   (relatedRec ?? initialRec) 기준으로 isSaved 계산 → 관련작 전환 시도 정상 반영 (B2 fix).
+   * - onToggleSave: 클릭 시 호출. toast/store/Set 업데이트는 호출처 책임.
    * 둘 다 optional — 미지정 시 save 버튼 자체를 렌더링하지 않음 (하위 호환).
    */
-  isSaved?: boolean;
+  savedIds?: Set<number>;
   onToggleSave?: (rec: Recommendation) => void;
   /**
    * 사용자 직접 테스트 #4 — Saved 통합 후, ReactionLabel 등 페이지 별 추가 콘텐츠를
@@ -80,7 +81,7 @@ export default function DetailSheet({
   onDetailTouchMove,
   onDetailTouchEnd,
   onShare,
-  isSaved = false,
+  savedIds,
   onToggleSave,
   reactionBadge,
   morphRect = null,
@@ -100,6 +101,9 @@ export default function DetailSheet({
   const [lazyCastMembers, setLazyCastMembers] = useState<CastMember[] | null>(null);
   const [lazyDirectorMember, setLazyDirectorMember] = useState<CastMember | null>(null);
   const rec = relatedRec ?? initialRec;
+  // B2 fix — savedIds 기반 isSaved 계산. 이전엔 호출처가 initialRec 기준 boolean 을 전달해
+  // relatedRec(관련작) 으로 전환되어도 button 상태가 옛 작품 기준으로 굳어 토글이 안 됨.
+  const isSaved = savedIds?.has(rec.tmdbId) ?? false;
 
   // GH-3 #7 — Synopsis 더보기/접기 토글.
   // 200자 임계 — 그 미만은 토글 자체 미노출 (자연스럽게 전체 표시).
