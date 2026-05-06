@@ -14,7 +14,7 @@ import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
 import { getPrimaryCountryName } from "@/lib/country-names";
 import type { Recommendation } from "@/lib/types";
-import type { FilterYear } from "@/lib/discover-types";
+import type { FilterYear, FilterRating } from "@/lib/discover-types";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
 import { useRecommendations } from "@/hooks/useRecommendations";
@@ -159,6 +159,12 @@ export default function DiscoverPage() {
       if (rec.filterYear === "classic") return year <= 2009;
       return true;
     });
+  }
+
+  // 별점 클라이언트 필터 — TMDB vote_average 기준 (rec.rating). 7+/8+/9+ 구간.
+  if (rec.filterRating !== "all") {
+    const min = parseFloat(rec.filterRating);
+    filtered = filtered.filter((r) => (r.rating ?? 0) >= min);
   }
 
   const current = filtered[topIdx];
@@ -518,7 +524,7 @@ export default function DiscoverPage() {
 
   // --- shared props ---
   const chipsProps = {
-    filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterOTTs: rec.filterOTTs,
+    filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterRating: rec.filterRating, filterOTTs: rec.filterOTTs,
     recs: rec.recs, loading: rec.loading, onFilterChange: rec.handleFilterChange,
     onYearChange: (y: FilterYear) => {
       rec.setFilterYear(y);
@@ -526,6 +532,12 @@ export default function DiscoverPage() {
       setTopIdx(0);
       // 년도 필터 변경 시 서버에서 해당 년도 작품을 가져오도록 새로 요청
       if (y !== "all") rec.loadRecs(rec.filterType, rec.filterOrigin, y);
+    },
+    onRatingChange: (r: FilterRating) => {
+      rec.setFilterRating(r);
+      sessionStorage.setItem("neq_filter_rating", r);
+      setTopIdx(0);
+      // 별점은 클라이언트 필터 — 서버 재요청 불필요. recs 그대로 두고 filtered 만 변동.
     },
     onOTTChange: (otts: Set<string>) => {
       rec.handleOTTChange(otts);
@@ -550,10 +562,10 @@ export default function DiscoverPage() {
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
-    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterOTTs.size > 0;
+    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
     // 온보딩 완료했거나 saved 있으면 cold start 아님 → 필터 좁음 메시지 대신 일반 empty 메시지
     const isCold = !hasOnboarded() && getSaved().length === 0;
-    return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
   }
   // topIdx 가 stack 끝을 넘긴 상태 (B3 fix 후 무한 추가 로드 흐름).
   // prefetch 진행 중이면 LoadingScreen, 아니면 EmptyScreen.
@@ -561,8 +573,8 @@ export default function DiscoverPage() {
     if (rec.prefetching) {
       return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
     }
-    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterOTTs.size > 0;
-    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.handleOTTChange(new Set()); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
+    const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
+    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();
@@ -668,6 +680,7 @@ export default function DiscoverPage() {
                             persona.switchPersona(p.id);
                             rec.abortLoading();
                             rec.setFilterYear("all");
+                            rec.setFilterRating("all");
                             setTopIdx(0);
                             sessionStorage.removeItem("neq_top_idx");
                             rec.loadRecs("all", "all");

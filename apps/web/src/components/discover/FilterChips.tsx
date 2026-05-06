@@ -5,23 +5,26 @@ import NextImage from "next/image";
 import { getOTTIcon } from "@/lib/ott-links";
 import { track } from "@/lib/analytics";
 import type { Recommendation } from "@/lib/types";
-import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
+import type { FilterType, FilterOrigin, FilterYear, FilterRating } from "@/lib/discover-types";
 import {
   OTT_OPTIONS,
   TYPE_LABELS,
   ORIGIN_LABELS,
   YEAR_LABELS,
+  RATING_LABELS,
 } from "@/lib/discover-types";
 
 interface FilterChipsProps {
   filterType: FilterType;
   filterOrigin: FilterOrigin;
   filterYear: FilterYear;
+  filterRating: FilterRating;
   filterOTTs: Set<string>;
   recs: Recommendation[];
   loading: boolean;
   onFilterChange: (t: FilterType, o: FilterOrigin) => void;
   onYearChange: (y: FilterYear) => void;
+  onRatingChange: (r: FilterRating) => void;
   onOTTChange: (otts: Set<string>) => void;
   onResetTopIdx: () => void;
 }
@@ -30,16 +33,18 @@ export default function FilterChips({
   filterType,
   filterOrigin,
   filterYear,
+  filterRating,
   filterOTTs,
   recs,
   loading,
   onFilterChange,
   onYearChange,
+  onRatingChange,
   onOTTChange,
   onResetTopIdx,
 }: FilterChipsProps) {
   const [openDropdown, setOpenDropdown] = useState<
-    "type" | "origin" | "year" | "ott" | null
+    "type" | "origin" | "year" | "rating" | "ott" | null
   >(null);
 
   useEffect(() => {
@@ -125,6 +130,24 @@ export default function FilterChips({
           )}
         >
           {YEAR_LABELS[filterYear]}{" "}
+          <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setOpenDropdown(openDropdown === "rating" ? null : "rating")
+          }
+          disabled={loading}
+          aria-haspopup="listbox"
+          aria-expanded={openDropdown === "rating"}
+          aria-label={`별점 필터: ${RATING_LABELS[filterRating]}`}
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+          style={chipStyle(
+            filterRating !== "all",
+            openDropdown === "rating",
+          )}
+        >
+          {RATING_LABELS[filterRating]}{" "}
           <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
         {availableOTTs.length > 0 && (
@@ -220,6 +243,27 @@ export default function FilterChips({
                   }}
                 >
                   {y === "all" ? "전체" : YEAR_LABELS[y]}
+                </button>
+              ))}
+            {openDropdown === "rating" &&
+              (["all", "7", "8", "9"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => {
+                    track("filter_changed", { kind: "rating", value: r });
+                    onRatingChange(r);
+                    onResetTopIdx();
+                    setOpenDropdown(null);
+                  }}
+                  type="button"
+                  className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+                  style={{
+                    background: filterRating === r ? "var(--accent)" : "transparent",
+                    color: filterRating === r ? "var(--text-inverse)" : "var(--text-secondary)",
+                    fontWeight: filterRating === r ? 600 : 400,
+                  }}
+                >
+                  {r === "all" ? "전체" : RATING_LABELS[r]}
                 </button>
               ))}
             {openDropdown === "ott" && (

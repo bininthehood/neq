@@ -11,6 +11,7 @@
 export type FilterType = 'all' | 'movie' | 'series' | 'variety';
 export type FilterOrigin = 'all' | 'kr' | 'foreign';
 export type FilterYear = 'all' | 'recent' | '2010s' | 'classic';
+export type FilterRating = 'all' | '7' | '8' | '9';
 
 export const OTT_OPTIONS = [
   'Netflix',
@@ -40,6 +41,13 @@ export const YEAR_LABELS: Record<FilterYear, string> = {
   recent: '2020~',
   '2010s': '2010년대',
   classic: '~2009',
+};
+
+export const RATING_LABELS: Record<FilterRating, string> = {
+  all: '별점',
+  '7': '7+',
+  '8': '8+',
+  '9': '9+',
 };
 
 /** TMDB 장르 ID — 예능(Variety) 판별용 */

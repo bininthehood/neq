@@ -13,7 +13,7 @@ import {
 import { getAccountPrefs } from "@/lib/account-prefs";
 import { isTasteGenresEnabled, isOttWeakSignalEnabled } from "@/lib/env";
 import type { Recommendation } from "@/lib/types";
-import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
+import type { FilterType, FilterOrigin, FilterYear, FilterRating } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
 
 /**
@@ -196,6 +196,10 @@ export function useRecommendations() {
   const [filterYear, setFilterYear] = useState<FilterYear>(() => {
     if (typeof window === "undefined") return "all";
     return (sessionStorage.getItem("neq_filter_year") as FilterYear) || "all";
+  });
+  const [filterRating, setFilterRating] = useState<FilterRating>(() => {
+    if (typeof window === "undefined") return "all";
+    return (sessionStorage.getItem("neq_filter_rating") as FilterRating) || "all";
   });
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -575,6 +579,8 @@ export function useRecommendations() {
     filterOrigin,
     filterYear,
     setFilterYear,
+    filterRating,
+    setFilterRating,
     filterOTTs,
     setFilterOTTs,
     handleOTTChange,

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Recommendation } from "@/lib/types";
-import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
+import type { FilterType, FilterOrigin, FilterYear, FilterRating } from "@/lib/discover-types";
 import { Button, Illust, NeqSpinner } from "@neq/design";
 import FilterChips from "@/components/discover/FilterChips";
 
@@ -9,11 +9,13 @@ interface FilterChipsPassthrough {
   filterType: FilterType;
   filterOrigin: FilterOrigin;
   filterYear: FilterYear;
+  filterRating: FilterRating;
   filterOTTs: Set<string>;
   recs: Recommendation[];
   loading: boolean;
   onFilterChange: (t: FilterType, o: FilterOrigin) => void;
   onYearChange: (y: FilterYear) => void;
+  onRatingChange: (r: FilterRating) => void;
   onOTTChange: (otts: Set<string>) => void;
   onResetTopIdx: () => void;
 }
