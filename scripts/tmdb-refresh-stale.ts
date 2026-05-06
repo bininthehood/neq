@@ -1,22 +1,26 @@
 /**
- * TMDB Refresh Stale — tmdb_metadata 의 두 가지 미커버 카테고리를 큐에 추가.
+ * TMDB Refresh Stale — 180일 지난 tmdb_metadata 를 큐에 추가해 다시 크롤링.
  *
- * 1) fetched_at < NOW() - 180 days  — 180일 TTL 만료 (스펙 원본)
- * 2) providers IS NULL              — initial-crawl 시점 providers fetch 누락분 보충
- *    (180일 미만이라 (1) 트리거에 안 잡혔다면 이쪽에서 enqueue)
+ * 스펙: _workspace/tmdb-mirror-spec.md §4 (Cron 설계)
+ *   "/api/cron/tmdb-refresh-stale | 매일 08:30 UTC | tmdb_metadata.fetched_at < NOW() - 180 days
+ *    인 것 1000건 추출 → tmdb_crawl_queue 에 priority=0 추가"
+ *
+ * 실행:
+ *   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx scripts/tmdb-refresh-stale.ts
  *
  * 처리 흐름:
- *   1. 두 카테고리에서 각각 BATCH_SIZE 건 추출 (오래된 순)
- *   2. dedupe (tmdb_id + media_type) 후 합치기
- *   3. tmdb_crawl_queue 에 (priority=0) UPSERT — onConflict DO NOTHING
- *   4. bulk-crawl 이 큐에서 pull 해서 실제 갱신 수행
+ *   1. tmdb_metadata 에서 fetched_at < NOW() - 180 days 인 row 1000건 추출 (오래된 순)
+ *   2. tmdb_crawl_queue 에 (tmdb_id, media_type, priority=0) UPSERT
+ *      - onConflict DO NOTHING — 이미 큐에 있으면 (사용자 트리거 priority>0 가능) 덮지 않음
+ *   3. bulk-crawl 이 큐에서 pull 해서 실제 갱신 수행
  *
  * 환경 변수:
  *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (필수)
  *   STALE_DAYS (기본 180)
- *   BATCH_SIZE (기본 1000) — 카테고리당 limit
+ *   BATCH_SIZE (기본 1000)
  *
- * 운영: GitHub Actions `.github/workflows/tmdb-refresh-stale.yml` (매일 08:30 UTC).
+ * 운영: GitHub Actions `.github/workflows/tmdb-refresh-stale.yml` (매일 08:30 UTC)
+ *   bulk-crawl 1h cron 이 큐를 비워주는 메커니즘 활성화 시점에 의미 있어짐.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
@@ -51,34 +55,19 @@ async function main(): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
   console.log(`[tmdb-refresh-stale] cutoff = ${cutoff.toISOString()}`);
 
-  const [staleRows, missingProvidersRows] = await Promise.all([
-    fetchStale(admin, cutoff, BATCH_SIZE),
-    fetchMissingProviders(admin, BATCH_SIZE),
-  ]);
-  console.log(
-    `[tmdb-refresh-stale] stale=${staleRows.length} missing_providers=${missingProvidersRows.length}`,
-  );
+  const staleRows = await fetchStale(admin, cutoff, BATCH_SIZE);
+  console.log(`[tmdb-refresh-stale] stale row ${staleRows.length}건 발견`);
 
-  // 두 카테고리는 일반적으로 disjoint 지만 (180일 stale 인데 providers 도 null) 안전하게 dedupe.
-  const seen = new Set<string>();
-  const combined: StaleRow[] = [];
-  for (const r of [...staleRows, ...missingProvidersRows]) {
-    const key = `${r.media_type}:${r.tmdb_id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    combined.push(r);
-  }
-
-  if (combined.length === 0) {
+  if (staleRows.length === 0) {
     console.log("[tmdb-refresh-stale] 갱신 대상 없음, 종료");
     return;
   }
 
-  const inserted = await enqueue(admin, combined);
+  const inserted = await enqueue(admin, staleRows);
 
   const elapsed = ((Date.now() - startedAt.getTime()) / 1000).toFixed(1);
   console.log(
-    `[tmdb-refresh-stale] 완료 inserted=${inserted}/${combined.length} elapsed=${elapsed}s`,
+    `[tmdb-refresh-stale] 완료 inserted=${inserted}/${staleRows.length} elapsed=${elapsed}s`,
   );
 }
 
@@ -96,28 +85,6 @@ async function fetchStale(
 
   if (error) {
     console.error("[tmdb-refresh-stale] tmdb_metadata 조회 실패:", error.message);
-    process.exit(2);
-  }
-
-  return (data ?? []) as StaleRow[];
-}
-
-async function fetchMissingProviders(
-  admin: SupabaseClient,
-  limit: number,
-): Promise<StaleRow[]> {
-  const { data, error } = await admin
-    .from("tmdb_metadata")
-    .select("tmdb_id, media_type")
-    .is("providers", null)
-    .order("fetched_at", { ascending: true })
-    .limit(limit);
-
-  if (error) {
-    console.error(
-      "[tmdb-refresh-stale] missing providers 조회 실패:",
-      error.message,
-    );
     process.exit(2);
   }
 
