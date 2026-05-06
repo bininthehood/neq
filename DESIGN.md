@@ -36,6 +36,7 @@
     - reason 박스: 면(`bg-accent-dim`) 금지 → 선(`borderLeft 2px solid var(--accent-border)`) 강조 (anti-slop #6 예외 2 패턴).
     - 통계 숫자: 한 그룹당 1개만 amber, 나머지는 primary.
     - 보조 액션(공유, OTT "열기" 텍스트, Tonight 화살표 등) amber 금지 — 가중치/형태로 위계 표현.
+    - selected 칩 그룹: 한 그룹의 selected 칩들은 시각적 연속이므로 1건으로 카운트(개수 무관). 그룹이 늘면 그룹 수만큼 카운트.
 
 ## Typography
 - **Display/Hero:** Fraunces (optical size, weight 700-900) — 율동적인 세리프. 영화 타이틀, "오늘 뭐 볼까?" 같은 헤드라인에 사용.
@@ -153,6 +154,13 @@
 - **규칙:** 닫힘은 열림보다 50ms 짧게. 사용자 입력 첫 반응 100ms 이내.
 - **prefers-reduced-motion:** 장식 모션 비활성화. 드래그 추적 등 필수 상태 변화만 유지.
 
+### Loading Interaction
+- **방향:** Quiet Ink 보존 + pop art 향(워홀 실크스크린의 "면" 느낌)
+- **패턴:** 타이포 중심. Fraunces 글자가 amber로 채워졌다가 비워지는 morph
+- **금지:** 회전 dots(클래식 스피너), 보라/그라디언트, blob, 이모지
+- **Duration:** 1400ms loop, --ease-soft
+- **Reduced motion:** 정적 amber fill (애니메이션 정지)
+
 ## Interaction Model
 
 ### Discover 스와이프 (불변식)
@@ -201,3 +209,5 @@
 | 2026-05-02 | DetailSheet morph ease 별도 컨텍스트 추가 | iOS sheet present 톤 위해 cubic-bezier(0.32, 0.72, 0.24, 1) 추가. 450/350ms enter/exit. 기존 motion 5종과 분리. |
 | 2026-05-02 | anti-slop #8 예외: Geist Mono uppercase 0.12em+ 10px 허용 | 잡지 eyebrow / 챕터 마크 / tech tag 톤. Profile chaptermark 4건, error.tsx eyebrow/tech tag, OfflineBanner retry CTA에 적용. uppercase + tracking으로 가독성 보전. |
 | 2026-05-02 | amber accent 누적 분배 정책 | DetailSheet/Profile에서 amber 동시 출현 9-10건 발견 → 한 화면 ≤ 4 정책. ChapterMark 첫 1개만 amber, 나머지 text-secondary uppercase 0.12em. reason 박스는 bg-accent-dim 면 → borderLeft accent 선(anti-slop #6 예외 2 추가). focus-visible / transient overlay / CTA Save는 카운트 제외. anti-slop #13 신규. |
+| 2026-05-06 | 칩 selected = solid amber fill + inverse text | 좌측 borderLeft strip 패턴이 anti-slop #6 예외 2(reason 인용구 한정) 정책 위반 중. fill 전환으로 정합성 회복. accent #C4A35A 위 #12110E 텍스트 대비 ~12:1 (AAA). FilterChips, Saved 필터 칩 일괄. |
+| 2026-05-06 | 로딩 인터랙션 = Fraunces 타이포 morph (C안 옵션 A) | 기존 3-dot 회전은 클래식 라인/기하학. Quiet Ink 정체성 보존하면서 활력 가미 = pop art 향. NeqSpinner 1곳 수정 → StatusScreens / FirstLoadingSkeleton / SearchSheet / Button(loading state) 자동 반영. |

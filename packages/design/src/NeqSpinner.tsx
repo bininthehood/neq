@@ -3,12 +3,12 @@
 /**
  * NeqSpinner — Quiet Ink 로딩 인디케이터.
  *
- * 패턴 (motion-demos.jsx #5):
- *   - 컨테이너: 1400ms linear infinite 회전
- *   - 3 dots, 120deg 간격, 각 dot 150ms phase 차로 opacity pulse (0.4 → 1.0 → 0.4)
- *   - 색상: --color-accent 기본
+ * 패턴 (Loading Interaction, DESIGN.md):
+ *   - Fraunces "neq" 글자가 amber로 채워졌다 비워지는 morph
+ *   - 1400ms loop, --ease-soft (cubic-bezier(0.4, 0, 0.2, 1))
+ *   - stroke만 → fill로 채워짐 → 다시 stroke만
  *
- * Reduced motion: 회전·pulse 정지. dot 정적 패턴 (균등 opacity).
+ * Reduced motion: 정적 amber fill (애니메이션 정지).
  */
 
 import type { CSSProperties } from "react";
@@ -18,7 +18,7 @@ export type NeqSpinnerSize = "sm" | "md" | "lg";
 export interface NeqSpinnerProps {
   /** 16 / 24 / 32 px (default 'md' = 24) */
   size?: NeqSpinnerSize;
-  /** dot 색상 (default: var(--accent)) */
+  /** fill 색상 (default: var(--accent)) */
   color?: string;
   /** 접근성 라벨 */
   label?: string;
@@ -31,15 +31,10 @@ export interface NeqSpinnerProps {
 // ─────────────────────────────────────────────────────
 
 export const NEQ_SPINNER_DURATION_MS = 1400;
-export const NEQ_SPINNER_PHASE_DELAY_MS = 150;
 
 export interface NeqSpinnerDimensions {
-  /** 컨테이너 px */
+  /** 글자 박스 height px */
   container: number;
-  /** dot px */
-  dot: number;
-  /** 회전 반경 px */
-  radius: number;
 }
 
 export function neqSpinnerDimensions(
@@ -47,12 +42,12 @@ export function neqSpinnerDimensions(
 ): NeqSpinnerDimensions {
   switch (size) {
     case "sm":
-      return { container: 16, dot: 3, radius: 5 };
+      return { container: 16 };
     case "lg":
-      return { container: 32, dot: 6, radius: 11 };
+      return { container: 32 };
     case "md":
     default:
-      return { container: 24, dot: 4, radius: 8 };
+      return { container: 24 };
   }
 }
 
@@ -68,47 +63,47 @@ export function NeqSpinner({
   style,
 }: NeqSpinnerProps) {
   const dims = neqSpinnerDimensions(size);
-  const dotColor = color ?? "var(--accent)";
+  const fillColor = color ?? "var(--accent)";
 
-  const containerStyle: CSSProperties = {
-    width: dims.container,
-    height: dims.container,
-    position: "relative",
-    display: "inline-block",
-    animation: `neqSpinnerRotate ${NEQ_SPINNER_DURATION_MS}ms linear infinite`,
-    ...style,
-  };
-
+  // Fraunces 글자 morph: stroke만 → fill로 채워짐 → 다시 stroke만, 1400ms 루프.
+  // SVG <text>로 출력. fontSize = container, fontWeight 800.
   return (
     <span
       role="status"
       aria-label={label}
       className={className}
-      style={containerStyle}
+      style={{
+        display: "inline-block",
+        lineHeight: 0,
+        ...style,
+      }}
     >
-      {/* keyframes는 inline <style>로 주입 (packages/design는 globals.css에 의존 X) */}
       <style>{NEQ_SPINNER_KEYFRAMES}</style>
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          aria-hidden="true"
+      <svg
+        width={dims.container * 2.4}
+        height={dims.container}
+        viewBox={`0 0 ${dims.container * 2.4} ${dims.container}`}
+        aria-hidden="true"
+        style={{ overflow: "visible" }}
+      >
+        <text
+          x="0"
+          y={dims.container * 0.82}
+          fontFamily="var(--font-fraunces, 'Fraunces', serif)"
+          fontWeight={800}
+          fontSize={dims.container}
+          fill="transparent"
+          stroke={fillColor}
+          strokeWidth={1.2}
           style={{
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            width: dims.dot,
-            height: dims.dot,
-            borderRadius: "50%",
-            background: dotColor,
-            marginTop: -dims.dot / 2,
-            marginLeft: -dims.dot / 2,
-            transform: `rotate(${i * 120}deg) translateY(-${dims.radius}px)`,
-            transformOrigin: "center",
-            animation: `neqSpinnerPulse ${NEQ_SPINNER_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1) infinite`,
-            animationDelay: `${i * NEQ_SPINNER_PHASE_DELAY_MS}ms`,
+            animation: `neqSpinnerMorph ${NEQ_SPINNER_DURATION_MS}ms cubic-bezier(0.4, 0, 0.2, 1) infinite`,
+            // CSS variable로 fill 색 전달 (keyframe에서 var() 사용)
+            ['--neq-spinner-color' as never]: fillColor,
           }}
-        />
-      ))}
+        >
+          neq
+        </text>
+      </svg>
     </span>
   );
 }
@@ -117,24 +112,15 @@ export function NeqSpinner({
 // Keyframes
 // ─────────────────────────────────────────────────────
 
-/**
- * Reduced motion 분기 포함:
- *   - prefers-reduced-motion: reduce 환경에서 회전/pulse animation은 globals.css의
- *     `* { animation-duration: 0.01ms !important; }` rule 로 즉시 정지.
- *   - 추가로 명시적 분기 — opacity 정적 (0.7 균일) 으로 LP 표현 유지.
- */
 const NEQ_SPINNER_KEYFRAMES = `
-@keyframes neqSpinnerRotate {
-  to { transform: rotate(360deg); }
-}
-@keyframes neqSpinnerPulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1; }
+@keyframes neqSpinnerMorph {
+  0%, 100% { fill: transparent; }
+  50% { fill: var(--neq-spinner-color); }
 }
 @media (prefers-reduced-motion: reduce) {
-  @keyframes neqSpinnerPulse {
-    0%, 100% { opacity: 0.7; }
-    50% { opacity: 0.7; }
+  @keyframes neqSpinnerMorph {
+    0%, 100% { fill: var(--neq-spinner-color); opacity: 0.8; }
+    50% { fill: var(--neq-spinner-color); opacity: 0.8; }
   }
 }
 `;

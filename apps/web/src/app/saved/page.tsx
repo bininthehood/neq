@@ -983,12 +983,13 @@ export default function SavedPage() {
                 role="tab"
                 aria-selected={viewFilter === f.key}
                 onClick={() => setViewFilter(f.key)}
-                className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
+                className="text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                 style={{
-                  background: "transparent",
-                  color: viewFilter === f.key ? "var(--text-primary)" : "var(--text-muted)",
+                  background: viewFilter === f.key ? "var(--accent)" : "transparent",
+                  color: viewFilter === f.key ? "var(--text-inverse)" : "var(--text-muted)",
                   fontWeight: viewFilter === f.key ? 600 : 400,
-                  borderBottom: viewFilter === f.key ? "2px solid var(--accent)" : "2px solid transparent",
+                  borderRadius: "9999px",
+                  padding: "6px 12px",
                 }}
               >
                 {f.label}
@@ -1034,8 +1035,8 @@ export default function SavedPage() {
             onClick={() => setOttFilter(null)}
             className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
             style={{
-              background: ottFilter === null ? "var(--accent-dim)" : "transparent",
-              color: ottFilter === null ? "var(--accent)" : "var(--text-muted)",
+              background: ottFilter === null ? "var(--accent)" : "transparent",
+              color: ottFilter === null ? "var(--text-inverse)" : "var(--text-muted)",
               fontWeight: ottFilter === null ? 600 : 400,
             }}
           >
@@ -1054,8 +1055,8 @@ export default function SavedPage() {
                 onClick={() => setOttFilter(isActive ? null : name)}
                 className="px-3 py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 flex-shrink-0 rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                 style={{
-                  background: isActive ? "var(--accent-dim)" : "transparent",
-                  color: isActive ? "var(--accent)" : "var(--text-muted)",
+                  background: isActive ? "var(--accent)" : "transparent",
+                  color: isActive ? "var(--text-inverse)" : "var(--text-muted)",
                   fontWeight: isActive ? 600 : 400,
                 }}
               >
@@ -1070,7 +1071,7 @@ export default function SavedPage() {
                   />
                 )}
                 {name}
-                <span className="font-data" style={{ fontSize: "11px", opacity: 0.6 }}>
+                <span className="font-data" style={{ fontSize: "11px", opacity: isActive ? 0.75 : 0.6 }}>
                   {count}
                 </span>
               </button>

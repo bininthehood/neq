@@ -62,11 +62,11 @@ export default function FilterChips({
         : `OTT ${filterOTTs.size}개`;
 
   const chipStyle = (active: boolean, isOpen?: boolean) => ({
-    background: "transparent",
-    color: active ? "var(--text-primary)" : "var(--text-secondary)",
+    background: active ? "var(--accent)" : "transparent",
+    color: active ? "var(--text-inverse)" : "var(--text-secondary)",
     borderRadius: 0,
     border: "none",
-    borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
+    borderBottom: "none",
     fontWeight: active ? 600 : 400,
     transform: isOpen ? "scale(1.02)" : "scale(1)",
     paddingBottom: "6px",
@@ -173,10 +173,9 @@ export default function FilterChips({
                   type="button"
                   className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
-                    background: filterType === t ? "var(--accent-dim)" : "transparent",
-                    color: filterType === t ? "var(--accent)" : "var(--text-secondary)",
+                    background: filterType === t ? "var(--accent)" : "transparent",
+                    color: filterType === t ? "var(--text-inverse)" : "var(--text-secondary)",
                     fontWeight: filterType === t ? 600 : 400,
-                    borderLeft: filterType === t ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {t === "all" ? "전체" : TYPE_LABELS[t]}
@@ -194,10 +193,9 @@ export default function FilterChips({
                   type="button"
                   className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
-                    background: filterOrigin === o ? "var(--accent-dim)" : "transparent",
-                    color: filterOrigin === o ? "var(--accent)" : "var(--text-secondary)",
+                    background: filterOrigin === o ? "var(--accent)" : "transparent",
+                    color: filterOrigin === o ? "var(--text-inverse)" : "var(--text-secondary)",
                     fontWeight: filterOrigin === o ? 600 : 400,
-                    borderLeft: filterOrigin === o ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {o === "all" ? "전체" : ORIGIN_LABELS[o]}
@@ -216,10 +214,9 @@ export default function FilterChips({
                   type="button"
                   className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
-                    background: filterYear === y ? "var(--accent-dim)" : "transparent",
-                    color: filterYear === y ? "var(--accent)" : "var(--text-secondary)",
+                    background: filterYear === y ? "var(--accent)" : "transparent",
+                    color: filterYear === y ? "var(--text-inverse)" : "var(--text-secondary)",
                     fontWeight: filterYear === y ? 600 : 400,
-                    borderLeft: filterYear === y ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   {y === "all" ? "전체" : YEAR_LABELS[y]}
@@ -236,10 +233,9 @@ export default function FilterChips({
                   type="button"
                   className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                   style={{
-                    background: filterOTTs.size === 0 ? "var(--accent-dim)" : "transparent",
-                    color: filterOTTs.size === 0 ? "var(--accent)" : "var(--text-secondary)",
+                    background: filterOTTs.size === 0 ? "var(--accent)" : "transparent",
+                    color: filterOTTs.size === 0 ? "var(--text-inverse)" : "var(--text-secondary)",
                     fontWeight: filterOTTs.size === 0 ? 600 : 400,
-                    borderLeft: filterOTTs.size === 0 ? "2px solid var(--accent)" : "2px solid transparent",
                   }}
                 >
                   모든 OTT
@@ -264,10 +260,9 @@ export default function FilterChips({
                       type="button"
                       className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
                       style={{
-                        background: selected ? "var(--accent-dim)" : "transparent",
-                        color: selected ? "var(--accent)" : "var(--text-secondary)",
+                        background: selected ? "var(--accent)" : "transparent",
+                        color: selected ? "var(--text-inverse)" : "var(--text-secondary)",
                         fontWeight: selected ? 600 : 400,
-                        borderLeft: selected ? "2px solid var(--accent)" : "2px solid transparent",
                       }}
                     >
                       {getOTTIcon(ott) && (
