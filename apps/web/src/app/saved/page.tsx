@@ -984,11 +984,12 @@ export default function SavedPage() {
                 role="tab"
                 aria-selected={viewFilter === f.key}
                 onClick={() => setViewFilter(f.key)}
-                className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-sm"
+                className="py-2 text-xs whitespace-nowrap active:scale-95 transition-all min-h-[44px] flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
                 style={{
                   background: "transparent",
                   color: viewFilter === f.key ? "var(--text-primary)" : "var(--text-muted)",
                   fontWeight: viewFilter === f.key ? 600 : 500,
+                  borderRadius: 0,
                   borderBottom: viewFilter === f.key ? "2px solid var(--accent)" : "2px solid transparent",
                 }}
               >
