@@ -14,14 +14,21 @@ import { useEffect } from "react";
  * 적용 범위: /discover, /saved, /profile. 탭 외 페이지는 wrapper 없이 children 그대로 통과.
  *
  * 회귀 #1 (위임 M, 2026-05-02) root cause:
- *   - 이전 구현은 useState + useEffect 기반: effect 안에서 setAnimClass 로 클래스를 바꿈.
- *     그런데 template.tsx 는 navigation 마다 fresh instance 로 remount 되어 useRef(true) 의
- *     isFirstMount 가드가 항상 true 로 시작 → 매 navigation 첫 render 에서 첫 mount 분기로 빠져
- *     클래스가 절대 적용되지 않았음 (sessionStorage 는 정상 갱신, DOM 만 미적용).
- *   - 해결: render 시점에 sessionStorage 직접 읽기만 (read-only 라 StrictMode 이중 호출에도 멱등).
- *     sessionStorage 갱신은 useEffect 로 분리해 side effect 격리.
- *   - SSR-safe: 서버에선 sessionStorage 접근 불가지만 wrapper 자체는 항상 동일 className(빈
- *     animClass) 으로 첫 hydration. 첫 render 는 prev 없으므로 어차피 빈 문자열 → mismatch 0.
+ *   - 이전 구현은 useState + useEffect + useRef(true) isFirstMount 가드 사용. template.tsx 는
+ *     navigation 마다 fresh instance 로 remount → ref 매번 true 로 reset → 매 navigation 첫
+ *     render 가 첫 mount 분기로 빠져 클래스가 절대 적용되지 않았음 (sessionStorage 갱신은 정상,
+ *     DOM 만 미적용).
+ *   - 해결: render 시점에 sessionStorage 직접 읽기. read-only 라 StrictMode 이중 render 안전.
+ *     sessionStorage 갱신은 useEffect 로 분리.
+ *
+ * 회귀 #2 (2026-05-06) — animation 우선 trade-off:
+ *   - render 시점 read 패턴은 SSR(빈 className) ↔ client 첫 render(sessionStorage prev 가
+ *     있으면 슬라이드 클래스) 사이 hydration mismatch 1 건을 발생시킴.
+ *   - useLayoutEffect + setState 로 mismatch 를 0 으로 만들면 첫 paint 가 final 위치에서 일어나
+ *     animation 의 시작 위치(translateX 40 / opacity 0) 점프가 사용자 눈에 안 보임 → 슬라이드
+ *     사실상 사라짐. SSR HTML 에 sessionStorage 가 없는 한 구조적 충돌이라 동시 만족 불가.
+ *   - 결정: animation 우선. mismatch 1 건은 dev console only, prod 영향 0, 기능 영향 0.
+ *     suppressHydrationWarning 은 React docs 명시상 patch up 안 하므로 무용 — 적용 안 함.
  *
  * prefers-reduced-motion: globals.css 의 글로벌 rule 이 animation-duration 0.01ms 강제.
  */
@@ -52,11 +59,6 @@ function readPrevIdx(): number | null {
 export default function RootTemplate({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isTabRoute = pathname ? pathname in TAB_ORDER : false;
-
-  // 탭 페이지가 아니면 wrapper 없이 children 그대로 — 레이아웃/포커스/스크롤 영향 0.
-  // 탭 외 페이지 거치면 sessionStorage 그대로 두어 다음 탭 진입 시 prev 로 사용 (자연스러운 UX).
-  // hooks 호출 후 early return 이 가능하도록 useEffect 는 항상 호출되어야 하지만,
-  // 탭 외 페이지에선 effect 내부에서 no-op 처리 (조건부 hook 호출 방지).
   const currentIdx = pathname ? TAB_ORDER[pathname] : undefined;
 
   // render 시점에 prev 읽기. 매 render 동일 값 → StrictMode 이중 render 안전.
