@@ -7,6 +7,101 @@
 ---
 
 
+## 2026-05-06 (Day 16)
+
+### 진행 요약
+**디자인 핸드오프 v2 통합 → Search UX 통일 → Saved 종합 정리 → 온보딩 6단계 분리.** 약 12일치 누적 작업을 단일 PR(#5, `feat/v2-handoff-search-ux`)로 정리. 사용자 직접 검증 + 즉각 피드백 사이클을 18+회 돌리며 UX 정합성 다듬기. type-check OK, vitest 31 files / 383 tests PASS 일관 유지.
+
+### 완료된 작업
+
+**Search UX 통일 (가장 큰 구조 변경)**
+- `/search` 라우트 제거 → BottomNav 4탭 → 3탭 (Discover / Saved / Profile)
+- 모든 페이지 헤더 우측 search 버튼 + 자체 SearchSheet 마운트 → 어디서 진입하든 cancel 시 그 페이지로 자연 복귀
+- DetailSheet → cast 클릭 시 `detail.closeDetail()` 제거 → DetailSheet 유지하면서 SearchSheet z-stacking 위에 띄움 → cancel 시 detail 그대로 노출
+- SearchSheet `mode` prop / page 분기 / openSearch query wiring 모두 롤백 (옵션 검토 후 단일 sheet 패턴 채택)
+- 인물 panel 안 작품 → `SelectedWorkPanel` nested 표시 + selectedWork 외 카드 dim 0.35 + 작품 카드 row 단위 panel 끼움 (CSS Grid `gridColumn: 1 / -1`)
+- DetailSheet 호출에 `isSaved` / `onToggleSave` (toast undo) / `onShare` prop 누락 보강 → save 버튼 정상 노출 (이전엔 prop 가드로 미렌더 회귀)
+- `lib/share.ts` 신규 — `navigator.share` + clipboard 폴백 통합
+
+**헤더 일관성 (3탭 구조)**
+- Saved/Profile 헤더 padding `pt-6 pb-2` → `h-12` (Discover 와 동일 height 48px)
+- H1 fontSize 32 → 20 (이전엔 14→18→20 사용자 직접 검증으로 단계 조정), weight 600
+- Saved 헤더 가운데에 Grid·List·Preview 3-way segmented 토글 (button w-11 h-11, segmented padding 1 + border 1 = 정확히 h-12 fit)
+- OTT별 보기 underline 토글을 VIEW_FILTERS row 우측 끝에 통합 (단독 줄 제거)
+
+**Saved 종합 정리**
+- Progress bar 영역 (저장 N편 / N편 남음) 제거 — 필터 탭으로 정보 확인 가능
+- 시청 리포트 stats card: `viewFilter === "watched" || "archived"` 한정 노출
+- "오늘 뭐 볼까" banner: `viewFilter === "all" || "unwatched"` 한정 노출 (탐색 vs 회고 컨텍스트 분리)
+- `filteredSaved` 정렬 제거 — 봤어요 토글 시 위치 이동 불편 해결
+- `dropped` 라벨 "포기했어" → "안 맞았어" 통일 (REACTIONS + stats 표시 양쪽)
+- saved 삭제 toast undo 동선 — rec + 시청 리포트 보존 후 복원
+- 빈 상태 안내 분기 세분화 (all / unwatched / watched / archived 별 적합 메시지)
+
+**Saved Preview 모드 (신규 viewMode)**
+- Coverflow 패턴: 큰 hero (포스터 비율 `object-contain`) + 하단 가로 스크롤 카드들 (히스토리 패턴)
+- hero 우측상단 "봤어요?" reaction 진입 + reporting overlay (PosterCard 패턴 재사용)
+- `selectedPreviewId` state 자동 보정 effect — ottFilter/viewFilter 변경 시 첫 작품으로 fallback
+- preview 활성 시 `groupByOTT` 자동 OFF + OTT 토글 hide
+- scroll wrapper에 `flex flex-col` 추가 → hero `flex-1` height 0 회귀 fix
+
+**Saved OTT 그룹 정밀화**
+- 다중 OTT 분류 (한 작품 여러 OTT 그룹 중복 노출) — "맨 앞 OTT 만 분류" 모호함 해결
+- 빈 그룹 placeholder ("이 OTT에는 저장된 작품이 없어요")
+- ottFilter 활성 시 단일 그룹만 노출 + 자동 `groupByOTT` 해제
+
+**Saved 그리드 mason packing**
+- CSS columns (`columnCount: 2`) + PosterCard `breakInside: avoid` + `marginBottom: 12px`
+- height 240/200 변형 시각 효과 유지하면서 좌-우 빈 row 공간을 위로 자연 packing
+
+**Saved archive 동선 강화**
+- archive 버튼 ✓/↩ 텍스트 → `IconArchive` SVG (위 뚜껑 + 박스, 시청 ✓와 시각 구분)
+- 토글 노출 조건 `report` → `(report || isArchived)` — archived 자체로 unarchive 가능
+- 기본 그리드 PosterCard에 `isArchived` / `onArchiveToggle` prop 누락 보강
+
+**DetailSheet save 가시성**
+- isSaved 색상 `--accent-dim` (12% alpha, 면 거의 안 보임) → `--surface-raised` (solid) + `--accent-border` + accent text
+- SelectedWorkPanel save 버튼도 동일 패턴 통일 (toast undo 포함)
+
+**데이터 초기화 cloud wipe**
+- `lib/sync.ts` `wipeCloudData` 신규 — `saved_items` / `watch_reports` / `seen_titles` / `archived_items` / `profiles.onboarding_picks·account_prefs` 모두 비움
+- 이전엔 `clearAllUserData` 가 localStorage 만 비우고 다음 sync 가 cloud 에서 끌어와 회귀 (사용자 직접 보고)
+
+**온보딩 V1 정리 + 6단계 분리**
+- V1 흐름 폐기 (`apps/web/src/app/onboarding/page.tsx` 363→10 줄, `isOnboardingV2Enabled` flag + `sync.ts` v2Enabled 분기 모두 제거)
+- 픽 자동 archive 처리 (V1+V2 양쪽) — saved 메인 노출 X, archived 탭 한정. `archiveItem` 을 `fetch` 전 미리 호출 → race condition 회피
+- 3단계 (taste 단일) → **3-1 Genre + 3-2 Taste** 로 분리. 총 6단계
+  - **Genre 신규**: `flex flex-wrap` 동그란 chip + 갯수 자유 (최소 1개), `account_prefs.tasteGenres` 즉시 저장
+  - **Taste 변형**: 선택 작품 + 검색 input sticky 분리 / 카로셀 영역만 스크롤 / 장르별 추천 카로셀 (`/api/tmdb/by-genre` 신규 엔드포인트)
+- `GENRE_CHIPS` 에 `tmdbMovieId` 매핑 (15종, variety 만 null)
+- `STEP_LABELS` 6단계 (welcome → hello → genre → taste → ott → notify)
+
+**OTT 단계 favicon 적용**
+- 기존 short text 박스 → `getOTTIcon` favicon 이미지 (Netflix/TVING/wavve/Watcha/Disney+/Apple TV+/Coupang Play)
+- `OTT_ICON_LOOKUP` 매핑 (data.ts id → providers 객체 키 차이 보정)
+
+**.gitignore + 정리**
+- root 디버그용 스크린샷 81개 삭제 + `.gitignore` 패턴 추가 (`/*.png`, `/*.jpg`, `/*.jpeg`, `/*.zip`)
+
+### 주요 결정
+
+- **Search 모달 단일 패턴 (옵션 Y)**: BottomNav search 탭은 layout flow에 두지 않고 각 페이지 자체 SearchSheet 마운트. cancel 시 그 페이지 컨텍스트 보존이 사용자 의도. `/search` 라우트 자체는 페이지답게 동작하기 어려워 (modal sheet UX와 페이지 정합성 충돌) 폐기.
+- **3탭 BottomNav**: 처음 3탭→4탭→3탭 사이클 후 안착. 4탭 search는 modal 인지가 약했음. 헤더 search 버튼 단일 entrypoint로 단순화.
+- **CSS columns mason packing**: 사용자 요청은 "빈 공간을 자연스럽게 위로 밀어 올림" — JS 라이브러리 없이 CSS columns로 충족. 카드 순서가 column-by-column 으로 약간 변경되지만 시각 효과 우선.
+- **온보딩 6단계 분리**: Genre + Taste 2단계로 나누면 단계당 인지 부담 ↓, 추천 카로셀 컨텍스트 명확. variety 장르는 TMDB movie 카테고리 미존재 → 카로셀 빈 처리.
+- **Preview 모드 단일 hero**: groupByOTT 와 충돌해 자동 OFF. 정보 밀도는 낮아지지만 사용자 명시 요청 (Coverflow 패턴).
+
+### 영향 / 다음 단계
+
+- 다음 단계 백로그
+  - Saved DetailSheet hero morph (Discover만 적용된 morph를 Saved 에도)
+  - Discover hero morph P1 정량 정렬 (현재 translateY only → 좌표 measure)
+  - DESIGN.md Decisions Log 정리 (이번 사이클 누적 예외 4건)
+  - immersive dead code 청소 (사용자 결정 — 보류, 추후 재사용 가능성)
+
+- PR #5 (`feat/v2-handoff-search-ux`) 머지 대기 — 3개 커밋 누적 (`c378984` / `3ec16ea` / `980d79f`)
+
+
 ## 2026-04-24 (Day 15)
 
 ### 진행 요약
