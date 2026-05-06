@@ -167,6 +167,25 @@ export default function DiscoverPage() {
     filtered = filtered.filter((r) => (r.rating ?? 0) >= min);
   }
 
+  // 별점 필터 활성 + 0 결과 시 자동 추가 로드 (서버는 별점 무관 응답이라 retry 한도 필요).
+  // 변경 감지로 attempts 리셋, filtered>0 되면 다음 0 진입 시 다시 시도하도록 0 으로.
+  const RATING_AUTO_FETCH_MAX = 3;
+  const ratingAutoFetchRef = useRef(0);
+  useEffect(() => {
+    ratingAutoFetchRef.current = 0;
+  }, [rec.filterRating]);
+  useEffect(() => {
+    if (filtered.length > 0) ratingAutoFetchRef.current = 0;
+  }, [filtered.length]);
+  useEffect(() => {
+    if (rec.filterRating === "all") return;
+    if (filtered.length > 0) return;
+    if (rec.loading || rec.prefetching) return;
+    if (ratingAutoFetchRef.current >= RATING_AUTO_FETCH_MAX) return;
+    ratingAutoFetchRef.current += 1;
+    rec.prefetchNextBatch();
+  }, [rec.filterRating, filtered.length, rec.loading, rec.prefetching, rec]);
+
   const current = filtered[topIdx];
   const isSaved = !!(current && savedIds.has(current.tmdbId));
 
@@ -562,6 +581,13 @@ export default function DiscoverPage() {
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
+    // 별점 필터 활성 + retry 여유 있을 때 자동 로드 중 — LoadingScreen.
+    if (
+      rec.filterRating !== "all"
+      && (rec.prefetching || ratingAutoFetchRef.current < RATING_AUTO_FETCH_MAX)
+    ) {
+      return <LoadingScreen filterLabel={`별점 ${rec.filterRating}+`} {...chipsProps} />;
+    }
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
     // 온보딩 완료했거나 saved 있으면 cold start 아님 → 필터 좁음 메시지 대신 일반 empty 메시지
     const isCold = !hasOnboarded() && getSaved().length === 0;
