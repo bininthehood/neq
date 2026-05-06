@@ -62,11 +62,11 @@ export default function FilterChips({
         : `OTT ${filterOTTs.size}개`;
 
   const chipStyle = (active: boolean, isOpen?: boolean) => ({
-    background: active ? "var(--accent)" : "transparent",
-    color: active ? "var(--text-inverse)" : "var(--text-secondary)",
+    background: "transparent",
+    color: active ? "var(--text-primary)" : "var(--text-secondary)",
     borderRadius: 0,
     border: "none",
-    borderBottom: "none",
+    borderBottom: active ? "2px solid var(--accent)" : "2px solid transparent",
     fontWeight: active ? 600 : 400,
     transform: isOpen ? "scale(1.02)" : "scale(1)",
     paddingBottom: "6px",
