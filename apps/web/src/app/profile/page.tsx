@@ -13,7 +13,6 @@ import { getDeviceId } from "@/lib/device-id";
 import { wipeCloudData } from "@/lib/sync";
 import { track } from "@/lib/analytics";
 import { usePersona } from "@/contexts/PersonaContext";
-import BottomNav from "@/components/BottomNav";
 import { IconClose, IconCheck, IconSearch } from "@/components/Icons";
 import SearchSheet from "@/components/discover/SearchSheet";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
@@ -839,7 +838,6 @@ export default function ProfilePage() {
         initialQuery={searchInitialQuery}
       />
 
-      <BottomNav active="profile" />
     </div>
   );
 }

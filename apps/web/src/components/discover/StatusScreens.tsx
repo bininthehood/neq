@@ -3,7 +3,6 @@
 import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear } from "@/lib/discover-types";
 import { Button, Illust, NeqSpinner } from "@neq/design";
-import BottomNav from "@/components/BottomNav";
 import FilterChips from "@/components/discover/FilterChips";
 
 interface FilterChipsPassthrough {
@@ -64,7 +63,6 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
           )}
         </p>
       </div>
-      <BottomNav active="discover" />
     </div>
   );
 }
@@ -112,7 +110,6 @@ export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
           다시 시도
         </Button>
       </div>
-      <BottomNav active="discover" />
     </div>
   );
 }
@@ -199,7 +196,6 @@ export function EmptyScreen({
           )}
         </div>
       </div>
-      <BottomNav active="discover" />
     </div>
   );
 }

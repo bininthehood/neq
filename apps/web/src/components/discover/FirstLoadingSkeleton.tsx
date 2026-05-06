@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Illust, NeqSpinner } from "@neq/design";
-import BottomNav from "@/components/BottomNav";
 
 const MESSAGES = [
   "취향을 분석하고 있어요…",
@@ -59,7 +58,6 @@ export default function FirstLoadingSkeleton() {
         </div>
       </div>
 
-      <BottomNav active="discover" />
     </div>
   );
 }

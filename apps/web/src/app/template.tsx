@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
+import BottomNav from "@/components/BottomNav";
 
 /**
  * Root template — 탭 라우트 전환 시 좌/우 슬라이드 애니메이션.
@@ -85,9 +86,13 @@ export default function RootTemplate({ children }: { children: React.ReactNode }
     animClass = currentIdx > prevIdx ? "animate-tab-slide-right" : "animate-tab-slide-left";
   }
 
+  // BottomNav 는 슬라이드 wrapper 밖 형제로 둠 — page content 만 슬라이드, 탭 바는 정지.
   return (
-    <div key={pathname} className={`flex-1 min-h-0 flex flex-col ${animClass}`}>
-      {children}
-    </div>
+    <>
+      <div key={pathname} className={`flex-1 min-h-0 flex flex-col ${animClass}`}>
+        {children}
+      </div>
+      <BottomNav />
+    </>
   );
 }

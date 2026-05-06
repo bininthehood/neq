@@ -1,19 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { IconDiscover, IconHeart, IconUser } from "./Icons";
 
-interface Props {
-  active: "discover" | "saved" | "profile";
-}
+type TabKey = "discover" | "saved" | "profile";
 
 // 3탭 구조. Search 는 각 페이지 헤더의 search 버튼으로 진입 (페이지별 SearchSheet 자체 마운트).
 // 사용자 cancel 시 그 페이지 컨텍스트 그대로 유지 — 페이지 이동 없이 search 진입/종료 일관.
-const TABS = [
-  { key: "discover" as const, href: "/discover", label: "Discover", Icon: IconDiscover, aria: "Discover — 추천 작품 탐색" },
-  { key: "saved" as const, href: "/saved", label: "Saved", Icon: IconHeart, aria: "Saved — 저장한 작품" },
-  { key: "profile" as const, href: "/profile", label: "Profile", Icon: IconUser, aria: "Profile — 내 정보" },
+const TABS: ReadonlyArray<{ key: TabKey; href: string; label: string; Icon: typeof IconDiscover; aria: string }> = [
+  { key: "discover", href: "/discover", label: "Discover", Icon: IconDiscover, aria: "Discover — 추천 작품 탐색" },
+  { key: "saved", href: "/saved", label: "Saved", Icon: IconHeart, aria: "Saved — 저장한 작품" },
+  { key: "profile", href: "/profile", label: "Profile", Icon: IconUser, aria: "Profile — 내 정보" },
 ];
+
+const PATH_TO_TAB: Record<string, TabKey> = {
+  "/discover": "discover",
+  "/saved": "saved",
+  "/profile": "profile",
+};
 
 /**
  * BottomNav — 탭 전환 fade only (slide 제거).
@@ -22,8 +27,14 @@ const TABS = [
  *   - 색상 transition 250ms cubic-bezier(0.4, 0, 0.2, 1) (--ease-soft)
  *   - 활성 탭 indicator: 하단 2px bar, opacity 1 / 0 — slide 없음
  *   - prefers-reduced-motion: globals.css 글로벌 rule이 transition 즉시 종료
+ *
+ * active 는 usePathname 으로 자동 결정 (template.tsx 가 마운트 위치를 통제하므로
+ * page 별 prop 전달 불필요). 탭 라우트 외에서는 마운트되지 않음.
  */
-export default function BottomNav({ active }: Props) {
+export default function BottomNav() {
+  const pathname = usePathname();
+  const active = pathname ? PATH_TO_TAB[pathname] : undefined;
+
   return (
     <nav
       aria-label="메인 네비게이션"

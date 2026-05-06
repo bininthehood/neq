@@ -16,7 +16,6 @@ import { track } from "@/lib/analytics";
 import { getPrimaryCountryName } from "@/lib/country-names";
 import type { Recommendation } from "@/lib/types";
 import type { FilterYear } from "@/lib/discover-types";
-import BottomNav from "@/components/BottomNav";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
 import { useRecommendations } from "@/hooks/useRecommendations";
@@ -589,7 +588,7 @@ export default function DiscoverPage() {
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();
 
   return (
-    <div className="h-dvh flex flex-col overflow-hidden relative">
+    <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
       <div className="flex items-center justify-between px-5 py-3 shrink-0 transition-all duration-300"
         style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
@@ -874,7 +873,6 @@ export default function DiscoverPage() {
             setRewinding(true);
           }}
           onRefresh={() => { vibrate("light"); setTopIdx(0); rec.refreshRecommendations(); }} />
-        <BottomNav active="discover" />
       </div>
 
       {/* 첫 카드 힌트 토스트 */}

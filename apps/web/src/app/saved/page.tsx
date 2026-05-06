@@ -17,7 +17,6 @@ import {
 import type { RecHistoryEntry } from "@/lib/store";
 import type { SavedItem, WatchReaction, Recommendation } from "@/lib/types";
 import Image from "next/image";
-import BottomNav from "@/components/BottomNav";
 import PosterFallback from "@/components/PosterFallback";
 import { IconStar, IconClose, IconCheck, IconHeart, IconGrid, IconList, IconSearch, IconPreview, IconArchive } from "@/components/Icons";
 import DetailSheet from "@/components/discover/DetailSheet";
@@ -1755,7 +1754,6 @@ export default function SavedPage() {
         onTouchEnd={searchSheet.onDetailTouchEnd}
         initialQuery={searchInitialQuery}
       />
-      <BottomNav active="saved" />
     </div>
   );
 }
