@@ -54,12 +54,6 @@ function readFlag(name: string): boolean {
   }
 }
 
-export function isOnboardingV2Enabled(): boolean {
-  // default ON 정책 (2026-05-02). 명시적 "0" 만 V1 폴백.
-  // (다른 readFlag 들과 의미가 반대라 별도 로직.)
-  return process.env.NEXT_PUBLIC_ONBOARDING_V2 !== "0";
-}
-
 export function isTasteGenresEnabled(): boolean {
   return readFlag("NEXT_PUBLIC_TASTE_GENRES_ENABLED");
 }

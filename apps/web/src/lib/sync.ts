@@ -22,7 +22,6 @@ import {
   setAccountPrefs,
   defaultAccountPrefs,
 } from "./account-prefs";
-import { isOnboardingV2Enabled } from "./env";
 import type { SavedItem, WatchReport, AccountPrefs } from "./types";
 
 // ---------- Profile ----------
@@ -201,9 +200,8 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += onboardingPicks.length;
     }
 
-    // 6. account_prefs (Onboarding V2 — feature flag 뒤)
-    //    flag OFF 시 column 자체를 건드리지 않으므로 V1 prod 영향 0.
-    if (isOnboardingV2Enabled()) {
+    // 6. account_prefs (Onboarding V2 default ON — flag 분기 제거됨)
+    {
       const accountPrefs = getAccountPrefs();
       const { error } = await supabase
         .from("profiles")
@@ -314,22 +312,17 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
 
     // 4. onboarding_picks (+ account_prefs when V2 flag ON)
     //    onboarding_picks: 로컬 비어있을 때만 복원 (덮어쓰기 방지)
-    //    account_prefs: V2 flag ON 시에만 select. flag OFF → column 무시 → V1 영향 0.
-    const v2Enabled = isOnboardingV2Enabled();
-    const localPicks = getFavoritesMeta();
-    const needPicksPull = localPicks.length === 0;
+    //    account_prefs: 항상 select (V2 default ON 정책).
+    {
+      const localPicks = getFavoritesMeta();
+      const needPicksPull = localPicks.length === 0;
 
-    if (needPicksPull || v2Enabled) {
-      const selectCols = v2Enabled
-        ? "onboarding_picks, account_prefs"
-        : "onboarding_picks";
       const { data: profileRow } = await supabase
         .from("profiles")
-        .select(selectCols)
+        .select("onboarding_picks, account_prefs")
         .eq("id", profileId)
         .single();
 
-      // typeof profileRow는 select 문자열에 따라 동적 — 안전하게 unknown 캐스팅
       const row = profileRow as
         | {
             onboarding_picks?: FavoriteMeta[] | null;
@@ -346,21 +339,19 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
         }
       }
 
-      if (v2Enabled) {
-        const serverPrefs = row?.account_prefs ?? null;
-        if (serverPrefs && typeof serverPrefs === "object") {
-          // 서버 우선 — 단, default 와 동일한 빈 객체면 굳이 덮어쓰지 않음
-          const merged: AccountPrefs = {
-            ...defaultAccountPrefs(),
-            ...serverPrefs,
-            notificationPrefs: {
-              ...defaultAccountPrefs().notificationPrefs,
-              ...(serverPrefs.notificationPrefs ?? {}),
-            },
-          };
-          setAccountPrefs(merged);
-          pulled += 1;
-        }
+      const serverPrefs = row?.account_prefs ?? null;
+      if (serverPrefs && typeof serverPrefs === "object") {
+        // 서버 우선 — 단, default 와 동일한 빈 객체면 굳이 덮어쓰지 않음
+        const merged: AccountPrefs = {
+          ...defaultAccountPrefs(),
+          ...serverPrefs,
+          notificationPrefs: {
+            ...defaultAccountPrefs().notificationPrefs,
+            ...(serverPrefs.notificationPrefs ?? {}),
+          },
+        };
+        setAccountPrefs(merged);
+        pulled += 1;
       }
     }
 
@@ -385,6 +376,34 @@ export async function syncAll(): Promise<{ success: boolean; pulled: number; pus
     pulled: pullResult.pulled,
     pushed: pushResult.pushed,
   };
+}
+
+/**
+ * 모든 cloud 데이터 삭제 — saved_items / watch_reports / seen_titles / archived_items 비우고
+ * profiles 의 onboarding_picks / account_prefs 도 리셋. profiles row 자체는 auth uid 와 연결돼
+ * 있으므로 유지. "모든 데이터 초기화" 시 clearAllUserData 와 함께 호출해야 다음 sync 에서
+ * cloud 가 다시 끌어오지 않음.
+ */
+export async function wipeCloudData(): Promise<{ success: boolean }> {
+  const profileId = await getOrCreateProfile();
+  if (!profileId) return { success: false };
+
+  try {
+    await Promise.all([
+      supabase.from("saved_items").delete().eq("profile_id", profileId),
+      supabase.from("watch_reports").delete().eq("profile_id", profileId),
+      supabase.from("seen_titles").delete().eq("profile_id", profileId),
+      supabase.from("archived_items").delete().eq("profile_id", profileId),
+    ]);
+    await supabase
+      .from("profiles")
+      .update({ onboarding_picks: null, account_prefs: null })
+      .eq("id", profileId);
+    return { success: true };
+  } catch (e) {
+    Sentry.captureException(e, { tags: { origin: "sync.wipeCloudData" } });
+    return { success: false };
+  }
 }
 
 // ---------- 마지막 동기화 시간 ----------

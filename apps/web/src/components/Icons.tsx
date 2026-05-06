@@ -144,6 +144,33 @@ export function IconList({ size = 16, color = "currentColor", className }: IconP
   );
 }
 
+/**
+ * IconPreview: 큰 hero (위) + 작은 카드 3개 (아래) — Coverflow / 미리보기 모드.
+ */
+export function IconPreview({ size = 16, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="square" className={className}>
+      <rect x="3" y="2" width="10" height="7" />
+      <rect x="2" y="11" width="3" height="3" />
+      <rect x="6.5" y="11" width="3" height="3" />
+      <rect x="11" y="11" width="3" height="3" />
+    </svg>
+  );
+}
+
+/**
+ * IconArchive: 위 뚜껑 + 박스 + 라벨 — 시청 리포트 ✓ 와 시각 구분되는 아카이브 아이콘.
+ */
+export function IconArchive({ size = 16, color = "currentColor", className }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth={1.4} strokeLinecap="square" className={className}>
+      <rect x="2" y="3" width="12" height="3" />
+      <rect x="3" y="6" width="10" height="8" />
+      <line x1="6" y1="9.5" x2="10" y2="9.5" />
+    </svg>
+  );
+}
+
 export function IconFilm({ size = 40, color = "currentColor", className }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className}>

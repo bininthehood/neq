@@ -19,7 +19,7 @@ import type { SavedItem, WatchReaction, Recommendation } from "@/lib/types";
 import Image from "next/image";
 import BottomNav from "@/components/BottomNav";
 import PosterFallback from "@/components/PosterFallback";
-import { IconStar, IconClose, IconCheck, IconHeart, IconGrid, IconList, IconSearch } from "@/components/Icons";
+import { IconStar, IconClose, IconCheck, IconHeart, IconGrid, IconList, IconSearch, IconPreview, IconArchive } from "@/components/Icons";
 import DetailSheet from "@/components/discover/DetailSheet";
 import SearchSheet from "@/components/discover/SearchSheet";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
@@ -31,25 +31,26 @@ const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string 
   { key: "loved", label: "인생작", color: "var(--accent)", bg: "var(--accent-dim)" },
   { key: "good", label: "재밌었어", color: "var(--text-secondary)", bg: "var(--surface-raised)" },
   { key: "meh", label: "그저 그래", color: "var(--text-muted)", bg: "var(--surface)" },
-  { key: "dropped", label: "포기했어", color: "var(--danger)", bg: "var(--danger-dim)" },
+  { key: "dropped", label: "안 맞았어", color: "var(--danger)", bg: "var(--danger-dim)" },
 ];
 
 type ViewFilter = "all" | "unwatched" | "watched" | "archived" | "history";
 
 /**
- * 위임 L #6 — Saved 뷰 모드.
- * - "grid": 기본 2열 그리드 (현재 동작)
- * - "list": 1열 가로 카드 (작은 포스터 60×90 + 제목/메타/액션)
- * localStorage 키: neq_saved_view (기존 컨벤션 neq_xxx 따름)
+ * Saved 뷰 모드.
+ * - "grid": 2열 그리드 (CSS columns mason packing)
+ * - "list": 1열 가로 카드 (60×90 포스터 + 제목/메타/액션)
+ * - "preview": Coverflow 스타일 — 큰 hero + 하단 가로 스크롤 카드들 (히스토리 패턴 활용)
+ * localStorage 키: neq_saved_view
  */
-type SavedViewMode = "grid" | "list";
+type SavedViewMode = "grid" | "list" | "preview";
 const SAVED_VIEW_KEY = "neq_saved_view";
 
 function loadSavedView(): SavedViewMode {
   if (typeof window === "undefined") return "grid";
   try {
     const v = localStorage.getItem(SAVED_VIEW_KEY);
-    if (v === "list" || v === "grid") return v;
+    if (v === "list" || v === "grid" || v === "preview") return v;
   } catch {
     /* ignore */
   }
@@ -221,17 +222,17 @@ function PosterCard({
       )}
 
       <div className="absolute top-1.5 right-1.5 flex gap-1">
-        {report && onArchiveToggle && (
+        {(report || isArchived) && onArchiveToggle && (
           <button
             type="button"
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
-            aria-label={isArchived ? `${item.recommendation.title} 복원` : `${item.recommendation.title} 아카이브`}
+            aria-label={isArchived ? `${item.recommendation.title} 복원` : `${item.recommendation.title} 보관`}
             aria-pressed={isArchived}
-            className="w-11 h-11 flex items-center justify-center text-xs sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:opacity-100"
+            className="w-11 h-11 flex items-center justify-center sm:opacity-0 sm:group-hover:opacity-100 transition-opacity bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none focus-visible:opacity-100"
             style={{ color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
-            title={isArchived ? "복원" : "아카이브"}
+            title={isArchived ? "복원" : "보관"}
           >
-            {isArchived ? "↩" : "✓"}
+            <IconArchive size={14} color={isArchived ? "var(--accent)" : "var(--text-muted)"} />
           </button>
         )}
         <button
@@ -353,17 +354,17 @@ function ListCard({
               <IconCheck size={11} />
             </button>
           )}
-          {report && onArchiveToggle && (
+          {(report || isArchived) && onArchiveToggle && (
             <button
               type="button"
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onArchiveToggle(tmdbId); }}
-              aria-label={isArchived ? `${rec.title} 복원` : `${rec.title} 아카이브`}
+              aria-label={isArchived ? `${rec.title} 복원` : `${rec.title} 보관`}
               aria-pressed={isArchived}
-              className="w-11 h-11 flex items-center justify-center text-xs active:scale-90 transition-transform rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               style={{ color: isArchived ? "var(--accent)" : "var(--text-muted)" }}
-              title={isArchived ? "복원" : "아카이브"}
+              title={isArchived ? "복원" : "보관"}
             >
-              {isArchived ? "↩" : "✓"}
+              <IconArchive size={14} color={isArchived ? "var(--accent)" : "var(--text-muted)"} />
             </button>
           )}
           <button
@@ -443,8 +444,10 @@ export default function SavedPage() {
   const [ottFilter, setOttFilter] = useState<string | null>(null);
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
   const [history, setHistory] = useState<RecHistoryEntry[]>([]);
-  // 위임 L #6 — 뷰 모드 (grid|list). 첫 mount 시 localStorage 에서 복원.
+  // 뷰 모드 (grid|list|preview). 첫 mount 시 localStorage 에서 복원.
   const [viewMode, setViewMode] = useState<SavedViewMode>("grid");
+  // preview 모드 hero 작품 id. 카드 탭으로 변경. 첫 진입 시 첫 작품 자동 선택 (effect 처리).
+  const [selectedPreviewId, setSelectedPreviewId] = useState<number | null>(null);
   const toast = useToast();
 
   // --- Nudge: 저장 후 24시간+ 미시청 작품 개별 넛지 ---
@@ -530,7 +533,13 @@ export default function SavedPage() {
     setViewMode(mode);
     persistSavedView(mode);
     track("saved_view_changed", { mode });
+    // preview 모드는 단일 hero 모델이라 OTT 그룹과 충돌 → 자동 OFF.
+    if (mode === "preview") {
+      setGroupByOTT(false);
+    }
   }, []);
+
+  // 이 selection effect 는 ottFilteredSaved 가 정의된 후에 추가되어야 한다 — 아래 useMemo 다음에 위치.
 
   const filteredSaved = useMemo(() => {
     let items = [...saved];
@@ -543,13 +552,9 @@ export default function SavedPage() {
       items = items.filter((s) => !reports[s.recommendation.tmdbId]);
     } else if (viewFilter === "watched") {
       items = items.filter((s) => !!reports[s.recommendation.tmdbId]);
-    } else {
-      items.sort((a, b) => {
-        const aWatched = reports[a.recommendation.tmdbId] ? 1 : 0;
-        const bWatched = reports[b.recommendation.tmdbId] ? 1 : 0;
-        return aWatched - bWatched;
-      });
     }
+    // 봤어요 적용 여부에 따른 정렬은 제거 — 사용자가 설문 토글 시 위치 이동 불편 보고.
+    // saved 원본 순서(저장 시점 역순) 그대로 유지.
     return items;
   }, [saved, reports, viewFilter, archivedIds]);
 
@@ -560,6 +565,25 @@ export default function SavedPage() {
       item.recommendation.providers.some((p) => p.name === ottFilter)
     );
   }, [filteredSaved, ottFilter]);
+
+  // preview 모드 hero 자동 선택 — selectedPreviewId 가 ottFilteredSaved 안에 없으면 첫 작품으로.
+  // ottFilter 변경, viewFilter 변경 등으로 목록 변경 시 자동 보정.
+  useEffect(() => {
+    if (viewMode !== "preview") return;
+    if (ottFilteredSaved.length === 0) return;
+    const exists = selectedPreviewId !== null
+      && ottFilteredSaved.some((item) => item.recommendation.tmdbId === selectedPreviewId);
+    if (!exists) {
+      setSelectedPreviewId(ottFilteredSaved[0].recommendation.tmdbId);
+    }
+  }, [viewMode, ottFilteredSaved, selectedPreviewId]);
+
+  // ottFilter 활성 시 OTT 그룹핑 자동 해제 (그룹 토글 hide 와 동기화).
+  useEffect(() => {
+    if (ottFilter && groupByOTT) {
+      setGroupByOTT(false);
+    }
+  }, [ottFilter, groupByOTT]);
 
   // Saved 작품에서 사용 가능한 OTT 목록 추출 (작품 수 많은 순)
   const availableOTTs = useMemo(() => {
@@ -680,11 +704,24 @@ export default function SavedPage() {
   };
 
   const handleRemove = (tmdbId: number) => {
+    // 삭제 전에 rec + 시청 리포트 보존 — toast undo 시 복원.
+    const target = saved.find((s) => s.recommendation.tmdbId === tmdbId);
+    const prevReport = reports[tmdbId];
     removeSaved(tmdbId);
     removeWatchReport(tmdbId);
     if (selected?.recommendation.tmdbId === tmdbId) setSelected(null);
     if (reportingId === tmdbId) setReportingId(null);
     refreshData();
+    if (target) {
+      toast.show("remove", {
+        ctx: { title: target.recommendation.title },
+        onAction: () => {
+          addSaved(target.recommendation);
+          if (prevReport) addWatchReport(tmdbId, prevReport);
+          refreshData();
+        },
+      });
+    }
   };
 
   const handleReport = (tmdbId: number, reaction: WatchReaction) => {
@@ -860,7 +897,7 @@ export default function SavedPage() {
         >
           Saved
         </h1>
-        {/* Grid/List 토글 — 항상 노출 (groupByOTT 모드에서도 보임). saved 있을 때만.
+        {/* Grid/List/Preview 토글 — 3-way segmented. saved 있을 때만.
             button w-11 h-11 (44, a11y 표준) + segmented padding 1 + border 1 = 48 = h-12 fit. */}
         {saved.length > 0 && viewFilter !== "history" && (
           <div
@@ -894,6 +931,19 @@ export default function SavedPage() {
               }}
             >
               <IconList size={14} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("preview")}
+              aria-pressed={viewMode === "preview"}
+              aria-label="미리보기"
+              className="w-11 h-11 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+              style={{
+                background: viewMode === "preview" ? "var(--accent-dim)" : "transparent",
+                color: viewMode === "preview" ? "var(--accent)" : "var(--text-muted)",
+              }}
+            >
+              <IconPreview size={14} />
             </button>
           </div>
         )}
@@ -950,8 +1000,12 @@ export default function SavedPage() {
               </button>
             ))}
           </div>
-          {/* OTT별 보기 — underline 토글 (이전 디자인). saved 있고 history 아닐 때만. */}
-          {saved.length > 0 && viewFilter !== "history" && (
+          {/* OTT별 보기 — underline 토글. saved 있고 history 아니고 preview 아니고 ottFilter null 일 때만 노출.
+              preview 모드는 단일 hero, ottFilter 활성 시 단일 그룹이라 OTT 그룹핑 의미 약함 → 자동 hide. */}
+          {saved.length > 0
+            && viewFilter !== "history"
+            && viewMode !== "preview"
+            && !ottFilter && (
             <button
               type="button"
               onClick={() => setGroupByOTT(!groupByOTT)}
@@ -1087,7 +1141,7 @@ export default function SavedPage() {
       )}
 
       {/* Watch Stats */}
-      {stats.total > 0 && viewFilter !== "history" && (
+      {stats.total > 0 && viewFilter === "watched" && (
         <div className="mx-5 mt-2 mb-3">
           <div
             className="p-3 flex items-center gap-3 rounded-lg"
@@ -1115,7 +1169,7 @@ export default function SavedPage() {
                 )}
                 {stats.dropped > 0 && (
                   <span className="text-xs text-danger">
-                    포기 {stats.dropped}
+                    안 맞았어 {stats.dropped}
                   </span>
                 )}
               </div>
@@ -1211,7 +1265,7 @@ export default function SavedPage() {
       )}
 
       {/* Poster grid — 스크롤 영역 */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
       {viewFilter === "history" ? (
         /* 히스토리 뷰 */
         <div className="pb-4">
@@ -1297,18 +1351,30 @@ export default function SavedPage() {
           <p className="text-sm mt-1.5 whitespace-pre-line">{`Discover에서 마음에 드는 걸\n하나씩 담아 보세요`}</p>
         </div>
       ) : ottFilteredSaved.length === 0 ? (
-        // D5 / Round 3 v2 — S-02 "이 조건엔 아무것도", S-04 "필터를 조금만 느슨해 보세요"
+        // viewFilter / ottFilter 별로 빈 상태 안내 분기.
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">
-            {ottFilter ? "이 조건엔 아무것도" : viewFilter === "unwatched" ? "모두 시청했어요!" : "아직 시청 기록이 없어요"}
+            {ottFilter
+              ? "이 조건엔 아무것도"
+              : viewFilter === "unwatched"
+                ? "모두 시청했어요!"
+                : viewFilter === "archived"
+                  ? "보관한 작품이 없어요"
+                  : viewFilter === "watched"
+                    ? "아직 시청 기록이 없어요"
+                    : "표시할 작품이 없어요"}
           </p>
           <p className="text-sm mt-1.5">
             {ottFilter
               ? "필터를 조금만 느슨해 보세요"
               : viewFilter === "unwatched"
                 ? "Discover에서 새로운 작품을 찾아보세요"
-                : "포스터의 '봤어요?' 버튼으로 기록해보세요"}
+                : viewFilter === "archived"
+                  ? "시청한 작품을 보관 아이콘으로 정리할 수 있어요"
+                  : viewFilter === "watched"
+                    ? "Saved의 작품에서 '봤어요?' 버튼을 눌러보세요"
+                    : "Discover에서 아래로 스와이프하거나 하트 버튼으로 담아보세요"}
           </p>
         </div>
       ) : groupByOTT && ottGroups ? (
@@ -1380,6 +1446,226 @@ export default function SavedPage() {
             </div>
           ))}
         </div>
+      ) : viewMode === "preview" ? (
+        /* Preview (Coverflow) — 큰 hero (포스터 비율 유지) + 하단 가로 스크롤 카드들.
+           hero 클릭 → DetailSheet 진입. hero 우측상단 봤어요 reaction 진입 (PosterCard 패턴). */
+        (() => {
+          const heroItem =
+            ottFilteredSaved.find((item) => item.recommendation.tmdbId === selectedPreviewId)
+            ?? ottFilteredSaved[0];
+          const heroRec = heroItem.recommendation;
+          const heroId = heroRec.tmdbId;
+          const heroReport = reports[heroId];
+          const heroIsReporting = reportingId === heroId;
+          return (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* Hero — 포스터 비율 (object-contain). flex-1 로 가용 height 가득 → no scroll. */}
+              <div
+                className="relative flex-1 mx-5 rounded-lg overflow-hidden cursor-pointer focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus-visible:outline-none"
+                style={{ background: "var(--surface)", minHeight: 0 }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${heroRec.title} 상세보기`}
+                onClick={() => {
+                  // reporting overlay 가 활성이면 hero 클릭은 무시 (reaction 선택 우선).
+                  if (heroIsReporting) return;
+                  openDetailFor(heroItem);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    if (!heroIsReporting) openDetailFor(heroItem);
+                  }
+                }}
+              >
+                {heroRec.posterUrl ? (
+                  <Image
+                    src={heroRec.posterUrl}
+                    alt={heroRec.title}
+                    fill
+                    className="object-contain"
+                    sizes="(max-width: 480px) 100vw, 480px"
+                    priority
+                  />
+                ) : (
+                  <PosterFallback title={heroRec.title} size="lg" />
+                )}
+                {/* 하단 그라디언트 + 메타 — 포스터 비율 유지로 좌우 빈 공간 가능 */}
+                <div
+                  className="absolute inset-x-0 bottom-0 flex flex-col p-4 pointer-events-none"
+                  style={{
+                    background: "linear-gradient(to bottom, transparent 0%, var(--bg-overlay-heavy) 100%)",
+                  }}
+                >
+                  <h2
+                    className="font-display text-xl font-bold mb-1"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    {heroRec.title}
+                  </h2>
+                  {heroRec.reason && (
+                    <p
+                      className="text-sm opacity-95 line-clamp-2"
+                      style={{ color: "var(--text-secondary)" }}
+                    >
+                      {heroRec.reason}
+                    </p>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    <span
+                      className="font-data text-xs flex items-center gap-0.5"
+                      style={{ color: "var(--text-muted)" }}
+                    >
+                      <IconStar size={12} /> {heroRec.rating.toFixed(1)}
+                    </span>
+                    {heroReport && <ReactionLabel reaction={heroReport} />}
+                    {heroRec.providers.slice(0, 3).map((p) => {
+                      const iconSrc = getOTTIcon(p.name) ?? p.logoUrl;
+                      return iconSrc ? (
+                        <Image
+                          key={p.name}
+                          src={iconSrc}
+                          alt={p.name}
+                          width={20}
+                          height={20}
+                          className="object-contain rounded-sm"
+                          unoptimized
+                        />
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+                {/* 봤어요 reaction 진입 — PosterCard 패턴. 우측상단. */}
+                {!heroReport && !heroIsReporting && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(heroId); }}
+                    aria-label={`${heroRec.title} 시청 리포트 작성`}
+                    className="absolute top-2 right-2 min-h-[44px] px-3 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full text-secondary focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                    style={{ backdropFilter: "blur(4px)" }}
+                  >
+                    봤어요?
+                  </button>
+                )}
+                {heroReport && !heroIsReporting && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleUndoReport(heroId); }}
+                    aria-label={`${heroRec.title} 시청 리포트 취소`}
+                    aria-pressed={true}
+                    className="absolute top-2 right-2 min-h-[44px] px-3 text-xs font-medium active:scale-90 transition-transform bg-overlay rounded-full focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none flex items-center gap-1"
+                    style={{ backdropFilter: "blur(4px)", color: REACTIONS.find((x) => x.key === heroReport)?.color }}
+                    title="리포트 취소"
+                  >
+                    <IconCheck size={12} /> 시청
+                  </button>
+                )}
+                {/* reporting overlay — PosterCard 패턴 hero 적용 */}
+                {heroIsReporting && (
+                  <div
+                    className="absolute inset-0 flex flex-col items-center justify-center px-3 gap-3 animate-fade-in z-10 rounded-lg"
+                    style={{ backdropFilter: "blur(8px)", background: "linear-gradient(var(--bg) 20%, var(--bg-overlay-heavy) 70%, transparent)" }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(null); }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Escape") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setReportingId(null);
+                      }
+                    }}
+                    role="dialog"
+                    aria-label="시청 리포트 선택"
+                  >
+                    <div className="text-center">
+                      <div className="font-display text-base font-bold">본 적 있나요?</div>
+                      <div className="text-xs mt-0.5 text-muted">알려주시면 더 좋은 추천을 드릴게요</div>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-1.5">
+                      {([
+                        { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)" },
+                        { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" },
+                        { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" },
+                        { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none" },
+                      ]).map((r) => (
+                        <button
+                          key={r.key}
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleReport(heroId, r.key); }}
+                          aria-label={`${r.label} 리포트`}
+                          className="px-3 py-2 text-xs font-medium active:scale-95 transition-transform rounded-lg focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
+                          style={{ background: r.bg, color: r.color, border: r.border }}
+                        >
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setReportingId(null); }}
+                      aria-label="리포트 닫기"
+                      className="text-xs min-h-[44px] px-4 flex items-center active:scale-95 transition-transform text-muted focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* 가로 스크롤 카드들 — 히스토리 탭 패턴 (w-16 h-24 포스터). active 카드 amber 보더. */}
+              <div
+                className="flex gap-3 px-5 mt-4 pb-4 overflow-x-auto"
+                style={{ scrollbarWidth: "none" }}
+                role="listbox"
+                aria-label="작품 목록"
+              >
+                {ottFilteredSaved.map((item) => {
+                  const id = item.recommendation.tmdbId;
+                  const isActive = id === selectedPreviewId;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      role="option"
+                      aria-selected={isActive}
+                      aria-label={`${item.recommendation.title}${isActive ? " (현재 미리보기)" : ""}`}
+                      className="flex-shrink-0 w-16 active:scale-95 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
+                      onClick={() => setSelectedPreviewId(id)}
+                    >
+                      <div
+                        className="relative w-16 h-24 overflow-hidden rounded-md"
+                        style={{
+                          border: isActive ? "1.5px solid var(--accent)" : "1px solid var(--border)",
+                          boxShadow: isActive ? "0 0 0 3px var(--accent-dim)" : "none",
+                          transition:
+                            "border-color 180ms var(--ease-detail-morph), box-shadow 180ms var(--ease-detail-morph)",
+                        }}
+                      >
+                        {item.recommendation.posterUrl ? (
+                          <Image
+                            src={item.recommendation.posterUrl}
+                            alt={item.recommendation.title}
+                            fill
+                            className="object-cover"
+                            sizes="64px"
+                          />
+                        ) : (
+                          <PosterFallback title={item.recommendation.title} size="xs" />
+                        )}
+                      </div>
+                      <p
+                        className="text-xs mt-1 truncate"
+                        style={{
+                          color: isActive ? "var(--text-primary)" : "var(--text-muted)",
+                        }}
+                      >
+                        {item.recommendation.title}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()
       ) : viewMode === "list" ? (
         /* 위임 L #6 — List 뷰 (1열 가로 카드). */
         <div className="flex flex-col gap-2 px-5 pb-4">
@@ -1416,6 +1702,8 @@ export default function SavedPage() {
               onRemove={handleRemove}
               onStartReport={setReportingId}
               onCancelReport={() => setReportingId(null)}
+              isArchived={archivedIds.has(item.recommendation.tmdbId)}
+              onArchiveToggle={(id) => { if (archivedIds.has(id)) { unarchiveItem(id); } else { archiveItem(id); } refreshData(); }}
             />
           ))}
         </div>

@@ -10,6 +10,7 @@ import {
   clearAllUserData,
 } from "@/lib/store";
 import { getDeviceId } from "@/lib/device-id";
+import { wipeCloudData } from "@/lib/sync";
 import { track } from "@/lib/analytics";
 import { usePersona } from "@/contexts/PersonaContext";
 import BottomNav from "@/components/BottomNav";
@@ -266,6 +267,10 @@ export default function ProfilePage() {
 
   const handleReset = () => {
     clearAllUserData();
+    // localStorage 만 비우면 다음 pullFromServer 가 cloud(saved_items/watch_reports/seen_titles/
+    // archived_items + profiles.onboarding_picks) 를 다시 끌어와 데이터가 복원되는 회귀가 있었음.
+    // cloud 도 함께 wipe — 비동기지만 sync 토큰 만료/오프라인 시에도 silent 실패라 UI 흐름은 영향 X.
+    void wipeCloudData();
     track("data_reset");
     setConfirmReset(false);
     refresh();

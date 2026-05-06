@@ -24,6 +24,7 @@ import { getAccountPrefs } from "@/lib/account-prefs";
 import StepHeader from "./StepHeader";
 import OnboardingStepWelcome from "./OnboardingStepWelcome";
 import OnboardingStepHello from "./OnboardingStepHello";
+import OnboardingStepGenre from "./OnboardingStepGenre";
 import OnboardingStepTaste from "./OnboardingStepTaste";
 import OnboardingStepOTT from "./OnboardingStepOTT";
 import OnboardingStepNotify from "./OnboardingStepNotify";
@@ -110,9 +111,10 @@ export default function OnboardingV2Controller() {
       {step === 1 && (
         <OnboardingStepHello onNext={(name) => goNext({ has_nickname: name.length > 0 })} />
       )}
-      {step === 2 && <OnboardingStepTaste onNext={() => goNext()} />}
-      {step === 3 && <OnboardingStepOTT onNext={() => goNext()} />}
-      {step === 4 && <OnboardingStepNotify onNext={() => goNext()} />}
+      {step === 2 && <OnboardingStepGenre onNext={() => goNext()} />}
+      {step === 3 && <OnboardingStepTaste onNext={() => goNext()} />}
+      {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
+      {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
     </div>
   );
 }

@@ -1,8 +1,22 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { OTT_OPTIONS } from "./data";
 import { setSubscribedOtt } from "@/lib/account-prefs";
+import { getOTTIcon } from "@/lib/ott-links";
+
+// OTT_OPTIONS.id → providers 객체 키 매핑 (이름 형식 차이 보정).
+// providers 정의: packages/core/src/ott.ts. 매칭 안 되면 short text 폴백.
+const OTT_ICON_LOOKUP: Record<string, string> = {
+  netflix: "Netflix",
+  tving: "TVING",
+  wavve: "wavve",
+  watcha: "Watcha",
+  disney: "Disney Plus",
+  apple: "Apple TV Plus",
+  coupang: "Coupang Play",
+};
 
 /**
  * Onboarding V2 — Step 4: OTT.
@@ -64,6 +78,8 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
         <div className="flex flex-col gap-2">
           {OTT_OPTIONS.map((o) => {
             const on = selected.has(o.providerId);
+            const lookupName = OTT_ICON_LOOKUP[o.id];
+            const iconUrl = lookupName ? getOTTIcon(lookupName) : null;
             return (
               <button
                 key={o.id}
@@ -75,12 +91,28 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
                   border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
                 }}
               >
-                <div
-                  className="w-9 h-9 rounded-md flex items-center justify-center text-[13px] font-bold"
-                  style={{ background: o.color, color: "#fff", flexShrink: 0 }}
-                >
-                  {o.short}
-                </div>
+                {iconUrl ? (
+                  <div
+                    className="w-9 h-9 rounded-md flex items-center justify-center overflow-hidden"
+                    style={{ background: "var(--surface-raised)", flexShrink: 0 }}
+                  >
+                    <Image
+                      src={iconUrl}
+                      alt={o.name}
+                      width={28}
+                      height={28}
+                      className="object-contain"
+                      unoptimized
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className="w-9 h-9 rounded-md flex items-center justify-center text-[13px] font-bold"
+                    style={{ background: o.color, color: "#fff", flexShrink: 0 }}
+                  >
+                    {o.short}
+                  </div>
+                )}
                 <div className="flex-1 text-left">
                   <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {o.name}

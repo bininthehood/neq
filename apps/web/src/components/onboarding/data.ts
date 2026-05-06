@@ -12,6 +12,7 @@ export interface GenreChip {
   id: string; // tasteGenres 의 slug — LLM 프롬프트에 그대로 전달
   ko: string;
   en: string;
+  tmdbMovieId: number | null; // TMDB movie genre id — `/discover/movie?with_genres=` 용. variety 등 movie 미존재 장르는 null.
 }
 
 export interface OttOption {
@@ -29,23 +30,24 @@ export interface NotifOption {
   defaultOn: boolean;
 }
 
-// 디자인 산출물 GENRE_CHIPS 와 동일 (15종)
+// 디자인 산출물 GENRE_CHIPS 와 동일 (15종) + TMDB movie genre id 매핑.
+// variety 는 movie 카테고리 미존재 → null (해당 장르 추천 fetch skip).
 export const GENRE_CHIPS: GenreChip[] = [
-  { id: 'drama',     ko: '드라마',     en: 'Drama' },
-  { id: 'thriller',  ko: '스릴러',     en: 'Thriller' },
-  { id: 'romance',   ko: '로맨스',     en: 'Romance' },
-  { id: 'comedy',    ko: '코미디',     en: 'Comedy' },
-  { id: 'sf',        ko: 'SF',         en: 'Sci-Fi' },
-  { id: 'mystery',   ko: '미스터리',   en: 'Mystery' },
-  { id: 'crime',     ko: '범죄',       en: 'Crime' },
-  { id: 'doc',       ko: '다큐',       en: 'Documentary' },
-  { id: 'action',    ko: '액션',       en: 'Action' },
-  { id: 'fantasy',   ko: '판타지',     en: 'Fantasy' },
-  { id: 'horror',    ko: '호러',       en: 'Horror' },
-  { id: 'animation', ko: '애니메이션', en: 'Animation' },
-  { id: 'variety',   ko: '예능',       en: 'Variety' },
-  { id: 'history',   ko: '시대극',     en: 'Period' },
-  { id: 'music',     ko: '음악',       en: 'Music' },
+  { id: 'drama',     ko: '드라마',     en: 'Drama',         tmdbMovieId: 18 },
+  { id: 'thriller',  ko: '스릴러',     en: 'Thriller',      tmdbMovieId: 53 },
+  { id: 'romance',   ko: '로맨스',     en: 'Romance',       tmdbMovieId: 10749 },
+  { id: 'comedy',    ko: '코미디',     en: 'Comedy',        tmdbMovieId: 35 },
+  { id: 'sf',        ko: 'SF',         en: 'Sci-Fi',        tmdbMovieId: 878 },
+  { id: 'mystery',   ko: '미스터리',   en: 'Mystery',       tmdbMovieId: 9648 },
+  { id: 'crime',     ko: '범죄',       en: 'Crime',         tmdbMovieId: 80 },
+  { id: 'doc',       ko: '다큐',       en: 'Documentary',   tmdbMovieId: 99 },
+  { id: 'action',    ko: '액션',       en: 'Action',        tmdbMovieId: 28 },
+  { id: 'fantasy',   ko: '판타지',     en: 'Fantasy',       tmdbMovieId: 14 },
+  { id: 'horror',    ko: '호러',       en: 'Horror',        tmdbMovieId: 27 },
+  { id: 'animation', ko: '애니메이션', en: 'Animation',     tmdbMovieId: 16 },
+  { id: 'variety',   ko: '예능',       en: 'Variety',       tmdbMovieId: null },
+  { id: 'history',   ko: '시대극',     en: 'Period',        tmdbMovieId: 36 },
+  { id: 'music',     ko: '음악',       en: 'Music',         tmdbMovieId: 10402 },
 ];
 
 /**
@@ -78,8 +80,17 @@ export const NOTIF_OPTIONS: NotifOption[] = [
   { id: 'monthlyReport', title: '월간 리포트',   desc: '매월 1일, 한 달간 본 작품 요약',          defaultOn: true },
 ];
 
-/** 단계 라벨 — 진행률/PostHog 이벤트 step prop 에 사용 */
-export const STEP_LABELS = ['welcome', 'hello', 'taste', 'ott', 'notify'] as const;
+/** 단계 라벨 — 진행률/PostHog 이벤트 step prop 에 사용. genre 추가로 6단계. */
+export const STEP_LABELS = ['welcome', 'hello', 'genre', 'taste', 'ott', 'notify'] as const;
 export type StepKey = typeof STEP_LABELS[number];
 
-export const TOTAL_STEPS = 5;
+export const TOTAL_STEPS = 6;
+
+/** 온보딩 픽 작품 — 어느 장르에서 선택된 작품인지 추적 위함 (선택 사항). */
+export interface OnboardingTasteSelection {
+  id: number;
+  title: string;
+  posterUrl: string | null;
+  year: string;
+  genreSlug: string | null; // 장르 섹션에서 선택된 경우, 검색에서 선택된 경우 null
+}
