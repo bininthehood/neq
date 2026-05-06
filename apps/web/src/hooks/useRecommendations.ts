@@ -326,7 +326,6 @@ export function useRecommendations() {
         headers: {
           "Content-Type": "application/json",
           "x-neko-streaming": "1",
-          "x-neko-mirror": "1",
         },
         body: JSON.stringify({
           favorites,
@@ -465,6 +464,11 @@ export function useRecommendations() {
     // localStorage 캐시 + React state 둘 다 비워야 새 추천이 깨끗하게 노출됨.
     // setRecs([]) 누락 시 streaming append 가 기존 recs 뒤로 붙어 setTopIdx(0)
     // 시점에 옛 첫 카드가 그대로 보임 (B1: 새로고침 무반응 / B3: 끝 도달 시 회귀).
+    //
+    // prev recs 를 exclude 로 보내는 건 candidates pool 이 좁은 favorites 조합
+    // (예: 한국 OTT 가용 작품이 2~3개) 에서 0 결과 → ErrorScreen 회귀 발생 →
+    // 미적용. 같은 카드 반복 문제는 server-side supplement (TMDB discover)
+    // 또는 cache-buster 로 별도 해결 필요.
     setRecommendations([], filterType, filterOrigin);
     setRecs([]);
     await loadRecs(filterType, filterOrigin, filterYear, filterOTTs);
@@ -510,7 +514,6 @@ export function useRecommendations() {
         headers: {
           "Content-Type": "application/json",
           "x-neko-streaming": "1",
-          "x-neko-mirror": "1",
         },
         body: JSON.stringify({ favorites, filter, exclude, excludeIds, ...v2Pref.body }),
         signal: controller.signal,
