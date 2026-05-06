@@ -184,7 +184,10 @@ export default function DiscoverPage() {
     if (ratingAutoFetchRef.current >= RATING_AUTO_FETCH_MAX) return;
     ratingAutoFetchRef.current += 1;
     rec.prefetchNextBatch();
-  }, [rec.filterRating, filtered.length, rec.loading, rec.prefetching, rec]);
+    // rec 객체 자체는 useRecommendations 가 매 render 새로 만들어 deps 매번 변동 → effect 폭주.
+    // 실제 변동을 감지해야 할 primitive 만 의존성으로 둔다 (prefetchNextBatch 도 새 ref 라 제외).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec.filterRating, filtered.length, rec.loading, rec.prefetching]);
 
   const current = filtered[topIdx];
   const isSaved = !!(current && savedIds.has(current.tmdbId));
