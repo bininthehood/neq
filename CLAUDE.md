@@ -169,7 +169,7 @@ DB 미러로 치환해 ~100ms 로 단축. 활성화는 opt-in (현재 default OF
 - `tmdb_metadata`    — 작품 detail + credits + providers 병합 (180일 TTL, providers는 30일 TTL 분리)
 - `tmdb_crawl_queue` — bulk crawl 대기열 (priority/failed_count 기반 pull)
 
-**파이프라인 — GitHub Actions 5종 (Vercel cron 아님):**
+**파이프라인 — GitHub Actions 6종 (Vercel cron 아님):**
 
 | Workflow (`.github/workflows/`) | 스케줄 (UTC) | 스크립트 (`scripts/`) | 역할 |
 |---|---|---|---|
@@ -177,6 +177,7 @@ DB 미러로 치환해 ~100ms 로 단축. 활성화는 opt-in (현재 default OF
 | `tmdb-initial-crawl.yml` | manual (1회성) | `tmdb-initial-crawl.ts` | catalog 전체 → 큐 적재 |
 | `tmdb-bulk-crawl.yml` | 6시간 간격 (`15 */6 * * *`) | `tmdb-bulk-crawl.ts` | 큐 pull → metadata upsert (providers 포함) |
 | `tmdb-refresh-stale.yml` | 매일 08:30 | `tmdb-refresh-stale.ts` | 180일+ stale row → 큐에 추가 |
+| `tmdb-refresh-providers.yml` | 매일 09:00 | `tmdb-refresh-providers.ts` | providers 30일 TTL 트리거 → 큐에 추가 (2026-05-08 신규) |
 | `tmdb-providers-snapshot.yml` | 매일 18:00 | (workflow 내장) | providers 변동 snapshot 보관 |
 
 **활성화 분기 (`apps/web/src/app/api/recommend/route.ts`):**
@@ -193,14 +194,27 @@ const useMirror =
 - KR 스트리밍 가능 universe: **17,131 / 113,666 = 15.1%** — 이게 실제 추천 모집단
 - 인기도 상위 10% NULL 비율 50.8% → 하위 10% 89.3% (단조 증가) — 비주류 작품일수록 KR 미공급
 
-**활성화 사전 작업 (재정립):**
-- ~~providers backfill~~ — **불필요**. 87K 재조회는 동일 NULL 재확인. (2026-05-08 audit 결정.)
-- ~~coverage 90% 타겟~~ — **무의미**. 모집단 자체가 17K KR 스트리밍 universe.
-- providers TTL (30일) 트리거 미구현 — 스키마는 분리(`providers_fetched_at`) 됐지만 어떤 스크립트도 stale 트리거 없음. 별도 PR 필요.
+**Parity 검증 (2026-05-08, 200건 샘플):**
+- `scripts/recommend-parity-check.ts` — mirror snapshot vs live TMDB 데이터 레이어 직접 비교
+- exact match: **97.0%** (rating-top mode + stale-first mode 동일 결과). 임계 90% 초과 ✅
+- either_empty 0% — 필터 결과 갯수 차이 없음
+- divergence 3% 는 모두 staleness 패턴 (Netflix add / wavve drop, 11일 내 발생). 30일 TTL 트리거로 8% 이내 유지 가능.
+- watch_link / runtime / seasons / country: 100% 일치
+- 산출물: `_workspace/tmdb-mirror-parity-2026-05-08.md`
 
-**활성화 절차:**
-1. parity 검증 — `x-neko-mirror: 1` 헤더로 staging A/B → LLM 직접 경로 vs mirror 경로 추천 결과 동일성 확인
-2. providers TTL 스크립트 추가 (`tmdb-refresh-providers.ts` 신규 또는 `refresh-stale` 확장 — `providers_fetched_at < now() - 30 days` 트리거)
-3. prod 활성화 — Vercel env `TMDB_MIRROR_ENABLED=true` (기대 효과: 4.8~12.3s → 100ms, 추천 품질 변동 없음 가정)
+**활성화 절차 (남은 단계):**
+1. ~~parity 검증~~ ✅ (2026-05-08 완료, 97% exact match)
+2. ~~providers TTL 30일 스크립트~~ ✅ (`tmdb-refresh-providers.ts` 신규, 매일 09:00 UTC)
+3. **prod 활성화** — Vercel env `TMDB_MIRROR_ENABLED=true` 설정 (남은 작업, 사용자 직접 실행)
+   - 기대 효과: enrich 4.8~12.3s → ~100ms (40~120× 속도 개선)
+   - 추천 갯수 변동 없음 (parity either_empty=0% 근거)
+   - 모니터링: `/api/recommend` p50 latency, 추천 갯수, TMDB quota 소비 (활성화 시 ~0)
 
-**측정 산출물:** `_workspace/tmdb-providers-backfill-plan-2026-05-08.md` + 메인 세션 audit 결과 (5-1/5-3/5-4 SQL 결과는 commit 메시지 참조).
+**활성화 후 운영:**
+- providers 30일 TTL 자동 리프레시 (`tmdb-refresh-providers` cron)
+- metadata 180일 TTL (`tmdb-refresh-stale` cron, 변동 작음)
+- staging 헤더 분기 (`x-neko-mirror: 1`) 는 그대로 유지 — 활성화 후에도 admin/디버깅 용도
+
+**측정 산출물:**
+- `_workspace/tmdb-providers-backfill-plan-2026-05-08.md` (audit + backfill STOP 결정)
+- `_workspace/tmdb-mirror-parity-2026-05-08.md` (parity 검증)
