@@ -162,7 +162,7 @@ neko/
 ## TMDB Mirror 인프라
 
 **목표:** `/api/recommend` 의 enrich 단계 (LLM 응답 → TMDB API hydrate, 4.8~12.3s 소요) 를
-DB 미러로 치환해 ~100ms 로 단축. 활성화는 opt-in (현재 default OFF).
+DB 미러로 치환해 ~100ms 로 단축. **상태: 2026-05-08 prod 활성화** (`TMDB_MIRROR_ENABLED=true`).
 
 **스토리지 (`supabase/migrations/20260424_tmdb_mirror.sql`):**
 - `tmdb_catalog`     — TMDB Daily ID Export (전체 universe, ~1.4M)
@@ -202,18 +202,23 @@ const useMirror =
 - watch_link / runtime / seasons / country: 100% 일치
 - 산출물: `_workspace/tmdb-mirror-parity-2026-05-08.md`
 
-**활성화 절차 (남은 단계):**
-1. ~~parity 검증~~ ✅ (2026-05-08 완료, 97% exact match)
-2. ~~providers TTL 30일 스크립트~~ ✅ (`tmdb-refresh-providers.ts` 신규, 매일 09:00 UTC)
-3. **prod 활성화** — Vercel env `TMDB_MIRROR_ENABLED=true` 설정 (남은 작업, 사용자 직접 실행)
-   - 기대 효과: enrich 4.8~12.3s → ~100ms (40~120× 속도 개선)
-   - 추천 갯수 변동 없음 (parity either_empty=0% 근거)
-   - 모니터링: `/api/recommend` p50 latency, 추천 갯수, TMDB quota 소비 (활성화 시 ~0)
+**활성화 단계 (완료):**
+1. ~~parity 검증~~ ✅ (2026-05-08, 97% exact match, 200건 샘플)
+2. ~~providers TTL 30일 스크립트~~ ✅ (`tmdb-refresh-providers.ts`, 매일 09:00 UTC)
+3. ~~prod 활성화~~ ✅ (2026-05-08, Vercel env `TMDB_MIRROR_ENABLED=true`)
 
 **활성화 후 운영:**
-- providers 30일 TTL 자동 리프레시 (`tmdb-refresh-providers` cron)
-- metadata 180일 TTL (`tmdb-refresh-stale` cron, 변동 작음)
+- providers 30일 TTL 자동 리프레시 (`tmdb-refresh-providers` cron, 매일 09:00 UTC)
+- metadata 180일 TTL (`tmdb-refresh-stale` cron, 매일 08:30 UTC)
 - staging 헤더 분기 (`x-neko-mirror: 1`) 는 그대로 유지 — 활성화 후에도 admin/디버깅 용도
+
+**모니터링 항목 (활성화 후 첫 24h):**
+- `/api/recommend` p50 latency: **5~12s → ~100~200ms 기대** (40~120× 속도 개선)
+- 추천 갯수 (rec / call): 변동 없음 기대 (parity either_empty=0% 근거)
+- TMDB API quota 소비: ~0 기대 (mirror 만 사용)
+- Sentry/PostHog error rate: baseline 유지
+
+**롤백 (이상 시):** Vercel env `TMDB_MIRROR_ENABLED` 제거 또는 `false` → 즉시 LLM-direct 경로 복귀.
 
 **측정 산출물:**
 - `_workspace/tmdb-providers-backfill-plan-2026-05-08.md` (audit + backfill STOP 결정)
