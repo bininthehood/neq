@@ -186,14 +186,21 @@ const useMirror =
   req.headers.get("x-neko-mirror") === "1";
 ```
 
-**알려진 이슈 (활성화 전 해결 필요):**
-- `tmdb_metadata.providers IS NULL` 비율 ~77% (87,975 / 113,666 — 2026-05-06 기준)
-- `tmdb_crawl_queue` 비어있음 (0 row) — initial crawl 후 큐 idle 상태
-- providers null 행은 `refresh-stale` 의 180일 트리거 안 잡힘 (모두 fresh 적재)
-- 활성화 시 LLM 추천의 ~80% 가 providers 없는 mirror hit 으로 필터아웃 → 추천량 4~5배 감소 위험
+**측정 결과 (2026-05-08 SQL audit):**
+- `tmdb_metadata.providers IS NULL` 87,963 행 (≈77%) — 모두 `providers_fetched_at` SET 상태 (=fetch 완료, TMDB 가 "KR 가용 0" 회신)
+- 미수집 (`providers_fetched_at IS NULL`) 행: **0** — 백필 대상 없음
+- NULL 행 country 분포: KR 2.8%, US 28.9%, JP 17.1%, other 50.2% — 비-KR 콘텐츠 97% (한국 OTT 미공급 정상 NULL)
+- KR 스트리밍 가능 universe: **17,131 / 113,666 = 15.1%** — 이게 실제 추천 모집단
+- 인기도 상위 10% NULL 비율 50.8% → 하위 10% 89.3% (단조 증가) — 비주류 작품일수록 KR 미공급
 
-**활성화 절차 (필수 사전 작업 후):**
-1. providers backfill — `providers IS NULL` 87,975 행 큐 재적재 후 bulk-crawl 완주
-2. coverage 확인 — providers filled ≥ 90% 타겟
-3. staging 검증 — `x-neko-mirror: 1` 헤더로 부분 트래픽 분기
-4. prod 활성화 — Vercel env `TMDB_MIRROR_ENABLED=true`
+**활성화 사전 작업 (재정립):**
+- ~~providers backfill~~ — **불필요**. 87K 재조회는 동일 NULL 재확인. (2026-05-08 audit 결정.)
+- ~~coverage 90% 타겟~~ — **무의미**. 모집단 자체가 17K KR 스트리밍 universe.
+- providers TTL (30일) 트리거 미구현 — 스키마는 분리(`providers_fetched_at`) 됐지만 어떤 스크립트도 stale 트리거 없음. 별도 PR 필요.
+
+**활성화 절차:**
+1. parity 검증 — `x-neko-mirror: 1` 헤더로 staging A/B → LLM 직접 경로 vs mirror 경로 추천 결과 동일성 확인
+2. providers TTL 스크립트 추가 (`tmdb-refresh-providers.ts` 신규 또는 `refresh-stale` 확장 — `providers_fetched_at < now() - 30 days` 트리거)
+3. prod 활성화 — Vercel env `TMDB_MIRROR_ENABLED=true` (기대 효과: 4.8~12.3s → 100ms, 추천 품질 변동 없음 가정)
+
+**측정 산출물:** `_workspace/tmdb-providers-backfill-plan-2026-05-08.md` + 메인 세션 audit 결과 (5-1/5-3/5-4 SQL 결과는 commit 메시지 참조).
