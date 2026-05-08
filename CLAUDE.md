@@ -212,9 +212,15 @@ const useMirror =
 - metadata 180일 TTL (`tmdb-refresh-stale` cron, 매일 08:30 UTC)
 - staging 헤더 분기 (`x-neko-mirror: 1`) 는 그대로 유지 — 활성화 후에도 admin/디버깅 용도
 
-**모니터링 항목 (활성화 후 첫 24h):**
-- `/api/recommend` p50 latency: **5~12s → ~100~200ms 기대** (40~120× 속도 개선)
-- 추천 갯수 (rec / call): 변동 없음 기대 (parity either_empty=0% 근거)
+**활성화 직후 실측 (2026-05-08, 4건 production 호출):**
+- enrich latency: 4.8~12.3s baseline → **329~475ms (warm), 평균 ~400ms** (10~25× 속도 개선)
+- 첫 호출 cold start 1회 3372ms 후 warm pool 수렴
+- 추천 갯수 안정 (10건/call), providers 데이터 정상 (wavve, Google Play Movies 등 mirror snapshot)
+- LLM 단계 (4000~6000ms) 가 새 병목 — 향후 streaming 패턴 활성화로 추가 개선 가능
+
+**모니터링 항목 (첫 24h):**
+- `/api/recommend` p50 enrich: 300~500ms 유지 시 정상. 1s 초과 시 mirror cache miss / fallback 의심
+- 추천 갯수 (rec / call): baseline 90%+ 유지 기대
 - TMDB API quota 소비: ~0 기대 (mirror 만 사용)
 - Sentry/PostHog error rate: baseline 유지
 
