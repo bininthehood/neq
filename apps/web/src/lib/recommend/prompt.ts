@@ -177,7 +177,9 @@ function buildCandidateList(candidates: EnrichedCandidate[]): string {
       const year = (c.item.release_date ?? c.item.first_air_date ?? "").slice(0, 4);
       const kind = c.type === "series" ? "시리즈" : "영화";
       const rating = c.item.vote_average.toFixed(1);
-      const overview = (c.item.overview ?? "").replace(/\s+/g, " ").slice(0, 150);
+      // 2026-05-08 — 150 → 80 자. uncached prompt 약 -275 tokens (rec-engineer 분석).
+      // 결 매칭 약화 위험 (plot-heavy 작품) 24h 모니터링 후 35-cap (recommend.ts) 추가 적용 결정.
+      const overview = (c.item.overview ?? "").replace(/\s+/g, " ").slice(0, 80);
       return `[ID:${c.id}] ${c.item.title} (${kind}${year ? ", " + year : ""}, 평점 ${rating}) — ${overview}`;
     })
     .join("\n");
