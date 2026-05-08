@@ -140,7 +140,7 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
         <button
           onClick={handleSkip}
           aria-label="튜토리얼 건너뛰기"
-          className="px-3 py-2 text-xs rounded-md active:scale-95 transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+          className="min-w-[44px] min-h-[44px] px-3 text-xs rounded-md active:scale-95 transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
           style={{
             color: "var(--text-secondary)",
             fontFamily: "var(--font-body)",

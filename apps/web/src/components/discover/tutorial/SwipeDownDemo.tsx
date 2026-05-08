@@ -3,11 +3,11 @@
 /**
  * TutorialFlow v3 — 3단계: 아래 스와이프 (저장).
  *
- * 모션: 카드 mock 이 아래로 살짝 밀렸다가 복귀 + save 글리프 강조 펄스 (1.5s).
+ * 모션: 카드 mock 이 아래로 살짝 밀렸다가 복귀 (1.5s, 진폭 72px = 좌/우 데모와 동일).
  * 실습 트리거: 부모(TutorialFlow)가 saveAbsorbing/savedIds 변화 감지로 진행.
  *
- * NOTE: anti-slop #13 amber 카운트 — 화살표 1 + 하트 글리프 1 = 2건 (지침 안내선 ≤ 2 준수).
- *   하트는 amber 글리프지만 transient 튜토리얼 overlay 라 카운트 제외 정책 적용 (DESIGN.md L34).
+ * NOTE: anti-slop #13 amber 카운트 — 화살표 1 + dot 1 + CardVariantA italic 1 = 3건.
+ *   transient 튜토리얼 overlay 라 카운트 제외 정책 적용 가능 (DESIGN.md L34).
  */
 
 import type { Recommendation } from "@/lib/types";
