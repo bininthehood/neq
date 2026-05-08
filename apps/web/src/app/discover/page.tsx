@@ -23,7 +23,7 @@ import DetailSheet from "@/components/discover/DetailSheet";
 import SwipeCard from "@/components/discover/SwipeCard";
 import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
-import CoachMark, { type CoachStep } from "@/components/discover/CoachMark";
+import TutorialFlow, { type TutorialStep } from "@/components/discover/tutorial/TutorialFlow";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
 import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
 import SearchSheet from "@/components/discover/SearchSheet";
@@ -64,14 +64,16 @@ export default function DiscoverPage() {
   const [saveAbsorbDelta, setSaveAbsorbDelta] = useState<{ tx: number; ty: number } | null>(null);
   const saveBtnRef = useRef<HTMLButtonElement>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
-  const [coachDone, setCoachDone] = useState<Record<CoachStep, boolean>>({
-    swipe: false,
-    save: false,
-    persona: false,
-  });
-  const [coachV2Shown, setCoachV2Shown] = useState(true); // 기본 true — mount 후 localStorage 확인하고 조정
-  const [coachSwipeAction, setCoachSwipeAction] = useState(false);
-  const [coachSaveAction, setCoachSaveAction] = useState(false);
+  // TutorialFlow v3 — 첫 진입 4단계 튜토리얼.
+  // mount 후 localStorage 1회 점검 → 둘 다 false 면 첫 카드 로드 시점에 노출.
+  // tutorialActive 가 true 인 동안 TutorialFlow 가 마운트되며,
+  // 사용자 액션 신호(아래 카운터들)로 단계 진행을 인식.
+  const [tutorialActive, setTutorialActive] = useState(false);
+  // 사용자 액션 카운터 — TutorialFlow 가 baseline 비교로 단계 진행 트리거.
+  const [leftSwipeCount, setLeftSwipeCount] = useState(0);
+  const [rightSwipeCount, setRightSwipeCount] = useState(0);
+  const [saveActionCount, setSaveActionCount] = useState(0);
+  const [detailOpenCount, setDetailOpenCount] = useState(0);
   // immersive: 카드 탭 시 상하단 UI 숨김 모드. 2026-05-02 부터 setter 미사용
   // (피드백 #2 — 탭은 DetailSheet 진입으로 단일화). state 자체는 다른 곳에서
   // 참조 중이라 false 고정 상수로 유지. 향후 다른 트리거(long-press 등) 도입 시 setter 부활.
@@ -204,6 +206,8 @@ export default function DiscoverPage() {
       });
       addSeenTitles([cur.title, cur.titleEn].filter(Boolean));
     }
+    // TutorialFlow v3 — 좌 스와이프 신호 emit
+    setLeftSwipeCount((c) => c + 1);
     // 남은 10개 이하 → 다음 배치 백그라운드 프리페치
     if (topIdx >= filtered.length - 10 && !rec.prefetching) {
       rec.prefetchNextBatch();
@@ -268,6 +272,8 @@ export default function DiscoverPage() {
       }
     }
     detail.openDetail(originRect);
+    // TutorialFlow v3 — Detail 진입 신호 emit (탭/액션바/키보드 등 모든 source 포함)
+    setDetailOpenCount((c) => c + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, filtered.length, detail.openDetail]);
 
@@ -314,7 +320,8 @@ export default function DiscoverPage() {
     track("card_saved", { tmdb_id: id, title: current.title, source: reason });
     addSaved(current);
     setSavedIds((s) => new Set(s).add(id));
-    setCoachSaveAction(true);
+    // TutorialFlow v3 — save 신호 emit (swipe-down 또는 button 둘 다 카운트)
+    setSaveActionCount((c) => c + 1);
     setSaveAbsorbing(true);
     setSaveFlash(true);
     swipe.setSwiping(true);
@@ -361,6 +368,8 @@ export default function DiscoverPage() {
           title: cur.title,
         });
       }
+      // TutorialFlow v3 — 우 스와이프(prev) 신호 emit
+      setRightSwipeCount((c) => c + 1);
     },
   });
 
@@ -514,35 +523,38 @@ export default function DiscoverPage() {
     }
   }, [topIdx, filtered.length, rec.loading, rec.prefetching]);
 
-  // CoachMark v2 초기 상태 — mount 시 1회 localStorage 읽기
+  // TutorialFlow v3 노출 정책:
+  //   - localStorage 키 `tutorialV3Shown` 또는 (기존) `neq_coach_v2_shown` 둘 중 하나라도 1 이면 미노출
+  //   - 둘 다 false 이고 첫 카드 로드 완료된 시점에 활성화
+  // mount 직후 1회만 점검. 첫 카드 로드 감지는 별도 effect 에서 filtered.length 의존성으로.
+  const [tutorialEligible, setTutorialEligible] = useState(false);
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
-    setCoachV2Shown(localStorage.getItem("neq_coach_v2_shown") === "1");
-    setCoachDone({
-      swipe: localStorage.getItem("neq_coach_swipe_done") === "1",
-      save: localStorage.getItem("neq_coach_save_done") === "1",
-      persona: localStorage.getItem("neq_coach_persona_done") === "1",
-    });
+    const v3Done = localStorage.getItem("tutorialV3Shown") === "1";
+    const v2Done = localStorage.getItem("neq_coach_v2_shown") === "1";
+    setTutorialEligible(!v3Done && !v2Done);
   }, []);
-
-  // 스와이프 액션 → coach dismiss 트리거 (topIdx가 0에서 한 번이라도 증가하면)
+  // 첫 카드 로드되면 tutorial 활성화. (eligible=false 면 무시)
   useEffect(() => {
-    if (topIdx > 0) setCoachSwipeAction(true);
-  }, [topIdx]);
-  // save coach의 action dismiss는 toggleSave 내부에서 직접 setCoachSaveAction 호출 (자동 시드/sync로 인한 savedIds 변화 오탐 방지)
+    if (!tutorialEligible) return;
+    if (!mounted) return;
+    if (filtered.length === 0) return;
+    if (tutorialActive) return;
+    setTutorialActive(true);
+    // tutorialActive 는 의존성에서 제외 — 자기 자신을 트리거하지 않게 함.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tutorialEligible, mounted, filtered.length]);
 
-  const handleCoachDismiss = useCallback((step: CoachStep) => {
-    if (typeof localStorage === "undefined") return;
-    localStorage.setItem(`neq_coach_${step}_done`, "1");
-    setCoachDone((prev) => {
-      const next = { ...prev, [step]: true };
-      if (next.swipe && next.save && next.persona) {
-        localStorage.setItem("neq_coach_v2_shown", "1");
-        setCoachV2Shown(true);
+  const handleTutorialClose = useCallback(
+    (_reason: "completed" | "skipped", _payload: { stepsCompleted: number; atStep: TutorialStep }) => {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("tutorialV3Shown", "1");
       }
-      return next;
-    });
-  }, []);
+      setTutorialActive(false);
+      setTutorialEligible(false);
+    },
+    [],
+  );
 
   // --- shared props ---
   const chipsProps = {
@@ -913,27 +925,19 @@ export default function DiscoverPage() {
           </div>
         </div>
       )}
-      {/* CoachMark v2 — 카드 1/3/5 진입 시점별 힌트 */}
-      {!coachV2Shown && mounted && filtered.length > 0 && (
-        <>
-          <CoachMark
-            step="swipe"
-            active={!coachDone.swipe && topIdx === 0}
-            completedByAction={coachSwipeAction}
-            onDismiss={handleCoachDismiss}
-          />
-          <CoachMark
-            step="save"
-            active={!coachDone.save && topIdx === 2}
-            completedByAction={coachSaveAction}
-            onDismiss={handleCoachDismiss}
-          />
-          <CoachMark
-            step="persona"
-            active={!coachDone.persona && topIdx === 4}
-            onDismiss={handleCoachDismiss}
-          />
-        </>
+      {/* TutorialFlow v3 — 첫 진입 4단계 튜토리얼 (좌/우/하 스와이프 + 탭).
+          기존 CoachMark v2 + TutorialOverlay 통합 후 대체. ↑ 스와이프 미포함. */}
+      {tutorialActive && filtered[0] && (
+        <TutorialFlow
+          recForDemo={filtered[0]}
+          userActionSignals={{
+            leftSwipeCount,
+            rightSwipeCount,
+            saveActionCount,
+            detailOpenCount,
+          }}
+          onClose={handleTutorialClose}
+        />
       )}
       {current && detail.showDetail && <DetailSheet rec={current} showDetail={detail.showDetail} detailY={detail.detailY}
         detailAnimating={detail.detailAnimating} detailBodyRef={detail.detailBodyRef} onClose={detail.closeDetail}

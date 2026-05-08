@@ -118,11 +118,13 @@ export type NekoEvent =
   | "persona_switched"
   | "persona_created"
   | "persona_deleted"
-  // 온보딩 브릿지 & 코치마크
+  // 온보딩 브릿지
   | "bridge_shown"
   | "bridge_completed"
-  | "coach_shown"
-  | "coach_completed"
+  // TutorialFlow v3 — Discover 첫 진입 4단계 튜토리얼 (CoachMark v2 대체)
+  | "tutorial_step_shown"
+  | "tutorial_completed"
+  | "tutorial_skipped"
   // Onboarding V2 (Day 24, P0-4): 알림 인프라
   | "notification_subscribed"
   | "notification_blocked"
