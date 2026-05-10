@@ -15,6 +15,7 @@ import { isTasteGenresEnabled, isOttWeakSignalEnabled } from "@/lib/env";
 import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear, FilterRating } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
+import { consumeStreamingNDJSON } from "@/lib/recommend-stream";
 
 /**
  * V2 신규 입력 (P0-2). flag ON + 값이 있을 때만 fetch body에 포함.
@@ -78,55 +79,6 @@ function usageToProps(usage: unknown): Record<string, number> {
   return out;
 }
 
-/** /api/recommend NDJSON stream 응답을 line별 JSON 파싱해 callback으로 전파 */
-async function consumeStreamingNDJSON(
-  response: Response,
-  callbacks: {
-    onCard: (rec: Recommendation) => void;
-    onTimings: (timings: unknown) => void;
-    onUsage: (usage: unknown) => void;
-    onError: (msg: string) => void;
-  },
-  signal?: AbortSignal,
-): Promise<void> {
-  if (!response.body) return;
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  const handle = (line: string) => {
-    if (!line) return;
-    try {
-      const msg = JSON.parse(line) as { type?: string; rec?: Recommendation; timings?: unknown; usage?: unknown; message?: string };
-      if (msg.type === "card" && msg.rec) callbacks.onCard(msg.rec);
-      else if (msg.type === "timings") callbacks.onTimings(msg.timings);
-      else if (msg.type === "usage") callbacks.onUsage(msg.usage);
-      else if (msg.type === "error") callbacks.onError(msg.message ?? "stream error");
-    } catch {
-      /* malformed line, skip */
-    }
-  };
-
-  try {
-    while (true) {
-      if (signal?.aborted) {
-        await reader.cancel();
-        return;
-      }
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
-      for (const line of lines) handle(line.trim());
-    }
-    if (buffer.trim()) handle(buffer.trim());
-  } catch (err) {
-    if (!(err instanceof DOMException && err.name === "AbortError")) {
-      callbacks.onError(err instanceof Error ? err.message : String(err));
-    }
-  }
-}
 
 /** 세션 스토리지에서 온보딩 완료 시각을 1회성으로 꺼냄 */
 function consumeOnboardingTimestamp(): number | undefined {

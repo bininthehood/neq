@@ -11,6 +11,8 @@ import {
   getSeenTitles,
 } from "@/lib/store";
 import { track } from "@/lib/analytics";
+import { consumeStreamingNDJSON } from "@/lib/recommend-stream";
+import type { Recommendation } from "@/lib/types";
 
 const MIN_DISPLAY_MS = 1500;
 // prod /api/recommend cold start이 ~20s까지 걸려 prefetch가 abort되면 discover에서 재요청 → 누적 ~21s 대기
@@ -78,7 +80,13 @@ export default function OnboardingCompletePage() {
 
         const res = await fetch("/api/recommend", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            // 2026-05-10 — non-streaming 경로의 보충 enrich 분기 (recommend.ts:286/339)
+            // 누적이 enrich 6238ms outlier (5월 9일 PostHog) 의 의심 원인. streaming 경로는
+            // 보충 분기 미구현이라 enrich 1회. prefetch 도 동일 latency 안전성 적용.
+            "x-neko-streaming": "1",
+          },
           body: JSON.stringify({
             favorites,
             filter: {},
@@ -90,23 +98,42 @@ export default function OnboardingCompletePage() {
           signal: controller.signal,
         });
         if (!res.ok) { navigate(false); return; }
-        const data = await res.json();
-        const recs = Array.isArray(data.recommendations) ? data.recommendations : [];
-        if (recs.length > 0) {
+        const isStream = res.headers.get("content-type")?.includes("application/x-ndjson") ?? false;
+
+        const collected: Recommendation[] = [];
+        let timingsMeta: unknown;
+        let usageMeta: unknown;
+
+        if (isStream) {
+          await consumeStreamingNDJSON(res, {
+            onCard: (rec) => collected.push(rec),
+            onTimings: (t) => { timingsMeta = t; },
+            onUsage: (u) => { usageMeta = u; },
+            onError: () => { /* prefetch — 부분 수집된 카드라도 저장 */ },
+          }, controller.signal);
+        } else {
+          // fallback: 서버가 streaming 미지원이거나 분기 OFF인 경우
+          const data = await res.json();
+          timingsMeta = data.timings;
+          usageMeta = data.usage;
+          if (Array.isArray(data.recommendations)) collected.push(...data.recommendations);
+        }
+
+        if (collected.length > 0) {
           try {
             sessionStorage.setItem(
               "neq_prefetched_recs",
               JSON.stringify({
-                recs,
-                timings: data.timings,
-                usage: data.usage,
+                recs: collected,
+                timings: timingsMeta,
+                usage: usageMeta,
                 ts: Date.now(),
                 filter: { type: "all", origin: "all" },
               }),
             );
           } catch { /* quota: 그냥 스킵 */ }
         }
-        navigate(recs.length > 0);
+        navigate(collected.length > 0);
       } catch (e) {
         if (e instanceof DOMException && e.name === "AbortError") return;
         navigate(false);
