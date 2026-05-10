@@ -22,6 +22,6 @@ jobs:
           PROD_URL: ${{ secrets.PROD_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -fsS -X GET \
+          curl -fsSL -X GET \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$PROD_URL/api/cron/notifications/refresh-persons"
+            "${PROD_URL%/}/api/cron/notifications/refresh-persons"
