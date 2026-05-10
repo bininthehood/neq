@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   addSaved,
@@ -20,17 +19,15 @@ import { useDetailSheet } from "@/hooks/useDetailSheet";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import FilterChips from "@/components/discover/FilterChips";
 import DetailSheet from "@/components/discover/DetailSheet";
-import SwipeCard from "@/components/discover/SwipeCard";
-import PrevCardOverlay from "@/components/discover/PrevCardOverlay";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialFlow, { type TutorialStep } from "@/components/discover/tutorial/TutorialFlow";
 import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
 import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
 import SearchSheet from "@/components/discover/SearchSheet";
-import RewindOverlay from "@/components/discover/RewindOverlay";
+import DiscoverHeader from "@/components/discover/DiscoverHeader";
+import DiscoverDeck from "@/components/discover/DiscoverDeck";
 import { useSync } from "@/hooks/useSync";
 import { usePersona } from "@/contexts/PersonaContext";
-import { IconSearch } from "@/components/Icons";
 import { useToast } from "@neq/design";
 
 const metaInfo = (r: Recommendation) => [
@@ -86,29 +83,6 @@ export default function DiscoverPage() {
   const persona = usePersona();
   const [personaOpen, setPersonaOpen] = useState(false);
   const toast = useToast();
-
-  // 위임 P #2 (2026-05-02) — 페르소나 드롭다운 회귀 수정.
-  // Root cause: 헤더 wrapper 의 inline `overflow: hidden` + `maxHeight: 48` 가 dropdown 을
-  // 잘라 화면에 안 보임 (dropdown 의 z-40 과 무관 — clipping 문제). 사용자: "목록이 보이지 않아요".
-  // 해결: dropdown 을 createPortal 로 document.body 에 직접 마운트해서 헤더 clipping 회피.
-  // 좌표는 chipRef.getBoundingClientRect() + window.scroll* 로 페이지 절댓값 계산.
-  const personaChipRef = useRef<HTMLButtonElement>(null);
-  const [personaDropdownPos, setPersonaDropdownPos] = useState<{
-    left: number;
-    top: number;
-  } | null>(null);
-  useEffect(() => {
-    if (!personaOpen || !personaChipRef.current) {
-      setPersonaDropdownPos(null);
-      return;
-    }
-    const r = personaChipRef.current.getBoundingClientRect();
-    // dropdown 가운데 정렬 + 6px 간격
-    setPersonaDropdownPos({
-      left: r.left + r.width / 2,
-      top: r.bottom + 6,
-    });
-  }, [personaOpen]);
 
   // 위임 J #3 — DetailSheet Cast 클릭 → SearchSheet 그 이름으로 자동 검색.
   // searchInitialQuery 가 SearchSheet 에 prop 으로 전달되며 sheet 가 열릴 때 자동 트리거.
@@ -622,259 +596,62 @@ export default function DiscoverPage() {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative">
-      <div className="flex items-center justify-between px-5 py-3 shrink-0 transition-all duration-300"
-        style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}>
-        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
-        {persona.personas.length > 1 && (
-          <div className="relative">
-            {/* 위임 K #1 (2026-05-02) — 페르소나 전환 chip.
-                이전: 텍스트 + 8px chevron (배경/border 없음) → 인터랙션 어포던스 부재.
-                변경: chip 스타일 (bg + border) + dot indicator + chevron 키워.
-                활성 페르소나 이름은 var(--accent) 로 강조하여 "현재 어떤 취향" 인지 명확히. */}
-            <button
-              ref={personaChipRef}
-              onClick={() => setPersonaOpen((v) => !v)}
-              aria-haspopup="listbox"
-              aria-expanded={personaOpen}
-              aria-label={`취향 전환: 현재 ${persona.activePersona?.name ?? "기본"} (${persona.personas.length}개 중)`}
-              className="flex items-center gap-1.5 h-9 px-3 active:scale-95 transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-full"
-              style={{
-                background: personaOpen ? "var(--accent-dim)" : "var(--surface)",
-                border: `1px solid ${personaOpen ? "var(--accent-border)" : "var(--border-subtle)"}`,
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ background: "var(--accent)" }}
-              />
-              <span
-                className="text-xs font-medium"
-                style={{
-                  color: personaOpen ? "var(--accent)" : "var(--text-primary)",
-                  transition: "color 150ms var(--ease-enter)",
-                }}
-              >
-                {persona.activePersona?.name ?? "기본"}
-              </span>
-              <svg
-                width="9"
-                height="9"
-                viewBox="0 0 8 8"
-                fill="none"
-                aria-hidden="true"
-                style={{
-                  transform: personaOpen ? "rotate(180deg)" : "none",
-                  transition: "transform 150ms var(--ease-enter)",
-                  opacity: 0.6,
-                }}
-              >
-                <path
-                  d="M1 2.5L4 5.5L7 2.5"
-                  stroke={personaOpen ? "var(--accent)" : "var(--text-muted)"}
-                  strokeWidth="1.4"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            {/* 위임 P #2 — dropdown 을 createPortal 로 body 에 직접 마운트해
-                헤더 wrapper 의 overflow:hidden clipping 회피. 좌표는 chip rect 기준 절댓값. */}
-            {personaOpen && personaDropdownPos && typeof document !== "undefined" &&
-              createPortal(
-                <>
-                  <div
-                    className="fixed inset-0"
-                    style={{ zIndex: 60 }}
-                    onClick={() => setPersonaOpen(false)}
-                    aria-hidden="true"
-                  />
-                  <div
-                    role="listbox"
-                    aria-label="취향 목록"
-                    className="fixed min-w-[200px] py-1.5 rounded-xl"
-                    style={{
-                      // chip 가로 가운데 정렬 + 6px 간격. transform 으로 -50%.
-                      left: personaDropdownPos.left,
-                      top: personaDropdownPos.top,
-                      transform: "translateX(-50%)",
-                      zIndex: 61,
-                      background: "var(--surface-raised)",
-                      border: "1px solid var(--border)",
-                      boxShadow: "var(--shadow-lg)",
-                      animation: "fade-in 150ms var(--ease-enter)",
-                    }}
-                  >
-                    <div
-                      className="px-4 pt-1 pb-1.5 text-[10px] uppercase tracking-wider font-data"
-                      style={{ color: "var(--text-muted)", letterSpacing: "0.12em" }}
-                    >
-                      취향 전환
-                    </div>
-                    {persona.personas.map((p) => (
-                      <button
-                        key={p.id}
-                        role="option"
-                        aria-selected={p.id === persona.activePersonaId}
-                        onClick={() => {
-                          if (p.id !== persona.activePersonaId) {
-                            persona.switchPersona(p.id);
-                            rec.abortLoading();
-                            rec.setFilterYear("all");
-                            rec.setFilterRating("all");
-                            setTopIdx(0);
-                            sessionStorage.removeItem("neq_top_idx");
-                            rec.loadRecs("all", "all");
-                            track("persona_switched", { persona_id: p.id, persona_name: p.name });
-                          }
-                          setPersonaOpen(false);
-                        }}
-                        className="w-full flex items-center px-4 h-12 text-sm active:scale-[0.98] transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:-outline-offset-2"
-                        style={{
-                          color: p.id === persona.activePersonaId ? "var(--accent)" : "var(--text-primary)",
-                          background: p.id === persona.activePersonaId ? "var(--accent-dim)" : "transparent",
-                        }}
-                      >
-                        {p.name}
-                        {p.id === persona.activePersonaId && (
-                          <svg className="ml-auto" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                    <div
-                      className="my-1 mx-4 h-px"
-                      style={{ background: "var(--border-subtle)" }}
-                      aria-hidden="true"
-                    />
-                    {persona.personas.length < 3 ? (
-                      <button
-                        onClick={() => {
-                          setPersonaOpen(false);
-                          router.push("/profile");
-                        }}
-                        className="w-full flex items-center px-4 h-11 text-xs active:scale-[0.98] transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:-outline-offset-2"
-                        style={{ color: "var(--text-muted)" }}
-                      >
-                        + 새 취향 추가
-                      </button>
-                    ) : (
-                      <div className="px-4 py-2 text-[11px]" style={{ color: "var(--text-muted)" }}>
-                        최대 3개까지 만들 수 있어요
-                      </div>
-                    )}
-                  </div>
-                </>,
-                document.body,
-              )}
-          </div>
-        )}
-        <button
-          onClick={() => {
+      <div
+        className="transition-all duration-300"
+        style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 48, overflow: "hidden" }}
+      >
+        <DiscoverHeader
+          persona={persona}
+          personaOpen={personaOpen}
+          onPersonaToggle={setPersonaOpen}
+          onAddPersona={() => router.push("/profile")}
+          onPersonaSwitch={(id) => {
+            persona.switchPersona(id);
+            rec.abortLoading();
+            rec.setFilterYear("all");
+            rec.setFilterRating("all");
+            setTopIdx(0);
+            sessionStorage.removeItem("neq_top_idx");
+            rec.loadRecs("all", "all");
+            const target = persona.personas.find((p) => p.id === id);
+            track("persona_switched", { persona_id: id, persona_name: target?.name });
+          }}
+          onSearchOpen={() => {
             track("search_opened");
             // 위임 J #3 — 검색 버튼으로 진입 시 initialQuery 비움 (이전 인물 검색 잔해 제거).
             setSearchInitialQuery("");
             searchSheet.openDetail();
           }}
-          aria-label="검색 열기"
-          className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
-        >
-          <IconSearch size={18} color="var(--text-muted)" />
-        </button>
+        />
       </div>
       <div className="transition-all duration-300 relative z-20" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 60, overflow: immersive ? "hidden" : "visible", pointerEvents: immersive ? "none" : "auto" }}>
         <FilterChips {...chipsProps} />
       </div>
 
-      <div ref={swipe.scrollRef} className="flex-1 min-h-0" style={{ overflowY: "hidden", overscrollBehavior: "none" }}>
-        <div ref={cardContainerRef} className="relative px-3 pb-2"
-          style={{ height: "100%", touchAction: "none" }}
-          onTouchStart={swipe.onTouchStart} onTouchMove={swipe.onTouchMove} onTouchEnd={swipe.onTouchEnd}>
-          {/* 아래 스와이프 힌트 — Stage 4 D1: save 액션 진입 신호.
-              dragY > 30 이상이면 카드가 살짝 작아지고 (SwipeCard 내부) save 버튼이 부풀음 (savePulling) */}
-          {swipe.dragY > 30 && !saveAbsorbing && (
-            <div
-              className="absolute inset-x-0 bottom-20 z-20 flex justify-center"
-              style={{
-                pointerEvents: "none",
-                opacity: Math.min(1, (swipe.dragY - 30) / 40),
-                transition: swipe.dragging.current ? "none" : "opacity 0.25s ease-out",
-              }}
-            >
-              <div
-                className="px-3.5 py-1.5 text-xs flex items-center gap-1.5 rounded-full"
-                style={{
-                  background: "var(--bg-overlay-heavy)",
-                  color: "var(--accent)",
-                  border: "1px solid var(--accent-border-light)",
-                  fontFamily: "var(--font-data)",
-                  letterSpacing: "0.04em",
-                }}
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 21s-7-4.5-9.5-9C0.7 8.5 2.5 4 6 4c2 0 3.5 1 4 2 0.5-1 2-2 4-2 3.5 0 5.3 4.5 3.5 8C19 16.5 12 21 12 21z"/>
-                </svg>
-                저장
-              </div>
-            </div>
-          )}
-          {/* 덱 뒤 스켈레톤 — 프리페치 또는 로딩 중 표시 */}
-          {(rec.prefetching || rec.loading) && (
-            <div
-              className="absolute overflow-hidden rounded-xl animate-pulse"
-              style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}
-            >
-              <div className="absolute bottom-0 left-0 right-0 p-5 space-y-2.5">
-                <div className="h-6 w-3/5 bg-surface-raised rounded-md" />
-                <div className="h-3 w-2/5 bg-surface-raised rounded-sm" />
-                <div className="h-4 w-4/5 bg-surface-raised rounded-sm" />
-              </div>
-            </div>
-          )}
-          {false && (
-            <div />
-          )}
-          {deckCards.map((r, stackIdx) => {
-            const isTop = stackIdx === deckCards.length - 1;
-            return (
-              <SwipeCard
-                key={r.tmdbId}
-                rec={r}
-                isTop={isTop}
-                depth={deckCards.length - 1 - stackIdx}
-                dragX={swipe.dragX}
-                dragY={swipe.dragY}
-                isDragging={swipe.dragging.current}
-                swiping={swipe.swiping}
-                absorbing={isTop && saveAbsorbing}
-                absorbDelta={saveAbsorbDelta}
-                immersive={isTop && immersive}
-                onCardTap={handleCardTap}
-                metaInfo={metaInfo(r)}
-              />
-            );
-          })}
-          {/* 되감기 오버레이 — VHS 테이프 되감기 */}
-          {rewinding && (
-            <RewindOverlay
-              cards={filtered.slice(0, topIdx).reverse()}
-              onComplete={() => {
-                setTopIdx(0);
-                setRewinding(false);
-                swipe.setDragX(0);
-                swipe.setDragY(0);
-                swipe.setSwiping(false);
-                swipe.scrollRef.current?.scrollTo({ top: 0 });
-              }}
-            />
-          )}
-          {swipe.prevOverlayX !== null && filtered.length > 1 && (() => {
-            const prev = filtered[topIdx > 0 ? topIdx - 1 : filtered.length - 1];
-            return prev ? <PrevCardOverlay prev={prev} prevOverlayX={swipe.prevOverlayX} isDragging={swipe.dragging.current} metaInfo={metaInfo(prev)} /> : null;
-          })()}
-        </div>
-      </div>
+      <DiscoverDeck
+        scrollRef={swipe.scrollRef}
+        cardContainerRef={cardContainerRef}
+        swipe={swipe}
+        deckCards={deckCards}
+        prevCard={filtered.length > 1 ? filtered[topIdx > 0 ? topIdx - 1 : filtered.length - 1] : null}
+        loading={rec.loading}
+        prefetching={rec.prefetching}
+        saveAbsorbing={saveAbsorbing}
+        saveAbsorbDelta={saveAbsorbDelta}
+        immersive={immersive}
+        rewinding={rewinding}
+        rewindCards={filtered.slice(0, topIdx).reverse()}
+        onCardTap={handleCardTap}
+        onRewindComplete={() => {
+          setTopIdx(0);
+          setRewinding(false);
+          swipe.setDragX(0);
+          swipe.setDragY(0);
+          swipe.setSwiping(false);
+          swipe.scrollRef.current?.scrollTo({ top: 0 });
+        }}
+        metaInfo={metaInfo}
+      />
 
       {/* 2026-05-02 사용자 직접 테스트 D-2 #7:
           ActionBar wrap 의 overflow: "hidden" 이 save 버튼 flash 시
