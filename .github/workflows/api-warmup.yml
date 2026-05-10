@@ -1,0 +1,27 @@
+name: API Warmup
+
+on:
+  schedule:
+    # 5분 간격 — Vercel function idle timeout (~5분) 보다 짧게 유지.
+    # /api/warmup → Supabase admin client connection + mirror 테이블 query path 살림.
+    # 효과: cold start 시 enrich 3164ms → warm 607ms (80% 단축, 2026-05-10 측정).
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: api-warmup
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Ping /api/warmup
+        env:
+          PROD_URL: ${{ secrets.PROD_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$PROD_URL/api/warmup"
