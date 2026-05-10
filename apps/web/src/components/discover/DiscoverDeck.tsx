@@ -98,8 +98,10 @@ export default function DiscoverDeck({
             </div>
           </div>
         )}
-        {/* 덱 뒤 스켈레톤 — 프리페치 또는 로딩 중 표시 */}
-        {(prefetching || loading) && (
+        {/* 덱 뒤 스켈레톤 — 프리페치/로딩 중이거나 deck 이 비어있을 때 표시.
+            2026-05-10 — deck.length === 0 (topIdx 가 끝 넘어갔지만 exhausted 아님) 시점에도
+            카드 자리 스켈레톤 유지. 사용자 컨텍스트 (헤더/필터) 잃지 않고 자연스러운 대기. */}
+        {(prefetching || loading || deckCards.length === 0) && (
           <div
             className="absolute overflow-hidden rounded-xl animate-pulse"
             style={{ top: 0, bottom: "8px", left: "12px", right: "12px", zIndex: 1, background: "var(--surface)" }}

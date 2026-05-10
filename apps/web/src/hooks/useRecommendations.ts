@@ -137,6 +137,12 @@ export function useRecommendations() {
   const [prefetching, setPrefetching] = useState(false);
   const prefetchingRef = useRef(false); // ref 기반 가드 (state보다 즉시 반영)
   const firstEntryRef = useRef(true); // 세션 내 첫 loadRecs 호출 여부
+  // 2026-05-10 — 사용자 보고: 어느 시점 이후 추가 로드 안 됨.
+  // 원인: prefetch 가 빈 응답 (unique=0) 받아도 lock 안 해 매번 빈 호출 반복.
+  // exclude 누적으로 LLM candidate pool 고갈된 상태에서 무한 시도.
+  // → unique=0 detect 시 exhausted=true 로 lock. refresh / filter 변경 / loadRecs 시 reset.
+  const [exhausted, setExhausted] = useState(false);
+  const exhaustedRef = useRef(false);
   const [filterType, setFilterType] = useState<FilterType>(() => {
     if (typeof window === "undefined") return "all";
     return (sessionStorage.getItem("neq_filter_type") as FilterType) || "all";
@@ -164,6 +170,9 @@ export function useRecommendations() {
   const abortRef = useRef<AbortController | null>(null);
 
   const loadRecs = async (ft: FilterType, fo: FilterOrigin, fy: FilterYear = "all", otts?: Set<string>) => {
+    // 새 로드 시점 = candidate pool 재시도 가능. exhausted 해제.
+    exhaustedRef.current = false;
+    setExhausted(false);
     const effectiveOTTs = otts ?? filterOTTs;
     // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로)
     if (fy === "all") {
@@ -429,6 +438,9 @@ export function useRecommendations() {
   /** 다음 배치를 백그라운드로 프리페치 — 현재 recs 뒤에 추가 */
   const prefetchAbortRef = useRef<AbortController | null>(null);
   const prefetchNextBatch = async () => {
+    // 직전 prefetch 가 빈 응답 (unique=0) 이었으면 candidate pool 고갈 추정 → lock.
+    // refresh / filter 변경 / loadRecs 로만 해제.
+    if (exhaustedRef.current) return;
     if (prefetchingRef.current || loading) return;
     prefetchingRef.current = true;
     setPrefetching(true);
@@ -494,11 +506,14 @@ export function useRecommendations() {
       const serverTimings = timingsToProps(timingsMeta);
       const serverUsage = usageToProps(usageMeta);
       const newRecs = collected;
+      // unique=0 감지 — candidate pool 고갈 추정. exhausted lock 으로 무한 호출 차단.
+      let appendedUnique = 0;
       if (newRecs.length > 0) {
         setRecs((prev) => {
           const existingIds = new Set(prev.map((r) => r.tmdbId));
           const unique = newRecs.filter((r) => !existingIds.has(r.tmdbId));
           if (unique.length === 0) return prev;
+          appendedUnique = unique.length;
           const merged = [...prev, ...unique];
           setRecommendations(merged, filterType, filterOrigin);
           const duration_ms = Math.round(performance.now() - t0);
@@ -511,6 +526,16 @@ export function useRecommendations() {
             ...serverUsage,
           });
           return merged;
+        });
+      }
+      if (appendedUnique === 0) {
+        exhaustedRef.current = true;
+        setExhausted(true);
+        track("recommendation_load_more", {
+          count: 0,
+          exhausted: true,
+          favorites_count: favorites.length,
+          ...serverTimings,
         });
       }
     } catch (e) {
@@ -532,6 +557,7 @@ export function useRecommendations() {
     loading,
     loadError,
     prefetching,
+    exhausted,
     filterType,
     filterOrigin,
     filterYear,

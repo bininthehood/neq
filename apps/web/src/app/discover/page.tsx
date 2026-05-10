@@ -583,11 +583,10 @@ export default function DiscoverPage() {
     return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
   }
   // topIdx 가 stack 끝을 넘긴 상태 (B3 fix 후 무한 추가 로드 흐름).
-  // prefetch 진행 중이면 LoadingScreen, 아니면 EmptyScreen.
-  if (topIdx >= filtered.length) {
-    if (rec.prefetching) {
-      return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
-    }
+  // - exhausted (prefetch 가 unique=0 응답) → EmptyScreen + 새로고침 안내
+  // - 그 외 (prefetch 진행 중 또는 다음 trigger 전) → deck 자리에 스켈레톤 유지
+  //   (전체 LoadingScreen 으로 덮어쓰지 않음 — 사용자 컨텍스트 보존, 2026-05-10 UX 개선)
+  if (topIdx >= filtered.length && rec.exhausted) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
     return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
