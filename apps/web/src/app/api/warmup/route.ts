@@ -36,13 +36,7 @@ export async function GET(req: Request) {
   // - mirror 경로 (/api/recommend enrich 단계) 와 동일 supabaseAdmin 인스턴스 활용
   // - tmdb_metadata limit 1 — index hit 로 ms 단위 응답
   let dbOk = false;
-  let dbError: string | null = null;
-  let envCheck: { url: boolean; key: boolean } | null = null;
   try {
-    envCheck = {
-      url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-      key: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-    };
     const tDb = Date.now();
     const admin = supabaseAdmin();
     const { error } = await admin
@@ -51,21 +45,16 @@ export async function GET(req: Request) {
       .limit(1);
     mark("db_ms", tDb);
     if (error) {
-      dbError = error.message;
       console.error("[warmup] db ping failed:", error.message);
     } else {
       dbOk = true;
     }
   } catch (err) {
-    dbError = err instanceof Error ? err.message : String(err);
     console.error("[warmup] supabaseAdmin init failed:", err);
   }
 
   return NextResponse.json({
     ok: dbOk,
-    db_ok: dbOk,
-    db_error: dbError,
-    env_check: envCheck,
     timings,
     total_ms: Date.now() - startedAt,
   });
