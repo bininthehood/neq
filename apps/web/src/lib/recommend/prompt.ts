@@ -72,6 +72,11 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - 단, 강한 필터가 절대 아닙니다. 다른 OTT의 좋은 작품도 동일 비중으로 포함해주세요. 가용성이 부족해도 후보 자체가 좋으면 선정.
 - "이 작품 ○○에서 볼 수 있어요" 같은 OTT 직접 언급은 reason에 넣지 마세요. reason은 작품 매력에만 집중.
 
+[작품 사실 정확성]
+- 후보 listing 에 (장르, 연도, 평점, overview) 가 명시됨. reason 은 이 정보와 일치해야 함
+- 제목·발음에서 장르 추측 금지. listing 에 "다큐"라면 다큐로 다루기, "SF"라면 SF로 다루기
+- listing 에 명시 안 된 사실 (수상·평가·주연·국가 등) 추측해서 reason에 넣지 말 것
+
 [JSON 출력 주의사항]
 - selected 배열 외 다른 키 추가 금지
 - id는 후보 listing의 [ID:숫자]에서 정확히 인용. 변형·생략·신규 ID 금지
@@ -170,6 +175,55 @@ function buildModeGuide(totalSignal: number): string {
   }
 }
 
+/**
+ * TMDB genre id → 한글 라벨. movie + TV 통합.
+ * 2026-05-10 — LLM 환각 방지. genre 미명시 시 LLM 이 제목/overview 만으로 추론
+ * (실측: "롱 웨이 라운드" 다큐 → "상징적인 SF 호러의 명작" 환각 발생).
+ *
+ * 출처: https://api.themoviedb.org/3/genre/{movie,tv}/list?language=ko
+ * 누락된 id 는 listing 에서 자동 무시 (잡음 최소화).
+ */
+const TMDB_GENRE_KR: Record<number, string> = {
+  // Movie
+  28: "액션",
+  12: "모험",
+  16: "애니메이션",
+  35: "코미디",
+  80: "범죄",
+  99: "다큐",
+  18: "드라마",
+  10751: "가족",
+  14: "판타지",
+  36: "역사",
+  27: "공포",
+  10402: "음악",
+  9648: "미스터리",
+  10749: "로맨스",
+  878: "SF",
+  10770: "TV영화",
+  53: "스릴러",
+  10752: "전쟁",
+  37: "서부",
+  // TV (movie 와 중복되는 id 는 동일 라벨 — 16/35/80/99/18/10751/9648/37 등)
+  10759: "액션·모험",
+  10762: "키즈",
+  10763: "뉴스",
+  10764: "리얼리티",
+  10765: "SF·판타지",
+  10766: "연속극",
+  10767: "토크",
+  10768: "전쟁·정치",
+};
+
+function formatGenreLabels(ids: number[] | undefined): string {
+  if (!ids || ids.length === 0) return "";
+  const names = ids
+    .map((id) => TMDB_GENRE_KR[id])
+    .filter((n): n is string => typeof n === "string");
+  // 최대 2개 라벨 (토큰 절감 + 핵심 장르만)
+  return names.slice(0, 2).join("/");
+}
+
 /** 후보 listing 직렬화 (LLM 입력용 한 줄 포맷). */
 function buildCandidateList(candidates: EnrichedCandidate[]): string {
   return candidates
@@ -178,9 +232,12 @@ function buildCandidateList(candidates: EnrichedCandidate[]): string {
       const kind = c.type === "series" ? "시리즈" : "영화";
       const rating = c.item.vote_average.toFixed(1);
       // 2026-05-08 — 150 → 80 자. uncached prompt 약 -275 tokens (rec-engineer 분석).
-      // 결 매칭 약화 위험 (plot-heavy 작품) 24h 모니터링 후 35-cap (recommend.ts) 추가 적용 결정.
       const overview = (c.item.overview ?? "").replace(/\s+/g, " ").slice(0, 80);
-      return `[ID:${c.id}] ${c.item.title} (${kind}${year ? ", " + year : ""}, 평점 ${rating}) — ${overview}`;
+      // 2026-05-10 — genre 라벨 추가. LLM 이 제목/overview 만으로 장르 오추론 방지.
+      // genre 라벨이 있으면 "(시리즈, 2004, 평점 8.5, 다큐)" 형태로 노출.
+      const genres = formatGenreLabels(c.item.genre_ids);
+      const meta = [kind, year, `평점 ${rating}`, genres].filter(Boolean).join(", ");
+      return `[ID:${c.id}] ${c.item.title} (${meta}) — ${overview}`;
     })
     .join("\n");
 }
