@@ -22,6 +22,9 @@ jobs:
           PROD_URL: ${{ secrets.PROD_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
-          curl -fsS -X GET \
+          # PROD_URL 에 trailing slash 가 있으면 //api/warmup → 308 redirect 됨.
+          # -L 로 follow + trailing slash strip 으로 이중 안전.
+          BASE="${PROD_URL%/}"
+          curl -fsSL -X GET \
             -H "Authorization: Bearer $CRON_SECRET" \
-            "$PROD_URL/api/warmup"
+            "${BASE}/api/warmup"
