@@ -179,6 +179,7 @@ DB 미러로 치환해 ~100ms 로 단축. **상태: 2026-05-08 prod 활성화** 
 | `tmdb-refresh-stale.yml` | 매일 08:30 | `tmdb-refresh-stale.ts` | 180일+ stale row → 큐에 추가 |
 | `tmdb-refresh-providers.yml` | 매일 09:00 | `tmdb-refresh-providers.ts` | providers 30일 TTL 트리거 → 큐에 추가 (2026-05-08 신규) |
 | `tmdb-providers-snapshot.yml` | 매일 18:00 | (workflow 내장) | providers 변동 snapshot 보관 |
+| `api-warmup.yml` | 5분 간격 (`*/5 * * * *`) | (workflow 내장 — `/api/warmup` GET 호출) | Vercel function + Supabase admin connection warm 유지 (2026-05-10 신규, cold start 완화) |
 
 **활성화 분기 (`apps/web/src/app/api/recommend/route.ts`):**
 ```ts
@@ -225,6 +226,24 @@ const useMirror =
 - Sentry/PostHog error rate: baseline 유지
 
 **롤백 (이상 시):** Vercel env `TMDB_MIRROR_ENABLED` 제거 또는 `false` → 즉시 LLM-direct 경로 복귀.
+
+**Cold start 완화 (2026-05-10):**
+- `/api/warmup` endpoint + `api-warmup.yml` 5분 cron — Vercel function + Supabase admin 살림
+- 측정: cold enrich 3164ms → warm 607ms (80% 단축)
+- 모니터링 SQL (PostHog HogQL) — cold 빈도 추적:
+  ```sql
+  SELECT
+    toDate(timestamp) AS day,
+    countIf(properties.srv_enrich_ms > 1000) AS cold_likely,
+    count(*) AS total,
+    round(countIf(properties.srv_enrich_ms > 1000) * 100.0 / count(*), 1) AS cold_pct
+  FROM events
+  WHERE event = 'recommendation_loaded'
+    AND timestamp >= now() - INTERVAL 7 DAY
+    AND properties.streamed = true
+  GROUP BY day ORDER BY day
+  ```
+  cold_pct 가 5월 10일 이후 감소하면 warmup 효과. 정상 mirror enrich = 400~800ms.
 
 **측정 산출물:**
 - `_workspace/tmdb-providers-backfill-plan-2026-05-08.md` (audit + backfill STOP 결정)
