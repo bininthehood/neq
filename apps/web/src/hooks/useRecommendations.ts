@@ -174,17 +174,32 @@ export function useRecommendations() {
     exhaustedRef.current = false;
     setExhausted(false);
     const effectiveOTTs = otts ?? filterOTTs;
-    // 새 세션 (PWA 재오픈) 감지 — sessionStorage flag.
+    // 새 세션 감지 — lastLoadedAt timestamp + navigation type 조합.
     // 2026-05-11 — 사용자 보고: 앱 재접속 시 이전 1번 카드 그대로. 원인:
-    // recCache 가 localStorage (persona) 에 영구 저장 → PWA 재오픈 후에도 캐시 hit.
-    //   - sessionStorage 는 PWA 인스턴스 lifespan 동안만 유지 → 재오픈 시 비어있음
-    //   - flag 없으면 새 세션 → 캐시 무시 + 새 fetch → 새 카드
-    //   - flag 있으면 같은 세션 → 캐시 사용 (Saved 왕복 등 스와이프 위치 유지)
-    const FRESH_SESSION_FLAG = "neq_session_recs_loaded";
+    // recCache 가 localStorage (persona) 에 영구 저장. sessionStorage flag 만으로는
+    // PWA suspend/resume 시 sessionStorage 도 유지되어 fresh 감지 실패.
+    //
+    // 휴리스틱:
+    //   - localStorage 'neq_recs_loaded_at' 갱신 (성공 fetch 시점)
+    //   - navType === "back_forward": 캐시 유지 (history nav 자연스러움)
+    //   - navType === "reload": fresh (사용자 명시 새로고침)
+    //   - navType === "navigate" + 30분+ 경과 또는 첫 진입: fresh
+    //   - 그 외 (30분 이내 navigate): 캐시 (Saved 왕복 등 짧은 이동)
+    const FRESH_TTL_MS = 30 * 60 * 1000;
     let isFreshSession = false;
     if (typeof window !== "undefined") {
-      isFreshSession = !sessionStorage.getItem(FRESH_SESSION_FLAG);
-      if (isFreshSession) sessionStorage.setItem(FRESH_SESSION_FLAG, "1");
+      const navEntries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+      const navType = navEntries[0]?.type;
+      const lastLoadedAt = Number(localStorage.getItem("neq_recs_loaded_at") ?? "0");
+      const elapsed = Date.now() - lastLoadedAt;
+      if (navType === "back_forward") {
+        isFreshSession = false;
+      } else if (navType === "reload") {
+        isFreshSession = true;
+      } else {
+        // navigate (link / PWA start / address bar)
+        isFreshSession = !lastLoadedAt || elapsed > FRESH_TTL_MS;
+      }
     }
     // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로).
     // 새 세션 첫 진입 시에는 캐시 무시 — 새 작품 표시.
@@ -360,6 +375,10 @@ export function useRecommendations() {
       setRecommendations(collected, ft, fo);
       setLoading(false);  // stream 미발현(빈 응답) 보호
       if (collected.length > 0) {
+        // 새 세션 감지용 timestamp 갱신 — 다음 진입에서 30분 TTL 비교.
+        if (typeof window !== "undefined") {
+          localStorage.setItem("neq_recs_loaded_at", String(Date.now()));
+        }
         const duration_ms = Math.round(performance.now() - t0);
         const time_from_onboarding_ms = isFirstEntry
           ? consumeOnboardingTimestamp()
@@ -529,6 +548,10 @@ export function useRecommendations() {
           appendedUnique = unique.length;
           const merged = [...prev, ...unique];
           setRecommendations(merged, filterType, filterOrigin);
+          // prefetch 도 신선 fetch — 다음 진입의 TTL 기준 갱신
+          if (typeof window !== "undefined") {
+            localStorage.setItem("neq_recs_loaded_at", String(Date.now()));
+          }
           const duration_ms = Math.round(performance.now() - t0);
           track("recommendation_load_more", {
             count: unique.length,
