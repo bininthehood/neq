@@ -211,11 +211,13 @@ export function DetailBody({
       {rec.overview && (() => {
         // GH-3 #7 — 200자 이상이면 line-clamp-5 + 더보기/접기 토글.
         // 미만이면 그대로 전체 표시 (토글 미노출).
+        // 2026-05-11 — 사용자 요청: 버튼뿐 아니라 synopsis 영역 자체 클릭 시 토글.
+        //   isLong 일 때 전체 컨테이너 (텍스트 + 더보기 라벨) 를 button 으로 래핑.
+        //   isLong 아니면 button 없이 plain 표시.
         const isLong = rec.overview.length >= SYNOPSIS_THRESHOLD;
         const showFade = isLong && !synopsisExpanded;
-        return (
-          <section className="mt-5" aria-labelledby="d3-synopsis-heading">
-            <ChapterMark id="d3-synopsis-heading">Synopsis · 줄거리</ChapterMark>
+        const SynopsisInner = (
+          <>
             <div className="relative">
               <p
                 className="text-sm leading-relaxed text-secondary"
@@ -244,16 +246,32 @@ export function DetailBody({
               )}
             </div>
             {isLong && (
+              <div
+                className="mt-1.5 py-2 text-xs font-medium"
+                style={{ color: "var(--text-secondary)" }}
+                aria-hidden="true"
+              >
+                {synopsisExpanded ? "접기" : "더보기"}
+              </div>
+            )}
+          </>
+        );
+        return (
+          <section className="mt-5" aria-labelledby="d3-synopsis-heading">
+            <ChapterMark id="d3-synopsis-heading">Synopsis · 줄거리</ChapterMark>
+            {isLong ? (
               <button
                 type="button"
                 onClick={() => setSynopsisExpanded((v) => !v)}
                 aria-expanded={synopsisExpanded}
                 aria-controls="d3-synopsis-heading"
-                className="mt-1.5 min-h-[44px] py-2 text-xs font-medium active:scale-95 transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-md"
-                style={{ color: "var(--text-secondary)" }}
+                aria-label={synopsisExpanded ? "줄거리 접기" : "줄거리 더보기"}
+                className="block w-full text-left min-h-[44px] active:scale-[0.995] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] rounded-md"
               >
-                {synopsisExpanded ? "접기" : "더보기"}
+                {SynopsisInner}
               </button>
+            ) : (
+              SynopsisInner
             )}
           </section>
         );

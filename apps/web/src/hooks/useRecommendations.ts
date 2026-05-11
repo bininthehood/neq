@@ -174,8 +174,21 @@ export function useRecommendations() {
     exhaustedRef.current = false;
     setExhausted(false);
     const effectiveOTTs = otts ?? filterOTTs;
-    // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로)
-    if (fy === "all") {
+    // 새 세션 (PWA 재오픈) 감지 — sessionStorage flag.
+    // 2026-05-11 — 사용자 보고: 앱 재접속 시 이전 1번 카드 그대로. 원인:
+    // recCache 가 localStorage (persona) 에 영구 저장 → PWA 재오픈 후에도 캐시 hit.
+    //   - sessionStorage 는 PWA 인스턴스 lifespan 동안만 유지 → 재오픈 시 비어있음
+    //   - flag 없으면 새 세션 → 캐시 무시 + 새 fetch → 새 카드
+    //   - flag 있으면 같은 세션 → 캐시 사용 (Saved 왕복 등 스와이프 위치 유지)
+    const FRESH_SESSION_FLAG = "neq_session_recs_loaded";
+    let isFreshSession = false;
+    if (typeof window !== "undefined") {
+      isFreshSession = !sessionStorage.getItem(FRESH_SESSION_FLAG);
+      if (isFreshSession) sessionStorage.setItem(FRESH_SESSION_FLAG, "1");
+    }
+    // 년도 필터 없을 때만 캐시 사용 (년도 필터는 서버에서 보충이 필요하므로).
+    // 새 세션 첫 진입 시에는 캐시 무시 — 새 작품 표시.
+    if (fy === "all" && !isFreshSession) {
       const cached = getRecommendations(ft, fo);
       if (cached.length >= 5) {
         // 캐시에 중복이 있을 수 있으므로 tmdbId 기반 dedup

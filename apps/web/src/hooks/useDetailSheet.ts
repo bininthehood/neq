@@ -110,7 +110,13 @@ export function useDetailSheet() {
     }
   }, []);
 
-  const closeDetail = useCallback(() => {
+  /**
+   * close 옵션:
+   *   skipMorph — swipe-down 으로 닫는 경우 sheet 가 이미 화면 밖이라 morph exit 가
+   *     별도 모션으로 보임 (sheet 닫힌 후 카드 morph 발생). swipe 시 morph 생략 →
+   *     sheet 슬라이드 다운만, 카드는 deck 에 그대로 노출 (자연스러움).
+   */
+  const closeDetail = useCallback((opts?: { skipMorph?: boolean }) => {
     // 합성 click 가드 — 방금 열린 직후 들어오는 닫기는 무시.
     // 사용자가 명시적으로 닫는 시점은 모션 완료 후이므로 무해함.
     const elapsed = Date.now() - openedAtRef.current;
@@ -124,7 +130,7 @@ export function useDetailSheet() {
     }
     setDetailAnimating(true);
     setDetailY(100);
-    if (morphRect && !prefersReducedMotion()) {
+    if (morphRect && !prefersReducedMotion() && !opts?.skipMorph) {
       setMorphPhase("exit");
     }
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
@@ -157,7 +163,10 @@ export function useDetailSheet() {
   const onDetailTouchEnd = useCallback(() => {
     if (!detailDragging.current) return;
     detailDragging.current = false;
-    if (detailY > 25) closeDetail();
+    // swipe-down 으로 닫는 경우 morph 스킵 — sheet 가 이미 swipe 따라 내려간 상태에서
+    // morph exit 가 별도로 발동되면 "sheet 닫힘 → 카드 morph" 순으로 보여 부자연.
+    // (2026-05-11 사용자 보고)
+    if (detailY > 25) closeDetail({ skipMorph: true });
     else {
       setDetailAnimating(true);
       setDetailY(0);
