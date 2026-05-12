@@ -240,9 +240,14 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Toast */}
+      {/* Toast — DESIGN.md L168: 성공=role=status polite, 에러=role=alert assertive */}
       {toast && (
-        <div className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4 animate-fade-in">
+        <div
+          className="fixed top-16 left-0 right-0 z-40 flex justify-center px-4 animate-fade-in"
+          role={toast.kind === "error" ? "alert" : "status"}
+          aria-live={toast.kind === "error" ? "assertive" : "polite"}
+          aria-atomic="true"
+        >
           <div
             className="px-4 py-2.5 text-sm rounded-lg flex items-center gap-2"
             style={{
@@ -254,6 +259,7 @@ export default function ProfilePage() {
             <span
               className="w-1.5 h-1.5 rounded-full flex-shrink-0"
               style={{ background: toast.kind === "ok" ? "var(--accent)" : "var(--danger)" }}
+              aria-hidden="true"
             />
             {toast.msg}
           </div>
