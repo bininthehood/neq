@@ -83,7 +83,7 @@ export function OttChip({ name, size = 22 }: { name: string; size?: number }) {
         background: "var(--surface-raised)",
         color: "var(--text-primary)",
         fontFamily: "var(--font-data)",
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 700,
         letterSpacing: "-0.02em",
       }}

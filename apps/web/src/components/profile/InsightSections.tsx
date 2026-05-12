@@ -219,9 +219,10 @@ export default function InsightSections({
                     }}
                   />
                   <div
-                    className="font-data text-[9px]"
+                    className="font-data text-[10px] uppercase"
                     style={{
                       color: b.isCurrent ? "var(--accent)" : "var(--text-muted)",
+                      letterSpacing: "0.12em",
                     }}
                   >
                     {b.month}

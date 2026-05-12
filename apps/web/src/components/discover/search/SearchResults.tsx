@@ -327,7 +327,7 @@ function WorksCarousel({
                 {item.title}
               </div>
               <div
-                className="flex items-center gap-1.5 mt-0.5 text-[10px]"
+                className="flex items-center gap-1.5 mt-0.5 text-[11px]"
                 style={{ color: "var(--text-muted)" }}
               >
                 <span>{item.mediaType === "tv" ? "시리즈" : "영화"}</span>
@@ -453,7 +453,7 @@ function PersonCard({
       </div>
       {knownForText && (
         <div
-          className="text-[10px] mt-0.5 truncate w-full"
+          className="text-[11px] mt-0.5 truncate w-full"
           style={{ color: "var(--text-muted)" }}
           title={knownForText}
         >

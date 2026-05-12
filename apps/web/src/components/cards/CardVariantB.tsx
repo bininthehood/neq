@@ -152,7 +152,8 @@ export default function CardVariantB({ work, w = 300, h = 460, fullbleed = false
               fontFamily: "var(--font-data)",
               fontSize: 10,
               color: "var(--text-muted)",
-              letterSpacing: "0.05em",
+              letterSpacing: "0.12em",
+              textTransform: "uppercase",
               fontVariantNumeric: "tabular-nums",
             }}
           >

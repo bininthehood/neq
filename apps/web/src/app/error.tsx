@@ -50,7 +50,7 @@ export default function GlobalError({
         다시 시도
       </button>
       <p
-        className="font-data text-[9px] uppercase mt-1"
+        className="font-data text-[10px] uppercase mt-1"
         style={{
           color: "var(--text-muted)",
           letterSpacing: "0.15em",
@@ -59,7 +59,12 @@ export default function GlobalError({
         err · {error.digest?.slice(0, 8) ?? "runtime"}
       </p>
       {error.digest && (
-        <span className="block text-[10px] text-muted">{error.digest}</span>
+        <span
+          className="block font-data text-[10px] uppercase text-muted"
+          style={{ letterSpacing: "0.12em" }}
+        >
+          {error.digest}
+        </span>
       )}
     </div>
   );
