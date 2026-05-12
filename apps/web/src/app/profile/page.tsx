@@ -208,27 +208,30 @@ export default function ProfilePage() {
           className="fixed inset-0 z-50 flex items-center justify-center px-6 animate-fade-in"
           style={{ background: "var(--bg-overlay-heavy)" }}
           onClick={() => setConfirmReset(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="confirm-reset-title"
         >
           <div
             className="w-full max-w-[320px] p-5 bg-surface-raised rounded-xl"
             style={{ boxShadow: "var(--shadow-lg)" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-display text-lg font-bold">정말 초기화할까요?</h3>
+            <h3 id="confirm-reset-title" className="font-display text-lg font-bold">정말 초기화할까요?</h3>
             <p className="text-sm text-secondary mt-2">
               저장한 작품 {savedCount}편, 시청 기록 {stats.total}편이 모두 사라져요. 이 동작은 되돌릴 수 없어요.
             </p>
             <div className="flex gap-2 mt-5">
               <button
                 onClick={() => setConfirmReset(false)}
-                className="flex-1 py-3 min-h-[44px] text-sm bg-surface rounded-lg text-secondary"
+                className="flex-1 py-3 min-h-[44px] text-sm bg-surface rounded-lg text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
               >
                 취소
               </button>
               <button
                 onClick={handleReset}
-                className="flex-1 py-3 text-sm font-semibold rounded-lg"
-                style={{ background: "var(--danger)", color: "var(--text-primary)" }}
+                className="flex-1 py-3 text-sm font-semibold rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+                style={{ background: "var(--danger)", color: "var(--text-inverse)" }}
               >
                 초기화
               </button>

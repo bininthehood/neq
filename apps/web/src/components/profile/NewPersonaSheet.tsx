@@ -114,6 +114,9 @@ export default function NewPersonaSheet({ onClose, onSubmit }: NewPersonaSheetPr
       className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ background: "var(--bg-overlay-heavy)" }}
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="new-persona-title"
     >
       <div
         className="w-full max-w-lg rounded-t-2xl flex flex-col animate-slide-up"
@@ -138,7 +141,7 @@ export default function NewPersonaSheet({ onClose, onSubmit }: NewPersonaSheetPr
       >
         <div className="w-10 h-1 rounded-full mx-auto mt-2 mb-3" style={{ background: "var(--border)" }} />
         <div className="px-5 pb-3 shrink-0">
-          <h3 className="font-display text-lg font-bold">새 취향 추가</h3>
+          <h3 id="new-persona-title" className="font-display text-lg font-bold">새 취향 추가</h3>
           <input
             type="text"
             value={newName}

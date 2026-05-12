@@ -183,7 +183,7 @@ export function DetailBody({
     >
       <DetailHero rec={rec} heroRef={heroRef} morphPhase={morphPhase} />
 
-      <h2 className="font-display text-xl font-bold pr-14">{rec.title}</h2>
+      <h2 id="detail-sheet-title" className="font-display text-xl font-bold pr-14">{rec.title}</h2>
       <p className="text-sm mt-0.5 text-muted">
         {rec.titleEn} · {metaInfo(rec)}
       </p>

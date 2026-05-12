@@ -134,6 +134,9 @@ export default function DetailSheet({
       className="fixed inset-0 z-50 flex items-end justify-center"
       style={{ touchAction: "none" }}
       onTouchMove={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="detail-sheet-title"
     >
       {/* dim background — 명시적 onClick 으로 닫기. root 의 onClick 은 제거.
           이전엔 root onClick={onClose} + sheet stopPropagation 패턴이었지만,

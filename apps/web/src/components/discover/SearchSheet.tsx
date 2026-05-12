@@ -580,7 +580,12 @@ export default function SearchSheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end">
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-end"
+      role="dialog"
+      aria-modal="true"
+      aria-label="검색"
+    >
       {/* backdrop */}
       <div
         className="absolute inset-0"
