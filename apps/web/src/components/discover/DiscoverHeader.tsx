@@ -106,7 +106,7 @@ export default function DiscoverHeader({
               className="text-xs font-medium"
               style={{
                 color: personaOpen ? "var(--accent)" : "var(--text-primary)",
-                transition: "color 150ms var(--ease-enter)",
+                transition: "color 150ms var(--ease-enter, cubic-bezier(0.25, 1, 0.5, 1))",
               }}
             >
               {persona.activePersona?.name ?? "기본"}
@@ -119,7 +119,7 @@ export default function DiscoverHeader({
               aria-hidden="true"
               style={{
                 transform: personaOpen ? "rotate(180deg)" : "none",
-                transition: "transform 150ms var(--ease-enter)",
+                transition: "transform 150ms var(--ease-enter, cubic-bezier(0.25, 1, 0.5, 1))",
                 opacity: 0.6,
               }}
             >
@@ -155,7 +155,7 @@ export default function DiscoverHeader({
                     background: "var(--surface-raised)",
                     border: "1px solid var(--border)",
                     boxShadow: "var(--shadow-lg)",
-                    animation: "fade-in 150ms var(--ease-enter)",
+                    animation: "fade-in 150ms var(--ease-enter, cubic-bezier(0.25, 1, 0.5, 1))",
                   }}
                 >
                   <div

@@ -86,7 +86,7 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
           style={{
             background: "var(--surface)",
             border: `1px solid ${hasValue ? "var(--accent-border-light)" : "var(--border)"}`,
-            transition: "border-color var(--duration-quick, 150ms) var(--ease-move, ease)",
+            transition: "border-color var(--duration-quick, 150ms) var(--ease-move, cubic-bezier(0.45, 0, 0.55, 1))",
           }}
         >
           <div

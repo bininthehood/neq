@@ -1,6 +1,6 @@
 export default function SavedLoading() {
   return (
-    <div className="h-dvh flex flex-col">
+    <div className="h-dvh flex flex-col" aria-busy="true" aria-label="저장 목록 불러오는 중">
       {/* Header — D5: ChapterMark eyebrow + Fraunces italic 패턴 placeholder */}
       <div className="px-5 pt-6 pb-2">
         <div className="flex items-end justify-between gap-3">

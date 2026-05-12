@@ -10,7 +10,7 @@
  */
 export default function DiscoverLoading() {
   return (
-    <div className="h-dvh flex flex-col">
+    <div className="h-dvh flex flex-col" aria-busy="true" aria-label="추천 작품 불러오는 중">
       {/* Header — 워드마크는 neq-logo.png 이미지 정본 (DESIGN.md Brand Identity) */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}

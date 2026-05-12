@@ -71,7 +71,7 @@ export default function StepHeader({ current, total, onBack }: StepHeaderProps) 
             style={{
               background: i <= current ? "var(--accent)" : "var(--border)",
               opacity: i < current ? 0.7 : 1,
-              transition: "background var(--duration-quick, 150ms) var(--ease-move, ease), opacity var(--duration-quick, 150ms) var(--ease-move, ease)",
+              transition: "background var(--duration-quick, 150ms) var(--ease-move, cubic-bezier(0.45, 0, 0.55, 1)), opacity var(--duration-quick, 150ms) var(--ease-move, cubic-bezier(0.45, 0, 0.55, 1))",
             }}
           />
         ))}

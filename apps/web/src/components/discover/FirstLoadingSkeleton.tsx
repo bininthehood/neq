@@ -30,7 +30,7 @@ export default function FirstLoadingSkeleton() {
   }, []);
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden" aria-busy="true" aria-label="첫 추천 준비 중">
       <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6">
         <Illust
           name="calibrating"

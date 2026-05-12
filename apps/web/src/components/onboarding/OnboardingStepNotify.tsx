@@ -122,7 +122,7 @@ export default function OnboardingStepNotify({ onNext }: Props) {
                     height: 26,
                     borderRadius: 13,
                     background: on ? "var(--accent)" : "var(--border)",
-                    transition: "background var(--duration-quick, 150ms) var(--ease-move, ease)",
+                    transition: "background var(--duration-quick, 150ms) var(--ease-move, cubic-bezier(0.45, 0, 0.55, 1))",
                   }}
                 >
                   <div
@@ -134,7 +134,7 @@ export default function OnboardingStepNotify({ onNext }: Props) {
                       height: 22,
                       borderRadius: 11,
                       background: "#fff",
-                      transition: "left var(--duration-quick, 150ms) var(--ease-spring, ease)",
+                      transition: "left var(--duration-quick, 150ms) var(--ease-spring, cubic-bezier(0.34, 1.3, 0.64, 1))",
                       boxShadow: "var(--shadow-sm)",
                     }}
                   />

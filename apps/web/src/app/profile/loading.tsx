@@ -1,6 +1,6 @@
 export default function ProfileLoading() {
   return (
-    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden" aria-busy="true" aria-label="프로필 불러오는 중">
       {/* Header */}
       <div className="px-5 pt-6 pb-4 shrink-0">
         <div className="h-8 w-24 animate-pulse bg-surface-raised rounded-md" />
