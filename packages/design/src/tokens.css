@@ -39,7 +39,6 @@
   /* ── Accent — amber/gold (서점·아카이브) ───── */
   --accent:           #C4A35A;
   --accent-hover:     #D4B36A;
-  --accent-strong:    #A88840;
   --accent-dim:       rgba(196, 163, 90, 0.12);
   --accent-border:    rgba(196, 163, 90, 0.25);
   --accent-border-light: rgba(196, 163, 90, 0.15);
