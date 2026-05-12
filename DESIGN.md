@@ -39,21 +39,26 @@
     - selected 칩 그룹: 한 그룹의 selected 칩들은 시각적 연속이므로 1건으로 카운트(개수 무관). 그룹이 늘면 그룹 수만큼 카운트.
 
 ## Typography
-- **Display/Hero:** Fraunces (optical size, weight 700-900) — 율동적인 세리프. 영화 타이틀, "오늘 뭐 볼까?" 같은 헤드라인에 사용.
-- **Body:** Pretendard Variable — 한글 UI 최적. 본문, 라벨, 추천 이유, 설명 텍스트.
+- **Display/Hero:** **Instrument Serif** (Google Fonts, weight 400 + italic) — 절제된 현대 세리프. 영문 헤드라인, 카드 메타("2024"), reason 인용구 italic. CSS var: `--font-display`. 한글 헤딩은 Pretendard 700 폴백 (Noto Serif KR 차순위).
+- **Body:** Pretendard Variable — 한글 UI 최적. 본문, 라벨, 추천 이유, 설명 텍스트, **한글 제목** (700). CSS var: `--font-body`.
 - **UI/Labels:** Pretendard Variable (weight 500)
-- **Data/Tables:** Outfit (tabular-nums) — 평점, 숫자, 카운터. 깔끔한 숫자 전용.
-- **Code:** JetBrains Mono
-- **Loading:** Pretendard CDN (cdn.jsdelivr.net/gh/orioncactus/pretendard), Google Fonts (Fraunces, Outfit)
-- **Scale:**
-  - xs: 11px / 0.6875rem
-  - sm: 13px / 0.8125rem
-  - base: 15px / 0.9375rem
-  - lg: 18px / 1.125rem
-  - xl: 22px / 1.375rem
-  - 2xl: 28px / 1.75rem
-  - 3xl: 36px / 2.25rem
-  - display: 48px / 3rem
+- **Data/Tabular:** **Geist Mono** (Google Fonts, tabular-nums) — 평점, 연도, 러닝타임, 카운터 + eyebrow/챕터 마크/tech tag (uppercase + tracking 0.12em 컨텍스트, anti-slop #8 예외). CSS var: `--font-data`.
+- **Loading:** Pretendard CDN (cdn.jsdelivr.net/gh/orioncactus/pretendard), `next/font/google` (Instrument Serif, Geist Mono — `layout.tsx` 에서 inject).
+- **Weight 위계:** 400 본문 / 500 UI 라벨·버튼·네비 / 600 강조·활성 탭 / 700 한글 제목 (Instrument Serif 는 400 만 로드).
+- **Scale:** size / line-height / letter-spacing — 큰 사이즈일수록 자간 음수로 옵티컬 보정.
+
+| 토큰 | size | line-height | letter-spacing | 용도 |
+|------|------|-------------|----------------|------|
+| xs | 11px | 1.45 | 0.02em | 뱃지, 태그, 캡션 |
+| sm | 13px | 1.45 | 0.01em | 메타, 부가 텍스트 |
+| base | 15px | 1.5 | 0 | 본문, 추천 이유 |
+| lg | 18px | 1.4 | -0.01em | 카드 제목, 섹션 헤딩 |
+| xl | 22px | 1.3 | -0.015em | 페이지 제목, DetailSheet 제목 |
+| 2xl | 28px | 1.25 | -0.02em | 대형 제목, Profile 통계 숫자 |
+| 3xl | 36px | 1.2 | -0.025em | 히어로, SwipeCard 제목 |
+| display | 48px | 1.1 | -0.03em | Fraunces 디스플레이 |
+
+- **금지:** 10px 이하 폰트 (anti-slop #8) / text-transform uppercase 를 한글에 적용 / letter-spacing 0.12em 이상을 한글에 적용.
 
 ## Color
 - **Approach:** Restrained + Warm Neutral
@@ -97,11 +102,24 @@
 - `--text-primary-dim`: rgba(237, 237, 239, 0.07) — 텍스트 컬러 기반 미세 배경
 
 ## Spacing
-- **Base unit:** 4px
+- **Base unit:** 4px. 모든 spacing 은 4px 의 배수. 예외 없음.
 - **Density:** Comfortable — 피곤한 상태에서도 정확히 누를 수 있는 터치 타겟
-- **Scale:** 2xs(2) xs(4) sm(8) md(16) lg(24) xl(32) 2xl(48) 3xl(64)
-- **Minimum touch target:** 44x44px
+- **Minimum touch target:** 44×44px
 - **좌우 여백:** 콘텐츠 20px (px-5), 그리드/필터 16px (px-4)
+- **Scale:**
+
+| 토큰 | px | 배수 | 용도 |
+|------|---|------|------|
+| `--space-2xs` | 2 | 0.5× | 아이콘-텍스트 인라인 미세 간격 |
+| `--space-xs` | 4 | 1× | 뱃지 내부, 아이콘 gap |
+| `--space-sm` | 8 | 2× | 칩 간격, 그리드 gap, 리스트 아이템 사이 |
+| `--space-md` | 16 | 4× | 섹션 내부 padding, 카드 내부 여백 |
+| `--space-lg` | 24 | 6× | 섹션 간 간격, 페이지 좌우 여백 |
+| `--space-xl` | 32 | 8× | 큰 섹션 간 간격, 페이지 하단 |
+| `--space-2xl` | 48 | 12× | 페이지 상단 여백, 히어로 영역 |
+| `--space-3xl` | 64 | 16× | 그라디언트 padding-top, 대형 간격 |
+
+- **간격 원칙:** 같은 그룹 ≤ sm / 그룹 내 섹션 분리 = md / 섹션 간 = lg~xl / 페이지 수준 ≥ 2xl. 의심스러우면 넓혀라 — Quiet Ink 는 밀도보다 여백.
 
 ## Layout
 - **Approach:** Full-bleed + asymmetric
@@ -130,11 +148,69 @@
 
 ## Accessibility
 - **터치 타겟:** 모든 인터랙티브 요소 최소 44x44px. 작은 아이콘 버튼이라도 패딩으로 터치 영역 확보.
-- **Focus:** `focus:outline-none` 사용 시 반드시 `focus-visible:ring-2` 대체 제공.
+- **Focus:** `focus:outline-none` 사용 시 반드시 `focus-visible:ring-2 ring-[--accent]` 대체 제공. BottomNav 탭은 추가로 `border-radius: var(--radius-md)`.
 - **확대:** viewport에서 `user-scalable=no` 금지. 사용자가 원하면 확대 가능해야 함.
-- **컬러:** 색상만으로 정보 전달 금지. 아이콘, 라벨, 패턴 병행.
+- **컬러:** 색상만으로 정보 전달 금지 — 아이콘 / 라벨 / 패턴 / 방향 병행. Save vs Pass 스와이프는 색상 틴트뿐 아니라 방향성 자체가 1차 단서.
 - **모바일:** `autoFocus` 금지 (모바일에서 키보드 자동 팝업 방지).
-- **대비비:** text-primary on bg ≥ 14:1 (AAA), text-secondary ≥ 4.5:1 (AA), text-muted ≥ 3.0:1 (대형 텍스트 AA)
+- **대비비:** text-primary on bg ≥ 14:1 (AAA), text-secondary ≥ 4.5:1 (AA), text-muted ≥ 3.0:1 (대형 텍스트 AA), text-inverse on accent ≥ 4.5:1 (AA). Danger·Accent 버튼 텍스트는 `--text-inverse` 사용 (`--text-primary` 사용 시 AA 미달).
+
+### ARIA 라벨 매핑
+| 컴포넌트 | aria-label / 역할 |
+|---------|------------------|
+| ActionBar 되감기 | "처음으로" |
+| ActionBar 공유 | "공유" |
+| ActionBar 상세 | "상세보기" |
+| ActionBar 새로고침 | "새로고침" |
+| ActionBar Save | "저장" (toggle: `aria-pressed`) |
+| BottomNav | `<nav aria-label="메인 네비게이션">` |
+| BottomNav 탭 | 탭별 설명 (예: "Discover — 추천 작품 탐색") |
+| BottomNav 활성 탭 | `aria-current="page"` |
+| Toast 컨테이너 | `role="status"` `aria-live="polite"` (성공) / `role="alert"` (에러) |
+| Modal | `role="dialog" aria-modal="true" aria-labelledby={titleId}` |
+| Skeleton | `aria-busy="true"` 부모에 적용, 자식에 `aria-hidden="true"` |
+
+## States
+공통 상태 규격. 컴포넌트 디테일은 `_workspace_20260417_172931/design-rebuild/02_states-spec.md` 참조.
+
+### Skeleton (로딩)
+- **배경:** `--surface`, 펄스 색상 `--surface-raised`.
+- **애니메이션:** `skeleton-pulse 2s var(--ease-soft) infinite` (opacity 1 ↔ 0.4). Quiet Ink 호흡 = 1.5s → 2s 로 느리게.
+- **Radius:** 각 요소의 기본 radius 따름. 모서리 날카로움 금지.
+- **추천 생성 중:** 카드 스켈레톤 + 센터 텍스트 오버레이 ("취향에 맞는 작품을 고르고 있어요..."). 스피너 없이 텍스트 = Quiet Ink 침묵. 별도 NeqSpinner(Fraunces morph) 사용 시 회전 dots 금지.
+
+### Empty State
+| 속성 | 값 |
+|------|---|
+| 정렬 | 수직/수평 중앙 |
+| 아이콘 | 48px, `--text-muted` |
+| 아이콘 → 제목 gap | `--space-md` (16px) |
+| 제목 | font-body, `--text-base`, 500, `--text-primary` |
+| 설명 | font-body, `--text-sm`, 400, `--text-muted` |
+| CTA | 설명 아래 `--space-lg` (24px), Ghost variant |
+| max-width | 260px |
+
+검색 결과 없음 / 인라인 빈 상태(Profile 좋아한 작품 없음 등)는 아이콘 생략 — 검색 입력·섹션 헤더가 이미 시각 앵커.
+
+### Error State
+- Empty 와 동일 구조, 아이콘 색상만 `--danger`.
+- **포스터 로딩 실패 (카드 폴백):** 배경 `--surface`, font-display 5xl "N" 글자 + `--text-muted`. 에러 메시지 없음 — 조용한 폴백 = neq 브랜드 시그니처.
+- **OTT 조회 실패:** 인라인 텍스트만 ("현재 한국 OTT에서 제공 정보를 찾지 못했어요"), 에러 톤 없이 담백.
+- **검색 API 에러:** 조용한 실패(silent catch). 결과 리스트 비움. "결과가 없어요"로 표시 — 사용자에게 에러와 빈 결과 구분 안 함 (의도적).
+
+### Toast (성공/에러 피드백)
+| 속성 | 값 |
+|------|---|
+| 위치 | fixed top 64px, 수평 중앙 |
+| padding | `px-4 py-2.5` |
+| 배경 | `--surface-raised` |
+| radius | `--radius-lg` |
+| 인디케이터 dot | 6×6, 성공=`--accent`, 에러=`--danger` |
+| 등장 | opacity 0→1 + translateY(-8→0), `--duration-moderate`, `--ease-enter` |
+| 체류 | 2500ms |
+| 퇴장 | opacity 1→0 + translateY(0→-4), `--duration-quick`, `--ease-exit` |
+| 중복 | 새 토스트가 기존 토스트 즉시 교체. 동시 2개 금지 |
+
+Pass 스와이프는 무언 — Toast 없이 카드만 사라짐.
 
 ## Motion
 - **Approach:** Intentional + physics-based + restrained
@@ -152,7 +228,23 @@
   - steady: 350ms (바텀시트, 카드 스냅백)
   - slow: 500ms (풀스크린 전환)
 - **규칙:** 닫힘은 열림보다 50ms 짧게. 사용자 입력 첫 반응 100ms 이내.
-- **prefers-reduced-motion:** 장식 모션 비활성화. 드래그 추적 등 필수 상태 변화만 유지.
+- **카드 진입 회전:** 3deg (Warm Cinema 5deg 에서 축소). enterFromLeft/Right `rotate(±3deg)`.
+- **Active scale 위계:** `scale(0.97)` 일반 버튼 / `scale(0.93)` 대형 버튼·Save / `scale(0.9)` 탭 아이콘·BottomNav. 단일 값으로 통일 금지 — 크기에 비례한 수축.
+
+### prefers-reduced-motion 요소별 대체
+| 요소 | 일반 | reduced |
+|------|------|---------|
+| 카드 스와이프 드래그 추적 | 1:1 실시간 | **유지** (사용자 직접 조작) |
+| 카드 스냅백 | 스프링 350ms | 즉시 위치 변경 |
+| 바텀시트 드래그 추적 | 1:1 실시간 | **유지** |
+| 바텀시트 열림/닫힘 | 슬라이드 350/250ms | 즉시 표시/숨김 |
+| Toast 등장·퇴장 | 페이드+슬라이드 | 즉시 표시 후 시간 경과로 즉시 숨김 |
+| 필터 칩 전환 | 색상 150ms | 즉시 색상 변경 |
+| 스켈레톤 펄스 | 2s 무한 반복 | 정적 단색 surface |
+| Immersive 확장 | 350ms | 즉시 확장 |
+| 모달 스케일 | 0.96→1, 250ms | 즉시 표시 |
+| 버튼 active scale | 0.97, 80ms | scale 변경 생략 |
+| NeqSpinner Fraunces morph | 1400ms loop | 정적 amber fill |
 
 ### Loading Interaction
 - **방향:** Quiet Ink 보존 + pop art 향(워홀 실크스크린의 "면" 느낌)
@@ -213,10 +305,62 @@ IconHeart(saved 내부 reaction badge) / IconSave / Close / Refresh / Detail / S
 - 수직 바텀시트 닫기: 30% 화면 높이
 - 방향 잠금: 첫 10px 이동 방향으로 잠금 (수평 vs 수직 혼동 방지)
 
+### 햅틱 피드백 (`navigator.vibrate(10)`)
+| 동작 | 진동 | 비고 |
+|------|------|------|
+| Pass 스와이프 임계값 도달 | 10ms | 가벼운 탭 |
+| Save 스와이프 임계값 도달 | 10ms | 가벼운 탭 |
+| 이전 카드 오버레이 30% 도달 | 10ms | 임계값 인지 |
+| 시청 리포트 드래그 임계값 | 10ms | 트리거 시점 |
+| 에러 | 없음 | Quiet Ink 는 에러에 진동을 쓰지 않음 |
+
+미지원 브라우저는 무시. iOS Safari 는 `navigator.vibrate` 미지원 (사용자 설정 의존) — 핵심 UX 가 햅틱에 의존하지 않도록 시각 피드백 병행 필수.
+
+### touch-action 전략
+| 영역 | 값 | 이유 |
+|------|---|------|
+| 카드 스와이프 영역 | `none` | 수평 스와이프와 브라우저 뒤로가기 제스처 충돌 방지 |
+| 바텀시트 본체 | `none` | 드래그↔스크롤 전환을 JS 가 직접 관리 |
+| 바텀시트 내부 콘텐츠 | `pan-y` | 세로 스크롤은 네이티브 허용 |
+| Saved 그리드 | `pan-y` | 기본 세로 스크롤 |
+| BottomNav | `manipulation` | 기본 탭 동작만, double-tap zoom 차단 |
+
+### 동시 제스처 충돌 방지
+- 스와이프 중 (`swiping === true`) 이면 `onCardTap` 무시.
+- 방향 잠금: 첫 10px 이동으로 수평/수직 결정. 이후 변경 불가.
+- 시트 열린 상태에서는 z-index 차단으로 카드 터치 이벤트가 도달하지 않음.
+- 애니메이션 진행 중 사용자 입력은 `swiping` ref 로 중복 실행 방지.
+
 ## Tone & Voice
 - **기본 톤:** 해요체 (부드러운 존댓말). "~습니다" 격식체 금지.
-- **키워드:** 담백, 확신, 위트 (적절한 순간에만)
-- **금지 표현:** 느낌표 연속, 이모지 UI, AI/알고리즘 언급, 과장 ("최고의", "완벽한")
+- **키워드:** 담백 / 확신 / 위트 (적절한 순간에만)
+- **DO:** 짧게 한 문장 / 행동 구체 ("저장하기" > "확인") / 사용자 주어 ("당신의 리스트") / 콘텐츠 이름 직접 언급.
+- **DON'T:** 느낌표 연속, 이모지 UI, AI/알고리즘 노출, 과장 어휘, 영문 마케팅 카피.
+
+### 금지 표현 목록
+| 금지 | 사유 | 대안 |
+|------|------|------|
+| "환영합니다!" / "Welcome to neq" | 제네릭 AI slop | 바로 핵심 기능 진입 |
+| "AI가 추천합니다" / "알고리즘 기반" | AI 노출 금지 | "취향에 맞는 작품이에요" |
+| "최고의 영화" / "놀라운 발견" | 과장 | "마음에 들 영화" / "새로운 발견" |
+| "잠금 해제" / "Unlock the power of..." | AI slop | 구체적 행동 서술 |
+| "쉽고 빠르게" / "단 N초 만에" | 광고 카피 | 삭제 |
+| "지금 바로!" | 강압 | "지금 시작해 보세요" (드물게) |
+| 느낌표 2개 이상 (`!!`, `!!!`) | 과잉 | 최대 1개, 가급적 마침표 |
+| "오류가 발생하였습니다" | 격식체 | "문제가 생겼어요" |
+| "성공적으로 완료" | 격식체 | "저장했어요" / "완료" |
+| "님" 호칭 | 커뮤니티 톤 | 호칭 생략 또는 "당신" |
+| "Curated for you" 등 영문 마케팅 | 불필요한 영문 | 한글로 번역 |
+
+### 마이크로카피 기본 패턴
+| 상황 | 카피 |
+|------|------|
+| Save 스와이프 | "저장했어요" |
+| Pass 스와이프 | (무언) |
+| 되돌리기 | "되돌렸어요" |
+| 시청 완료 토글 ON | "봤어요" |
+| 공유 | "링크를 복사했어요" |
+| 로그인 유도 | "로그인하면 리스트가 저장돼요" |
 
 ## Content Categories (확장용)
 영화/시리즈 외 확장 시 카테고리 구분 색상. 메인 UI에는 미사용, 뱃지/필터 칩에만 적용.
@@ -228,6 +372,26 @@ IconHeart(saved 내부 reaction badge) / IconSave / Close / Refresh / Detail / S
 | 음악 | #E08A6C | 코랄 |
 | 도서 | #7EC4A0 | 세이지 그린 |
 | 공연 | #D4A245 | 앰버 |
+
+## References
+DESIGN.md 는 원칙·토큰 문서. 컴포넌트별 상세 규격·시각 정본·산출물은 외부 문서로 분리해 두께를 관리.
+
+- **`_design-handoff/`** — Claude Design `neq-design-v2` bundle (2026-04-29). **아이콘/시각 정본**. 진입점: `HANDOFF_README.md`. 정본 prototype: `Phase 4 - Full Prototype.html`. 시각 토큰 충돌 시 이쪽 우선.
+- **`_workspace_20260417_172931/design-rebuild/`** — 4-Phase 디자인 팀 산출물 (2026-04-15 ~ 2026-04-17, brand/ui/motion/critic). 컴포넌트 디테일·빈 상태 카피 템플릿·gesture numeric spec 의 원전.
+  - `01_brand-identity.md` — 경쟁 분석 5종 + 브랜드 포지셔닝
+  - `01_color-system.md` — 컬러 토큰 (블루 → 앰버 결정 전 원안)
+  - `01_typography.md` — 타이포 (Instrument Serif 원안, Fraunces 로 결정)
+  - `01_tone-guide.md` — 빈 상태/에러/로딩 카피 템플릿 + 금지 표현 원전
+  - `02_component-spec.md` — 컴포넌트 10종 풀스펙 (655L)
+  - `02_spacing-layout.md` — Discover/Saved/Profile 레이아웃 다이어그램
+  - `02_states-spec.md` — 스켈레톤·빈·에러·전환 애니메이션 원전
+  - `03_gesture-spec.md` — 카드/시트 제스처 numeric spec
+  - `03_motion-language.md` — easing/duration 토큰 원전
+  - `04_anti-slop-audit.md` — 12 항목 PASS/FAIL 감사
+  - `04_benchmark.md` — Letterboxd/Spotify/Watcha/Mubi 와 색상축 좌표 매핑
+  - `04_design-critique.md` — P0/P1 비평 → DESIGN.md 가 채택한 결정의 근거
+- **코드 토큰 정본:** `apps/web/src/app/globals.css` — `:root` CSS 변수 선언. DESIGN.md ↔ globals.css 값 불일치 시 globals.css 가 빌드 정본, DESIGN.md 가 인텐트 정본.
+- **컴포넌트 진입점:** `CODEMAP.md` — 거대 파일 책임 분할 후 어디부터 읽을지 1줄 안내.
 
 ## Decisions Log
 | Date | Decision | Rationale |
@@ -242,6 +406,8 @@ IconHeart(saved 내부 reaction badge) / IconSave / Close / Refresh / Detail / S
 | 2026-05-02 | anti-slop #8 예외: Geist Mono uppercase 0.12em+ 10px 허용 | 잡지 eyebrow / 챕터 마크 / tech tag 톤. Profile chaptermark 4건, error.tsx eyebrow/tech tag, OfflineBanner retry CTA에 적용. uppercase + tracking으로 가독성 보전. |
 | 2026-05-02 | amber accent 누적 분배 정책 | DetailSheet/Profile에서 amber 동시 출현 9-10건 발견 → 한 화면 ≤ 4 정책. ChapterMark 첫 1개만 amber, 나머지 text-secondary uppercase 0.12em. reason 박스는 bg-accent-dim 면 → borderLeft accent 선(anti-slop #6 예외 2 추가). focus-visible / transient overlay / CTA Save는 카운트 제외. anti-slop #13 신규. |
 | 2026-05-06 | 칩 selected = solid amber fill + inverse text | 좌측 borderLeft strip 패턴이 anti-slop #6 예외 2(reason 인용구 한정) 정책 위반 중. fill 전환으로 정합성 회복. accent #C4A35A 위 #12110E 텍스트 대비 ~12:1 (AAA). FilterChips, Saved 필터 칩 일괄. |
-| 2026-05-06 | 로딩 인터랙션 = Fraunces 타이포 morph (C안 옵션 A) | 기존 3-dot 회전은 클래식 라인/기하학. Quiet Ink 정체성 보존하면서 활력 가미 = pop art 향. NeqSpinner 1곳 수정 → StatusScreens / FirstLoadingSkeleton / SearchSheet / Button(loading state) 자동 반영. |
+| 2026-05-06 | 로딩 인터랙션 = display 타이포 morph (C안 옵션 A) | 기존 3-dot 회전은 클래식 라인/기하학. Quiet Ink 정체성 보존하면서 활력 가미 = pop art 향. NeqSpinner 1곳 수정 → StatusScreens / FirstLoadingSkeleton / SearchSheet / Button(loading state) 자동 반영. (참고: 5/2 시점 Fraunces 기준 결정, 5/8 fontsV2 로 Instrument Serif 전환 후에도 morph 패턴 유지) |
 | 2026-05-06 | Iconography = uniform stroke 1.5 round (`_design-handoff/Phase 4 - Full Prototype.html`) | Claude Design `neq-design-v2` bundle 의 Phase 4 정본 적용. 5 원칙(uniform thin / round / single-form / color 위임 / quiet weight). Discover/Bookmark active variant + Search/User. **Saved 탭 = Heart → Bookmark 변경** (정본 모티프). 두 차례 잘못된 출처 적용 후 정정: (1) `_brand/icon-prototype.html` serif terminal → 삭제, (2) `neq-design.zip`(v1, Phase 1-3) → 삭제하고 `neq-design-v2`(Phase 1-4 + Round 1-3 + Handoff Package) 풀어 `_design-handoff/` 통합. |
 | 2026-05-06 | v2 핸드오프 시각 정렬 (B안 — 기능 보존) | Phase 2 audit 의 fix 6건 중 4건 적용 (A1/B1/B3+B4/B7). A1: ActionBar Save 버튼 1.5px border (idle `--border` / active `--accent`) — 정본 잉크 윤곽 회복. B1: Saved 헤더 20→28px weight 500 letter-spacing -0.025em (정본 40px 의 모바일 viewport 충돌 방지 절충안). B3+B4: viewFilter/ottFilter 1px border 추가 + ottFilter radius 12→8px(rounded-md) + weight 정본 통일(active 600/inactive 500) — 두 칩 위계(pill 강조 vs rounded-md 분류) 회복. B7: "OTT별 보기" 토글 amber → text-secondary — 보조 액션 amber 금지 정책(L40) 준수 + amber 카운트 안전 마진. **의도적 분기 5건 보존**: ActionBar 5-button(발견성) / Grid·List·Preview 뷰모드 토글 / 헤더 검색 버튼 / OTT 별행 분리 / 빈 상태 카피 5종 확장. **제외 2건**: A4(Discover bottom cue 텍스트), B2(Saved 서브카피) — 사용자 결정으로 보류. **amber 카운트 WARN**: Saved 화면 fix 후 6건 (B7 -1, Grid 토글 active +1, 카드 reaction +1 신규 카운트 발견) — 정체성 위반 수준 아니라 진입 허용, 후속 사이클에서 위계 재배분(예: Grid 토글 또는 reaction badge amber 박탈) 예고. |
+| 2026-04-29 | fontsV2 전환: display Fraunces → Instrument Serif, data Outfit → Geist Mono (`f0982d0`, Stage 4 D1) | next/font/google 로 inject (`layout.tsx`). Instrument Serif 는 절제된 세리프 + 우아한 italic (italic 액센트 활용도 ↑), Geist Mono 는 tabular-nums + 잡지 eyebrow 톤. CSS var 명 (`--font-display`, `--font-data`) 보존 — 호출처 0 변경. DESIGN.md L42/L45 표기는 5/12 W3 통합에서 정정. **본 결정은 5/2 "Fraunces 유지"를 27일 후 reverse — Decisions Log 미기록 상태 유지되다 W3 에서 발견 후 추가 기록.** |
+| 2026-05-12 | W3 디자인 통합: design-rebuild 산출물 → DESIGN.md 흡수 | 4-Phase 산출물 12종 중 운영 디테일 흡수 (Typography line-height/letter-spacing, Spacing 토큰명, States 공통 규격, Motion reduced-motion 표/회전 3deg/scale 위계, Haptics, touch-action, Tone 금지표현 표, ARIA 라벨, References 섹션). 247L → ~390L. 컴포넌트별 풀스펙(655L)·빈 상태 카피 템플릿은 흡수하지 않고 References 로 위임 — DESIGN.md 는 원칙·토큰 정본, 산출물은 컴포넌트 디테일 정본. 충돌: Instrument Serif·블루 액센트 원안은 4-15 결정으로 Fraunces·앰버로 폐기됨 (정합 OK). 미흡수 잔여: 로고/워드마크 미정의 (P2 critique), 앱 아이콘 미정의 (P2 critique) — Phase 5 별도 작업. |
