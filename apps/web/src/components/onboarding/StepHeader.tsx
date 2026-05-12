@@ -4,7 +4,7 @@
  * Onboarding V2 (D4a) 공통 헤더.
  *
  * 구성:
- *  - "neq," 로고 (Quiet Ink amber, fontsV2.display)
+ *  - "neq," 워드마크 이미지 정본 (`/neq-logo.png`, DESIGN.md Brand Identity)
  *  - 진행률 bar (1/5 ~ 5/5) — 디자인 산출물 StepProgress 패턴
  *  - 뒤로가기 버튼 (1단계 제외)
  *

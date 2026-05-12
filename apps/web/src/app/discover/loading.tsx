@@ -11,9 +11,10 @@
 export default function DiscoverLoading() {
   return (
     <div className="h-dvh flex flex-col">
-      {/* Header */}
+      {/* Header — 워드마크는 neq-logo.png 이미지 정본 (DESIGN.md Brand Identity) */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
-        <span className="font-display text-lg text-accent">neq,</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
         <div className="w-9 h-9 animate-pulse bg-surface rounded-full" />
       </div>
 

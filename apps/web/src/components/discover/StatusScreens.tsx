@@ -30,10 +30,8 @@ interface LoadingScreenProps extends FilterChipsPassthrough {
 export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
   return (
     <div className="h-dvh flex flex-col">
-      {/* 위임 R #1 (2026-05-02) — 페르소나 전환 시 로고 깜빡임 회귀 수정.
-          discover/page.tsx 헤더는 <img src="/neq-logo.png" /> 로고를 쓰는데
-          여기서만 텍스트 로고("neq,")라 페르소나 전환 → loadRecs() 로딩 진입 순간
-          이미지→텍스트로 변하며 깜빡임. 동일 이미지 로고로 통일. */}
+      {/* 워드마크 = neq-logo.png 이미지 정본 (DESIGN.md Brand Identity).
+          5/2 위임 R #1 후속 — 페르소나 전환 시 텍스트↔이미지 깜빡임 방지. */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>

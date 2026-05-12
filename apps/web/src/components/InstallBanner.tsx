@@ -56,7 +56,7 @@ export default function InstallBanner() {
     <div
       className="fixed bottom-20 left-4 right-4 z-40 p-4 flex items-start gap-3 animate-fade-in max-w-[480px] mx-auto bg-surface border border-border rounded-lg"
       style={{
-        boxShadow: "0 8px 32px rgba(12,10,9,0.6)",
+        boxShadow: "0 8px 32px rgba(18,17,14,0.6)",
       }}
     >
       <Image src="/icon-192.png" alt="neq" width={48} height={48} className="flex-shrink-0 rounded-md" unoptimized />
