@@ -30,6 +30,7 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+- Writing, reviewing, or refactoring code (surface assumptions, simplicity, surgical edits, verify) → invoke karpathy-guidelines
 
 ## Design System
 Always read DESIGN.md before making any visual or UI decisions.
