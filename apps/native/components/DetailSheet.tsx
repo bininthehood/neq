@@ -116,14 +116,11 @@ export default function DetailSheet({
         duration: DETAIL_ENTER_MS,
         easing: DETAIL_BEZIER,
       });
-      if (initialRec) {
-        track('detail_opened', {
-          tmdb_id: initialRec.tmdbId,
-          title: initialRec.title,
-          providers_count: initialRec.providers.length,
-          source: 'native_detail_sheet',
-        });
-      }
+      // W5 Task C 7.1 — `detail_opened` 발사는 호출처가 담당.
+      // (web 정본 `apps/web/src/components/discover/DetailSheet.tsx` 와 동일하게
+      // sheet 컴포넌트 내부에서는 발사하지 않는다. source 분기를 호출처가 정확히
+      // 알기 때문 — card_tap / action_bar / saved_tap 등.)
+      // 이전 native 구현은 source='native_detail_sheet' 로 중복 발사 → 제거.
     } else {
       // Phase C-3: web (DETAIL_EXIT_MS=350) 와 정합.
       translateY.value = withTiming(SHEET_MAX_HEIGHT, {
@@ -134,7 +131,6 @@ export default function DetailSheet({
       setRelatedRec(null);
       setRelated(null);
     }
-    // initialRec 의존성은 의도적으로 제외 — visible 토글 시점에만 발사
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, translateY]);
 
