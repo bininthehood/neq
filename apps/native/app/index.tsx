@@ -690,8 +690,15 @@ export default function DiscoverScreen() {
 
       <View style={styles.stackWrap}>
         {state === 'loading' && (
-          <View style={styles.centered}>
-            <ActivityIndicator color={colors.accent} />
+          <View
+            style={styles.centered}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="추천을 준비하고 있어요"
+          >
+            <ActivityIndicator
+              color={colors.accent}
+              accessibilityLabel="추천 로딩 중"
+            />
             <Text style={styles.loadingText}>추천을 준비하고 있어요…</Text>
           </View>
         )}

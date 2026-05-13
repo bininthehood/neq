@@ -35,7 +35,8 @@ export const colors = {
   // Accent
   accent: '#C4A35A',
   accentHover: '#D4B36A',             // 신규
-  accentStrong: '#A88840',            // 신규
+  // accentStrong 제거 (2026-05-13, Task D 정합) — web 6bda81e 와 정합.
+  // 사용처 0건 dead token. 향후 strong variant 필요 시 재정의.
   accentDim: 'rgba(196, 163, 90, 0.12)',
   accentBorder: 'rgba(196, 163, 90, 0.25)',
   accentBorderLight: 'rgba(196, 163, 90, 0.15)', // 신규

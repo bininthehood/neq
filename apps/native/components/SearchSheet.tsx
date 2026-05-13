@@ -233,9 +233,18 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
 
   return (
     <Modal visible={visible} animationType="none" transparent statusBarTranslucent>
-      <View style={StyleSheet.absoluteFill}>
+      <View
+        style={StyleSheet.absoluteFill}
+        accessibilityViewIsModal
+        accessibilityLabel="검색"
+      >
         <Animated.View style={[styles.dim, dimStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onClose}
+            accessibilityLabel="검색 닫기"
+            accessibilityRole="button"
+          />
         </Animated.View>
 
         <GestureDetector gesture={pan}>
@@ -296,8 +305,15 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
               )}
 
               {uiState === 'loading' && (
-                <View style={styles.centered}>
-                  <ActivityIndicator color={colors.accent} />
+                <View
+                  style={styles.centered}
+                  accessibilityLiveRegion="polite"
+                  accessibilityLabel="검색 중"
+                >
+                  <ActivityIndicator
+                    color={colors.accent}
+                    accessibilityLabel="검색 결과 로딩 중"
+                  />
                 </View>
               )}
 
@@ -670,8 +686,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   workMeta: {
+    // anti-slop #8 정합 (web a3bbf94, SearchResults.tsx:330) — 한글 메타 ("시리즈 · 2024 · 평점")
+    // uppercase tracking 부적합 → 10→11 상향 (DESIGN.md L?? 일반 폰트 최소 11px).
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
   },
 
@@ -706,8 +724,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   personKnownFor: {
+    // anti-slop #8 정합 (web a3bbf94, SearchResults.tsx:456) — known-for 텍스트 (배우 대표작 한글).
+    // uppercase tracking 부적합 → 10→11 상향.
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
     textAlign: 'center',
     width: '100%',

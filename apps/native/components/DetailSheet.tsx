@@ -332,16 +332,31 @@ export default function DetailSheet({
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <View style={StyleSheet.absoluteFill}>
+      <View
+        style={StyleSheet.absoluteFill}
+        accessibilityViewIsModal
+        accessibilityLabel={`${rec.title} 상세 정보`}
+      >
         <Animated.View style={[styles.dim, dimStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onClose}
+            accessibilityLabel="닫기"
+            accessibilityRole="button"
+          />
         </Animated.View>
 
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
             <View style={styles.handleRow}>
               <View style={styles.handleBar} />
-              <Pressable style={styles.closeBtn} onPress={onClose} hitSlop={8}>
+              <Pressable
+                style={styles.closeBtn}
+                onPress={onClose}
+                hitSlop={8}
+                accessibilityLabel="닫기"
+                accessibilityRole="button"
+              >
                 <Text style={styles.closeIcon}>✕</Text>
               </Pressable>
             </View>
@@ -352,7 +367,9 @@ export default function DetailSheet({
               contentContainerStyle={styles.bodyContent}
               showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.title}>{rec.title}</Text>
+              <Text style={styles.title} accessibilityRole="header">
+                {rec.title}
+              </Text>
               <Text style={styles.subtitle}>
                 {rec.titleEn}
                 {metaInfo(rec) ? ` · ${metaInfo(rec)}` : ''}

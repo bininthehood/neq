@@ -66,13 +66,30 @@ export default function OnboardingCompleteScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <SafeAreaView style={styles.wrap} edges={['top', 'bottom']}>
-        <View style={styles.center}>
-          <Animated.View style={[styles.glow, pulseStyle]} />
+      <SafeAreaView
+        style={styles.wrap}
+        edges={['top', 'bottom']}
+        accessibilityLiveRegion="polite"
+      >
+        <View
+          style={styles.center}
+          accessibilityLabel="오늘의 한 편이 준비됐어요. 매일 자정에 새 큐레이션이 도착해요."
+        >
+          <Animated.View
+            style={[styles.glow, pulseStyle]}
+            // 시각 단서만 (pulse glow) — 스크린리더는 무시.
+            importantForAccessibility="no"
+          />
 
-          <ActivityIndicator color={colors.accent} size="large" />
+          <ActivityIndicator
+            color={colors.accent}
+            size="large"
+            accessibilityLabel="추천 준비 중"
+          />
 
-          <Text style={styles.title}>오늘의 한 편이{'\n'}준비됐어요</Text>
+          <Text style={styles.title} accessibilityRole="header">
+            오늘의 한 편이{'\n'}준비됐어요
+          </Text>
           <Text style={styles.subtitle}>매일 자정, 새 큐레이션이 도착해요</Text>
         </View>
       </SafeAreaView>
