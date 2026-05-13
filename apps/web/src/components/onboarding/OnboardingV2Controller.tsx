@@ -111,8 +111,16 @@ export default function OnboardingV2Controller() {
       {step === 1 && (
         <OnboardingStepHello onNext={(name) => goNext({ has_nickname: name.length > 0 })} />
       )}
-      {step === 2 && <OnboardingStepGenre onNext={() => goNext()} />}
-      {step === 3 && <OnboardingStepTaste onNext={() => goNext()} />}
+      {step === 2 && (
+        <OnboardingStepGenre
+          onNext={(opts) => goNext(opts?.random ? { random: true, selected_count: 0 } : undefined)}
+        />
+      )}
+      {step === 3 && (
+        <OnboardingStepTaste
+          onNext={(opts) => goNext(opts?.random ? { random: true, selected_count: 0 } : undefined)}
+        />
+      )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
       {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
     </div>

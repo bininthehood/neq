@@ -14,7 +14,7 @@ import { setTasteGenres, getAccountPrefs } from "@/lib/account-prefs";
 import { GENRE_CHIPS } from "./data";
 
 interface Props {
-  onNext: () => void;
+  onNext: (opts?: { random?: boolean }) => void;
 }
 
 const MIN_COUNT = 1;
@@ -34,6 +34,14 @@ export default function OnboardingStepGenre({ onNext }: Props) {
   const submit = () => {
     setTasteGenres(selected);
     onNext();
+  };
+
+  // 보조 액션: 장르 선택 비우고 cold start v1 분기로 진입.
+  // 일부 선택한 상태에서 클릭해도 비우고 진행 (혼동 줄임).
+  const submitRandom = () => {
+    setSelected([]);
+    setTasteGenres([]);
+    onNext({ random: true });
   };
 
   const isReady = selected.length >= MIN_COUNT;
@@ -88,7 +96,7 @@ export default function OnboardingStepGenre({ onNext }: Props) {
         </div>
       </div>
 
-      <div className="px-6 pb-8 pt-3 shrink-0">
+      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col items-center gap-3">
         <button
           type="button"
           onClick={submit}
@@ -101,6 +109,19 @@ export default function OnboardingStepGenre({ onNext }: Props) {
           }}
         >
           {isReady ? "다음" : "최소 1개 이상 선택해주세요"}
+        </button>
+        <button
+          type="button"
+          onClick={submitRandom}
+          className="text-sm py-1.5 px-2 rounded transition-colors active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+          style={{
+            color: "var(--text-secondary)",
+            textDecoration: "underline",
+            textUnderlineOffset: "3px",
+            textDecorationColor: "var(--border-strong, var(--border))",
+          }}
+        >
+          다양하게 추천받기
         </button>
       </div>
     </div>

@@ -32,7 +32,7 @@ const MIN_FAVORITES = 3;
 const MAX_FAVORITES = 5;
 
 interface Props {
-  onNext: () => void;
+  onNext: (opts?: { random?: boolean }) => void;
 }
 
 export default function OnboardingStepTaste({ onNext }: Props) {
@@ -147,6 +147,15 @@ export default function OnboardingStepTaste({ onNext }: Props) {
     }
 
     onNext();
+  };
+
+  // 보조 액션: 작품 선택 비우고 다음 단계 진입.
+  // 일부 선택한 상태에서 클릭해도 favorites/saved 시드 안 함.
+  const handleRandom = () => {
+    setSelected([]);
+    setFavorites([]);
+    setFavoritesMeta([]);
+    onNext({ random: true });
   };
 
   const showSearchResults = query.length > 0;
@@ -383,7 +392,7 @@ export default function OnboardingStepTaste({ onNext }: Props) {
         )}
       </div>
 
-      <div className="px-6 pb-8 pt-3 shrink-0">
+      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col items-center gap-3">
         <button
           type="button"
           onClick={handleNext}
@@ -396,6 +405,19 @@ export default function OnboardingStepTaste({ onNext }: Props) {
           }}
         >
           {ctaLabel}
+        </button>
+        <button
+          type="button"
+          onClick={handleRandom}
+          className="text-sm py-1.5 px-2 rounded transition-colors active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+          style={{
+            color: "var(--text-secondary)",
+            textDecoration: "underline",
+            textUnderlineOffset: "3px",
+            textDecorationColor: "var(--border-strong, var(--border))",
+          }}
+        >
+          다양하게 추천받기
         </button>
       </div>
     </div>
