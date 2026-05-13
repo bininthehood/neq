@@ -7,6 +7,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withRepeat,
+  cancelAnimation,
   withTiming,
   withDelay,
   withSequence,
@@ -68,14 +69,16 @@ function OrbitPoster({ meta, index }: OrbitPosterProps) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    // Bridge 는 1.5s 후 dismiss → 무한 loop 불필요. 1 cycle 충분.
+    // 무한 loop + Reanimated cloneShadowTreeWithNewPropsRecursive 가 5 worklet
+    // × 60fps × shadow tree clone 누적 = 메모리 폭증 → SIGABRT crash 발생함.
     progress.value = withDelay(
       index * ORBIT_STAGGER_MS,
-      withRepeat(
-        withTiming(1, { duration: ORBIT_DURATION_MS, easing: easingSpring }),
-        -1,
-        false, // reverse=false — 끝에서 처음으로 점프 (수렴 후 다시 외곽에서 시작)
-      ),
+      withTiming(1, { duration: ORBIT_DURATION_MS, easing: easingSpring }),
     );
+    return () => {
+      cancelAnimation(progress);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
 
@@ -144,14 +147,10 @@ export default function OnboardingCompleteScreen() {
       }
     })();
 
-    // pulse-glow: 0 → 1 → 0 무한반복. interpolate 로 scale/opacity 도출.
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: PULSE_DURATION_MS / 2, easing: easingEnter }),
-        withTiming(0, { duration: PULSE_DURATION_MS / 2, easing: easingEnter }),
-      ),
-      -1,
-      false,
+    // pulse-glow: Bridge 1.5s 동안 1 cycle 만. 무한 loop crash 회피.
+    pulse.value = withSequence(
+      withTiming(1, { duration: PULSE_DURATION_MS / 2, easing: easingEnter }),
+      withTiming(0, { duration: PULSE_DURATION_MS / 2, easing: easingEnter }),
     );
 
     const timer = setTimeout(() => {
@@ -165,7 +164,10 @@ export default function OnboardingCompleteScreen() {
       router.replace('/');
     }, MIN_DISPLAY_MS);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimation(pulse);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -238,8 +240,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentDim,
     // shadow 로 halo 추가 (RN 은 radial-gradient 없으므로 shadow 로 대체)
     shadowColor: colors.accent,
-    shadowOpacity: 0.6,
-    shadowRadius: 32,
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
   },
