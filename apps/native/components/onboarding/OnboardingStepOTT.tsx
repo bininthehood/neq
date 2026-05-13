@@ -6,9 +6,24 @@ import {
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import { Image } from 'expo-image';
+import { getOTTIcon } from '@neq/core';
 import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
 import { setSubscribedOtt } from '../../lib/store';
 import { OTT_OPTIONS } from './data';
+
+// OTT_OPTIONS.id → @neq/core providers 키 매핑.
+// web `apps/web/src/components/onboarding/OnboardingStepOTT.tsx` 와 동일.
+// 매칭 안 되면 short text placeholder 폴백.
+const OTT_ICON_LOOKUP: Record<string, string> = {
+  netflix: 'Netflix',
+  tving: 'TVING',
+  wavve: 'wavve',
+  watcha: 'Watcha',
+  disney: 'Disney Plus',
+  apple: 'Apple TV Plus',
+  coupang: 'Coupang Play',
+};
 
 interface Props {
   onNext: () => void;
@@ -54,6 +69,8 @@ export default function OnboardingStepOTT({
       <ScrollView style={styles.scroll} contentContainerStyle={styles.list}>
         {OTT_OPTIONS.map((o) => {
           const on = selected.has(o.providerId);
+          const lookupName = OTT_ICON_LOOKUP[o.id];
+          const iconUrl = lookupName ? getOTTIcon(lookupName) : null;
           return (
             <Pressable
               key={o.id}
@@ -67,9 +84,21 @@ export default function OnboardingStepOTT({
                 },
               ]}
             >
-              <View style={[styles.logo, { backgroundColor: o.color }]}>
-                <Text style={styles.logoLabel}>{o.short}</Text>
-              </View>
+              {iconUrl ? (
+                <View style={[styles.logo, { backgroundColor: colors.surfaceRaised }]}>
+                  <Image
+                    source={{ uri: iconUrl }}
+                    style={styles.logoImage}
+                    contentFit="contain"
+                    transition={0}
+                    accessibilityLabel={o.name}
+                  />
+                </View>
+              ) : (
+                <View style={[styles.logo, { backgroundColor: o.color }]}>
+                  <Text style={styles.logoLabel}>{o.short}</Text>
+                </View>
+              )}
               <Text style={styles.rowName}>{o.name}</Text>
               <View
                 style={[
@@ -158,6 +187,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 28,
+    height: 28,
   },
   logoLabel: {
     color: '#fff',
