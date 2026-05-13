@@ -45,7 +45,7 @@ export function persistSavedView(mode: SavedViewMode) {
 }
 
 export const REACTIONS: { key: WatchReaction; label: string; color: string; bg: string }[] = [
-  { key: "loved", label: "인생작", color: "var(--accent)", bg: "var(--accent-dim)" },
+  { key: "loved", label: "인생작", color: "var(--text-primary)", bg: "var(--accent-dim)" },
   { key: "good", label: "재밌었어", color: "var(--text-secondary)", bg: "var(--surface-raised)" },
   { key: "meh", label: "그저 그래", color: "var(--text-muted)", bg: "var(--surface)" },
   { key: "dropped", label: "안 맞았어", color: "var(--danger)", bg: "var(--danger-dim)" },
@@ -189,7 +189,7 @@ export function PosterCard({
           </div>
           <div className="flex flex-wrap justify-center gap-1.5">
             {([
-              { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)" },
+              { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--text-primary)", border: "1px solid var(--accent-border-light)" },
               { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" },
               { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" },
               { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none" },
@@ -393,7 +393,7 @@ export function ListCard({
           </div>
           <div className="flex flex-wrap justify-center gap-1.5">
             {([
-              { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)" },
+              { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--text-primary)", border: "1px solid var(--accent-border-light)" },
               { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" },
               { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" },
               { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none" },

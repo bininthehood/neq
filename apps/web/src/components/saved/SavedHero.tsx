@@ -174,7 +174,7 @@ export function SavedHero({
             </div>
             <div className="flex flex-wrap justify-center gap-1.5">
               {([
-                { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--accent)", border: "1px solid var(--accent-border-light)" },
+                { key: "loved" as WatchReaction, label: "인생작", bg: "var(--accent-dim)", color: "var(--text-primary)", border: "1px solid var(--accent-border-light)" },
                 { key: "good" as WatchReaction, label: "괜찮았어", bg: "var(--surface)", color: "var(--text-secondary)", border: "1px solid var(--border)" },
                 { key: "meh" as WatchReaction, label: "별로였어", bg: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" },
                 { key: "dropped" as WatchReaction, label: "안 맞았어", bg: "var(--danger-dim)", color: "var(--danger)", border: "none" },

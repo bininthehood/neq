@@ -467,8 +467,8 @@ export default function SavedPage() {
               aria-label="그리드 보기"
               className="w-11 h-11 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               style={{
-                background: viewMode === "grid" ? "var(--accent-dim)" : "transparent",
-                color: viewMode === "grid" ? "var(--accent)" : "var(--text-muted)",
+                background: viewMode === "grid" ? "var(--surface-raised)" : "transparent",
+                color: viewMode === "grid" ? "var(--text-primary)" : "var(--text-muted)",
               }}
             >
               <IconGrid size={14} />
@@ -480,8 +480,8 @@ export default function SavedPage() {
               aria-label="리스트 보기"
               className="w-11 h-11 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               style={{
-                background: viewMode === "list" ? "var(--accent-dim)" : "transparent",
-                color: viewMode === "list" ? "var(--accent)" : "var(--text-muted)",
+                background: viewMode === "list" ? "var(--surface-raised)" : "transparent",
+                color: viewMode === "list" ? "var(--text-primary)" : "var(--text-muted)",
               }}
             >
               <IconList size={14} />
@@ -493,8 +493,8 @@ export default function SavedPage() {
               aria-label="미리보기"
               className="w-11 h-11 flex items-center justify-center rounded-full active:scale-90 transition-all focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
               style={{
-                background: viewMode === "preview" ? "var(--accent-dim)" : "transparent",
-                color: viewMode === "preview" ? "var(--accent)" : "var(--text-muted)",
+                background: viewMode === "preview" ? "var(--surface-raised)" : "transparent",
+                color: viewMode === "preview" ? "var(--text-primary)" : "var(--text-muted)",
               }}
             >
               <IconPreview size={14} />
