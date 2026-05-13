@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import {
   clearAllUserData,
 } from '../lib/store';
 import { wipeCloudData } from '../lib/sync';
+import { calcMonthlyWatch, type MonthlyWatchResult } from '../lib/profile-stats';
+import type { WatchReport } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
 
@@ -39,6 +41,7 @@ export default function ProfileScreen() {
     meh: 0,
     dropped: 0,
   });
+  const [reportsRaw, setReportsRaw] = useState<WatchReport[]>([]);
   const [deviceId, setDeviceId] = useState('');
 
   const refresh = useCallback(async () => {
@@ -51,6 +54,7 @@ export default function ProfileScreen() {
 
     setSavedCount(saved.length);
     setStats(s);
+    setReportsRaw(reports);
     setDeviceId(did);
 
     // 좋아한 작품: loved/good reaction + saved에 있는 것
@@ -65,6 +69,13 @@ export default function ProfileScreen() {
       .map((s) => s.recommendation.title);
     setTasteItems(titles);
   }, []);
+
+  // W5 Task F — 월별 시청 분포 (web `apps/web/src/app/profile/page.tsx:72` 정합).
+  // 최근 12개월 buckets — reportedAt 기반. 0 편이면 섹션 숨김.
+  const monthly: MonthlyWatchResult = useMemo(
+    () => calcMonthlyWatch(reportsRaw),
+    [reportsRaw],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -169,6 +180,57 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* W5 Task F — 월별 시청 분포 (web `InsightSections.tsx:189-240` 정합).
+            최근 12개월 막대 차트. reports.total === 0 일 때 섹션 숨김.
+            pure View 기반 — 외부 차트 라이브러리 없음 (디자인 확정 시 교체 가능). */}
+        {monthly.total > 0 && (
+          <View style={[styles.section, styles.monthlySection]}>
+            <Text style={styles.monthlyHeader}>
+              {new Date().getFullYear()} · 월간 시청
+            </Text>
+            <View style={styles.monthlyBars}>
+              {monthly.buckets.map((b, i) => {
+                const max = Math.max(
+                  ...monthly.buckets.map((x) => x.count),
+                  1,
+                );
+                // bar 영역 80 기준 4~80px 범위. minimal 막대 차트.
+                const heightPx = Math.max((b.count / max) * 80, 4);
+                return (
+                  <View key={i} style={styles.monthlyBucket}>
+                    <View style={styles.monthlyBarFrame}>
+                      <View
+                        style={[
+                          styles.monthlyBar,
+                          {
+                            height: heightPx,
+                            backgroundColor: b.isCurrent
+                              ? colors.accent
+                              : colors.accentDim,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      style={[
+                        styles.monthlyMonthLabel,
+                        b.isCurrent && styles.monthlyMonthLabelCurrent,
+                      ]}
+                    >
+                      {b.month}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            <Text style={styles.monthlyFooter}>
+              {new Date().getFullYear()}년 · 총{' '}
+              <Text style={styles.monthlyFooterAccent}>{monthly.total}편</Text>{' '}
+              시청 기록
+            </Text>
+          </View>
+        )}
 
         {/* 설정 */}
         <View style={styles.section}>
@@ -291,6 +353,63 @@ const styles = StyleSheet.create({
   reactionGood: { color: colors.textSecondary },
   reactionMeh: { color: colors.textMuted },
   reactionDropped: { color: colors.danger },
+  // W5 Task F — 월별 시청 분포 (minimal 막대 차트).
+  // web `InsightSections.tsx` 의 borderTop / accent / accentDim 색상 정합.
+  monthlySection: {
+    paddingTop: spacing.lg - spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderSubtle,
+  },
+  monthlyHeader: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontFamily: fonts.data,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginBottom: spacing.sm + 4,
+  },
+  monthlyBars: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 6,
+    marginBottom: spacing.sm,
+  },
+  monthlyBucket: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  // 80px 고정 영역 안에서 bar 가 bottom 정렬되도록 frame 분리.
+  monthlyBarFrame: {
+    width: '100%',
+    height: 80,
+    justifyContent: 'flex-end',
+  },
+  monthlyBar: {
+    width: '100%',
+    borderRadius: 2,
+  },
+  monthlyMonthLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontFamily: fonts.data,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+  },
+  monthlyMonthLabelCurrent: {
+    color: colors.accent,
+  },
+  monthlyFooter: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  monthlyFooterAccent: {
+    color: colors.accent,
+    fontWeight: '600',
+  },
   resetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
