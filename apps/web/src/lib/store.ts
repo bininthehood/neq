@@ -220,6 +220,9 @@ export function setFavoritesMeta(items: FavoriteMeta[]) {
 export function hasOnboarded(): boolean {
   if (typeof window === "undefined") return false;
   ensureMigrated();
+  // 명시 완료 플래그 우선 (cold_start_v1 호환 — favorites 빈 케이스도 인정)
+  if (localStorage.getItem("neq_onboarded") === "true") return true;
+  // backward compat: favorites >= 3 (기존 사용자 데이터)
   const personas = getPersonas();
   return personas.some((p) => p.favorites.length >= 3);
 }

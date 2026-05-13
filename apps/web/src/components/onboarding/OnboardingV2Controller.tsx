@@ -97,6 +97,8 @@ export default function OnboardingV2Controller() {
     // V1 호환: persona.refresh + onboarding 완료 시각 기록
     persona.refresh();
     try {
+      localStorage.setItem("neq_onboarded", "true");
+      localStorage.setItem("neq_onboarding_done", "true");
       sessionStorage.setItem("neq_onb_completed_ts", String(Date.now()));
     } catch { /* ignore */ }
 
@@ -122,11 +124,7 @@ export default function OnboardingV2Controller() {
         />
       )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
-      {step === 5 && (
-        <OnboardingStepNotify
-          onNext={(opts) => goNext(opts?.skipped ? { notifications_skipped: true } : undefined)}
-        />
-      )}
+      {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
     </div>
   );
 }
