@@ -5,6 +5,7 @@ import Image from "next/image";
 import { OTT_OPTIONS } from "./data";
 import { setSubscribedOtt } from "@/lib/account-prefs";
 import { getOTTIcon } from "@/lib/ott-links";
+import { IconCheck } from "@/components/Icons";
 
 // OTT_OPTIONS.id → providers 객체 키 매핑 (이름 형식 차이 보정).
 // providers 정의: packages/core/src/ott.ts. 매칭 안 되면 short text 폴백.
@@ -69,7 +70,7 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
           어디서 보세요?
         </p>
         <p className="text-sm" style={{ color: "var(--text-secondary)", lineHeight: 1.55 }}>
-          구독 중인 OTT를 알려 주시면<br />지금 바로 볼 수 있는 작품만 추천해요
+          구독 중인 OTT를 알려 주시면 지금 보실 수 있는 작품만 추천해요
         </p>
       </div>
 
@@ -124,11 +125,10 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
                     background: on ? "var(--accent)" : "transparent",
                     border: `1.5px solid ${on ? "var(--accent)" : "var(--border)"}`,
                     color: "var(--bg)",
-                    fontSize: 12,
                     flexShrink: 0,
                   }}
                 >
-                  {on ? "✓" : ""}
+                  {on && <IconCheck size={12} color="var(--bg)" />}
                 </div>
               </button>
             );
@@ -154,10 +154,10 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
         <button
           type="button"
           onClick={skip}
-          className="w-full py-3 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
+          className="w-full py-3 text-sm transition-transform active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
           style={{ color: "var(--text-secondary)" }}
         >
-          구독 중인 OTT 없음 / 나중에 설정
+          나중에 설정
         </button>
       </div>
     </div>

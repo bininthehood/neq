@@ -45,7 +45,7 @@ export default function StepHeader({ current, total, onBack }: StepHeaderProps) 
         <img
           src="/neq-logo.png"
           alt="neq,"
-          className="h-6 object-contain"
+          className="h-5 object-contain"
         />
 
         <div

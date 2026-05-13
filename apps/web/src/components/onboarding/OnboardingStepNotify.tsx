@@ -24,7 +24,7 @@ import { track } from "@/lib/analytics";
  */
 
 interface Props {
-  onNext: () => void;
+  onNext: (opts?: { skipped?: boolean }) => void;
 }
 
 type Settings = Record<NotifOption["id"], boolean>;
@@ -73,6 +73,21 @@ export default function OnboardingStepNotify({ onNext }: Props) {
 
     setSubmitting(false);
     onNext();
+  };
+
+  // 보조 액션: 모든 토글 OFF + 권한 요청 skip + 다음 단계.
+  // Notification.requestPermission() 호출 자체를 안 함 (사용자 의사 명시).
+  const skipAllNotifications = () => {
+    if (submitting) return;
+    updateNotificationPrefs((prev) => ({
+      ...prev,
+      weeklyRec: false,
+      newRelease: false,
+      ottExpiry: false,
+      monthlyReport: false,
+    }));
+    track("notification_blocked", { timing: "onboarding-skip-all" });
+    onNext({ skipped: true });
   };
 
   return (
@@ -149,13 +164,13 @@ export default function OnboardingStepNotify({ onNext }: Props) {
             className="text-[11px] mt-4"
             style={{ color: "var(--text-muted)", lineHeight: 1.5 }}
           >
-            ※ 알림 발송은 곧 시작됩니다. 지금 설정하면 시작 시점에 자동 적용됩니다.
+            ※ 알림 발송은 곧 시작해요. 지금 설정하면 시작 시점에 자동 적용돼요.
           </p>
         )}
       </div>
 
       {/* CTA */}
-      <div className="px-6 pb-8 pt-3 shrink-0">
+      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col gap-2">
         <button
           type="button"
           onClick={submit}
@@ -168,6 +183,15 @@ export default function OnboardingStepNotify({ onNext }: Props) {
           }}
         >
           {submitting ? "준비 중..." : "시작하기"}
+        </button>
+        <button
+          type="button"
+          onClick={skipAllNotifications}
+          disabled={submitting}
+          className="w-full py-3 text-sm transition-transform active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
+          style={{ color: "var(--text-secondary)" }}
+        >
+          알림 받지 않기
         </button>
       </div>
     </div>

@@ -392,7 +392,7 @@ export default function OnboardingStepTaste({ onNext }: Props) {
         )}
       </div>
 
-      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col items-center gap-3">
+      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col gap-2">
         <button
           type="button"
           onClick={handleNext}
@@ -409,15 +409,10 @@ export default function OnboardingStepTaste({ onNext }: Props) {
         <button
           type="button"
           onClick={handleRandom}
-          className="text-sm py-1.5 px-2 rounded transition-colors active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
-          style={{
-            color: "var(--text-secondary)",
-            textDecoration: "underline",
-            textUnderlineOffset: "3px",
-            textDecorationColor: "var(--border-strong, var(--border))",
-          }}
+          className="w-full py-3 text-sm transition-transform active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
+          style={{ color: "var(--text-secondary)" }}
         >
-          다양하게 추천받기
+          작품 정하지 않고 시작
         </button>
       </div>
     </div>

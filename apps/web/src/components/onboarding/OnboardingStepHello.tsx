@@ -144,10 +144,10 @@ export default function OnboardingStepHello({ onNext, initialName = "" }: Props)
         <button
           type="button"
           onClick={skip}
-          className="w-full py-3 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
+          className="w-full py-3 text-sm transition-transform active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
           style={{ color: "var(--text-secondary)" }}
         >
-          건너뛰기
+          이름 없이 시작
         </button>
       </div>
     </div>

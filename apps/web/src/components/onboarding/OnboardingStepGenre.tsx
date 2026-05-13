@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { setTasteGenres, getAccountPrefs } from "@/lib/account-prefs";
 import { GENRE_CHIPS } from "./data";
+import { IconCheck } from "@/components/Icons";
 
 interface Props {
   onNext: (opts?: { random?: boolean }) => void;
@@ -81,7 +82,7 @@ export default function OnboardingStepGenre({ onNext }: Props) {
                   fontWeight: isSel ? 600 : 500,
                 }}
               >
-                {isSel && <span style={{ fontSize: 10 }}>✓</span>}
+                {isSel && <IconCheck size={12} color="var(--bg)" />}
                 {g.ko}
               </button>
             );
@@ -96,7 +97,7 @@ export default function OnboardingStepGenre({ onNext }: Props) {
         </div>
       </div>
 
-      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col items-center gap-3">
+      <div className="px-6 pb-8 pt-3 shrink-0 flex flex-col gap-2">
         <button
           type="button"
           onClick={submit}
@@ -113,15 +114,10 @@ export default function OnboardingStepGenre({ onNext }: Props) {
         <button
           type="button"
           onClick={submitRandom}
-          className="text-sm py-1.5 px-2 rounded transition-colors active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
-          style={{
-            color: "var(--text-secondary)",
-            textDecoration: "underline",
-            textUnderlineOffset: "3px",
-            textDecorationColor: "var(--border-strong, var(--border))",
-          }}
+          className="w-full py-3 text-sm transition-transform active:scale-[0.99] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-md"
+          style={{ color: "var(--text-secondary)" }}
         >
-          다양하게 추천받기
+          장르 정하지 않고 시작
         </button>
       </div>
     </div>

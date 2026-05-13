@@ -104,7 +104,7 @@ export default function OnboardingV2Controller() {
   }
 
   return (
-    <div className="h-dvh flex flex-col max-w-lg mx-auto w-full" style={{ background: "var(--bg)" }}>
+    <div className="h-dvh flex flex-col max-w-[480px] mx-auto w-full" style={{ background: "var(--bg)" }}>
       <StepHeader current={step} total={TOTAL_STEPS} onBack={step > 0 ? goBack : undefined} />
 
       {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
@@ -122,7 +122,11 @@ export default function OnboardingV2Controller() {
         />
       )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
-      {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
+      {step === 5 && (
+        <OnboardingStepNotify
+          onNext={(opts) => goNext(opts?.skipped ? { notifications_skipped: true } : undefined)}
+        />
+      )}
     </div>
   );
 }

@@ -39,7 +39,7 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
             lineHeight: 1.6,
           }}
         >
-          알고리즘 대신, 큐레이션.<br />
+          리스트 대신, 한 편씩.<br />
           당신의 취향에 맞춰 매일 한 작품씩.
         </p>
       </div>
