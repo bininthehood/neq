@@ -23,14 +23,23 @@ import PrevCardOverlay from '../components/PrevCardOverlay';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar from '../components/ActionBar';
-import TutorialOverlay from '../components/TutorialOverlay';
+import TutorialFlow, {
+  type TutorialStep,
+} from '../components/TutorialFlow';
 import SearchSheet from '../components/SearchSheet';
 import {
   fetchRecommendations,
   prefetchRecommendations,
   consumePrefetchedRecommendations,
 } from '../lib/api';
-import { getAccountPrefs, getSaved, hasOnboarded, toggleSaved } from '../lib/store';
+import {
+  getAccountPrefs,
+  getSaved,
+  hasOnboarded,
+  hasSeenTutorialV3,
+  markTutorialV3Seen,
+  toggleSaved,
+} from '../lib/store';
 import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
@@ -131,6 +140,23 @@ export default function DiscoverScreen() {
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>('all');
   const [filterYear, setFilterYear] = useState<FilterYear>('all');
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
+
+  // W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
+  //
+  // 동작 모델 (web `apps/web/src/app/discover/page.tsx` 정합):
+  //   1. mount 직후 AsyncStorage `tutorialV3Shown` 점검 → tutorialEligible
+  //   2. 첫 카드 로드 (recs.length > 0) 완료 시 tutorialActive = true
+  //   3. TutorialFlow 마운트 후 사용자가 좌/우/하/탭 4 액션을 실습할 때마다 카운터 증가
+  //   4. TutorialFlow 가 카운터 변동을 감지해 자동 다음 단계 진행
+  //   5. 4단계 완료 또는 건너뛰기 → handleTutorialClose → markTutorialV3Seen() + tutorialActive=false
+  //
+  // 카운터는 각 액션 핸들러에서 emit (handleSwipeLeft / onPrevCard / triggerSaveAbsorption / handleCardTap).
+  const [tutorialEligible, setTutorialEligible] = useState(false);
+  const [tutorialActive, setTutorialActive] = useState(false);
+  const [leftSwipeCount, setLeftSwipeCount] = useState(0);
+  const [rightSwipeCount, setRightSwipeCount] = useState(0);
+  const [saveActionCount, setSaveActionCount] = useState(0);
+  const [detailOpenCount, setDetailOpenCount] = useState(0);
 
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
   // 사이클 2: pass dismiss worklet 곡선용 sharedValue.
@@ -235,6 +261,40 @@ export default function DiscoverScreen() {
     if (onboardCheck !== 'pass') return;
     load();
   }, [load, onboardCheck]);
+
+  // W5 Task B — TutorialFlow v3 노출 정책.
+  // onboarding 가드 통과 후 1회만 AsyncStorage 점검. flag 가 없으면 eligible=true.
+  useEffect(() => {
+    if (onboardCheck !== 'pass') return;
+    let cancelled = false;
+    hasSeenTutorialV3().then((seen) => {
+      if (cancelled) return;
+      setTutorialEligible(!seen);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [onboardCheck]);
+
+  // 첫 카드 로드 완료 → tutorialActive=true. eligible=false 면 무시.
+  // tutorialActive 가 의존성에서 빠진 이유: 자기 자신 트리거 방지 (web 정본과 동일).
+  useEffect(() => {
+    if (!tutorialEligible) return;
+    if (state !== 'ready') return;
+    if (recs.length === 0) return;
+    if (tutorialActive) return;
+    setTutorialActive(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tutorialEligible, state, recs.length]);
+
+  const handleTutorialClose = useCallback(
+    (_reason: 'completed' | 'skipped', _payload: { stepsCompleted: number; atStep: TutorialStep }) => {
+      void markTutorialV3Seen();
+      setTutorialActive(false);
+      setTutorialEligible(false);
+    },
+    [],
+  );
 
   // #17 prefetch 트리거 — 남은 카드 3장 이하로 떨어지면 다음 배치 백그라운드 로드
   // (web 의 page.tsx line 297 패턴: remaining <= 10 — native 는 stack depth 가 작으므로 3 으로 단축)
@@ -348,6 +408,9 @@ export default function DiscoverScreen() {
     // 사이클 2 통일 매핑: prev card 진입 = medium (web vibrate('medium')=14ms 와 정합)
     hapticMedium();
     setTopIdx((i) => Math.max(i - 1, 0));
+    // W5 Task B — TutorialFlow v3: 우 스와이프(prev overlay) 신호 emit.
+    // rewind 버튼은 setTopIdx(0) 으로 직접 호출하므로 본 카운터에 안 잡힘 (web 정본 정합).
+    setRightSwipeCount((c) => c + 1);
   }
 
   /**
@@ -388,6 +451,9 @@ export default function DiscoverScreen() {
     }
 
     track('card_saved', { tmdb_id: id, title: currentRec.title, source: reason });
+    // W5 Task B — TutorialFlow v3: save 신호 emit (swipe_down / button 둘 다).
+    // unsave 는 카운트 X — web 정본 정합.
+    setSaveActionCount((c) => c + 1);
     const nowSaved = await toggleSaved(currentRec);
     setSavedIds((prev) => {
       const next = new Set(prev);
@@ -440,6 +506,8 @@ export default function DiscoverScreen() {
       });
     }
     setDetailOpen(true);
+    // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit.
+    setDetailOpenCount((c) => c + 1);
   }
 
   const tap = Gesture.Tap()
@@ -468,6 +536,8 @@ export default function DiscoverScreen() {
         title: currentRec.title,
       });
     }
+    // W5 Task B — TutorialFlow v3: 좌 스와이프 신호 emit.
+    setLeftSwipeCount((c) => c + 1);
     dismissThenNext();
   }
 
@@ -665,7 +735,6 @@ export default function DiscoverScreen() {
               {prevActive && prevRec && (
                 <PrevCardOverlay rec={prevRec} overlayX={prevOverlayX} />
               )}
-              <TutorialOverlay visible={topIdx < 3 && !isDragging && !prevActive} />
             </Animated.View>
           </GestureDetector>
         )}
@@ -697,7 +766,11 @@ export default function DiscoverScreen() {
           savePulling={dragY > 30 && isDragging}
           onRewind={() => setTopIdx(0)}
           onShare={handleShare}
-          onOpenDetail={() => setDetailOpen(true)}
+          onOpenDetail={() => {
+            setDetailOpen(true);
+            // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
+            setDetailOpenCount((c) => c + 1);
+          }}
           onRefresh={handleRefresh}
           onToggleSave={toggleLike}
         />
@@ -723,6 +796,22 @@ export default function DiscoverScreen() {
         onClose={() => setSearchOpen(false)}
         initialQuery={searchInitialQuery}
       />
+
+      {/* W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
+          마운트 조건: tutorialActive (state=ready + recs[0] 로드 후 1회) + recs[0] 존재.
+          dim overlay 는 pointerEvents="box-none" — 사용자가 실제 카드를 만져야 진행. */}
+      {tutorialActive && recs[0] && (
+        <TutorialFlow
+          recForDemo={recs[0]}
+          userActionSignals={{
+            leftSwipeCount,
+            rightSwipeCount,
+            saveActionCount,
+            detailOpenCount,
+          }}
+          onClose={handleTutorialClose}
+        />
+      )}
     </SafeAreaView>
   );
 }
