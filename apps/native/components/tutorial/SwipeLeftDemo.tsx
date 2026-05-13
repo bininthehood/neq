@@ -8,6 +8,7 @@ import Animated, {
   withSequence,
   withTiming,
   withDelay,
+  cancelAnimation,
   Easing,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../../lib/types';
@@ -83,6 +84,13 @@ export default function SwipeLeftDemo({ recForDemo }: Props) {
       -1,
       false,
     );
+    // unmount 시 worklet cancel — shadow tree clone 누적 방지 (SIGABRT crash fix).
+    return () => {
+      cancelAnimation(cardTx);
+      cancelAnimation(cardRot);
+      cancelAnimation(arrowOpacity);
+      cancelAnimation(arrowTx);
+    };
   }, [cardTx, cardRot, arrowOpacity, arrowTx]);
 
   const cardStyle = useAnimatedStyle(() => ({
