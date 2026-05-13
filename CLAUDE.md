@@ -159,6 +159,7 @@ neko/
 | 2026-04-07 | 초기 구성 | 전체 | neq 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |
 | 2026-04-15 | 디자인 팀 추가 | 디자인 | Warm Cinema 탈피 + 고유 디자인 언어 구축 |
 | 2026-04-15 | 네이티브 전환 시작 | 전체 | PWA → Expo RN. frontend-builder, qa-tester 확장 |
+| 2026-05-12 | W3 디자인 통합 완료 | 디자인 | DESIGN.md 247→425L, motion 토큰 globals.css 활성화, Brand Identity 섹션 신규, ux-reviewer follow-up 11/14건 처리. devlog: `_workspace/devlog-2026-05-12-w3-integration.md`. W4 (이관 준비) 진입 가능 |
 
 ## TMDB Mirror 인프라
 
