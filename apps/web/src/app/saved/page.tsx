@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   getSaved,
   removeSaved,
@@ -78,6 +78,7 @@ export default function SavedPage() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SavedSort>("saved");
   const toast = useToast();
+  const trackedViewRef = useRef(false);
 
   const refreshData = () => {
     // 한 번만 읽고 Map으로 변환 (O(n))
@@ -100,6 +101,10 @@ export default function SavedPage() {
     // 위임 L #6 — 뷰 모드 복원
     setViewMode(loadSavedView());
     setSortBy(loadSavedSort());
+    if (!trackedViewRef.current) {
+      trackedViewRef.current = true;
+      track("saved_viewed");
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

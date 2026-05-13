@@ -109,6 +109,8 @@ export type NekoEvent =
   | "search_person_selected"
   | "search_person_work_clicked"
   | "discover_open_with_q"
+  // Saved
+  | "saved_viewed"
   // 위임 L #6 — Saved 뷰 모드 토글
   | "saved_view_changed"
   // 프로필
