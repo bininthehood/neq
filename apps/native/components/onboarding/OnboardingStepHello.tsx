@@ -79,7 +79,7 @@ export default function OnboardingStepHello({ onNext, initialName = '' }: Props)
           </Text>
         </Pressable>
         <Pressable onPress={skip} style={styles.skipBtn}>
-          <Text style={styles.skipLabel}>건너뛰기</Text>
+          <Text style={styles.skipLabel}>이름 없이 시작</Text>
         </Pressable>
       </View>
     </View>

@@ -47,7 +47,7 @@ export default function OnboardingStepOTT({
       <View style={styles.head}>
         <Text style={styles.heading}>어디서 보세요?</Text>
         <Text style={styles.subtitle}>
-          구독 중인 OTT를 알려 주시면{'\n'}지금 바로 볼 수 있는 작품만 추천해요
+          구독 중인 OTT를 알려 주시면 지금 보실 수 있는 작품만 추천해요
         </Text>
       </View>
 
@@ -109,7 +109,7 @@ export default function OnboardingStepOTT({
           </Text>
         </Pressable>
         <Pressable onPress={skip} style={styles.skipBtn}>
-          <Text style={styles.skipLabel}>구독 중인 OTT 없음 / 나중에 설정</Text>
+          <Text style={styles.skipLabel}>나중에 설정</Text>
         </Pressable>
       </View>
     </View>

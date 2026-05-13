@@ -12,7 +12,7 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
         <Text style={styles.logo}>neq,</Text>
         <Text style={styles.heading}>오늘의 한 편을{'\n'}고르는 시간</Text>
         <Text style={styles.subtitle}>
-          알고리즘 대신, 큐레이션.{'\n'}당신의 취향에 맞춰 매일 한 작품씩.
+          리스트 대신, 한 편씩.{'\n'}당신의 취향에 맞춰 매일 한 작품씩.
         </Text>
       </View>
 

@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   },
   logo: {
     color: colors.accent,
-    fontSize: 22,
+    fontSize: 20,
     fontFamily: fonts.display,
     letterSpacing: 0.5,
   },
