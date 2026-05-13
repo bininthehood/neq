@@ -12,6 +12,7 @@ import type {
 
 const SAVED_KEY = 'neq_saved';
 const WATCH_REPORTS_KEY = 'neq_watch_reports';
+const ARCHIVE_KEY = 'neq_archived';
 const DEVICE_ID_KEY = 'neq_device_id';
 const ACCOUNT_PREFS_KEY = 'neq_account_prefs';
 const ONBOARDED_KEY = 'neq_onboarded';
@@ -92,6 +93,37 @@ export async function getWatchStats(): Promise<{
     meh: reports.filter((r) => r.reaction === 'meh').length,
     dropped: reports.filter((r) => r.reaction === 'dropped').length,
   };
+}
+
+// ---------- archive (W5 Task F) ----------
+//
+// web `apps/web/src/lib/store.ts:325-343` 와 동일 의미.
+// "저장은 유지하되 목록에서 숨김" — 사용자가 시청 완료/관심 종료한 작품을
+// 잡음에서 제외하는 메커니즘. 기본 뷰에서 hide, "아카이브" 필터에서만 노출.
+//
+// 키: 'neq_archived' (web LocalStorage 키와 동일 — 향후 sync 시 호환).
+// 값: number[] (tmdbId 배열).
+
+export async function getArchivedIds(): Promise<number[]> {
+  return safeGet<number[]>(ARCHIVE_KEY, []);
+}
+
+export async function archiveItem(tmdbId: number): Promise<void> {
+  const ids = await getArchivedIds();
+  if (!ids.includes(tmdbId)) {
+    ids.push(tmdbId);
+    await AsyncStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
+  }
+}
+
+export async function unarchiveItem(tmdbId: number): Promise<void> {
+  const ids = (await getArchivedIds()).filter((id) => id !== tmdbId);
+  await AsyncStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
+}
+
+export async function isArchived(tmdbId: number): Promise<boolean> {
+  const ids = await getArchivedIds();
+  return ids.includes(tmdbId);
 }
 
 // ---------- device id ----------
@@ -281,6 +313,7 @@ export async function clearAllUserData(): Promise<void> {
   await AsyncStorage.multiRemove([
     SAVED_KEY,
     WATCH_REPORTS_KEY,
+    ARCHIVE_KEY,
     ACCOUNT_PREFS_KEY,
     ONBOARDED_KEY,
     TUTORIAL_V3_KEY,
