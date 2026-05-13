@@ -86,7 +86,7 @@ export default function OnboardingStepNotify({ onNext }: Props) {
         })}
 
         <Text style={styles.notice}>
-          ※ iOS 출시 후 알림이 활성화됩니다. 지금 설정하면 출시 시점에 자동 적용돼요.
+          ※ iOS 출시 후 알림을 보내드려요. 지금 설정하면 출시 시점에 자동 적용돼요.
         </Text>
       </ScrollView>
 
