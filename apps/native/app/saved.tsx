@@ -13,10 +13,11 @@ import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Rect, Line } from 'react-native-svg';
 import { getSaved, removeSaved } from '../lib/store';
-import type { SavedItem } from '../lib/types';
+import type { Recommendation, SavedItem } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
 import { track } from '../lib/analytics';
+import DetailSheet from '../components/DetailSheet';
 
 const COLS = 2;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -77,6 +78,10 @@ export default function SavedScreen() {
   const [items, setItems] = useState<SavedItem[]>([]);
   // 위임 O #2 — 뷰 모드. 첫 mount 시 AsyncStorage 에서 복원.
   const [viewMode, setViewMode] = useState<SavedViewMode>('grid');
+  // W5 Task E — Saved DetailSheet 진입 (web `openDetailFor` 정합).
+  // 카드 onPress → DetailSheet open + `detail_opened` source: 'saved_tap'.
+  const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -99,6 +104,19 @@ export default function SavedScreen() {
     await removeSaved(tmdbId);
     setItems((prev) => prev.filter((s) => s.recommendation.tmdbId !== tmdbId));
   }
+
+  // W5 Task E — DetailSheet 진입. web `apps/web/src/app/saved/page.tsx:335-342`
+  // 의 `openDetailFor` 와 1:1 정합. source 는 'saved_tap' 고정.
+  const handleOpenDetail = useCallback((rec: Recommendation) => {
+    track('detail_opened', {
+      tmdb_id: rec.tmdbId,
+      title: rec.title,
+      providers_count: rec.providers.length,
+      source: 'saved_tap',
+    });
+    setDetailRec(rec);
+    setDetailOpen(true);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -163,7 +181,7 @@ export default function SavedScreen() {
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           renderItem={({ item }) => (
-            <ListCard item={item} onRemove={handleRemove} />
+            <ListCard item={item} onPress={handleOpenDetail} onRemove={handleRemove} />
           )}
         />
       ) : (
@@ -179,7 +197,12 @@ export default function SavedScreen() {
             return (
               <Pressable
                 style={[styles.card, { width: CARD_W, height: tall ? 240 : 200 }]}
+                // W5 Task E — 카드 탭 = DetailSheet 진입 (web `openDetailFor` 정합).
+                // long-press 는 기존 삭제 동작 유지 (회귀 0).
+                onPress={() => handleOpenDetail(item.recommendation)}
                 onLongPress={() => handleRemove(item.recommendation.tmdbId)}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.recommendation.title} 상세보기`}
               >
                 {item.recommendation.posterUrl ? (
                   <Image
@@ -203,6 +226,14 @@ export default function SavedScreen() {
           }}
         />
       )}
+
+      {/* W5 Task E — Saved DetailSheet (web 정본 동일 패턴).
+          rec=null 인 첫 mount 시점에는 Modal 자체가 안 뜨므로 렌더 비용 0. */}
+      <DetailSheet
+        rec={detailRec}
+        visible={detailOpen}
+        onClose={() => setDetailOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -214,9 +245,11 @@ export default function SavedScreen() {
  */
 function ListCard({
   item,
+  onPress,
   onRemove,
 }: {
   item: SavedItem;
+  onPress: (rec: Recommendation) => void;
   onRemove: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
@@ -230,6 +263,8 @@ function ListCard({
         styles.listCard,
         pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
       ]}
+      // W5 Task E — 카드 탭 = DetailSheet 진입.
+      onPress={() => onPress(rec)}
       onLongPress={() => onRemove(rec.tmdbId)}
       accessibilityRole="button"
       accessibilityLabel={`${rec.title} 상세보기`}
