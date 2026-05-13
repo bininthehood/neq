@@ -15,6 +15,10 @@ const WATCH_REPORTS_KEY = 'neq_watch_reports';
 const DEVICE_ID_KEY = 'neq_device_id';
 const ACCOUNT_PREFS_KEY = 'neq_account_prefs';
 const ONBOARDED_KEY = 'neq_onboarded';
+// W5 Task B — Discover 첫 진입 4단계 튜토리얼 (TutorialFlow v3) 노출 여부.
+// web `localStorage.tutorialV3Shown === "1"` 과 동일한 의미/값.
+// 양 플랫폼이 같은 익명 식별자를 공유하지 않으므로 디바이스별 1회만 노출.
+const TUTORIAL_V3_KEY = 'tutorialV3Shown';
 
 async function safeGet<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -242,6 +246,35 @@ export async function clearOnboarded(): Promise<void> {
   await AsyncStorage.removeItem(ONBOARDED_KEY);
 }
 
+// ---------- tutorial v3 flag (W5 Task B) ----------
+//
+// web `apps/web/src/app/discover/page.tsx` 의 localStorage `tutorialV3Shown === "1"`
+// 과 동일 의미. Discover 첫 진입 시 4단계 튜토리얼을 1회만 보여주기 위한 가드.
+//
+// 값 '1' = 노출 완료 / 부재 = 미노출. web 과 동일 문자열 사용 (혹시라도 양 플랫폼이
+// 같은 storage 를 공유하는 향후 시나리오에 호환 유지).
+//
+// 호출자:
+//   - `app/index.tsx` Discover 의 mount effect 에서 false 면 TutorialFlow 마운트
+//   - TutorialFlow 의 onClose 콜백에서 `markTutorialV3Seen()` 호출
+
+export async function hasSeenTutorialV3(): Promise<boolean> {
+  try {
+    const v = await AsyncStorage.getItem(TUTORIAL_V3_KEY);
+    return v === '1';
+  } catch {
+    return false;
+  }
+}
+
+export async function markTutorialV3Seen(): Promise<void> {
+  await AsyncStorage.setItem(TUTORIAL_V3_KEY, '1');
+}
+
+export async function clearTutorialV3(): Promise<void> {
+  await AsyncStorage.removeItem(TUTORIAL_V3_KEY);
+}
+
 // ---------- reset ----------
 
 export async function clearAllUserData(): Promise<void> {
@@ -250,6 +283,7 @@ export async function clearAllUserData(): Promise<void> {
     WATCH_REPORTS_KEY,
     ACCOUNT_PREFS_KEY,
     ONBOARDED_KEY,
+    TUTORIAL_V3_KEY,
   ]);
   // device_id는 유지 (익명 식별자 안정성)
 }
