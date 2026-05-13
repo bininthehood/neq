@@ -481,11 +481,19 @@ export default function DiscoverPage() {
     if (mounted) sessionStorage.setItem("neq_top_idx", String(topIdx));
   }, [topIdx, mounted]);
 
-  // filtered가 줄어들었을 때 topIdx 클램프 (OTT 필터 변경 등)
+  // filtered가 *줄어든* 경우만 클램프 (예: OTT 필터 추가로 후보 축소).
+  // 자연 소진(스와이프 누적으로 topIdx 도달) 시점에는 filtered.length 가 줄지 않으므로
+  // 클램프 안 발동 → deck 자리 스켈레톤 유지 → prefetch 결과 대기.
+  const prevFilteredLenRef = useRef(filtered.length);
   useEffect(() => {
-    if (filtered.length > 0 && topIdx >= filtered.length) {
+    if (
+      filtered.length > 0
+      && topIdx >= filtered.length
+      && filtered.length < prevFilteredLenRef.current
+    ) {
       setTopIdx(Math.max(0, filtered.length - 1));
     }
+    prevFilteredLenRef.current = filtered.length;
   }, [filtered.length, topIdx]);
 
   // 프리페치: 남은 카드 10장 이하 + 스와이프 시작한 이후에만
