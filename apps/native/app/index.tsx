@@ -767,6 +767,14 @@ export default function DiscoverScreen() {
           onRewind={() => setTopIdx(0)}
           onShare={handleShare}
           onOpenDetail={() => {
+            // W5 Task C 7.1 — ActionBar Detail 버튼은 web 정본 source='action_bar'.
+            // (web `apps/web/src/app/discover/page.tsx:683` 정합.)
+            track('detail_opened', {
+              tmdb_id: currentRec.tmdbId,
+              title: currentRec.title,
+              providers_count: currentRec.providers.length,
+              source: 'action_bar',
+            });
             setDetailOpen(true);
             // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
             setDetailOpenCount((c) => c + 1);
