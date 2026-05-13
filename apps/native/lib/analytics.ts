@@ -153,11 +153,16 @@ export type NekoEvent =
   | 'nudge_reported'
   | 'nudge_dismissed'
   | 'reentry_nudge_shown'
-  // 온보딩 브릿지 & 코치마크
+  // 온보딩 브릿지 & 코치마크 (v2 잔재 — 신규 호출처 없음. v3 는 아래 tutorial_* 사용)
   | 'bridge_shown'
   | 'bridge_completed'
   | 'coach_shown'
   | 'coach_completed'
+  // TutorialFlow v3 — Discover 첫 진입 4단계 튜토리얼 (CoachMark v2 대체).
+  // web `apps/web/src/lib/analytics.ts` 정합. W5 Task B 에서 native 도입.
+  | 'tutorial_step_shown'
+  | 'tutorial_completed'
+  | 'tutorial_skipped'
   // 알림 인프라
   | 'notification_subscribed'
   | 'notification_blocked'
