@@ -1,7 +1,7 @@
 import { createApiClient } from '@neq/core';
 import type { Recommendation, RecommendFilter } from '@neq/core';
 import { env } from './env';
-import { track, parseServerTiming } from './analytics';
+import { track, parseServerTiming, timingsToProps, usageToProps } from './analytics';
 import { buildPrefetchKey } from './prefetch-utils';
 
 // re-export — 외부 호출자(useRecommendations 등)는 './api' 한 곳에서 가져갈 수 있게
@@ -87,9 +87,24 @@ export async function fetchRecommendations(
     throw new Error(`추천 요청 실패 (${res.status}) ${text.slice(0, 200)}`);
   }
 
-  const serverTiming = parseServerTiming(res.headers.get('server-timing'));
-  const data = (await res.json()) as { recommendations?: Recommendation[] };
+  // W5 Task C 6.1 — Server-Timing 헤더는 Vercel/Next.js infra 가 strip 하는 사례가
+  // 관측되어 web 정본 (`apps/web/src/app/api/recommend/route.ts:161-169`) 도 body 에
+  // timings/usage 를 함께 실어 보낸다. native 도 동일 패턴으로 body 우선 사용.
+  // 헤더는 dev tools 호환용 fallback (body 누락 시 보강).
+  const serverTimingHeader = parseServerTiming(res.headers.get('server-timing'));
+  const data = (await res.json()) as {
+    recommendations?: Recommendation[];
+    timings?: unknown;
+    usage?: unknown;
+  };
   let recs = data.recommendations ?? [];
+  // body.timings → srv_<step>_ms 매핑. 헤더는 키가 없을 때만 보강.
+  const bodyTimings = timingsToProps(data.timings);
+  const headerTimings: Record<string, number> = {};
+  for (const [k, v] of Object.entries(serverTimingHeader)) {
+    headerTimings[`srv_${k}_ms`] = v;
+  }
+  const usageProps = usageToProps(data.usage);
 
   // #16 Cold start fallback — favorites=[] + 빈 응답일 때 trending으로 보강
   let coldStartFallbackUsed = false;
@@ -123,9 +138,15 @@ export async function fetchRecommendations(
     subscribed_ott_count: subscribedOttCount,
     cold_start_version: coldStartVersion,
   };
-  // Server-Timing 헤더 → srv_<name>_ms
-  for (const [k, v] of Object.entries(serverTiming)) {
-    props[`srv_${k}_ms`] = v;
+  // body.timings 우선 → 누락된 키만 헤더 fallback. usage 도 동일 모듈에서 매핑.
+  for (const [k, v] of Object.entries(bodyTimings)) {
+    props[k] = v;
+  }
+  for (const [k, v] of Object.entries(headerTimings)) {
+    if (props[k] === undefined) props[k] = v;
+  }
+  for (const [k, v] of Object.entries(usageProps)) {
+    props[k] = v;
   }
   track('recommendation_loaded', props);
 
@@ -259,9 +280,10 @@ export function prefetchRecommendations(
     }
     if (!res.ok) return;
 
-    const serverTiming = parseServerTiming(res.headers.get('server-timing'));
+    // W5 Task C 6.1 — body.timings 우선, 헤더는 fallback (web 정본 동일 패턴).
+    const serverTimingHeader = parseServerTiming(res.headers.get('server-timing'));
     const data = (await res.json().catch(() => null)) as
-      | { recommendations?: Recommendation[] }
+      | { recommendations?: Recommendation[]; timings?: unknown; usage?: unknown }
       | null;
     const recs = data?.recommendations ?? [];
     if (recs.length === 0) return;
@@ -278,8 +300,17 @@ export function prefetchRecommendations(
       streamed: false,
       platform: 'native',
     };
-    for (const [k, v] of Object.entries(serverTiming)) {
-      props[`srv_${k}_ms`] = v;
+    const bodyTimings = timingsToProps(data?.timings);
+    const usageProps = usageToProps(data?.usage);
+    for (const [k, v] of Object.entries(bodyTimings)) {
+      props[k] = v;
+    }
+    for (const [k, v] of Object.entries(serverTimingHeader)) {
+      const mappedKey = `srv_${k}_ms`;
+      if (props[mappedKey] === undefined) props[mappedKey] = v;
+    }
+    for (const [k, v] of Object.entries(usageProps)) {
+      props[k] = v;
     }
     track('recommendation_load_more', props);
   })().finally(() => {
