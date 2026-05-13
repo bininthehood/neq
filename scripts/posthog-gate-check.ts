@@ -11,7 +11,9 @@
  */
 import { writeFileSync } from "node:fs";
 
-const PH_HOST = (process.env.POSTHOG_HOST ?? "https://us.i.posthog.com").replace(/\/$/, "");
+// GH Actions 에서 secret 미등록 시 환경변수가 빈 문자열로 set 됨. `??` 는 undefined 만
+// 대체하므로 빈 문자열을 보존 → URL 조립 실패. `||` 로 falsy 모두 default 적용.
+const PH_HOST = (process.env.POSTHOG_HOST || "https://us.i.posthog.com").replace(/\/$/, "");
 const PH_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
 const PH_API_KEY = process.env.POSTHOG_PERSONAL_API_KEY;
 
