@@ -102,8 +102,8 @@ FROM (
 // srv_enrich_ms p50/p95 — recommendation_loaded streamed=true 한정 (mirror enrich 측정)
 const Q_ENRICH = `
 SELECT
-  round(quantile(0.5)(toFloat64(properties.srv_enrich_ms)), 0) AS p50_ms,
-  round(quantile(0.95)(toFloat64(properties.srv_enrich_ms)), 0) AS p95_ms,
+  round(quantile(0.5)(toFloat(properties.srv_enrich_ms)), 0) AS p50_ms,
+  round(quantile(0.95)(toFloat(properties.srv_enrich_ms)), 0) AS p95_ms,
   count(*) AS sample_n
 FROM events
 WHERE event = 'recommendation_loaded'
