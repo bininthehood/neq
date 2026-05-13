@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
 import { colors } from '../../lib/tokens';
 import { track } from '../../lib/analytics';
-import { getAccountPrefs } from '../../lib/store';
+import { getAccountPrefs, setOnboarded } from '../../lib/store';
 import StepHeader from '../../components/onboarding/StepHeader';
 import OnboardingStepWelcome from '../../components/onboarding/OnboardingStepWelcome';
 import OnboardingStepHello from '../../components/onboarding/OnboardingStepHello';
@@ -25,10 +25,11 @@ import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboard
  *
  * Q4=A: native Notify 단계 토글은 활성화하되 "iOS 출시 후 활성화" 라벨 + push 발급 X.
  *
- * 진입 경로 활성화는 본 위임 영역 외 (별도 위임).
- *  - 현재 `apps/native/app/_layout.tsx` 는 `Tabs` 만 export 하므로 `/onboarding` 진입은
- *    `router.push('/onboarding')` 호출 + Stack + (tabs) 그룹 재구조화가 필요.
- *  - 본 위임은 컴포넌트/라우트 파일만 산출. 진입 활성화는 D5 페르소나 또는 W5 출시 직전.
+ * 진입 경로 (W5 Task A):
+ *  - `finalize()` 에서 `setOnboarded()` 호출 → AsyncStorage 'neq_onboarded' = 'true'.
+ *  - Discover (`app/index.tsx`) 의 mount effect 가 `hasOnboarded()` false 면
+ *    `router.replace('/onboarding')` 로 진입. 완료 후 `complete.tsx` 가
+ *    `router.replace('/')` 로 Discover 로 복귀하고 가드 통과.
  */
 
 export default function OnboardingScreen() {
@@ -86,6 +87,10 @@ export default function OnboardingScreen() {
       notify_ott_expiry: prefs.notificationPrefs.ottExpiry,
       notify_monthly_report: prefs.notificationPrefs.monthlyReport,
     });
+
+    // web 정본 (OnboardingV2Controller.finalize) 과 동일 — 명시 완료 플래그를 기록해
+    // 이후 root 진입 시 `hasOnboarded()` 가 true 를 반환하도록 한다.
+    await setOnboarded();
 
     router.replace('/onboarding/complete');
   }

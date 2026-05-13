@@ -16,7 +16,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import SwipeCard from '../components/SwipeCard';
 import PrevCardOverlay from '../components/PrevCardOverlay';
@@ -30,7 +30,7 @@ import {
   prefetchRecommendations,
   consumePrefetchedRecommendations,
 } from '../lib/api';
-import { getAccountPrefs, getSaved, toggleSaved } from '../lib/store';
+import { getAccountPrefs, getSaved, hasOnboarded, toggleSaved } from '../lib/store';
 import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
@@ -85,6 +85,32 @@ function toApiFilter(
 }
 
 export default function DiscoverScreen() {
+  // W5 Task A — onboarding 진입 가드.
+  //
+  // root layout (`app/_layout.tsx`) 이 `Tabs` 만 export 하므로 Discover (`app/index.tsx`)
+  // 가 사실상 첫 진입 화면이다. 첫 mount 시 `hasOnboarded()` 를 평가해
+  // false 면 즉시 `/onboarding` 으로 replace. 깜빡임 방지를 위해 결정 전까지는
+  // null 을 렌더 (Tabs 의 scene background = colors.bg 가 그대로 노출).
+  const [onboardCheck, setOnboardCheck] = useState<'pending' | 'pass' | 'redirect'>(
+    'pending',
+  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ok = await hasOnboarded();
+      if (cancelled) return;
+      if (ok) {
+        setOnboardCheck('pass');
+      } else {
+        setOnboardCheck('redirect');
+        router.replace('/onboarding');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [state, setState] = useState<LoadState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -203,8 +229,12 @@ export default function DiscoverScreen() {
   );
 
   useEffect(() => {
+    // W5 Task A — onboarding 가드 통과 전에는 추천 fetch 보류.
+    // pending 상태에서 호출하면 anon 사용자에게 cold-start 추천이 먼저 캐싱돼서
+    // onboarding 완료 후 첫 카드가 onboarding 결과를 반영하지 못한다.
+    if (onboardCheck !== 'pass') return;
     load();
-  }, [load]);
+  }, [load, onboardCheck]);
 
   // #17 prefetch 트리거 — 남은 카드 3장 이하로 떨어지면 다음 배치 백그라운드 로드
   // (web 의 page.tsx line 297 패턴: remaining <= 10 — native 는 stack depth 가 작으므로 3 으로 단축)
@@ -551,6 +581,12 @@ export default function DiscoverScreen() {
     setFilterYear('all');
     setFilterOTTs(new Set());
     load({});
+  }
+
+  // W5 Task A — onboarding 가드 결정 전 / redirect 결정 시 빈 화면.
+  // 첫 frame 깜빡임 방지 (Discover 의 첫 추천 요청도 시작되지 않음).
+  if (onboardCheck !== 'pass') {
+    return <SafeAreaView style={styles.container} edges={['top', 'bottom']} />;
   }
 
   return (

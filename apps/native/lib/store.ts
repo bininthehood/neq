@@ -14,6 +14,7 @@ const SAVED_KEY = 'neq_saved';
 const WATCH_REPORTS_KEY = 'neq_watch_reports';
 const DEVICE_ID_KEY = 'neq_device_id';
 const ACCOUNT_PREFS_KEY = 'neq_account_prefs';
+const ONBOARDED_KEY = 'neq_onboarded';
 
 async function safeGet<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -212,6 +213,35 @@ export async function clearAccountPrefs(): Promise<void> {
   await AsyncStorage.removeItem(ACCOUNT_PREFS_KEY);
 }
 
+// ---------- onboarding flag ----------
+//
+// web `apps/web/src/lib/store.ts` 의 `hasOnboarded()` 와 동일 의미.
+// 명시 완료 플래그 (`neq_onboarded === "true"`) 우선 + saved >= 3 폴백.
+// favorites 는 native 에 페르소나 구조가 없으므로 saved 갯수로 대체 (의도: 기존 사용자
+// 데이터가 있는 경우에도 가드를 통과하도록).
+//
+// 호출자: `app/index.tsx` (Discover) 의 첫 mount effect 에서 false 면
+// `router.replace('/onboarding')`.
+
+export async function hasOnboarded(): Promise<boolean> {
+  try {
+    const flag = await AsyncStorage.getItem(ONBOARDED_KEY);
+    if (flag === 'true') return true;
+  } catch {
+    /* read 실패 — fallback 으로 진입 */
+  }
+  const saved = await getSaved();
+  return saved.length >= 3;
+}
+
+export async function setOnboarded(): Promise<void> {
+  await AsyncStorage.setItem(ONBOARDED_KEY, 'true');
+}
+
+export async function clearOnboarded(): Promise<void> {
+  await AsyncStorage.removeItem(ONBOARDED_KEY);
+}
+
 // ---------- reset ----------
 
 export async function clearAllUserData(): Promise<void> {
@@ -219,6 +249,7 @@ export async function clearAllUserData(): Promise<void> {
     SAVED_KEY,
     WATCH_REPORTS_KEY,
     ACCOUNT_PREFS_KEY,
+    ONBOARDED_KEY,
   ]);
   // device_id는 유지 (익명 식별자 안정성)
 }
