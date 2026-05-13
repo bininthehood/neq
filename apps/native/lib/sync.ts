@@ -241,6 +241,51 @@ export async function syncAll(): Promise<{ success: boolean; pulled: number; pus
   };
 }
 
+/**
+ * W5 Task E — Supabase wipe.
+ *
+ * web 정본: `apps/web/src/lib/sync.ts:387` `wipeCloudData()`.
+ * "모든 데이터 초기화" 시 `clearAllUserData()` 와 함께 호출해야 다음 sync 에서
+ * cloud 가 다시 끌어오지 않는다. 호출하지 않으면 reset 후 다음 pull 에서
+ * 서버 데이터가 그대로 부활.
+ *
+ * 삭제 대상 (web 정합):
+ *   - saved_items     : profile_id 기준 행 삭제
+ *   - watch_reports   : profile_id 기준 행 삭제
+ *   - profiles.account_prefs / onboarding_picks : NULL 로 리셋 (row 자체는 auth uid 와
+ *     연결되므로 유지)
+ *
+ * native 만의 차이: web 의 seen_titles / archived_items 는 native sync 에 아직 미포함
+ * (페르소나 / 아카이브 UI 미구현 단계). 향후 추가 시 본 함수도 확장.
+ *
+ * 디바이스 격리 (메모리 `project_anon_auth_device_isolation`): 현재 anon 인증은 디바이스마다
+ * 별도 user_id 라 다른 디바이스에 격리됨. 향후 OAuth + linkIdentity 도입 시점에는
+ * 사용자가 명시적으로 "모든 디바이스 데이터 초기화" 의도일 수 있으므로 그대로 유효.
+ *
+ * 실패 시 silent — sentry/posthog 미연동 native 환경에서는 console.error 만.
+ */
+export async function wipeCloudData(): Promise<{ success: boolean }> {
+  if (!isConfigured()) return { success: false };
+
+  const profileId = await getOrCreateProfile();
+  if (!profileId) return { success: false };
+
+  try {
+    await Promise.all([
+      supabase.from('saved_items').delete().eq('profile_id', profileId),
+      supabase.from('watch_reports').delete().eq('profile_id', profileId),
+    ]);
+    await supabase
+      .from('profiles')
+      .update({ onboarding_picks: null, account_prefs: null })
+      .eq('id', profileId);
+    return { success: true };
+  } catch (err) {
+    console.error('[sync] wipeCloudData failed:', err);
+    return { success: false };
+  }
+}
+
 export async function getLastSyncTime(): Promise<number> {
   const raw = await AsyncStorage.getItem(LAST_SYNC_KEY);
   return Number(raw ?? '0');

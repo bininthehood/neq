@@ -17,6 +17,7 @@ import {
   getDeviceId,
   clearAllUserData,
 } from '../lib/store';
+import { wipeCloudData } from '../lib/sync';
 import { colors, radius, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
 
@@ -81,7 +82,12 @@ export default function ProfileScreen() {
           text: '초기화',
           style: 'destructive',
           onPress: async () => {
+            // W5 Task E — local + cloud 동시 정리.
+            // local 만 비우면 다음 sync 의 pull 단계에서 서버 데이터가 부활하므로
+            // web `apps/web/src/app/profile/page.tsx:89-93` 와 동일하게 wipeCloudData 함께 호출.
+            // wipeCloudData 는 silent (실패 시 console.error 만) — 사용자 알림은 local 기준.
             await clearAllUserData();
+            void wipeCloudData();
             await refresh();
           },
         },
