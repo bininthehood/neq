@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase, ensureAuth, getAuthUid } from './supabase';
-import { env, isOnboardingV2Enabled } from './env';
+import { env } from './env';
 import {
   getSaved,
   getWatchReports,
@@ -118,10 +118,8 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
       if (!error) pushed += rows.length;
     }
 
-    // account_prefs (Onboarding V2 — feature flag 뒤)
-    //   flag OFF 시 column 자체를 건드리지 않으므로 V1 prod 영향 0.
-    //   web `apps/web/src/lib/sync.ts` 의 account_prefs 분기와 동일.
-    if (isOnboardingV2Enabled()) {
+    // account_prefs (Onboarding V2)
+    {
       const accountPrefs = await getAccountPrefs();
       const { error } = await supabase
         .from('profiles')
@@ -199,10 +197,9 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
       }
     }
 
-    // account_prefs (Onboarding V2 — feature flag 뒤)
-    //   flag OFF → column 무시 → V1 영향 0.
-    //   서버 우선 — default 와 동일하면 굳이 덮어쓰지 않음 (web 동일 패턴).
-    if (isOnboardingV2Enabled()) {
+    // account_prefs (Onboarding V2)
+    //   서버 우선 — default 와 동일하면 굳이 덮어쓰지 않음.
+    {
       const { data: profileRow } = await supabase
         .from('profiles')
         .select('account_prefs')

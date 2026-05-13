@@ -44,10 +44,6 @@ function readFlag(name: string): boolean {
   }
 }
 
-export function isOnboardingV2Enabled(): boolean {
-  return readFlag('EXPO_PUBLIC_ONBOARDING_V2');
-}
-
 export function isTasteGenresEnabled(): boolean {
   return readFlag('EXPO_PUBLIC_TASTE_GENRES_ENABLED');
 }
