@@ -48,6 +48,15 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
     onNext();
   };
 
+  // 보조 액션 — 장르 선택 비우고 cold start v1 분기로 진입.
+  // web 정본 OnboardingStepGenre.submitRandom 1:1 매핑 (a05d704 / 295ac0e).
+  // tasteGenres 빈 배열 → computeV2Inputs 가 body 에 키 미포함 → coldStartVersion v1.
+  const submitSkip = async () => {
+    setGenres(new Set());
+    await setTasteGenres([]);
+    onNext();
+  };
+
   const ctaLabel = enough ? '다음' : `${MIN_GENRES - genres.size}개 더 골라 주세요`;
 
   return (
@@ -119,6 +128,9 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
             {ctaLabel}
           </Text>
         </Pressable>
+        <Pressable onPress={submitSkip} style={styles.skipBtn}>
+          <Text style={styles.skipLabel}>장르/작품 정하지 않고 시작</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -173,6 +185,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     paddingTop: spacing.sm + 4,
+    gap: spacing.sm,
   },
   cta: {
     width: '100%',
@@ -181,4 +194,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaLabel: { fontSize: 14, fontWeight: '600' },
+  skipBtn: { alignItems: 'center', paddingVertical: 12 },
+  skipLabel: { color: colors.textSecondary, fontSize: 12 },
 });

@@ -1,5 +1,6 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
+import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 
 interface Props {
   onNext: () => void;
@@ -9,7 +10,12 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.body}>
-        <Text style={styles.logo}>neq,</Text>
+        <Image
+          source={WORDMARK_ASSET}
+          accessibilityLabel="neq,"
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.heading}>오늘의 한 편을{'\n'}고르는 시간</Text>
         <Text style={styles.subtitle}>
           리스트 대신, 한 편씩.{'\n'}당신의 취향에 맞춰 매일 한 작품씩.
@@ -33,11 +39,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
+  // web 정본 OnboardingStepWelcome `<img className="h-16">` (64px) 매핑.
   logo: {
-    color: colors.accent,
-    fontSize: 40,
-    fontFamily: fonts.display,
-    letterSpacing: 1,
+    height: 64,
+    width: 64 * WORDMARK_ASPECT_RATIO,
     marginBottom: spacing.xl,
   },
   heading: {

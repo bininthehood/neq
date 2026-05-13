@@ -7,6 +7,7 @@ import {
   Dimensions,
   ActivityIndicator,
   Share,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -43,6 +44,10 @@ import {
 import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
+import {
+  WORDMARK_ASSET,
+  WORDMARK_ASPECT_RATIO,
+} from '../components/onboarding/data';
 import type {
   Recommendation,
   RecommendFilter,
@@ -51,7 +56,7 @@ import type {
   FilterYear,
 } from '../lib/types';
 import { colors, spacing } from '../lib/tokens';
-import { fonts, easings, durations } from '@neq/design';
+import { easings, durations } from '@neq/design';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Stage 4 D1 (swipe-stack.jsx) / G1-A (Handoff v2 Phase B+C):
@@ -662,7 +667,12 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.logo}>neq,</Text>
+        <Image
+          source={WORDMARK_ASSET}
+          accessibilityLabel="neq,"
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Pressable
           style={styles.searchIcon}
           onPress={() => {
@@ -840,11 +850,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  // 워드마크 이미지 — 기존 fontSize 22 매핑 (height 22, aspect ratio 보존).
   logo: {
-    color: colors.accent,
-    fontSize: 22,
-    fontFamily: fonts.display,
-    letterSpacing: 0.5,
+    height: 22,
+    width: 22 * WORDMARK_ASPECT_RATIO,
   },
   searchIcon: {
     width: 40,

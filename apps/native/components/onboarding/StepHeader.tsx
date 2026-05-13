@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useDerivedValue,
@@ -6,6 +6,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { colors, spacing, durations, easings, fonts } from '../../lib/tokens';
+import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 
 /**
  * Onboarding V2 (D4a, native) 공통 헤더.
@@ -46,7 +47,12 @@ export default function StepHeader({ current, total, onBack }: StepHeaderProps) 
           <View style={styles.backPlaceholder} />
         )}
 
-        <Text style={styles.logo}>neq,</Text>
+        <Image
+          source={WORDMARK_ASSET}
+          accessibilityLabel="neq,"
+          style={styles.logo}
+          resizeMode="contain"
+        />
 
         <Text style={styles.counter}>
           {current + 1} / {total}
@@ -117,11 +123,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 18,
   },
+  // web 정본 StepHeader `<img className="h-5">` (20px) 매핑.
   logo: {
-    color: colors.accent,
-    fontSize: 20,
-    fontFamily: fonts.display,
-    letterSpacing: 0.5,
+    height: 20,
+    width: 20 * WORDMARK_ASPECT_RATIO,
   },
   counter: {
     color: colors.textMuted,

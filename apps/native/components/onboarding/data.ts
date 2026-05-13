@@ -67,3 +67,13 @@ export const STEP_LABELS = ['welcome', 'hello', 'taste', 'ott', 'notify'] as con
 export type StepKey = typeof STEP_LABELS[number];
 
 export const TOTAL_STEPS = 5;
+
+/**
+ * "neq," 워드마크 이미지 정본 (Phase 5 amber 리컬러링).
+ * web `apps/web/public/neq-logo.png` 와 동일 자산.
+ *
+ * 폰트 텍스트 대신 이미지 사용 이유: amber 색상 + 컴마 disc + 폰트 미탑재 환경 보장.
+ * 비율 346:153 ≈ 2.26:1 — height 만 지정하고 width = height × 2.26 으로 설정.
+ */
+export const WORDMARK_ASSET = require('../../assets/neq-logo.png');
+export const WORDMARK_ASPECT_RATIO = 346 / 153; // ≈ 2.26
