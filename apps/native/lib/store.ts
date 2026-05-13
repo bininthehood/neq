@@ -2,8 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import type {
   AccountPrefs,
+  FavoriteMeta,
   NekoPushSubscriptionJSON,
   NotificationPrefs,
+  Persona,
   Recommendation,
   SavedItem,
   WatchReaction,
@@ -16,10 +18,19 @@ const ARCHIVE_KEY = 'neq_archived';
 const DEVICE_ID_KEY = 'neq_device_id';
 const ACCOUNT_PREFS_KEY = 'neq_account_prefs';
 const ONBOARDED_KEY = 'neq_onboarded';
+// W5 Task G — 페르소나 메타데이터.
+// web `apps/web/src/lib/store.ts` 의 PERSONAS_KEY / ACTIVE_PERSONA_KEY 와 동일.
+// native 는 web 의 full v2 마이그레이션을 수행하지 않고 메타데이터 (id/name/favorites/
+// favoritesMeta) 만 관리. watchReports / seenTitles / recCache 는 single bucket 유지
+// (web 의 v1 sync limitation 과 정합 — 비-default persona 일 때 동기화 skip 동일).
+const PERSONAS_KEY = 'neq_personas';
+const ACTIVE_PERSONA_KEY = 'neq_active_persona_id';
 // W5 Task B — Discover 첫 진입 4단계 튜토리얼 (TutorialFlow v3) 노출 여부.
 // web `localStorage.tutorialV3Shown === "1"` 과 동일한 의미/값.
 // 양 플랫폼이 같은 익명 식별자를 공유하지 않으므로 디바이스별 1회만 노출.
 const TUTORIAL_V3_KEY = 'tutorialV3Shown';
+
+const MAX_PERSONAS = 3;
 
 async function safeGet<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -124,6 +135,116 @@ export async function unarchiveItem(tmdbId: number): Promise<void> {
 export async function isArchived(tmdbId: number): Promise<boolean> {
   const ids = await getArchivedIds();
   return ids.includes(tmdbId);
+}
+
+// ---------- personas (W5 Task G) ----------
+//
+// web `apps/web/src/lib/store.ts:113-198` 의 페르소나 CRUD 와 동등하지만, native 는
+// **metadata-only** 모델 — 페르소나의 favorites / favoritesMeta 만 관리하고
+// watchReports / seenTitles / recCache 는 single bucket 유지.
+//
+// 이는 web 자체도 sync.ts 에서 비-default persona 의 watch_reports / seen_titles 동기화를
+// skip 하는 v1 limitation 과 정합 (web `sync.ts:134-135, 151-152, 231-234`).
+// 즉 양 플랫폼 모두 단일 디바이스 안에서만 페르소나별 데이터가 분리됨.
+//
+// **non-default persona 가 활성**일 때:
+//   - native 의 sync push 에서 watch_reports 를 skip (web 정본 정합).
+//   - saved_items 는 글로벌이므로 그대로 동기화.
+//
+// 키:
+//   - PERSONAS_KEY (`neq_personas`): Persona[] 배열
+//   - ACTIVE_PERSONA_KEY (`neq_active_persona_id`): string
+//
+// web 과 동일한 키 사용 — 향후 storage 통합 시 호환 유지 (현재는 분리된 환경).
+
+function createEmptyPersonaMeta(id: string, name: string): Persona {
+  return {
+    id,
+    name,
+    favorites: [],
+    favoritesMeta: [],
+    // native metadata-only — 아래 3개 필드는 web 타입 호환을 위해 빈 값 유지.
+    // single bucket (store.ts 상단의 SAVED_KEY/WATCH_REPORTS_KEY) 가 실제 데이터 소스.
+    watchReports: [],
+    seenTitles: [],
+    recCache: [],
+    recFilteredCache: {},
+  };
+}
+
+export async function getPersonas(): Promise<Persona[]> {
+  const personas = await safeGet<Persona[]>(PERSONAS_KEY, []);
+  if (personas.length === 0) {
+    // 첫 호출 — default 페르소나 시드. 사용자가 명시 생성하지 않아도 active 상태 보장.
+    const seed: Persona[] = [createEmptyPersonaMeta('default', '기본')];
+    await AsyncStorage.setItem(PERSONAS_KEY, JSON.stringify(seed));
+    return seed;
+  }
+  return personas;
+}
+
+export async function setPersonas(personas: Persona[]): Promise<void> {
+  await AsyncStorage.setItem(PERSONAS_KEY, JSON.stringify(personas));
+}
+
+export async function getActivePersonaId(): Promise<string> {
+  const raw = await AsyncStorage.getItem(ACTIVE_PERSONA_KEY).catch(() => null);
+  if (!raw) return 'default';
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'string' ? parsed : 'default';
+  } catch {
+    return 'default';
+  }
+}
+
+export async function setActivePersonaId(id: string): Promise<void> {
+  await AsyncStorage.setItem(ACTIVE_PERSONA_KEY, JSON.stringify(id));
+}
+
+export async function getActivePersona(): Promise<Persona> {
+  const personas = await getPersonas();
+  const activeId = await getActivePersonaId();
+  return (
+    personas.find((p) => p.id === activeId) ??
+    personas[0] ??
+    createEmptyPersonaMeta('default', '기본')
+  );
+}
+
+export async function createPersona(
+  name: string,
+  favorites: string[],
+  favoritesMeta: FavoriteMeta[],
+): Promise<string | null> {
+  const personas = await getPersonas();
+  if (personas.length >= MAX_PERSONAS) return null;
+  const id = Crypto.randomUUID().slice(0, 8);
+  const persona = createEmptyPersonaMeta(id, name);
+  persona.favorites = favorites;
+  persona.favoritesMeta = favoritesMeta;
+  personas.push(persona);
+  await setPersonas(personas);
+  return id;
+}
+
+export async function switchPersona(id: string): Promise<void> {
+  const personas = await getPersonas();
+  if (!personas.some((p) => p.id === id)) return;
+  await setActivePersonaId(id);
+}
+
+export async function deletePersona(id: string): Promise<void> {
+  let personas = await getPersonas();
+  personas = personas.filter((p) => p.id !== id);
+  if (personas.length === 0) {
+    personas = [createEmptyPersonaMeta('default', '기본')];
+  }
+  await setPersonas(personas);
+  const activeId = await getActivePersonaId();
+  if (activeId === id) {
+    await setActivePersonaId(personas[0].id);
+  }
 }
 
 // ---------- device id ----------
@@ -317,6 +438,8 @@ export async function clearAllUserData(): Promise<void> {
     ACCOUNT_PREFS_KEY,
     ONBOARDED_KEY,
     TUTORIAL_V3_KEY,
+    PERSONAS_KEY,
+    ACTIVE_PERSONA_KEY,
   ]);
   // device_id는 유지 (익명 식별자 안정성)
 }

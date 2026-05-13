@@ -22,6 +22,9 @@ import { calcMonthlyWatch, type MonthlyWatchResult } from '../lib/profile-stats'
 import type { WatchReport } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
+import { usePersona } from '../contexts/PersonaContext';
+import PersonaSection from '../components/PersonaSection';
+import { track } from '../lib/analytics';
 
 interface Stats {
   total: number;
@@ -32,6 +35,7 @@ interface Stats {
 }
 
 export default function ProfileScreen() {
+  const persona = usePersona();
   const [tasteItems, setTasteItems] = useState<string[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [stats, setStats] = useState<Stats>({
@@ -119,6 +123,31 @@ export default function ProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* W5 Task G — 페르소나 (web `profile/page.tsx:135-151` 정합).
+            web 의 PersonaSection 과 동등하지만 native 는 metadata-only 모델 +
+            minimal create flow (이름만). favorites 픽 풍부한 UX 는 디자인 확정 후. */}
+        <PersonaSection
+          personas={persona.personas}
+          activePersonaId={persona.activePersonaId}
+          onSwitch={(id) => {
+            void persona.switchPersona(id);
+            track('persona_switched', { persona_id: id });
+            void refresh();
+          }}
+          onDelete={(id) => {
+            void persona.deletePersona(id);
+            track('persona_deleted', { persona_id: id });
+          }}
+          onCreate={(name) => {
+            void persona.createPersona(name, [], []).then((id) => {
+              if (id) {
+                void persona.switchPersona(id);
+                track('persona_created', { name });
+              }
+            });
+          }}
+        />
+
         {/* 좋아한 작품 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>좋아한 작품</Text>

@@ -21,6 +21,7 @@ import {
 import { colors } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
+import { PersonaProvider } from '../contexts/PersonaContext';
 import { track } from '../lib/analytics';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -82,10 +83,11 @@ export default function RootLayout() {
 
   return (
     <PostHogProvider>
-      <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
-        <SafeAreaProvider>
-          <StatusBar style="light" />
-          <Tabs
+      <PersonaProvider>
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
+          <SafeAreaProvider>
+            <StatusBar style="light" />
+            <Tabs
             screenOptions={{
               headerShown: false,
               tabBarStyle: {
@@ -123,8 +125,9 @@ export default function RootLayout() {
               }}
             />
           </Tabs>
-        </SafeAreaProvider>
-      </GestureHandlerRootView>
+          </SafeAreaProvider>
+        </GestureHandlerRootView>
+      </PersonaProvider>
     </PostHogProvider>
   );
 }
