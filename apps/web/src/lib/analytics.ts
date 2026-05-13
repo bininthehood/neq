@@ -116,6 +116,9 @@ export type NekoEvent =
   // 프로필
   | "profile_viewed"
   | "data_reset"
+  // 데이터 백업/복원
+  | "data_exported"
+  | "data_imported"
   // 페르소나
   | "persona_switched"
   | "persona_created"
