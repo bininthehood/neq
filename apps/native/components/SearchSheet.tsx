@@ -62,6 +62,7 @@ import type {
 } from '../lib/types';
 import { env } from '../lib/env';
 import { colors, radius, spacing } from '../lib/tokens';
+import { IconClose } from './Icons';
 import { fonts } from '@neq/design';
 import { Illust } from './Illust';
 
@@ -276,7 +277,7 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
                     accessibilityLabel="검색어 지우기"
                     accessibilityRole="button"
                   >
-                    <Text style={styles.clear}>✕</Text>
+                    <IconClose size={14} color={colors.textMuted} />
                   </Pressable>
                 )}
               </View>

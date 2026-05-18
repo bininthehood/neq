@@ -11,6 +11,7 @@ import {
 import type { Persona } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
+import { IconClose } from './Icons';
 
 /**
  * PersonaSection — Profile 탭의 취향(페르소나) 리스트 + 전환/삭제/생성 UI.
@@ -121,7 +122,7 @@ export default function PersonaSection({
                   pressed && styles.deleteBtnPressed,
                 ]}
               >
-                <Text style={styles.deleteBtnText}>✕</Text>
+                <IconClose size={12} color={colors.textMuted} />
               </Pressable>
             ) : null}
           </Pressable>

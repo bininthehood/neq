@@ -7,6 +7,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { colors, radius, spacing, easings, durations } from '../lib/tokens';
+import { IconRewind, IconShare, IconInfo, IconRefresh, IconSave } from './Icons';
 
 interface Props {
   isSaved: boolean;
@@ -71,7 +72,7 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel="처음으로"
           hitSlop={4}
         >
-          <Text style={styles.iconText}>⟲</Text>
+          <IconRewind size={18} color={colors.textMuted} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
@@ -79,7 +80,7 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel="공유"
           hitSlop={4}
         >
-          <Text style={styles.iconText}>⤴</Text>
+          <IconShare size={20} color={colors.textMuted} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
@@ -87,7 +88,7 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel="상세보기"
           hitSlop={4}
         >
-          <Text style={styles.iconText}>ⓘ</Text>
+          <IconInfo size={22} color={colors.textMuted} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
@@ -95,7 +96,7 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel="새 추천"
           hitSlop={4}
         >
-          <Text style={styles.iconText}>⟳</Text>
+          <IconRefresh size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 
@@ -113,9 +114,11 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel={isSaved ? '저장 해제' : '저장'}
           style={styles.saveBtnInner}
         >
-          <Text style={[styles.saveIcon, saveActive && styles.saveIconActive]}>
-            {saveActive ? '♥' : '♡'}
-          </Text>
+          <IconSave
+            size={24}
+            color={saveActive ? colors.accent : colors.textPrimary}
+            filled={saveActive}
+          />
         </Pressable>
       </Animated.View>
     </View>

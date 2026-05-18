@@ -22,6 +22,7 @@ import * as Haptics from 'expo-haptics';
 import SwipeCard from '../components/SwipeCard';
 import PrevCardOverlay from '../components/PrevCardOverlay';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
+import { IconSearch } from '../components/Icons';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar from '../components/ActionBar';
 import TutorialFlow, {
@@ -733,7 +734,7 @@ export default function DiscoverScreen() {
           }}
           hitSlop={8}
         >
-          <Text style={styles.searchIconText}>⌕</Text>
+          <IconSearch size={20} color={colors.textPrimary} />
         </Pressable>
       </View>
 

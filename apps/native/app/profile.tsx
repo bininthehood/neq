@@ -24,6 +24,7 @@ import { colors, radius, spacing } from '../lib/tokens';
 import { fonts } from '@neq/design';
 import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
+import { IconClose } from '../components/Icons';
 import { track } from '../lib/analytics';
 
 interface Stats {
@@ -265,7 +266,7 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>설정</Text>
           <Pressable style={styles.resetBtn} onPress={handleReset}>
-            <Text style={styles.resetIcon}>✕</Text>
+            <IconClose size={18} color={colors.danger ?? '#d54e4e'} />
             <View style={styles.resetBody}>
               <Text style={styles.resetTitle}>모든 데이터 초기화</Text>
               <Text style={styles.resetSub}>

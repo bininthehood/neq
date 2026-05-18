@@ -11,6 +11,7 @@ import {
   Share,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { IconClose } from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -357,7 +358,7 @@ export default function DetailSheet({
                 accessibilityLabel="닫기"
                 accessibilityRole="button"
               >
-                <Text style={styles.closeIcon}>✕</Text>
+                <IconClose size={20} color={colors.textPrimary} />
               </Pressable>
             </View>
 
