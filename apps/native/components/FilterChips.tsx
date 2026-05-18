@@ -4,40 +4,47 @@ import {
   TYPE_LABELS,
   ORIGIN_LABELS,
   YEAR_LABELS,
+  RATING_LABELS,
   OTT_OPTIONS,
   type FilterType,
   type FilterOrigin,
   type FilterYear,
+  type FilterRating,
 } from '@neq/core';
 import { colors, radius, spacing } from '../lib/tokens';
 
-type DropdownKey = 'type' | 'origin' | 'year' | 'ott' | null;
+type DropdownKey = 'type' | 'origin' | 'year' | 'rating' | 'ott' | null;
 
 interface Props {
   filterType: FilterType;
   filterOrigin: FilterOrigin;
   filterYear: FilterYear;
+  filterRating: FilterRating;
   filterOTTs: Set<string>;
   availableOTTs: string[];
   disabled?: boolean;
   onFilterChange: (t: FilterType, o: FilterOrigin) => void;
   onYearChange: (y: FilterYear) => void;
+  onRatingChange: (r: FilterRating) => void;
   onOTTChange: (otts: Set<string>) => void;
 }
 
 const TYPE_OPTIONS: FilterType[] = ['all', 'movie', 'series', 'variety'];
 const ORIGIN_OPTIONS: FilterOrigin[] = ['all', 'kr', 'foreign'];
 const YEAR_OPTIONS: FilterYear[] = ['all', 'recent', '2010s', 'classic'];
+const RATING_OPTIONS: FilterRating[] = ['all', '7', '8', '9'];
 
 export default function FilterChips({
   filterType,
   filterOrigin,
   filterYear,
+  filterRating,
   filterOTTs,
   availableOTTs,
   disabled,
   onFilterChange,
   onYearChange,
+  onRatingChange,
   onOTTChange,
 }: Props) {
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
@@ -129,6 +136,12 @@ export default function FilterChips({
           label={YEAR_LABELS[filterYear]}
           onPress={() => toggle('year')}
         />
+        <Chip
+          active={filterRating !== 'all'}
+          isOpen={openDropdown === 'rating'}
+          label={RATING_LABELS[filterRating]}
+          onPress={() => toggle('rating')}
+        />
         {availableOTTs.length > 0 && (
           <Chip
             active={filterOTTs.size > 0}
@@ -173,6 +186,18 @@ export default function FilterChips({
                 label={y === 'all' ? '전체' : YEAR_LABELS[y]}
                 onPress={() => {
                   onYearChange(y);
+                  setOpenDropdown(null);
+                }}
+              />
+            ))}
+          {openDropdown === 'rating' &&
+            RATING_OPTIONS.map((r) => (
+              <Option
+                key={r}
+                active={filterRating === r}
+                label={r === 'all' ? '전체' : RATING_LABELS[r]}
+                onPress={() => {
+                  onRatingChange(r);
                   setOpenDropdown(null);
                 }}
               />

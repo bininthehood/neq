@@ -20,6 +20,7 @@ export type {
   FilterType,
   FilterOrigin,
   FilterYear,
+  FilterRating,
   AccountPrefs,
   NotificationPrefs,
   NekoPushSubscriptionJSON,

@@ -55,6 +55,7 @@ import type {
   FilterType,
   FilterOrigin,
   FilterYear,
+  FilterRating,
 } from '../lib/types';
 import { colors, spacing } from '../lib/tokens';
 import { easings, durations } from '@neq/design';
@@ -89,6 +90,9 @@ function toApiFilter(
   type: FilterType,
   origin: FilterOrigin,
   year: FilterYear,
+  // rating 은 클라이언트 사이드 필터 (web `apps/web/src/app/discover/page.tsx:141` 정합).
+  // 서버 RecommendFilter 미수신 — 받은 카드들을 클라이언트에서 자른다.
+  _rating: FilterRating,
   otts: Set<string>,
 ): RecommendFilter {
   const filter: RecommendFilter = {};
@@ -145,6 +149,7 @@ export default function DiscoverScreen() {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>('all');
   const [filterYear, setFilterYear] = useState<FilterYear>('all');
+  const [filterRating, setFilterRating] = useState<FilterRating>('all');
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
 
   // W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
@@ -344,7 +349,7 @@ export default function DiscoverScreen() {
     const remaining = recs.length - topIdx;
     if (remaining > 3) return;
     if (topIdx === 0) return; // 첫 로드 직후 즉시 prefetch 방지
-    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterOTTs);
+    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
     void triggerPrefetch(filter);
   }, [
     topIdx,
@@ -353,6 +358,7 @@ export default function DiscoverScreen() {
     filterType,
     filterOrigin,
     filterYear,
+    filterRating,
     filterOTTs,
     triggerPrefetch,
   ]);
@@ -361,19 +367,22 @@ export default function DiscoverScreen() {
     type?: FilterType;
     origin?: FilterOrigin;
     year?: FilterYear;
+    rating?: FilterRating;
     otts?: Set<string>;
   }) {
     const nextType = nextState.type ?? filterType;
     const nextOrigin = nextState.origin ?? filterOrigin;
     const nextYear = nextState.year ?? filterYear;
+    const nextRating = nextState.rating ?? filterRating;
     const nextOtts = nextState.otts ?? filterOTTs;
 
     if (nextState.type !== undefined) setFilterType(nextType);
     if (nextState.origin !== undefined) setFilterOrigin(nextOrigin);
     if (nextState.year !== undefined) setFilterYear(nextYear);
+    if (nextState.rating !== undefined) setFilterRating(nextRating);
     if (nextState.otts !== undefined) setFilterOTTs(nextOtts);
 
-    load(toApiFilter(nextType, nextOrigin, nextYear, nextOtts));
+    load(toApiFilter(nextType, nextOrigin, nextYear, nextRating, nextOtts));
   }
 
   useFocusEffect(
@@ -384,8 +393,13 @@ export default function DiscoverScreen() {
     }, []),
   );
 
-  const currentRec = recs[topIdx];
-  const prevRec = topIdx > 0 ? recs[topIdx - 1] : null;
+  // rating 클라이언트 사이드 필터 — web `apps/web/src/app/discover/page.tsx:141` 정합.
+  // recs 자체는 그대로 두고 표시/swipe 단계에서만 자른다 (서버 재호출 X).
+  const filteredRecs = filterRating === 'all'
+    ? recs
+    : recs.filter((r) => r.rating >= parseFloat(filterRating));
+  const currentRec = filteredRecs[topIdx];
+  const prevRec = topIdx > 0 ? filteredRecs[topIdx - 1] : null;
 
   /**
    * 사이클 2 통일 매핑 (web `vibrate(...)` 와 인지 강도 정합):
@@ -530,7 +544,7 @@ export default function DiscoverScreen() {
   }
 
   function handleRefresh() {
-    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterOTTs);
+    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
     load(filter);
   }
 
@@ -647,7 +661,7 @@ export default function DiscoverScreen() {
       }
     });
 
-  const cardsToShow = recs.slice(topIdx, topIdx + 3);
+  const cardsToShow = filteredRecs.slice(topIdx, topIdx + 3);
   const isLiked = currentRec ? savedIds.has(currentRec.tmdbId) : false;
   const exhausted = state === 'ready' && cardsToShow.length === 0;
 
@@ -659,6 +673,7 @@ export default function DiscoverScreen() {
     filterType !== 'all' ||
     filterOrigin !== 'all' ||
     filterYear !== 'all' ||
+    filterRating !== 'all' ||
     filterOTTs.size > 0;
 
   const { emptyTitle, emptyHint } = (() => {
@@ -726,11 +741,13 @@ export default function DiscoverScreen() {
         filterType={filterType}
         filterOrigin={filterOrigin}
         filterYear={filterYear}
+        filterRating={filterRating}
         filterOTTs={filterOTTs}
         availableOTTs={availableOTTs}
         disabled={state === 'loading'}
         onFilterChange={(t, o) => applyFilterChange({ type: t, origin: o })}
         onYearChange={(y) => applyFilterChange({ year: y })}
+        onRatingChange={(r) => applyFilterChange({ rating: r })}
         onOTTChange={(otts) => applyFilterChange({ otts })}
       />
 
