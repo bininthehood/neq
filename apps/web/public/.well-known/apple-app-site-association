@@ -1,0 +1,7 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": []
+  },
+  "_note": "W7 placeholder — iOS Team ID + bundleIdentifier 채우기 전. Universal Link 비활성 상태"
+}
