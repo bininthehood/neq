@@ -127,7 +127,11 @@ export default function SwipeCard({
         { rotate: `${safe(rot)}deg` },
       ],
       opacity: safe(opacity, 1),
-      zIndex: 10 - d,
+      // 2026-05-18 — SIGABRT 진짜 원인: Fabric `zIndex` prop 은 `std::optional<int>`.
+      // `10 - d` (d=animatedDepth.value, withSpring 결과 = double) 가 9.9 같은 비정수면
+      // folly::to<long long, double> 변환 실패 → ConversionError → cloneShadow abort.
+      // Math.round 로 정수 강제.
+      zIndex: Math.round(10 - d),
     };
   });
 
