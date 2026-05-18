@@ -15,9 +15,13 @@ interface Props {
 // 이전 카드는 화면 왼쪽 바깥에서 우 스와이프 시 오버레이로 덮어온다.
 // overlayX: -SCREEN_WIDTH = 완전 가림(시작), 0 = 완전히 도착
 export default function PrevCardOverlay({ rec, overlayX }: Props) {
-  const style = useAnimatedStyle(() => ({
-    transform: [{ translateX: overlayX.value }],
-  }));
+  const style = useAnimatedStyle(() => {
+    'worklet';
+    // 2026-05-18 — Fabric folly::ConversionError abort 방어 (NaN/Infinity guard).
+    const v = overlayX.value;
+    const tx = Number.isFinite(v) ? v : 0;
+    return { transform: [{ translateX: tx }] };
+  });
 
   return (
     <Animated.View style={[styles.card, style]}>

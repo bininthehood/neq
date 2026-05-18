@@ -48,9 +48,12 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
     });
   }, [saveFlash, savePulling, scale]);
 
-  const saveBtnAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const saveBtnAnimStyle = useAnimatedStyle(() => {
+    'worklet';
+    // 2026-05-18 — Fabric NaN/Infinity guard.
+    const s = scale.value;
+    return { transform: [{ scale: Number.isFinite(s) ? s : 1 }] };
+  });
 
   const saveActive = isSaved || saveFlash || savePulling;
 

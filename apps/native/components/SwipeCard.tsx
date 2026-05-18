@@ -73,27 +73,32 @@ export default function SwipeCard({
   }, [absorbing, isTop, absorbProgress]);
 
   const cardStyle = useAnimatedStyle(() => {
-    const d = animatedDepth.value;
+    'worklet';
+    // 2026-05-18 — Fabric `folly::ConversionError` SIGABRT crash 방어.
+    // worklet sharedValue 가 어떤 path 에서든 NaN/Infinity 가 되면 Fabric 의
+    // RawValue<double> → long long 변환이 abort. 모든 transform/opacity 결과를
+    // finite number 로 강제. (가시적 동작 동일, 단 NaN race 시 안전한 0 fallback.)
+    const safe = (n: number, fallback = 0): number => (Number.isFinite(n) ? n : fallback);
+
+    const d = safe(animatedDepth.value);
     const baseScale = 1 - d * 0.04;
     const yOffset = d * 12;
 
     // 사이클 2: dismissX worklet 값이 활성화 (≠0) 면 dragX 대신 사용.
-    // dismiss 도중에는 UI 스레드 useSharedValue 만으로 60fps 보간 가능.
-    const dismissActive = dismissX !== undefined && dismissX.value !== 0;
-    const effectiveDragX = dismissActive ? dismissX!.value : dragX;
+    const dismissRaw = dismissX !== undefined ? safe(dismissX.value) : 0;
+    const dragXSafe = safe(dragX);
+    const dragYSafe = safe(dragY);
+    const dismissActive = dismissRaw !== 0;
+    const effectiveDragX = dismissActive ? dismissRaw : dragXSafe;
 
-    // Stage 4 D1: 4방향 + save 흡수
-    // tx/ty: top 카드만 drag 반영 (좌=다음, 우는 이전 오버레이가 처리, 위=detail, 아래=save 진행)
+    // tx/ty: top 카드만 drag 반영
     let tx = isTop ? effectiveDragX : 0;
-    // 아래로 끌 때 카드가 살짝 따라감 (0.6 댐핑) — save 진입 신호
-    let ty = isTop ? dragY * 0.6 + yOffset : yOffset;
-    // 좌 드래그만 회전 (좌=next 시각 신호)
+    let ty = isTop ? dragYSafe * 0.6 + yOffset : yOffset;
     let rot = isTop && effectiveDragX < 0 ? Math.max(effectiveDragX * 0.04, -8) : 0;
     let scale = baseScale;
     let opacity = 1;
-    // 아래 끌 때 살짝 축소 (흡수 예고)
-    if (isTop && dragY > 30) {
-      scale = Math.max(0.94, 1 - (dragY - 30) * 0.0008);
+    if (isTop && dragYSafe > 30) {
+      scale = Math.max(0.94, 1 - (dragYSafe - 30) * 0.0008);
     }
 
     // 흡수 모션 활성: 카드 중심 → save 버튼 좌표로 보간
@@ -102,12 +107,11 @@ export default function SwipeCard({
         x: SCREEN_W - 48,
         y: SCREEN_H - 80,
       };
-      // 카드의 화면상 중심 (대략): 카드는 absolute fill — 화면 중앙 근처 가정
       const cardCenterX = SCREEN_W / 2;
       const cardCenterY = SCREEN_H / 2;
       const dx = target.x - cardCenterX;
       const dy = target.y - cardCenterY;
-      const p = absorbProgress.value;
+      const p = safe(absorbProgress.value);
       tx = dx * p;
       ty = dy * p;
       scale = baseScale - (baseScale - 0.12) * p;
@@ -117,12 +121,12 @@ export default function SwipeCard({
 
     return {
       transform: [
-        { translateX: tx },
-        { translateY: ty },
-        { scale },
-        { rotate: `${rot}deg` },
+        { translateX: safe(tx) },
+        { translateY: safe(ty) },
+        { scale: safe(scale, 1) },
+        { rotate: `${safe(rot)}deg` },
       ],
-      opacity,
+      opacity: safe(opacity, 1),
       zIndex: 10 - d,
     };
   });
