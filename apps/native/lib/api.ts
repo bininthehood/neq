@@ -1,5 +1,9 @@
 import { createApiClient } from '@neq/core';
 import type { Recommendation, RecommendFilter } from '@neq/core';
+// expo/fetch — Hermes 환경에서 `response.body.getReader()` 지원 보장.
+// 기본 RN fetch 는 body 가 ReadableStream 이 아니라 string 으로 전체 받음 (streaming 미작동).
+// 일반 (non-streaming) 호출은 기본 fetch 그대로 사용 — 영향 최소화.
+import { fetch as expoFetch } from 'expo/fetch';
 import { env } from './env';
 import { track, parseServerTiming, timingsToProps, usageToProps } from './analytics';
 import { buildPrefetchKey } from './prefetch-utils';
@@ -216,7 +220,8 @@ export async function fetchRecommendationsStreaming(
   let res: Response | null = null;
 
   try {
-    res = await fetch(`${env.API_BASE_URL}/api/recommend`, {
+    // expo/fetch — Hermes 환경에서 body.getReader() 보장. 표준 Response 인터페이스 호환.
+    res = (await expoFetch(`${env.API_BASE_URL}/api/recommend`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -224,7 +229,7 @@ export async function fetchRecommendationsStreaming(
       },
       body: JSON.stringify(body),
       signal,
-    });
+    })) as unknown as Response;
   } catch (err) {
     track('recommendation_failed', {
       reason: 'network_error',
