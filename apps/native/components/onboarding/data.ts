@@ -11,6 +11,8 @@ export interface GenreChip {
   id: string;
   ko: string;
   en: string;
+  /** TMDB movie genre id — `/api/tmdb/by-genre` 호출용. variety 등 movie 미존재 장르는 null. */
+  tmdbMovieId: number | null;
 }
 
 export interface OttOption {
@@ -29,21 +31,21 @@ export interface NotifOption {
 }
 
 export const GENRE_CHIPS: GenreChip[] = [
-  { id: 'drama',     ko: '드라마',     en: 'Drama' },
-  { id: 'thriller',  ko: '스릴러',     en: 'Thriller' },
-  { id: 'romance',   ko: '로맨스',     en: 'Romance' },
-  { id: 'comedy',    ko: '코미디',     en: 'Comedy' },
-  { id: 'sf',        ko: 'SF',         en: 'Sci-Fi' },
-  { id: 'mystery',   ko: '미스터리',   en: 'Mystery' },
-  { id: 'crime',     ko: '범죄',       en: 'Crime' },
-  { id: 'doc',       ko: '다큐',       en: 'Documentary' },
-  { id: 'action',    ko: '액션',       en: 'Action' },
-  { id: 'fantasy',   ko: '판타지',     en: 'Fantasy' },
-  { id: 'horror',    ko: '호러',       en: 'Horror' },
-  { id: 'animation', ko: '애니메이션', en: 'Animation' },
-  { id: 'variety',   ko: '예능',       en: 'Variety' },
-  { id: 'history',   ko: '시대극',     en: 'Period' },
-  { id: 'music',     ko: '음악',       en: 'Music' },
+  { id: 'drama',     ko: '드라마',     en: 'Drama',         tmdbMovieId: 18 },
+  { id: 'thriller',  ko: '스릴러',     en: 'Thriller',      tmdbMovieId: 53 },
+  { id: 'romance',   ko: '로맨스',     en: 'Romance',       tmdbMovieId: 10749 },
+  { id: 'comedy',    ko: '코미디',     en: 'Comedy',        tmdbMovieId: 35 },
+  { id: 'sf',        ko: 'SF',         en: 'Sci-Fi',        tmdbMovieId: 878 },
+  { id: 'mystery',   ko: '미스터리',   en: 'Mystery',       tmdbMovieId: 9648 },
+  { id: 'crime',     ko: '범죄',       en: 'Crime',         tmdbMovieId: 80 },
+  { id: 'doc',       ko: '다큐',       en: 'Documentary',   tmdbMovieId: 99 },
+  { id: 'action',    ko: '액션',       en: 'Action',        tmdbMovieId: 28 },
+  { id: 'fantasy',   ko: '판타지',     en: 'Fantasy',       tmdbMovieId: 14 },
+  { id: 'horror',    ko: '호러',       en: 'Horror',        tmdbMovieId: 27 },
+  { id: 'animation', ko: '애니메이션', en: 'Animation',     tmdbMovieId: 16 },
+  { id: 'variety',   ko: '예능',       en: 'Variety',       tmdbMovieId: null },
+  { id: 'history',   ko: '시대극',     en: 'Period',        tmdbMovieId: 36 },
+  { id: 'music',     ko: '음악',       en: 'Music',         tmdbMovieId: 10402 },
 ];
 
 export const OTT_OPTIONS: OttOption[] = [
@@ -63,10 +65,10 @@ export const NOTIF_OPTIONS: NotifOption[] = [
   { id: 'monthlyReport', title: '월간 리포트',   desc: '매월 1일, 한 달간 본 작품 요약',          defaultOn: true },
 ];
 
-export const STEP_LABELS = ['welcome', 'hello', 'taste', 'ott', 'notify'] as const;
+export const STEP_LABELS = ['welcome', 'hello', 'genre', 'taste', 'ott', 'notify'] as const;
 export type StepKey = typeof STEP_LABELS[number];
 
-export const TOTAL_STEPS = 5;
+export const TOTAL_STEPS = 6;
 
 /**
  * "neq," 워드마크 이미지 정본 (Phase 5 amber 리컬러링).

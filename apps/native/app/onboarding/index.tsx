@@ -9,14 +9,17 @@ import StepHeader from '../../components/onboarding/StepHeader';
 import OnboardingStepWelcome from '../../components/onboarding/OnboardingStepWelcome';
 import OnboardingStepHello from '../../components/onboarding/OnboardingStepHello';
 import OnboardingStepTaste from '../../components/onboarding/OnboardingStepTaste';
+import OnboardingStepFavorites from '../../components/onboarding/OnboardingStepFavorites';
 import OnboardingStepOTT from '../../components/onboarding/OnboardingStepOTT';
 import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNotify';
 import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
 
 /**
- * Onboarding V2 (D4a, native) — 5단계 router.
+ * Onboarding V2 (D4a, native) — 6단계 router.
  *
- * 단계: welcome → hello → taste → ott → notify → /onboarding/complete
+ * 단계: welcome → hello → genre → taste → ott → notify → /onboarding/complete
+ *  - 'genre' = 장르 칩 3개 선택 (구 OnboardingStepTaste 의미 유지)
+ *  - 'taste' = 작품 3-5개 선택 (web `OnboardingStepTaste` 정합, 신규 추가 2026-05-18)
  *  - 각 단계 진입 시 `onboarding_step_viewed` 발사
  *  - 각 단계 완료 시 `onboarding_step_completed` (duration_ms)
  *  - 마지막 단계 완료 시 `onboarding_completed` (전체 duration + 카운트)
@@ -113,8 +116,9 @@ export default function OnboardingScreen() {
             />
           )}
           {step === 2 && <OnboardingStepTaste onNext={() => goNext()} />}
-          {step === 3 && <OnboardingStepOTT onNext={() => goNext()} />}
-          {step === 4 && <OnboardingStepNotify onNext={() => goNext()} />}
+          {step === 3 && <OnboardingStepFavorites onNext={() => goNext()} />}
+          {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
+          {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
         </View>
       </SafeAreaView>
     </>
