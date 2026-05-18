@@ -214,7 +214,12 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
     }
 
     // account_prefs (Onboarding V2)
-    //   서버 우선 — default 와 동일하면 굳이 덮어쓰지 않음.
+    //   2026-05-18 — v1 회귀 audit: 이전 구현은 서버 prefs 가 비어 있어도 (다른 디바이스
+    //   진입 / anon ID 충돌 / 첫 push 전 pull 등) `default + serverPrefs` merge 가
+    //   local 의 tasteGenres / subscribedOtt 를 빈 배열로 덮어 v2 → v1 회귀가 발생.
+    //
+    //   Fix: 필드 단위로 "비어있지 않은 쪽을 보존" — 서버 빈 + 로컬 채움 → 로컬 보존.
+    //   notificationPrefs 는 server override 우선 (사용자가 다른 디바이스에서 변경 가능).
     {
       const { data: profileRow } = await supabase
         .from('profiles')
@@ -225,11 +230,19 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
       const row = profileRow as { account_prefs?: AccountPrefs | null } | null;
       const serverPrefs = row?.account_prefs ?? null;
       if (serverPrefs && typeof serverPrefs === 'object') {
+        const localPrefs = await getAccountPrefs();
+
+        const serverTaste = Array.isArray(serverPrefs.tasteGenres) ? serverPrefs.tasteGenres : [];
+        const serverOtt = Array.isArray(serverPrefs.subscribedOtt) ? serverPrefs.subscribedOtt : [];
+
         const merged: AccountPrefs = {
           ...defaultAccountPrefs(),
-          ...serverPrefs,
+          // 빈 server 배열 → local 보존. 둘 다 비어있으면 default 빈 배열 그대로.
+          tasteGenres: serverTaste.length > 0 ? serverTaste : localPrefs.tasteGenres,
+          subscribedOtt: serverOtt.length > 0 ? serverOtt : localPrefs.subscribedOtt,
           notificationPrefs: {
             ...defaultAccountPrefs().notificationPrefs,
+            ...(localPrefs.notificationPrefs ?? {}),
             ...(serverPrefs.notificationPrefs ?? {}),
           },
         };

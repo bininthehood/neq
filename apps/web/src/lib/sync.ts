@@ -341,12 +341,23 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
 
       const serverPrefs = row?.account_prefs ?? null;
       if (serverPrefs && typeof serverPrefs === "object") {
-        // 서버 우선 — 단, default 와 동일한 빈 객체면 굳이 덮어쓰지 않음
+        // 2026-05-18 — v1 회귀 audit (native 동일 fix): 서버 prefs 가 비어 있을 때
+        // (다른 디바이스 진입 / anon ID 충돌 / 첫 push 전 pull) `default + serverPrefs`
+        // merge 가 local 의 tasteGenres / subscribedOtt 를 빈 배열로 덮어 v2 → v1 회귀.
+        //
+        // Fix: 필드 단위로 "비어있지 않은 쪽 보존". notificationPrefs 는 server override 유지.
+        const localPrefs = getAccountPrefs();
+
+        const serverTaste = Array.isArray(serverPrefs.tasteGenres) ? serverPrefs.tasteGenres : [];
+        const serverOtt = Array.isArray(serverPrefs.subscribedOtt) ? serverPrefs.subscribedOtt : [];
+
         const merged: AccountPrefs = {
           ...defaultAccountPrefs(),
-          ...serverPrefs,
+          tasteGenres: serverTaste.length > 0 ? serverTaste : localPrefs.tasteGenres,
+          subscribedOtt: serverOtt.length > 0 ? serverOtt : localPrefs.subscribedOtt,
           notificationPrefs: {
             ...defaultAccountPrefs().notificationPrefs,
+            ...(localPrefs.notificationPrefs ?? {}),
             ...(serverPrefs.notificationPrefs ?? {}),
           },
         };
