@@ -12,11 +12,12 @@ export const config: Options.Testrunner = {
     {
       platformName: 'iOS',
       'appium:automationName': 'XCUITest',
-      'appium:platformVersion': '17.2',
-      'appium:deviceName': 'iPhone 15',
+      'appium:platformVersion': '26.4',
+      'appium:deviceName': 'iPhone 17 Pro',
+      'appium:udid': '4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29',
       // Expo Go container — 개발 빌드로 전환하면 com.neko.app로 교체
       'appium:bundleId': 'host.exp.Exponent',
-      'appium:autoLaunch': true,
+      'appium:autoLaunch': false,
       'appium:noReset': true,
       'appium:newCommandTimeout': 240,
       'appium:wdaLocalPort': 8100,
