@@ -30,6 +30,7 @@ import TutorialFlow, {
 import SearchSheet from '../components/SearchSheet';
 import {
   fetchRecommendations,
+  fetchRecommendationsStreaming,
   prefetchRecommendations,
   consumePrefetchedRecommendations,
 } from '../lib/api';
@@ -183,7 +184,6 @@ export default function DiscoverScreen() {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
         // P0-2 Cold Start V2 입력 — flag ON + 값 있을 때만 body 에 포함.
-        // flag 두 개 모두 OFF 면 V1 동작 100% 동일 (body 변경 X).
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
           tasteGenresEnabled: isTasteGenresEnabled(),
@@ -191,15 +191,51 @@ export default function DiscoverScreen() {
           tasteGenres: prefs.tasteGenres,
           subscribedOtt: prefs.subscribedOtt,
         });
-        const data = await fetchRecommendations({
-          filter,
-          favorites,
-          savedCount: saved.length,
-          ...v2.body,
-        });
-        setRecs(data);
-        setTopIdx(0);
-        setState('ready');
+
+        // 2026-05-18 — streaming 적용 (web 정합). 첫 카드 도착 시 'ready' 전환.
+        // 미지원 환경 (Hermes fetch.body 미지원) 은 lib/api 가 자동 폴백 → 동일 onCard 시퀀스.
+        const collected: Recommendation[] = [];
+        let firstSeen = false;
+        let streamError: Error | null = null;
+
+        await fetchRecommendationsStreaming(
+          {
+            filter,
+            favorites,
+            savedCount: saved.length,
+            ...v2.body,
+          },
+          {
+            onCard: (rec) => {
+              collected.push(rec);
+              if (!firstSeen) {
+                firstSeen = true;
+                setRecs([...collected]);
+                setTopIdx(0);
+                setState('ready');
+              } else {
+                setRecs([...collected]);
+              }
+            },
+            onError: (err) => {
+              streamError = err;
+            },
+          },
+        );
+
+        if (!firstSeen) {
+          // streaming 동안 카드 0건 — error 또는 빈 응답. error 우선, 아니면 non-streaming 폴백.
+          if (streamError) throw streamError;
+          const data = await fetchRecommendations({
+            filter,
+            favorites,
+            savedCount: saved.length,
+            ...v2.body,
+          });
+          setRecs(data);
+          setTopIdx(0);
+          setState('ready');
+        }
       } catch (e) {
         setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류');
         setState('error');

@@ -3,6 +3,7 @@ import type { Recommendation, RecommendFilter } from '@neq/core';
 import { env } from './env';
 import { track, parseServerTiming, timingsToProps, usageToProps } from './analytics';
 import { buildPrefetchKey } from './prefetch-utils';
+import { consumeStreamingNDJSON } from './recommend-stream';
 
 // re-export — 외부 호출자(useRecommendations 등)는 './api' 한 곳에서 가져갈 수 있게
 export { buildPrefetchKey } from './prefetch-utils';
@@ -161,6 +162,191 @@ export async function fetchRecommendations(
   }
 
   return recs;
+}
+
+// =============================================================================
+// NDJSON Streaming (2026-05-18 P0-3) — web 정합. 첫 카드 latency 17s → 2~3s 목표.
+// =============================================================================
+
+interface StreamingCallbacks {
+  /** 카드 1장 도착 시 호출. 순서대로 점진 수신. */
+  onCard: (rec: Recommendation) => void;
+  /** 전체 stream 종료 시 호출 (timings/usage 받은 후). */
+  onComplete?: () => void;
+  /** stream/네트워크 오류 시 호출. */
+  onError?: (err: Error) => void;
+}
+
+/**
+ * Streaming 변형 — `x-neko-streaming: 1` 헤더로 NDJSON 응답 요청.
+ *
+ * 측정 (PostHog `recommendation_loaded`):
+ *  - srv_first_card_ms: 첫 카드 도착까지 (사용자 체감 latency)
+ *  - srv_<step>_ms: body 내 timings (web 정합)
+ *  - streamed: true
+ *
+ * 미지원 환경 (response.body.getReader X) 에서는 자동으로 `fetchRecommendations`
+ * non-streaming 경로로 폴백 — 호출자는 같은 onCard callback 시퀀스로 처리 가능.
+ */
+export async function fetchRecommendationsStreaming(
+  body: RecommendRequest = {},
+  callbacks: StreamingCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const t0 = Date.now();
+  let firstCardAt: number | null = null;
+  const favoritesCount = body.favorites?.length ?? 0;
+  const hasFilter = !!body.filter && Object.keys(body.filter).length > 0;
+  const filterType = body.filter?.type ?? 'all';
+  const filterOrigin = body.filter?.origin ?? 'all';
+  const isColdStart = favoritesCount === 0;
+  const tasteGenresCount = body.tasteGenres?.length ?? 0;
+  const subscribedOttCount = body.subscribedOtt?.length ?? 0;
+  const coldStartVersion: 'v1' | 'v2' =
+    tasteGenresCount > 0 || subscribedOttCount > 0 ? 'v2' : 'v1';
+
+  let count = 0;
+  let bodyTimings: Record<string, number> = {};
+  let usageProps: Record<string, number> = {};
+
+  // Cold start fallback (#16) tracking — streaming 시작 후 카드 0건 + favorites 0
+  // 인 경우만 trigger.
+
+  let usedStreaming = true;
+  let res: Response | null = null;
+
+  try {
+    res = await fetch(`${env.API_BASE_URL}/api/recommend`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-neko-streaming': '1',
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (err) {
+    track('recommendation_failed', {
+      reason: 'network_error',
+      filter_type: filterType,
+      filter_origin: filterOrigin,
+    });
+    callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+    return;
+  }
+
+  if (!res.ok) {
+    track('recommendation_failed', {
+      reason: 'http_error',
+      status: res.status,
+      filter_type: filterType,
+      filter_origin: filterOrigin,
+    });
+    const text = await res.text().catch(() => '');
+    callbacks.onError?.(new Error(`추천 요청 실패 (${res.status}) ${text.slice(0, 200)}`));
+    return;
+  }
+
+  const contentType = res.headers.get('content-type') ?? '';
+  const isNdjson = contentType.includes('ndjson');
+
+  if (isNdjson) {
+    try {
+      await consumeStreamingNDJSON(
+        res,
+        {
+          onCard: (rec) => {
+            if (firstCardAt === null) firstCardAt = Date.now();
+            count += 1;
+            callbacks.onCard(rec);
+          },
+          onTimings: (timings) => {
+            bodyTimings = timingsToProps(timings);
+          },
+          onUsage: (usage) => {
+            usageProps = usageToProps(usage);
+          },
+          onError: (msg) => {
+            callbacks.onError?.(new Error(msg));
+          },
+        },
+        signal,
+      );
+    } catch (err) {
+      // streaming_unsupported — Hermes 환경 fetch body 미지원 시. 폴백.
+      usedStreaming = false;
+      if (err instanceof Error && err.message.startsWith('streaming_unsupported')) {
+        try {
+          // 응답을 전체 받아서 처리 (NDJSON line 단위 파싱)
+          const text = await res.text();
+          const lines = text.split('\n').filter((l) => l.trim());
+          for (const line of lines) {
+            try {
+              const msg = JSON.parse(line) as { type?: string; rec?: Recommendation; timings?: unknown; usage?: unknown };
+              if (msg.type === 'card' && msg.rec) {
+                if (firstCardAt === null) firstCardAt = Date.now();
+                count += 1;
+                callbacks.onCard(msg.rec);
+              } else if (msg.type === 'timings') {
+                bodyTimings = timingsToProps(msg.timings);
+              } else if (msg.type === 'usage') {
+                usageProps = usageToProps(msg.usage);
+              }
+            } catch { /* skip malformed */ }
+          }
+        } catch (e) {
+          callbacks.onError?.(e instanceof Error ? e : new Error(String(e)));
+        }
+      } else {
+        callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+      }
+    }
+  } else {
+    // 서버가 streaming 헤더를 무시하고 JSON 응답을 줬다면 (구버전 라우트 등) JSON 파싱
+    usedStreaming = false;
+    const data = (await res.json()) as { recommendations?: Recommendation[]; timings?: unknown; usage?: unknown };
+    bodyTimings = timingsToProps(data.timings);
+    usageProps = usageToProps(data.usage);
+    for (const rec of data.recommendations ?? []) {
+      if (firstCardAt === null) firstCardAt = Date.now();
+      count += 1;
+      callbacks.onCard(rec);
+    }
+  }
+
+  const duration_ms = Date.now() - t0;
+  const first_card_ms = firstCardAt !== null ? firstCardAt - t0 : undefined;
+
+  const props: Record<string, string | number | boolean | null | undefined> = {
+    count,
+    duration_ms,
+    cold_start: isColdStart,
+    favorites_count: favoritesCount,
+    has_filter: hasFilter,
+    filter_type: filterType,
+    filter_origin: filterOrigin,
+    streamed: usedStreaming,
+    platform: 'native',
+    cold_start_fallback: false,
+    taste_genres_count: tasteGenresCount,
+    subscribed_ott_count: subscribedOttCount,
+    cold_start_version: coldStartVersion,
+    ...(first_card_ms !== undefined ? { srv_first_card_ms: first_card_ms } : {}),
+  };
+  for (const [k, v] of Object.entries(bodyTimings)) props[k] = v;
+  for (const [k, v] of Object.entries(usageProps)) props[k] = v;
+  track('recommendation_loaded', props);
+
+  if (coldStartVersion === 'v2') {
+    track('cold_start_v2', {
+      taste_genres_count: tasteGenresCount,
+      subscribed_ott_count: subscribedOttCount,
+      favorites_count: favoritesCount,
+      platform: 'native',
+    });
+  }
+
+  callbacks.onComplete?.();
 }
 
 // =============================================================================
