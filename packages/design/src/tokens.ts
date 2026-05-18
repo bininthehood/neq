@@ -154,17 +154,22 @@ export const fonts = {
  * - display: Instrument Serif (큰 헤더, hero, italic 액센트)
  * - data: Geist Mono (수치 tabular, 라벨)
  *
- * 웹 사용처 — apps/web/src/app/layout.tsx 의 next/font import 변경 또는 CSS @import 통합
- * 네이티브 사용처 — expo-font 로 로드 후 RN StyleSheet 에서 fontFamily 로 참조
+ * 2026-05-18 Fix B 적용 — 네이티브 사용 시점:
+ *  - InstrumentSerif/GeistMono 는 `@expo-google-fonts/*` 패키지로 로드 (apps/native/app/_layout.tsx)
+ *  - 폰트 패밀리 키는 useFonts 등록 이름과 일치 (`InstrumentSerif_400Regular`, `GeistMono_400Regular`)
+ *  - Pretendard 는 Expo Google Fonts 미존재 → 시스템 폰트 (iOS San Francisco) 사용
+ *    `body` 키를 undefined 로 두면 RN 기본 system font 자동 적용
  */
 export const fontsV2 = {
-  body: 'PretendardVariable',
-  bodyMedium: 'PretendardVariable',  // weight 500
-  bodyBold: 'PretendardVariable',    // weight 700
-  display: 'InstrumentSerif',
-  displayItalic: 'InstrumentSerifItalic',
-  data: 'GeistMono',
-  dataMedium: 'GeistMonoMedium',
+  // Pretendard 미설치 → undefined 로 RN system font fallback. iOS San Francisco 가
+  // 한글 가독성 우수. 웹은 next/font Pretendard 로딩 시 같은 키 override.
+  body: undefined as string | undefined,
+  bodyMedium: undefined as string | undefined,
+  bodyBold: undefined as string | undefined,
+  display: 'InstrumentSerif_400Regular',
+  displayItalic: 'InstrumentSerif_400Regular_Italic',
+  data: 'GeistMono_400Regular',
+  dataMedium: 'GeistMono_500Medium',
 } as const;
 
 // ─────────────────────────────────────────────────────

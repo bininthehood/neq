@@ -28,7 +28,7 @@ import type {
   RelatedWorksResponse,
 } from '../lib/types';
 import { getOTTLink, getOTTIcon } from '@neq/core';
-import { fonts, easings, durations } from '@neq/design';
+import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env } from '../lib/env';
@@ -797,7 +797,8 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 24,
-    fontFamily: fonts.display,
+    // 2026-05-18 Fix B — fontsV2 적용 (Instrument Serif). web 정합.
+    fontFamily: fontsV2.display,
     paddingRight: 56,
     lineHeight: 30,
   },
@@ -864,8 +865,8 @@ const styles = StyleSheet.create({
   castAvatarFallback: {
     color: colors.textSecondary,
     fontSize: 22,
-    fontFamily: fonts.display,
-    fontStyle: 'italic',
+    // Italic 변형 (web 정본 OS-mediated italic 과 일치)
+    fontFamily: fontsV2.displayItalic,
     lineHeight: 22,
   },
   castName: {

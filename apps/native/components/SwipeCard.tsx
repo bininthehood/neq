@@ -12,7 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
 import { buildMetaInfo, getOTTIcon } from '@neq/core';
-import { fonts, easings, durations } from '@neq/design';
+import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 
 interface Props {
@@ -260,7 +260,9 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 30,
-    fontFamily: fonts.display,
+    // 2026-05-18 Fix B — fontsV2.display (Instrument Serif) 적용. web `'핀치' - Finch` 정합.
+    // ratingText/typeText/metaText 는 fonts.data/dataReg (Outfit) 유지 — 사용자 요청.
+    fontFamily: fontsV2.display,
     lineHeight: 36,
   },
   metaRow: {

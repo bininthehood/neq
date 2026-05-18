@@ -1,5 +1,5 @@
 import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
-import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
+import { colors, spacing, fonts, fontsV2, fontSizePx } from '../../lib/tokens';
 import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 
 interface Props {
@@ -47,8 +47,8 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    // 2026-05-18 Fix B — fontsV2.displayItalic (Instrument Serif Italic) 적용. web 정합.
+    fontFamily: fontsV2.displayItalic,
     fontSize: 28,
     lineHeight: 32,
     textAlign: 'center',

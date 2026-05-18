@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",
+    "@expo-google-fonts/geist-mono": "^0.4.2",
+    "@expo-google-fonts/instrument-serif": "^0.4.1",
     "@expo-google-fonts/outfit": "^0.4.3",
     "@neq/core": "*",
     "@neq/design": "*",

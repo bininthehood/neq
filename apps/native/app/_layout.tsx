@@ -15,10 +15,18 @@ import {
   Outfit_400Regular,
   Outfit_600SemiBold,
 } from '@expo-google-fonts/outfit';
-// Stage 4 D1: fontsV2 전환은 web 만 실 적용 (next/font Instrument Serif + Geist Mono).
-// native 는 패키지 부재로 기존 Fraunces/Outfit 호환 유지. 추후 별도 위임에서 진행:
-//   npm install @expo-google-fonts/instrument-serif @expo-google-fonts/geist-mono -w apps/native
-// 패키지 설치 후 아래에 useFonts 항목 추가하고 packages/design tokens.ts fonts 매핑 갱신.
+// 2026-05-18 Fix B — fontsV2 native 적용. web (next/font Instrument Serif + Geist Mono) 정합.
+// 단 SwipeCard 의 영화/시리즈 + 별점 라벨 (fonts.data) 은 현 디자인 유지 (사용자 요청).
+// Pretendard Variable 은 Expo Google Fonts 미존재 — 시스템 폰트 fallback (iOS San Francisco
+// 가 한글/영문 본문 가독성 우수). 후속 작업에서 expo-font 로 직접 로드 검토.
+import {
+  InstrumentSerif_400Regular,
+  InstrumentSerif_400Regular_Italic,
+} from '@expo-google-fonts/instrument-serif';
+import {
+  GeistMono_400Regular,
+  GeistMono_500Medium,
+} from '@expo-google-fonts/geist-mono';
 import { colors } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
@@ -63,10 +71,16 @@ export default function RootLayout() {
   useSync();
 
   const [fontsLoaded, fontError] = useFonts({
+    // 기존 Fraunces/Outfit — SwipeCard 의 영화/시리즈 + 별점 라벨 (fonts.data) 유지용
     Fraunces_400Regular,
     Fraunces_700Bold,
     Outfit_400Regular,
     Outfit_600SemiBold,
+    // fontsV2 (web 정합) — display + data 신규
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
+    GeistMono_400Regular,
+    GeistMono_500Medium,
   });
 
   useEffect(() => {
