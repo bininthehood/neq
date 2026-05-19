@@ -258,12 +258,20 @@ export default function DiscoverHeader({
 }
 
 const styles = StyleSheet.create({
+  // 2026-05-19 native↔PWA 정합 (항목 1) — 헤더 세로 공간을 PWA 정본에 맞춤.
+  // web DiscoverHeader 정본: `px-5 py-3` 이지만 부모 wrap 이 `maxHeight: 48` +
+  // `overflow: hidden` 으로 헤더를 48px 로 강제 클리핑한다 (discover/page.tsx:608).
+  // 즉 web 의 실효 헤더 높이 = 48px.
+  // 기존 native 는 `paddingVertical: spacing.md(16)` → 콘텐츠(검색버튼 40) + 32 = 72px.
+  //   → web 대비 +24px, Discover deck 세로 공간을 그만큼 잠식 → 포스터가 작게 보임.
+  // paddingVertical 을 spacing.xs(4) 로 축소 → 40 + 8 = 48px, web 실효 높이와 정확 일치.
+  // (chip 은 36px 라 헤더 콘텐츠 하한 미초과 — chip 노출 시에도 48px 유지.)
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
   },
   logo: {
     height: WORDMARK_HEIGHT,

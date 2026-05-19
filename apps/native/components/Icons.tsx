@@ -36,12 +36,16 @@ export function IconShare({ size = 20, color = '#000' }: IconProps) {
   );
 }
 
-export function IconInfo({ size = 24, color = '#000' }: IconProps) {
+// IconDetail — ActionBar 상세보기 버튼. web `apps/web/src/components/Icons.tsx`
+// IconDetail 정본 포팅 (2026-05-19 native↔PWA 정합 — 항목 2).
+// 기존 IconInfo(원 안에 i)를 web 의 3라인 tapering 모양으로 교체.
+// 3개 line: (4,7→20,7) sw2.2 / (4,12→16,12) sw1.5 / (4,17→12,17) sw1 — 모두 strokeLinecap square.
+export function IconDetail({ size = 22, color = '#000' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth={1.5} />
-      <Line x1="12" y1="16" x2="12" y2="12" stroke={color} strokeWidth={2} strokeLinecap="square" />
-      <Circle cx="12" cy="8" r="0.8" fill={color} stroke="none" />
+      <Line x1="4" y1="7" x2="20" y2="7" stroke={color} strokeWidth={2.2} strokeLinecap="square" />
+      <Line x1="4" y1="12" x2="16" y2="12" stroke={color} strokeWidth={1.5} strokeLinecap="square" />
+      <Line x1="4" y1="17" x2="12" y2="17" stroke={color} strokeWidth={1} strokeLinecap="square" />
     </Svg>
   );
 }

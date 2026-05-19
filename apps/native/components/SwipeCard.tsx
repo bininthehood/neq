@@ -36,7 +36,12 @@ interface Props {
   dragX: number;
   /** Stage 4 D1: 위/아래 스와이프 변위. 양수=아래(save), 음수=위(detail) */
   dragY?: number;
-  isDragging: boolean;
+  /**
+   * @deprecated 2026-05-19 — 항목 4 정합 이후 미사용. PWA SwipeCard 정합으로
+   * 드래그 중에도 정보 영역을 유지하므로 SwipeCard 내부에서 더 이상 참조하지 않는다.
+   * prop 자체는 호출처(`index.tsx`) 호환을 위해 optional 로 보존.
+   */
+  isDragging?: boolean;
   immersive?: boolean;
   /**
    * Stage 4 D1: save 흡수 모션 트리거.
@@ -116,7 +121,7 @@ export default function SwipeCard({
   depth,
   dragX,
   dragY = 0,
-  isDragging,
+  // isDragging — 항목 4 정합 이후 미참조 (Props 에서 @deprecated). destructure 생략.
   immersive = false,
   absorbing = false,
   saveTargetPoint,
@@ -226,7 +231,13 @@ export default function SwipeCard({
   const otts = rec.providers
     .filter((p) => !p.category || p.category === 'subscription')
     .slice(0, 6);
-  const infoVisible = isTop && !isDragging && !immersive;
+  // 2026-05-19 native↔PWA 정합 (항목 4) — 드래그 중에도 정보 영역 유지.
+  // PWA SwipeCard 는 `isDragging` 을 CardVariantA 에 전달하지 않아 드래그 중에도
+  // 제목·설명·OTT·평점 칩이 정적으로 보인다. 기존 native 는 `!isDragging` 으로
+  // 드래그 시 opacity 0 → 좌/우/아래 스와이프·prev overlay 진행 중 정보가 사라져
+  // PWA 와 불일치했다. absorb(save 흡수) 시엔 카드 자체 opacity 가 페이드하므로
+  // 정보도 함께 페이드 — infoVisible 과 무관하게 정상 동작.
+  const infoVisible = isTop && !immersive;
 
   const cardContent = (
     <>

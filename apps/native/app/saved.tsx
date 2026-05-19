@@ -628,7 +628,7 @@ export default function SavedScreen() {
           web saved/page.tsx 헤더 (좌 H1 / 중앙 grid·list·preview / 우 search) 정합. */}
       <View style={styles.header}>
         <View style={styles.titleWrap}>
-          <Text style={styles.title}>저장한 작품</Text>
+          <Text style={styles.title}>Saved</Text>
           {/* 배치 H — history 뷰에서는 추천 기록 갯수를 카운터로 표시
               (native 고유 카운터 — saved 갯수를 보여주면 history 맥락과 어긋남). */}
           <Text style={styles.counter}>
@@ -1381,7 +1381,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    // 2026-05-19 native↔PWA 정합 — web saved/page.tsx 헤더 `h-12`(48px 고정) 정본.
+    // 기존 paddingVertical: spacing.md(16) → 헤더 ~60px. Discover 헤더 정합과 동일하게
+    // PWA 실효 높이로 수렴. 가장 큰 자식(searchBtn 44)이 alignItems:center 로 48 안에
+    // 들어가 클리핑 없음 (segmented 42 / title lineHeight 28 도 여유).
+    height: 48,
     gap: spacing.sm,
   },
   titleWrap: {
@@ -1390,10 +1394,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     minWidth: 0,
   },
+  // 2026-05-19 native↔PWA 정합 (항목 3) — web saved/page.tsx h1 정본:
+  //   text 'Saved' (영문) / font-display(Instrument Serif) / fontSize 28 /
+  //   fontWeight 500 / letterSpacing -0.025em (28×-0.025=-0.7) / lineHeight 1.
+  // 기존 native 는 한글 '저장한 작품' + fontSize 22 + weight/letterSpacing 미지정.
+  // 영문 'Saved' 는 Instrument Serif 가 자연스럽게 렌더 — web 과 동일 폰트라 정합.
   title: {
     color: colors.textPrimary,
-    fontSize: 22,
-    // 2026-04-29 fontsV2 전환 — display = Instrument Serif. web saved 제목 정합.
+    fontSize: 28,
+    fontWeight: '500',
+    letterSpacing: -0.7,
+    lineHeight: 28,
     fontFamily: fontsV2.display,
   },
   counter: { color: colors.textMuted, fontSize: 13 },

@@ -7,7 +7,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { colors, radius, spacing, easings, durations, shadowsNative } from '../lib/tokens';
-import { IconRewind, IconShare, IconInfo, IconRefresh, IconSave } from './Icons';
+import { IconRewind, IconShare, IconDetail, IconRefresh, IconSave } from './Icons';
 
 interface Props {
   isSaved: boolean;
@@ -88,7 +88,7 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel="상세보기"
           hitSlop={4}
         >
-          <IconInfo size={22} color={colors.textMuted} />
+          <IconDetail size={18} color={colors.textMuted} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
@@ -131,13 +131,22 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
 
 export default ActionBar;
 
+// 2026-05-19 native↔PWA 정합 (항목 1) — ActionBar 높이를 PWA 정본에 맞춤.
+// web ActionBar 정본: `px-4 pb-2` — 상단 패딩 0, 하단 8px. saveBtn 56(w-14 h-14).
+// → 실제 높이 = 56(saveBtn) + 8(pb) = 64.
+// 기존 native 는 `paddingVertical: spacing.sm` 으로 상하 8씩 → 72px (PWA 대비 +8).
+// 상단 패딩을 제거해 64 로 정합 → Discover deck 세로 공간 +8 회복.
+// ACTION_BAR_HEIGHT 는 index.tsx 의 placeholder 와 공유 (조건부 렌더 jank 방지, 증상 B).
+export const ACTION_BAR_HEIGHT = 64;
+
 const styles = StyleSheet.create({
   wrap: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingTop: 0,
+    paddingBottom: spacing.sm,
   },
   left: {
     flexDirection: 'row',

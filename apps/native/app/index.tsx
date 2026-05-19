@@ -23,7 +23,7 @@ import PrevCardOverlay from '../components/PrevCardOverlay';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
-import ActionBar from '../components/ActionBar';
+import ActionBar, { ACTION_BAR_HEIGHT } from '../components/ActionBar';
 import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
@@ -943,32 +943,44 @@ export default function DiscoverScreen() {
         )}
       </View>
 
-      {state === 'ready' && currentRec && (
-        <ActionBar
-          ref={saveBtnRef}
-          isSaved={isLiked}
-          canRewind={topIdx > 0}
-          saveFlash={saveFlash}
-          savePulling={dragY > 30 && isDragging}
-          onRewind={() => setTopIdx(0)}
-          onShare={handleShare}
-          onOpenDetail={() => {
-            // W5 Task C 7.1 — ActionBar Detail 버튼은 web 정본 source='action_bar'.
-            // (web `apps/web/src/app/discover/page.tsx:683` 정합.)
-            track('detail_opened', {
-              tmdb_id: currentRec.tmdbId,
-              title: currentRec.title,
-              providers_count: currentRec.providers.length,
-              source: 'action_bar',
-            });
-            setDetailOpen(true);
-            // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
-            setDetailOpenCount((c) => c + 1);
-          }}
-          onRefresh={handleRefresh}
-          onToggleSave={toggleLike}
-        />
-      )}
+      {/* 2026-05-19 native↔PWA 정합 (항목 1, 증상 B) — ActionBar 자리 항상 확보.
+          기존: ActionBar 가 `state==='ready' && currentRec` 조건부 렌더 → loading→ready
+          전환·탭 재진입 시 ActionBar 가 mount/unmount 되며 stackWrap(flex:1) 이
+          ACTION_BAR_HEIGHT(64px) 만큼 재배분 → 카드(absolute top0/bottom8)가 한 프레임
+          "늘어났다 줄어드는" jank.
+          해결: 항상 높이 ACTION_BAR_HEIGHT 인 slot 을 두고, ready 가 아닐 땐 내부를
+          비워둔다. slot 자체 높이가 불변 → stackWrap 이 어느 상태에서나 동일 공간.
+          (web 은 loading/error/empty 를 전체화면 컴포넌트로 early-return 하므로 ready
+          상태의 ActionBar 가 항상 렌더 — 구조상 jank 가 없다. native 는 같은
+          SafeAreaView 안에서 분기하므로 slot 고정으로 동등 효과를 만든다.) */}
+      <View style={styles.actionBarSlot}>
+        {state === 'ready' && currentRec && (
+          <ActionBar
+            ref={saveBtnRef}
+            isSaved={isLiked}
+            canRewind={topIdx > 0}
+            saveFlash={saveFlash}
+            savePulling={dragY > 30 && isDragging}
+            onRewind={() => setTopIdx(0)}
+            onShare={handleShare}
+            onOpenDetail={() => {
+              // W5 Task C 7.1 — ActionBar Detail 버튼은 web 정본 source='action_bar'.
+              // (web `apps/web/src/app/discover/page.tsx:683` 정합.)
+              track('detail_opened', {
+                tmdb_id: currentRec.tmdbId,
+                title: currentRec.title,
+                providers_count: currentRec.providers.length,
+                source: 'action_bar',
+              });
+              setDetailOpen(true);
+              // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
+              setDetailOpenCount((c) => c + 1);
+            }}
+            onRefresh={handleRefresh}
+            onToggleSave={toggleLike}
+          />
+        )}
+      </View>
 
       <DetailSheet
         rec={currentRec ?? null}
@@ -1014,6 +1026,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   // 헤더는 DiscoverHeader 컴포넌트로 분리 (워드마크 + 페르소나 chip + search).
   stackWrap: { flex: 1 },
+  // 항목 1 (증상 B) — ActionBar 고정 높이 slot. ready 여부와 무관하게 항상
+  // ACTION_BAR_HEIGHT(64px) 점유 → stackWrap flex 재배분으로 인한 카드 점프 차단.
+  // ActionBar 컴포넌트 자체 높이(saveBtn 56 + pb 8)도 64 라 slot 을 정확히 채운다.
+  actionBarSlot: {
+    height: ACTION_BAR_HEIGHT,
+    justifyContent: 'flex-end',
+  },
   stack: { flex: 1, position: 'relative' },
   centered: {
     flex: 1,
