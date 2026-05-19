@@ -687,6 +687,46 @@ function CastItem({
 }
 
 /**
+ * 작품 제목을 이중 줄로 분할 — web `PosterFallback.splitTitle` 정확 포팅.
+ * 4자 이하면 단행, 공백 있으면 어절 절반 분할, 없으면 글자 중간 분할.
+ */
+function splitTitle(title: string): { line1: string; line2?: string } {
+  const trimmed = title.trim();
+  if (trimmed.length <= 4) return { line1: trimmed };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length >= 2) {
+    const mid = Math.ceil(parts.length / 2);
+    return {
+      line1: parts.slice(0, mid).join(' '),
+      line2: parts.slice(mid).join(' '),
+    };
+  }
+  const mid = Math.ceil(trimmed.length / 2);
+  return { line1: trimmed.slice(0, mid), line2: trimmed.slice(mid) };
+}
+
+/**
+ * RelatedRow 포스터 폴백 — web `<PosterFallback size="xs" />` 정본 포팅.
+ * D-1 (2026-05-19 정합 audit): 단일 `N` 글자 → 작품 제목 typographic fallback.
+ * dashed border + surface-sunken 면 + Instrument Serif italic 제목(이중행)
+ * + Geist Mono uppercase eyebrow "poster · n/a".
+ * web `PosterFallback.tsx` SIZE_MAP.xs: titleSize text-base(16), eyebrow 9px,
+ * padding 6, gap 4.
+ */
+function RelatedPosterFallback({ title }: { title: string }) {
+  const { line1, line2 } = splitTitle(title);
+  return (
+    <View style={styles.relatedPosterFallback}>
+      <Text style={styles.relatedFallbackTitle}>
+        {line1}
+        {line2 ? '\n' + line2 : ''}
+      </Text>
+      <Text style={styles.relatedFallbackEyebrow}>POSTER · N/A</Text>
+    </View>
+  );
+}
+
+/**
  * 관련 작품 가로 스크롤 — neko-detail-sheet.jsx SimilarStrip 매핑.
  * 카드 90×132, 간격 10. label 은 amber accent + uppercase tracking.
  */
@@ -734,9 +774,7 @@ function RelatedRow({
                   transition={150}
                 />
               ) : (
-                <View style={styles.relatedPosterFallback}>
-                  <Text style={styles.relatedPosterFallbackText}>N</Text>
-                </View>
+                <RelatedPosterFallback title={w.title} />
               )}
             </View>
             <Text style={styles.relatedTitle} numberOfLines={2}>
@@ -841,10 +879,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: colors.accentBorder,
   },
+  // D-2 (2026-05-19 정합 audit) — web `text-sm` line-height 1.45 (DESIGN.md L101).
+  // 13 × 1.45 ≈ 18.85 → 19. 기존 20 은 약 6% 큼.
   reasonText: {
     color: colors.textSecondary,
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 19,
   },
   // 위임 O #1.1 — Cast row 가로 스크롤 (web CastRow 시각 정합).
   // 64×64 원형 + 이름(11px line-clamp 2) + 역할(11px muted), 셀 너비 64.
@@ -1019,18 +1059,39 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 6,
   },
+  // D-1 (2026-05-19 정합 audit) — web `<PosterFallback size="xs" />` 정본 포팅.
+  // dashed border + surface-sunken 면 + 작품 제목 typographic fallback.
+  // web PosterFallback.tsx SIZE_MAP.xs: padding 6(p-1.5), gap 4(gap-1).
   relatedPosterFallback: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surface,
+    gap: 4,
+    padding: 6,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
   },
-  // E-3 (2026-05-19 정합 audit) — `◇` 기하 문자 제거. PosterFallback 의 'N' 글자 패턴
-  // (web parts.tsx PosterImage / native SwipeCard fallbackText 정합) 으로 통일.
-  relatedPosterFallbackText: {
-    fontFamily: fontsV2.display,
+  // 제목 — Instrument Serif italic, text-base(16), weight 500,
+  // letterSpacing -0.02em(≈-0.32), lineHeight 1.05(≈17). web PosterFallback 정합.
+  relatedFallbackTitle: {
+    fontFamily: fontsV2.displayItalic,
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: -0.32,
+    lineHeight: 17,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  // eyebrow — Geist Mono uppercase "POSTER · N/A", 9px, tracking 0.15em(≈1.35).
+  // web PosterFallback xs eyebrowSize text-[9px] 정본 그대로 (aria-hidden 장식).
+  relatedFallbackEyebrow: {
+    fontFamily: fontsV2.data,
+    fontSize: 9,
+    letterSpacing: 1.35,
     color: colors.textMuted,
-    fontSize: 28,
+    textAlign: 'center',
   },
   relatedTitle: {
     color: colors.textPrimary,

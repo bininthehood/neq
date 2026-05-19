@@ -149,11 +149,17 @@ export default function PersonaSection({
         animationType="fade"
         onRequestClose={() => setShowCreate(false)}
       >
-        <Pressable
-          style={styles.modalBackdrop}
-          onPress={() => setShowCreate(false)}
-        >
-          <Pressable style={styles.modalCard} onPress={() => {}}>
+        {/* backdrop 와 modalCard 를 형제로 분리 (FAIL-J) — backdrop Pressable 이
+            카드 콘텐츠(TextInput/취소/추가)를 a11y 트리에서 흡수하지 않도록.
+            modalCard 가 backdrop 위에 렌더돼 카드 영역 탭은 backdrop 로 전파 안 됨. */}
+        <View style={styles.modalRoot} accessible={false}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setShowCreate(false)}
+            accessibilityRole="button"
+            accessibilityLabel="새 취향 추가 닫기"
+          />
+          <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>새 취향 추가</Text>
             <Text style={styles.modalDesc}>
               이름을 정해주세요. 작품은 저장 후에 채울 수 있어요.
@@ -204,8 +210,8 @@ export default function PersonaSection({
                 </Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -303,12 +309,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   // create modal — minimal anti-slop. Profile reset 모달과 일관된 패턴.
-  modalBackdrop: {
+  modalRoot: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
   },
   modalCard: {
     width: '100%',

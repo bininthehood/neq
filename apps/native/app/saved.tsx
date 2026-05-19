@@ -621,7 +621,7 @@ export default function SavedScreen() {
                   ? 'Discover에서 새로운 작품을 찾아보세요'
                   : viewFilter === 'watched'
                     ? "Saved의 작품에서 '봤어요?' 버튼을 눌러보세요"
-                    : '다른 필터를 선택해 보세요'}
+                    : 'Discover에서 아래로 스와이프하거나 하트 버튼으로 담아보세요'}
           </Text>
         </View>
       ) : viewMode === 'preview' ? (
@@ -825,14 +825,16 @@ function PosterCard({
   const tall = index % 3 === 0;
 
   return (
+    // a11y: 카드 root 는 accessible={false} — 카드 탭과 reaction 칩이 각각
+    // 별개 a11y element 가 되도록 병합 해제 (iOS 가 자식 Pressable 을 부모로
+    // 흡수하는 것 방지). 카드 탭 a11y 는 하단 label View 에 명시 부여.
     <Pressable
       style={[styles.card, { width: CARD_W, height: tall ? 240 : 200 }]}
       // W5 Task E — 카드 탭 = DetailSheet 진입.
       // W5 Task F — long-press = ActionSheet [상세/아카이브/삭제] 메뉴.
       onPress={() => onPress(rec)}
       onLongPress={() => onLongPress(rec)}
-      accessibilityRole="button"
-      accessibilityLabel={`${rec.title} 상세보기`}
+      accessible={false}
     >
       {rec.posterUrl ? (
         <Image
@@ -852,8 +854,17 @@ function PosterCard({
         <View style={[StyleSheet.absoluteFill, styles.cardDim]} pointerEvents="none" />
       )}
 
-      {/* 하단 메타 — 제목 + 평점 / reaction badge 또는 OTT 아이콘 */}
-      <View style={styles.label} pointerEvents="none">
+      {/* 하단 메타 — 제목 + 평점 / reaction badge 또는 OTT 아이콘.
+          a11y: 카드 탭(상세보기) 의 단일 a11y element. pointerEvents 는 'none'
+          유지 — 터치는 root Pressable 이 그대로 처리(시각/터치 동작 불변),
+          VoiceOver 에는 이 View 가 "상세보기" 버튼으로 노출. */}
+      <View
+        style={styles.label}
+        pointerEvents="none"
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={`${rec.title} 상세보기`}
+      >
         <Text style={styles.labelText} numberOfLines={1}>
           {rec.title}
         </Text>
@@ -948,6 +959,9 @@ function ListCard({
   if (rec.type === 'series' && rec.seasons) meta.push(`시즌 ${rec.seasons}`);
 
   return (
+    // a11y: 카드 root 는 accessible={false} — 카드 탭과 트레일링 reaction 칩이
+    // 각각 별개 a11y element 가 되도록 병합 해제 (iOS 의 자식 Pressable 흡수
+    // 방지). 카드 탭 a11y 는 listBody View 에 명시 부여.
     <Pressable
       style={({ pressed }) => [
         styles.listCard,
@@ -957,8 +971,7 @@ function ListCard({
       // W5 Task F — long-press = ActionSheet 메뉴 (상세/아카이브/삭제).
       onPress={() => onPress(rec)}
       onLongPress={() => onLongPress(rec)}
-      accessibilityRole="button"
-      accessibilityLabel={`${rec.title} 상세보기`}
+      accessible={false}
     >
       <View style={styles.listPosterFrame}>
         {rec.posterUrl ? (
@@ -974,7 +987,14 @@ function ListCard({
           </View>
         )}
       </View>
-      <View style={styles.listBody}>
+      {/* a11y: 카드 탭(상세보기) 의 단일 a11y element. 터치는 root Pressable 이
+          처리(동작 불변), VoiceOver 에는 이 View 가 "상세보기" 버튼으로 노출. */}
+      <View
+        style={styles.listBody}
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={`${rec.title} 상세보기`}
+      >
         <Text style={styles.listTitle} numberOfLines={1}>
           {rec.title}
         </Text>

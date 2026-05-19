@@ -69,53 +69,77 @@ export default function ReactionOverlay({
   compact?: boolean;
 }) {
   return (
-    <Pressable
-      style={[StyleSheet.absoluteFill, styles.overlay]}
-      onPress={onCancel}
+    // a11y: overlay root 는 accessible={false} — backdrop(닫기) 와 4종 reaction
+    // 버튼이 각각 별개 a11y element 가 되도록 병합 해제 (iOS 가 자식 Pressable 을
+    // 부모로 흡수하는 것 방지). VoiceOver 로 reaction 입력 개별 접근 가능.
+    <View
+      style={[StyleSheet.absoluteFill, styles.overlayRoot]}
       accessibilityViewIsModal
-      accessibilityLabel="시청 리포트 선택 — 빈 곳을 누르면 닫혀요"
+      accessible={false}
     >
-      <View style={styles.headingWrap}>
-        <Text style={styles.heading}>본 적 있나요?</Text>
-        {!compact && (
-          <Text style={styles.sub}>알려주시면 더 좋은 추천을 드릴게요</Text>
-        )}
+      {/* backdrop — 빈 곳 탭 = 취소. 닫기 전용 별개 a11y element.
+          absoluteFill 로 카드 전체를 덮어 기존 터치 동작(어디든 탭=닫기) 보존. */}
+      <Pressable
+        style={[StyleSheet.absoluteFill, styles.overlayBackdrop]}
+        onPress={onCancel}
+        accessibilityRole="button"
+        accessibilityLabel="시청 리포트 선택 닫기"
+      />
+      {/* 콘텐츠 — 시각 레이아웃은 기존 overlay 스타일 그대로. pointerEvents
+          는 'box-none' 으로 빈 영역 터치는 backdrop 으로 통과, 버튼만 흡수. */}
+      <View style={styles.overlayContent} pointerEvents="box-none">
+        <View style={styles.headingWrap}>
+          <Text style={styles.heading}>본 적 있나요?</Text>
+          {!compact && (
+            <Text style={styles.sub}>알려주시면 더 좋은 추천을 드릴게요</Text>
+          )}
+        </View>
+        <View style={styles.btnRow}>
+          {REACTION_OPTIONS.map((r) => (
+            <Pressable
+              key={r.key}
+              onPress={() => onReport(tmdbId, r.key)}
+              accessibilityRole="button"
+              accessibilityLabel={`${r.label} 리포트`}
+              style={({ pressed }) => [
+                styles.reactionBtn,
+                {
+                  backgroundColor: r.bg,
+                  borderColor: r.border,
+                },
+                pressed && { transform: [{ scale: 0.95 }] },
+              ]}
+            >
+              <Text style={[styles.reactionLabel, { color: r.color }]}>
+                {r.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
-      <View style={styles.btnRow}>
-        {REACTION_OPTIONS.map((r) => (
-          <Pressable
-            key={r.key}
-            onPress={() => onReport(tmdbId, r.key)}
-            accessibilityRole="button"
-            accessibilityLabel={`${r.label} 리포트`}
-            style={({ pressed }) => [
-              styles.reactionBtn,
-              {
-                backgroundColor: r.bg,
-                borderColor: r.border,
-              },
-              pressed && { transform: [{ scale: 0.95 }] },
-            ]}
-          >
-            <Text style={[styles.reactionLabel, { color: r.color }]}>
-              {r.label}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-    </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  // overlay root — 불투명 면 + radius (시각). a11y 트리에서는 accessible=false.
+  // web 의 backdrop-blur + 그라디언트 대신 불투명 surface (의존성 금지).
+  overlayRoot: {
+    backgroundColor: colors.overlayHeavy,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+  },
+  // backdrop — 닫기 전용 투명 레이어. root 면이 색을 담당하므로 투명.
+  overlayBackdrop: {
+    backgroundColor: 'transparent',
+  },
+  // content — 헤딩 + 버튼 행. 기존 overlay 의 center 정렬/gap/padding 그대로.
+  overlayContent: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.md,
-    // web 의 backdrop-blur + 그라디언트 대신 불투명 surface (의존성 금지).
-    backgroundColor: colors.overlayHeavy,
-    borderRadius: radius.lg,
   },
   headingWrap: {
     alignItems: 'center',
