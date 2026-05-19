@@ -89,6 +89,22 @@ export async function addWatchReport(tmdbId: number, reaction: WatchReaction): P
   await AsyncStorage.setItem(WATCH_REPORTS_KEY, JSON.stringify(next));
 }
 
+/**
+ * 시청 리포트 제거 — web `apps/web/src/lib/store.ts:307-312` `removeWatchReport` 정합.
+ * Saved 카드의 reaction 토글 해제("시청" 배지 다시 누름) 및 작품 삭제 시 함께 호출.
+ *
+ * sync 정합: web/native sync 모두 watch_reports 를 `upsert` 만 한다 (push 가 전체
+ * 행을 다시 올리는 모델이 아니라 "현재 로컬에 있는 것만 upsert"). 즉 로컬에서 제거된
+ * 행은 서버에서 자동 삭제되지 않는다 — 이는 web 도 동일한 v1 한계이며, 서버 측 삭제는
+ * `wipeCloudData` (전체 초기화) 에서만 일어난다. 따라서 본 함수 추가로 sync push 모델을
+ * 바꿀 필요는 없다 (web 정본과 동일 동작).
+ */
+export async function removeWatchReport(tmdbId: number): Promise<void> {
+  const reports = await getWatchReports();
+  const next = reports.filter((r) => r.tmdbId !== tmdbId);
+  await AsyncStorage.setItem(WATCH_REPORTS_KEY, JSON.stringify(next));
+}
+
 export async function getWatchStats(): Promise<{
   total: number;
   loved: number;

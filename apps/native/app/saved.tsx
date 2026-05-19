@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
+  SectionList,
   Dimensions,
   ScrollView,
   ActionSheetIOS,
@@ -15,11 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Rect, Line, Path } from 'react-native-svg';
+import Svg, { Rect, Line, Path, Polyline } from 'react-native-svg';
+import { getOTTIcon } from '@neq/core';
 import {
   getSaved,
   removeSaved,
   getWatchReports,
+  addWatchReport,
+  removeWatchReport,
   getArchivedIds,
   archiveItem,
   unarchiveItem,
@@ -31,6 +35,15 @@ import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
 import SavedHero from '../components/SavedHero';
 import { IconSearch } from '../components/Icons';
+import SavedFilterSheet from '../components/saved/SavedFilterSheet';
+import ReactionOverlay from '../components/saved/ReactionOverlay';
+import ReactionLabel from '../components/saved/ReactionLabel';
+import {
+  loadSavedSort,
+  persistSavedSort,
+  sortSavedItems,
+  type SavedSort,
+} from '../components/saved/SavedSortControl';
 
 const COLS = 2;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -111,6 +124,16 @@ function IconPreview({ size = 14, color }: { size?: number; color: string }) {
     </Svg>
   );
 }
+/**
+ * IconChevronDown — "필터" 트리거의 ▾ 표시. web SavedFilters 의 polyline 정합.
+ */
+function IconChevronDown({ size = 10, color }: { size?: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polyline points="6 9 12 15 18 9" stroke={color} strokeWidth={2} strokeLinecap="square" fill="none" />
+    </Svg>
+  );
+}
 
 export default function SavedScreen() {
   const [items, setItems] = useState<SavedItem[]>([]);
@@ -131,6 +154,13 @@ export default function SavedScreen() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all');
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
+  // P2 배치 A — 정렬 / OTT 필터 / OTT별 그룹화 (web saved/page.tsx 정합).
+  const [sortBy, setSortBy] = useState<SavedSort>('saved');
+  const [ottFilter, setOttFilter] = useState<string | null>(null);
+  const [groupByOTT, setGroupByOTT] = useState(false);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  // P2 배치 A — 카드 내 reaction 입력 ('봤어요?'). web saved/page.tsx:66 reportingId 정합.
+  const [reportingId, setReportingId] = useState<number | null>(null);
 
   const refreshAll = useCallback(async () => {
     const [savedList, reportsList, archived] = await Promise.all([
@@ -153,9 +183,10 @@ export default function SavedScreen() {
     }, [refreshAll]),
   );
 
-  // 첫 mount 시 1회 — 저장된 뷰 모드 복원.
+  // 첫 mount 시 1회 — 저장된 뷰 모드 + 정렬 복원.
   useEffect(() => {
-    loadSavedView().then(setViewMode);
+    void loadSavedView().then(setViewMode);
+    void loadSavedSort().then(setSortBy);
   }, []);
 
   // W5 Task F — archived 0 되면 'archived' 탭 자체가 hide 되므로,
@@ -166,16 +197,57 @@ export default function SavedScreen() {
     }
   }, [viewFilter, archivedIds]);
 
+  // ottFilter 활성 시 OTT 그룹핑 자동 해제 (web saved/page.tsx:171-175 정합).
+  useEffect(() => {
+    if (ottFilter && groupByOTT) {
+      setGroupByOTT(false);
+    }
+  }, [ottFilter, groupByOTT]);
+
   const handleViewModeChange = useCallback((mode: SavedViewMode) => {
     setViewMode(mode);
     void persistSavedView(mode);
     track('saved_view_changed', { mode });
+    // preview 모드는 단일 hero 모델이라 OTT 그룹과 충돌 → 자동 OFF (web saved/page.tsx:116-118).
+    if (mode === 'preview') {
+      setGroupByOTT(false);
+    }
+  }, []);
+
+  const handleSortChange = useCallback((s: SavedSort) => {
+    setSortBy(s);
+    void persistSavedSort(s);
   }, []);
 
   async function handleRemove(tmdbId: number) {
     await removeSaved(tmdbId);
+    // 작품 삭제 시 시청 리포트도 함께 제거 (web saved/page.tsx:299-300 정합).
+    await removeWatchReport(tmdbId);
+    if (reportingId === tmdbId) setReportingId(null);
     setItems((prev) => prev.filter((s) => s.recommendation.tmdbId !== tmdbId));
+    setReports((prev) => {
+      const next = { ...prev };
+      delete next[tmdbId];
+      return next;
+    });
   }
+
+  // P2 배치 A — reaction 기록. web saved/page.tsx:315-319 handleReport 정합.
+  const handleReport = useCallback(async (tmdbId: number, reaction: WatchReaction) => {
+    await addWatchReport(tmdbId, reaction);
+    setReportingId(null);
+    setReports((prev) => ({ ...prev, [tmdbId]: reaction }));
+  }, []);
+
+  // P2 배치 A — reaction 해제. web saved/page.tsx:321-324 handleUndoReport 정합.
+  const handleUndoReport = useCallback(async (tmdbId: number) => {
+    await removeWatchReport(tmdbId);
+    setReports((prev) => {
+      const next = { ...prev };
+      delete next[tmdbId];
+      return next;
+    });
+  }, []);
 
   // W5 Task E — DetailSheet 진입. web `apps/web/src/app/saved/page.tsx:335-342`
   // 의 `openDetailFor` 와 1:1 정합. source 는 'saved_tap' 고정.
@@ -242,6 +314,7 @@ export default function SavedScreen() {
         ]);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [archivedIds, handleOpenDetail, handleArchiveToggle],
   );
 
@@ -261,18 +334,73 @@ export default function SavedScreen() {
     return result;
   }, [items, archivedIds, reports, viewFilter]);
 
-  // preview 모드 hero 자동 선택 — selectedPreviewId 가 filteredItems 안에 없으면
-  // 첫 작품으로 보정. viewFilter 변경 등 목록 변경 시 자동 보정 (web 정본 정합).
+  // P2 배치 A — OTT 필터 적용. web saved/page.tsx:141-146 ottFilteredSaved 정합.
+  const ottFilteredItems = useMemo(() => {
+    if (!ottFilter) return filteredItems;
+    return filteredItems.filter((s) =>
+      s.recommendation.providers.some((p) => p.name === ottFilter),
+    );
+  }, [filteredItems, ottFilter]);
+
+  // P2 배치 A — 정렬 적용. web saved/page.tsx:148-151 sortedSaved 정합.
+  const sortedItems = useMemo(
+    () => sortSavedItems(ottFilteredItems, sortBy),
+    [ottFilteredItems, sortBy],
+  );
+
+  // P2 배치 A — 저장 작품에서 사용 가능한 OTT 목록 (작품 수 많은 순).
+  // web saved/page.tsx:178-188 availableOTTs 정합. ottFilter 와 무관하게 filteredItems 기준.
+  const availableOTTs = useMemo(() => {
+    const ottCount = new Map<string, number>();
+    for (const s of filteredItems) {
+      for (const p of s.recommendation.providers) {
+        ottCount.set(p.name, (ottCount.get(p.name) ?? 0) + 1);
+      }
+    }
+    return Array.from(ottCount.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({ name, count }));
+  }, [filteredItems]);
+
+  // P2 배치 A — OTT별 그룹핑. web saved/page.tsx:194-218 ottGroups 정합.
+  // 작품이 여러 OTT 제공 시 각 그룹에 중복 노출. providers 빈 작품은 "기타".
+  // ottFilter 활성 시엔 그룹화 자동 해제되므로 여기선 ottFilter 분기 불필요.
+  const ottGroups = useMemo<{ ott: string; items: SavedItem[] }[] | null>(() => {
+    if (!groupByOTT) return null;
+    const groups: Record<string, SavedItem[]> = {};
+    for (const { name } of availableOTTs) {
+      groups[name] = [];
+    }
+    for (const s of sortedItems) {
+      const providers = s.recommendation.providers;
+      if (!providers || providers.length === 0) {
+        if (!groups['기타']) groups['기타'] = [];
+        groups['기타'].push(s);
+        continue;
+      }
+      for (const p of providers) {
+        if (!groups[p.name]) groups[p.name] = [];
+        groups[p.name].push(s);
+      }
+    }
+    // 작품 수 많은 OTT 먼저.
+    return Object.entries(groups)
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([ott, list]) => ({ ott, items: list }));
+  }, [sortedItems, groupByOTT, availableOTTs]);
+
+  // preview 모드 hero 자동 선택 — selectedPreviewId 가 sortedItems 안에 없으면
+  // 첫 작품으로 보정. viewFilter/ottFilter/sort 변경 등 목록 변경 시 자동 보정 (web 정본 정합).
   useEffect(() => {
     if (viewMode !== 'preview') return;
-    if (filteredItems.length === 0) return;
+    if (sortedItems.length === 0) return;
     const exists =
       selectedPreviewId !== null &&
-      filteredItems.some((s) => s.recommendation.tmdbId === selectedPreviewId);
+      sortedItems.some((s) => s.recommendation.tmdbId === selectedPreviewId);
     if (!exists) {
-      setSelectedPreviewId(filteredItems[0].recommendation.tmdbId);
+      setSelectedPreviewId(sortedItems[0].recommendation.tmdbId);
     }
-  }, [viewMode, filteredItems, selectedPreviewId]);
+  }, [viewMode, sortedItems, selectedPreviewId]);
 
   // ViewFilter 탭 정의. 카운트는 archived 제외한 활성 작품 기준 (web 정본 동일).
   const viewFilters = useMemo(() => {
@@ -295,6 +423,11 @@ export default function SavedScreen() {
     }
     return base;
   }, [items, reports, archivedIds]);
+
+  // P2 배치 A — "필터" 트리거 노출 조건. web saved/page.tsx:536-540 정합.
+  // OTT 가 2종 이상일 때만 필터 의미 있음.
+  const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
+  const hasActiveFilter = ottFilter !== null || groupByOTT || sortBy !== 'saved';
 
   // viewMode 토글 버튼 1개 — web saved/page.tsx 의 3-way segmented 정합.
   // active = surface-raised 면 + text-primary (2026-05-13 M1: amber 박탈).
@@ -325,7 +458,7 @@ export default function SavedScreen() {
       <View style={styles.header}>
         <View style={styles.titleWrap}>
           <Text style={styles.title}>저장한 작품</Text>
-          <Text style={styles.counter}>{filteredItems.length}개</Text>
+          <Text style={styles.counter}>{ottFilteredItems.length}개</Text>
         </View>
         {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김. */}
         {items.length > 0 ? (
@@ -359,89 +492,236 @@ export default function SavedScreen() {
       </View>
 
       {/* W5 Task F — ViewFilter 탭 행 (web `SavedFilters` underline 패턴 정합).
+          P2 배치 A — 우측에 "필터 ▾" 트리거 추가 (web SavedFilters 정합).
           items 0 일 때는 탭 의미 없음 → 숨김. */}
       {items.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          // FAIL-B (2026-05-19 재검증) — horizontal ScrollView 는 부모 column flex
-          // 컨텍스트에서 cross-axis(세로) 로 남는 공간을 흡수한다. preview 모드는
-          // 형제가 SavedHero(flex:1) 라 ScrollView 가 297px 부풀어 hero 가 72px 로
-          // 짜부라졌다. flexGrow:0 + flexShrink:0 으로 ScrollView 가 자기 콘텐츠
-          // 높이(44px)만 차지하게 고정 — 어느 viewMode 에서나 filter 행은 고정 높이.
-          style={styles.viewFilterScroll}
-          contentContainerStyle={styles.viewFilterRow}
-          accessibilityRole="tablist"
-          accessibilityLabel="저장 필터"
-        >
-          {viewFilters.map((f) => {
-            const active = viewFilter === f.key;
-            return (
-              <Pressable
-                key={f.key}
-                onPress={() => setViewFilter(f.key)}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                style={[styles.viewFilterTab, active && styles.viewFilterTabActive]}
-                hitSlop={4}
-              >
-                <Text style={[styles.viewFilterLabel, active && styles.viewFilterLabelActive]}>
-                  {f.label}
-                </Text>
-                {f.count > 0 && (
-                  <Text style={[styles.viewFilterCount, active && styles.viewFilterCountActive]}>
-                    {f.count}
+        <View style={styles.filterBar}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            // FAIL-B (2026-05-19 재검증) — horizontal ScrollView 는 부모 column flex
+            // 컨텍스트에서 cross-axis(세로) 로 남는 공간을 흡수한다. flexGrow:0 +
+            // flexShrink:0 으로 자기 콘텐츠 높이(44px)만 차지하게 고정.
+            style={styles.viewFilterScroll}
+            contentContainerStyle={styles.viewFilterRow}
+            accessibilityRole="tablist"
+            accessibilityLabel="저장 필터"
+          >
+            {viewFilters.map((f) => {
+              const active = viewFilter === f.key;
+              return (
+                <Pressable
+                  key={f.key}
+                  onPress={() => setViewFilter(f.key)}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  style={[styles.viewFilterTab, active && styles.viewFilterTabActive]}
+                  hitSlop={4}
+                >
+                  <Text style={[styles.viewFilterLabel, active && styles.viewFilterLabelActive]}>
+                    {f.label}
                   </Text>
-                )}
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+                  {f.count > 0 && (
+                    <Text style={[styles.viewFilterCount, active && styles.viewFilterCountActive]}>
+                      {f.count}
+                    </Text>
+                  )}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {/* "필터 ▾" 트리거 — OTT 선택 + 정렬 + 그룹화 토글을 모두 sheet 안으로 격하.
+              web SavedFilters 의 sheet 트리거 정합. 활성 시 accent dot 표시. */}
+          {showFilterTrigger && (
+            <Pressable
+              onPress={() => setFilterSheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="필터 열기"
+              accessibilityState={{ expanded: filterSheetOpen }}
+              style={styles.filterTrigger}
+              hitSlop={4}
+            >
+              <Text style={styles.filterTriggerText}>필터</Text>
+              <IconChevronDown size={10} color={colors.textSecondary} />
+              {hasActiveFilter && <View style={styles.filterTriggerDot} />}
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* P2 배치 A — 활성 필터 chip 행 (web SavedFilters 활성 chip 정합).
+          OTT 또는 그룹화 적용 시에만 노출. 탭하면 즉시 제거. */}
+      {items.length > 0 && (ottFilter !== null || groupByOTT) && (
+        <View style={styles.activeChipsRow}>
+          {ottFilter !== null && (
+            <Pressable
+              onPress={() => setOttFilter(null)}
+              accessibilityRole="button"
+              accessibilityLabel={`${ottFilter} 필터 제거`}
+              style={styles.activeChip}
+            >
+              {(() => {
+                const iconSrc = getOTTIcon(ottFilter);
+                return iconSrc ? (
+                  <Image
+                    source={{ uri: iconSrc }}
+                    style={styles.activeChipIcon}
+                    contentFit="contain"
+                    transition={0}
+                  />
+                ) : null;
+              })()}
+              <Text style={styles.activeChipText}>{ottFilter}</Text>
+              <Text style={styles.activeChipX}>✕</Text>
+            </Pressable>
+          )}
+          {groupByOTT && (
+            <Pressable
+              onPress={() => setGroupByOTT(false)}
+              accessibilityRole="button"
+              accessibilityLabel="OTT별 그룹화 해제"
+              style={styles.activeChip}
+            >
+              <Text style={styles.activeChipText}>OTT별 그룹화</Text>
+              <Text style={styles.activeChipX}>✕</Text>
+            </Pressable>
+          )}
+        </View>
       )}
 
       {items.length === 0 ? (
+        // P3 — 빈 상태 카피 정본 일치 (web saved/page.tsx:673-678 책장 메타포, Round 3 v2 잠금).
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>아직 저장한 작품이 없어요</Text>
-          <Text style={styles.emptyHint}>발견 탭에서 좋아요를 눌러보세요</Text>
+          <Text style={styles.emptyTitle}>책장이 비어 있어요</Text>
+          <Text style={styles.emptyHint}>
+            Discover에서 마음에 드는 걸{'\n'}하나씩 담아 보세요
+          </Text>
         </View>
-      ) : filteredItems.length === 0 ? (
-        // W5 Task F — view filter 적용 후 결과 0 (예: "안 봤어요" 인데 모두 시청).
-        // items 자체는 0 이 아니므로 별도 메시지.
+      ) : ottFilteredItems.length === 0 ? (
+        // view filter / OTT filter 적용 후 결과 0.
+        // web saved/page.tsx:679-705 의 빈 상태 분기 카피 정합.
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>
-            {viewFilter === 'archived'
-              ? '아카이브된 작품이 없어요'
-              : viewFilter === 'unwatched'
-                ? '안 본 작품이 없어요'
-                : viewFilter === 'watched'
-                  ? '시청한 작품이 없어요'
-                  : '표시할 작품이 없어요'}
+            {ottFilter
+              ? '이 조건엔 아무것도'
+              : viewFilter === 'archived'
+                ? '보관한 작품이 없어요'
+                : viewFilter === 'unwatched'
+                  ? '모두 시청했어요!'
+                  : viewFilter === 'watched'
+                    ? '아직 시청 기록이 없어요'
+                    : '표시할 작품이 없어요'}
           </Text>
-          <Text style={styles.emptyHint}>다른 필터를 선택해 보세요</Text>
+          <Text style={styles.emptyHint}>
+            {ottFilter
+              ? '필터를 조금만 느슨해 보세요'
+              : viewFilter === 'archived'
+                ? '시청한 작품을 보관 아이콘으로 정리할 수 있어요'
+                : viewFilter === 'unwatched'
+                  ? 'Discover에서 새로운 작품을 찾아보세요'
+                  : viewFilter === 'watched'
+                    ? "Saved의 작품에서 '봤어요?' 버튼을 눌러보세요"
+                    : '다른 필터를 선택해 보세요'}
+          </Text>
         </View>
       ) : viewMode === 'preview' ? (
         // Preview(Coverflow) 뷰 — 큰 hero + 하단 가로 carousel.
         <SavedHero
-          items={filteredItems}
+          items={sortedItems}
           selectedPreviewId={selectedPreviewId}
           reports={reports}
           onSelectPreview={setSelectedPreviewId}
           onOpen={handleOpenDetail}
+        />
+      ) : ottGroups ? (
+        // P2 배치 A — OTT별 그룹핑. web SavedList 의 ottGroups 분기 정합.
+        // SectionList 로 OTT 섹션 헤더 + 그룹 내 grid/list 분기.
+        <SectionList
+          key={`saved-grouped-${viewMode}`}
+          sections={ottGroups.map((g) => ({ title: g.ott, count: g.items.length, data: [g.items] }))}
+          keyExtractor={(_, index) => `group-${index}`}
+          contentContainerStyle={styles.groupedContent}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => {
+            const iconSrc = getOTTIcon(section.title);
+            return (
+              <View style={styles.ottSectionHeader}>
+                {iconSrc ? (
+                  <Image
+                    source={{ uri: iconSrc }}
+                    style={styles.ottSectionIcon}
+                    contentFit="contain"
+                    transition={0}
+                  />
+                ) : null}
+                <Text style={styles.ottSectionTitle}>{section.title}</Text>
+                <Text style={styles.ottSectionCount}>{section.count}</Text>
+              </View>
+            );
+          }}
+          renderItem={({ item: groupItems }) =>
+            groupItems.length === 0 ? (
+              <Text style={styles.ottSectionEmpty}>
+                이 OTT에는 저장된 작품이 없어요
+              </Text>
+            ) : viewMode === 'list' ? (
+              <View style={styles.groupListWrap}>
+                {groupItems.map((s) => (
+                  <ListCard
+                    key={s.recommendation.tmdbId}
+                    item={s}
+                    report={reports[s.recommendation.tmdbId]}
+                    isReporting={reportingId === s.recommendation.tmdbId}
+                    onPress={handleOpenDetail}
+                    onLongPress={handleLongPress}
+                    onStartReport={setReportingId}
+                    onReport={handleReport}
+                    onUndoReport={handleUndoReport}
+                    onCancelReport={() => setReportingId(null)}
+                  />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.groupGridWrap}>
+                {groupItems.map((s, i) => (
+                  <PosterCard
+                    key={s.recommendation.tmdbId}
+                    item={s}
+                    index={i}
+                    report={reports[s.recommendation.tmdbId]}
+                    isReporting={reportingId === s.recommendation.tmdbId}
+                    onPress={handleOpenDetail}
+                    onLongPress={handleLongPress}
+                    onStartReport={setReportingId}
+                    onReport={handleReport}
+                    onUndoReport={handleUndoReport}
+                    onCancelReport={() => setReportingId(null)}
+                  />
+                ))}
+              </View>
+            )
+          }
         />
       ) : viewMode === 'list' ? (
         // List 뷰 — 1열 가로 카드 (60×90 포스터).
         // key 로 grid FlatList 와 별개 인스턴스 강제 — numColumns on-the-fly 변경 invariant 회피.
         <FlatList
           key="saved-list"
-          data={filteredItems}
+          data={sortedItems}
           keyExtractor={(s) => String(s.recommendation.tmdbId)}
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           renderItem={({ item }) => (
             <ListCard
               item={item}
+              report={reports[item.recommendation.tmdbId]}
+              isReporting={reportingId === item.recommendation.tmdbId}
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
+              onStartReport={setReportingId}
+              onReport={handleReport}
+              onUndoReport={handleUndoReport}
+              onCancelReport={() => setReportingId(null)}
             />
           )}
         />
@@ -450,43 +730,25 @@ export default function SavedScreen() {
         // key 로 list FlatList 와 별개 인스턴스 강제 — numColumns on-the-fly 변경 invariant 회피.
         <FlatList
           key="saved-grid"
-          data={filteredItems}
+          data={sortedItems}
           keyExtractor={(s) => String(s.recommendation.tmdbId)}
           numColumns={COLS}
           contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}
           columnWrapperStyle={{ gap: spacing.md }}
-          renderItem={({ item, index }) => {
-            const tall = index % 3 === 0;
-            return (
-              <Pressable
-                style={[styles.card, { width: CARD_W, height: tall ? 240 : 200 }]}
-                // W5 Task E — 카드 탭 = DetailSheet 진입 (web `openDetailFor` 정합).
-                // W5 Task F — long-press = ActionSheet [상세/아카이브/삭제] 메뉴 (단일 entry point).
-                onPress={() => handleOpenDetail(item.recommendation)}
-                onLongPress={() => handleLongPress(item.recommendation)}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.recommendation.title} 상세보기`}
-              >
-                {item.recommendation.posterUrl ? (
-                  <Image
-                    source={{ uri: item.recommendation.posterUrl }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    transition={200}
-                  />
-                ) : (
-                  <View style={[StyleSheet.absoluteFill, styles.fallback]}>
-                    <Text style={styles.fallbackText}>N</Text>
-                  </View>
-                )}
-                <View style={styles.label}>
-                  <Text style={styles.labelText} numberOfLines={1}>
-                    {item.recommendation.title}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          }}
+          renderItem={({ item, index }) => (
+            <PosterCard
+              item={item}
+              index={index}
+              report={reports[item.recommendation.tmdbId]}
+              isReporting={reportingId === item.recommendation.tmdbId}
+              onPress={handleOpenDetail}
+              onLongPress={handleLongPress}
+              onStartReport={setReportingId}
+              onReport={handleReport}
+              onUndoReport={handleUndoReport}
+              onCancelReport={() => setReportingId(null)}
+            />
+          )}
         />
       )}
 
@@ -513,7 +775,143 @@ export default function SavedScreen() {
         onClose={() => setSearchOpen(false)}
         initialQuery={searchInitialQuery}
       />
+
+      {/* P2 배치 A — 필터 sheet. OTT 선택 + 정렬 + OTT별 그룹화 토글 (web SavedFilterSheet 정합). */}
+      <SavedFilterSheet
+        open={filterSheetOpen}
+        onClose={() => setFilterSheetOpen(false)}
+        ottFilter={ottFilter}
+        setOttFilter={setOttFilter}
+        groupByOTT={groupByOTT}
+        setGroupByOTT={setGroupByOTT}
+        availableOTTs={availableOTTs}
+        sortBy={sortBy}
+        setSortBy={handleSortChange}
+      />
     </SafeAreaView>
+  );
+}
+
+/**
+ * PosterCard — Grid 뷰 카드.
+ * web `apps/web/src/components/saved/SavedList.tsx` PosterCard 정합.
+ * P2 배치 A — reaction 입력 경로: 좌상단 '봤어요?' / reaction 있으면 '시청' 토글 +
+ * isReporting 시 ReactionOverlay.
+ */
+function PosterCard({
+  item,
+  index,
+  report,
+  isReporting,
+  onPress,
+  onLongPress,
+  onStartReport,
+  onReport,
+  onUndoReport,
+  onCancelReport,
+}: {
+  item: SavedItem;
+  index: number;
+  report: WatchReaction | undefined;
+  isReporting: boolean;
+  onPress: (rec: Recommendation) => void;
+  onLongPress: (rec: Recommendation) => void;
+  onStartReport: (tmdbId: number) => void;
+  onReport: (tmdbId: number, reaction: WatchReaction) => void;
+  onUndoReport: (tmdbId: number) => void;
+  onCancelReport: () => void;
+}) {
+  const rec = item.recommendation;
+  const tall = index % 3 === 0;
+
+  return (
+    <Pressable
+      style={[styles.card, { width: CARD_W, height: tall ? 240 : 200 }]}
+      // W5 Task E — 카드 탭 = DetailSheet 진입.
+      // W5 Task F — long-press = ActionSheet [상세/아카이브/삭제] 메뉴.
+      onPress={() => onPress(rec)}
+      onLongPress={() => onLongPress(rec)}
+      accessibilityRole="button"
+      accessibilityLabel={`${rec.title} 상세보기`}
+    >
+      {rec.posterUrl ? (
+        <Image
+          source={{ uri: rec.posterUrl }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={200}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.fallback]}>
+          <Text style={styles.fallbackText}>N</Text>
+        </View>
+      )}
+
+      {/* reaction 있을 때 카드 살짝 어둡게 (web overlay-light 정합) */}
+      {report && !isReporting && (
+        <View style={[StyleSheet.absoluteFill, styles.cardDim]} pointerEvents="none" />
+      )}
+
+      {/* 하단 메타 — 제목 + 평점 / reaction badge 또는 OTT 아이콘 */}
+      <View style={styles.label} pointerEvents="none">
+        <Text style={styles.labelText} numberOfLines={1}>
+          {rec.title}
+        </Text>
+        <View style={styles.labelMetaRow}>
+          <Text style={styles.labelRating}>★ {rec.rating.toFixed(1)}</Text>
+          {report ? (
+            <ReactionLabel reaction={report} />
+          ) : (
+            rec.providers.slice(0, 2).map((p) => {
+              const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
+              return iconUrl ? (
+                <Image
+                  key={p.name}
+                  source={{ uri: iconUrl }}
+                  style={styles.labelOttIcon}
+                  contentFit="contain"
+                  transition={0}
+                />
+              ) : null;
+            })
+          )}
+        </View>
+      </View>
+
+      {/* 좌상단 reaction 입력 버튼 — '봤어요?' 또는 '시청'(해제). web PosterCard 정합. */}
+      {!isReporting && !report && (
+        <Pressable
+          onPress={() => onStartReport(rec.tmdbId)}
+          accessibilityRole="button"
+          accessibilityLabel={`${rec.title} 시청 리포트 작성`}
+          style={styles.reportChip}
+          hitSlop={4}
+        >
+          <Text style={styles.reportChipText}>봤어요?</Text>
+        </Pressable>
+      )}
+      {!isReporting && report && (
+        <Pressable
+          onPress={() => onUndoReport(rec.tmdbId)}
+          accessibilityRole="button"
+          accessibilityLabel={`${rec.title} 시청 리포트 취소`}
+          accessibilityState={{ selected: true }}
+          style={styles.reportChip}
+          hitSlop={4}
+        >
+          <Text style={styles.reportChipDone}>✓ 시청</Text>
+        </Pressable>
+      )}
+
+      {/* isReporting 시 reaction 선택 overlay — 카드 전체 덮음. */}
+      {isReporting && (
+        <ReactionOverlay
+          tmdbId={rec.tmdbId}
+          onReport={onReport}
+          onCancel={onCancelReport}
+        />
+      )}
+    </Pressable>
   );
 }
 
@@ -521,15 +919,28 @@ export default function SavedScreen() {
  * ListCard — 위임 O #2 / web ListCard 동기화.
  * 가로 카드 = 포스터 60×90 + 제목/평점/타입+런타임/OTT 칩.
  * W5 Task F — onLongPress = ActionSheet 메뉴 (Grid 와 동일 인터랙션).
+ * P2 배치 A — reaction 입력: 우측 '봤어요?'/'시청' 토글 + isReporting 시 ReactionOverlay.
  */
 function ListCard({
   item,
+  report,
+  isReporting,
   onPress,
   onLongPress,
+  onStartReport,
+  onReport,
+  onUndoReport,
+  onCancelReport,
 }: {
   item: SavedItem;
+  report: WatchReaction | undefined;
+  isReporting: boolean;
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
+  onStartReport: (tmdbId: number) => void;
+  onReport: (tmdbId: number, reaction: WatchReaction) => void;
+  onUndoReport: (tmdbId: number) => void;
+  onCancelReport: () => void;
 }) {
   const rec = item.recommendation;
   const meta: string[] = [];
@@ -573,12 +984,54 @@ function ListCard({
             <Text style={styles.listMeta}>· {meta.join(' · ')}</Text>
           )}
         </View>
-        {rec.providers.length > 0 && (
-          <Text style={styles.listProviders} numberOfLines={1}>
-            {rec.providers.slice(0, 3).map((p) => p.name).join(' · ')}
-          </Text>
-        )}
+        <View style={styles.listSubRow}>
+          {report ? (
+            <ReactionLabel reaction={report} />
+          ) : rec.providers.length > 0 ? (
+            <Text style={styles.listProviders} numberOfLines={1}>
+              {rec.providers.slice(0, 3).map((p) => p.name).join(' · ')}
+            </Text>
+          ) : null}
+        </View>
       </View>
+
+      {/* 트레일링 reaction 입력 버튼 — '봤어요?' 또는 '✓'(해제). web ListCard 정합. */}
+      {!isReporting && (
+        <View style={styles.listTrailing}>
+          {!report ? (
+            <Pressable
+              onPress={() => onStartReport(rec.tmdbId)}
+              accessibilityRole="button"
+              accessibilityLabel={`${rec.title} 시청 리포트 작성`}
+              style={styles.listReportChip}
+              hitSlop={4}
+            >
+              <Text style={styles.listReportChipText}>봤어요?</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => onUndoReport(rec.tmdbId)}
+              accessibilityRole="button"
+              accessibilityLabel={`${rec.title} 시청 리포트 취소`}
+              accessibilityState={{ selected: true }}
+              style={styles.listReportChip}
+              hitSlop={4}
+            >
+              <Text style={styles.listReportChipDone}>✓</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* isReporting 시 reaction 선택 overlay — 카드 전체 덮음 (compact 모드). */}
+      {isReporting && (
+        <ReactionOverlay
+          tmdbId={rec.tmdbId}
+          onReport={onReport}
+          onCancel={onCancelReport}
+          compact
+        />
+      )}
     </Pressable>
   );
 }
@@ -634,12 +1087,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // W5 Task F — ViewFilter 탭 행 스타일 (web SavedFilters underline 패턴 정합).
-  // chip 가 아닌 underline 타입 — web saved/page.tsx 의 borderBottom 2px 와 정합.
-  // FAIL-B — ScrollView 자체가 세로 공간을 흡수하지 못하도록 flex 고정.
-  viewFilterScroll: {
+  // P2 배치 A — filter bar = viewFilter 탭 행 + "필터 ▾" 트리거 (web SavedFilters 정합).
+  filterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingRight: spacing.lg,
+    // FAIL-B — bar 전체가 세로 공간을 흡수하지 않도록 고정.
     flexGrow: 0,
     flexShrink: 0,
+  },
+  // W5 Task F — ViewFilter 탭 행 스타일 (web SavedFilters underline 패턴 정합).
+  viewFilterScroll: {
+    flexGrow: 1,
+    flexShrink: 1,
   },
   viewFilterRow: {
     flexDirection: 'row',
@@ -678,18 +1138,89 @@ const styles = StyleSheet.create({
   viewFilterCountActive: {
     color: colors.textSecondary,
   },
+  // "필터 ▾" 트리거 — web SavedFilters sheet 트리거 정합.
+  filterTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: spacing.sm,
+  },
+  filterTriggerText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  filterTriggerDot: {
+    position: 'absolute',
+    top: 8,
+    right: 2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accent,
+  },
+  // 활성 필터 chip 행 — web SavedFilters 활성 chip 정합.
+  activeChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 32,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentBorderLight,
+  },
+  activeChipIcon: {
+    width: 14,
+    height: 14,
+    borderRadius: radius.sm,
+  },
+  activeChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  activeChipX: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.accent,
+  },
   empty: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
   },
-  emptyTitle: { color: colors.textPrimary, fontSize: 16, fontWeight: '600' },
-  emptyHint: { color: colors.textMuted, fontSize: 13 },
+  emptyTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontFamily: fontsV2.display,
+  },
+  emptyHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
   card: {
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.surface,
+  },
+  cardDim: {
+    backgroundColor: colors.overlay,
+    opacity: 0.35,
   },
   fallback: {
     backgroundColor: colors.surface,
@@ -715,6 +1246,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  labelMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  labelRating: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+  },
+  labelOttIcon: {
+    width: 16,
+    height: 16,
+    borderRadius: radius.sm,
+  },
+  // 좌상단 reaction 입력 칩 — web PosterCard 의 '봤어요?' 버튼 정합.
+  reportChip: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
+    minHeight: 32,
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: colors.overlay,
+  },
+  reportChipText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  reportChipDone: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.accent,
+  },
   // List 뷰 스타일.
   listContent: {
     paddingHorizontal: spacing.md,
@@ -728,6 +1298,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    overflow: 'hidden',
   },
   listPosterFrame: {
     width: 60,
@@ -767,9 +1338,79 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 12,
   },
+  listSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    minHeight: 18,
+  },
   listProviders: {
     color: colors.textMuted,
     fontSize: 11,
-    marginTop: 4,
+  },
+  // 트레일링 reaction 칩 — web ListCard 의 '봤어요?'/'✓' 정합.
+  listTrailing: {
+    flexShrink: 0,
+  },
+  listReportChip: {
+    minHeight: 36,
+    minWidth: 44,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: colors.surfaceRaised,
+  },
+  listReportChipText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+  },
+  listReportChipDone: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.accent,
+  },
+  // OTT 그룹핑 (SectionList) 스타일 — web SavedList ottGroups 정합.
+  groupedContent: {
+    paddingBottom: spacing.lg,
+  },
+  ottSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  ottSectionIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: radius.sm,
+  },
+  ottSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  ottSectionCount: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontFamily: fontsV2.data,
+  },
+  ottSectionEmpty: {
+    fontSize: 12,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.lg,
+  },
+  groupListWrap: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  groupGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.md,
+    gap: spacing.md,
   },
 });
