@@ -28,15 +28,19 @@ import {
   getArchivedIds,
   archiveItem,
   unarchiveItem,
+  getRecHistory,
+  getWatchStats,
+  type RecHistoryEntry,
 } from '../lib/store';
+import { env } from '../lib/env';
 import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
-import { colors, radius, spacing, fontsV2 } from '../lib/tokens';
+import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
 import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
 import SavedHero from '../components/SavedHero';
-import { IconSearch } from '../components/Icons';
+import { IconSearch, IconSave } from '../components/Icons';
 import SavedFilterSheet from '../components/saved/SavedFilterSheet';
 import ReactionOverlay from '../components/saved/ReactionOverlay';
 import ReactionLabel from '../components/saved/ReactionLabel';
@@ -62,14 +66,15 @@ type SavedViewMode = 'grid' | 'list' | 'preview';
 const SAVED_VIEW_KEY = 'neq_saved_view';
 
 /**
- * W5 Task F — Saved 화면 view filter (web `SavedFilters.tsx` 와 정합).
- * web 의 'history' (rec 히스토리) 는 native 미구현 — 4종만 노출:
+ * W5 Task F / 배치 H — Saved 화면 view filter (web `SavedFilters.tsx` 와 정합).
+ * 배치 H 에서 'history' 추가 → web 정본과 동일하게 5종 노출:
  *  - "all"       : 전체 (아카이브 hide)
  *  - "unwatched" : 안 봤어요 (시청 리포트 없음)
  *  - "watched"   : 시청 완료 (loved/good/meh/dropped 어떤 reaction 이라도 있음)
- *  - "archived"  : 아카이브 (사용자가 명시적으로 숨긴 작품)
+ *  - "archived"  : 아카이브 (사용자가 명시적으로 숨긴 작품) — 0개면 탭 숨김
+ *  - "history"   : 히스토리 (Discover 에서 추천받은 작품 누적 기록 — 날짜별 그룹)
  */
-type ViewFilter = 'all' | 'unwatched' | 'watched' | 'archived';
+type ViewFilter = 'all' | 'unwatched' | 'watched' | 'archived' | 'history';
 
 async function loadSavedView(): Promise<SavedViewMode> {
   try {
@@ -156,6 +161,18 @@ export default function SavedScreen() {
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all');
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
+  // 배치 H — 추천 기록 + 시청 통계.
+  // web `apps/web/src/app/saved/page.tsx:68/73` 와 1:1 정합.
+  const [history, setHistory] = useState<RecHistoryEntry[]>([]);
+  const [stats, setStats] = useState({
+    total: 0,
+    loved: 0,
+    good: 0,
+    meh: 0,
+    dropped: 0,
+  });
+  // 배치 H — resave 진행 중인 항목 id (중복 탭 방지 + 진행 표시).
+  const [resavingId, setResavingId] = useState<number | null>(null);
   // P2 배치 A — 정렬 / OTT 필터 / OTT별 그룹화 (web saved/page.tsx 정합).
   const [sortBy, setSortBy] = useState<SavedSort>('saved');
   const [ottFilter, setOttFilter] = useState<string | null>(null);
@@ -168,11 +185,15 @@ export default function SavedScreen() {
   const toast = useToast();
 
   const refreshAll = useCallback(async () => {
-    const [savedList, reportsList, archived] = await Promise.all([
-      getSaved(),
-      getWatchReports(),
-      getArchivedIds(),
-    ]);
+    // 배치 H — history / stats 도 함께 로드 (web `refreshData` saved/page.tsx:83-95 정합).
+    const [savedList, reportsList, archived, historyList, statsData] =
+      await Promise.all([
+        getSaved(),
+        getWatchReports(),
+        getArchivedIds(),
+        getRecHistory(),
+        getWatchStats(),
+      ]);
     setItems(savedList);
     const reportsMap: Record<number, WatchReaction> = {};
     for (const r of reportsList) {
@@ -180,6 +201,8 @@ export default function SavedScreen() {
     }
     setReports(reportsMap);
     setArchivedIds(new Set(archived));
+    setHistory(historyList);
+    setStats(statsData);
   }, []);
 
   useFocusEffect(
@@ -306,6 +329,124 @@ export default function SavedScreen() {
       });
     },
     [archivedIds],
+  );
+
+  // 배치 H — 추천 기록 날짜별 그룹핑. web `historyGroups` (saved/page.tsx:221-236) 정합.
+  // 오늘 / 어제 / 이전 3구간. 빈 그룹은 제외. viewFilter 가 history 일 때만 계산.
+  const historyGroups = useMemo(() => {
+    if (viewFilter !== 'history') return [];
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const groups: { label: string; items: RecHistoryEntry[] }[] = [
+      { label: '오늘', items: [] },
+      { label: '어제', items: [] },
+      { label: '이전', items: [] },
+    ];
+    for (const entry of history) {
+      if (entry.date === today) groups[0].items.push(entry);
+      else if (entry.date === yesterday) groups[1].items.push(entry);
+      else groups[2].items.push(entry);
+    }
+    return groups.filter((g) => g.items.length > 0);
+  }, [history, viewFilter]);
+
+  // 배치 H — saved 에 있는 tmdbId Set. history 카드의 "저장됨" 배지 / resave 버튼 분기용.
+  // web `savedIdSet` (saved/page.tsx:239) 정합.
+  const savedIdSet = useMemo(
+    () => new Set(items.map((s) => s.recommendation.tmdbId)),
+    [items],
+  );
+
+  /**
+   * 배치 H — history 항목 → TMDB 상세 조회로 full Recommendation 복원.
+   * web `hydrateEntry` (saved/page.tsx:242-252) 정합.
+   * native 는 web 의 상대경로 `/api/tmdb/hydrate` 대신 `env.API_BASE_URL` prefix 사용
+   * (DetailSheet.tsx:226 / OnboardingStepFavorites.tsx:145 와 동일한 native 패턴).
+   */
+  const hydrateEntry = useCallback(
+    async (entry: RecHistoryEntry): Promise<Recommendation | null> => {
+      try {
+        const params = new URLSearchParams({ id: String(entry.tmdbId) });
+        if (entry.type) params.set('type', entry.type);
+        const res = await fetch(
+          `${env.API_BASE_URL}/api/tmdb/hydrate?${params.toString()}`,
+        );
+        if (!res.ok) return null;
+        return (await res.json()) as Recommendation;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
+  /**
+   * 배치 H — history 항목을 책장에 다시 담기.
+   * web `handleResave` (saved/page.tsx:254-281) 정합:
+   *   hydrate 성공 → full Recommendation 으로 addSaved.
+   *   hydrate 실패 → 최소 정보(평점/OTT 등 없음) 폴백 객체로 addSaved.
+   */
+  const handleResave = useCallback(
+    async (entry: RecHistoryEntry) => {
+      if (resavingId !== null) return;
+      setResavingId(entry.tmdbId);
+      try {
+        const full = await hydrateEntry(entry);
+        if (full) {
+          await addSaved(full);
+        } else {
+          // hydrate 실패 — web 정본과 동일한 최소 폴백 객체.
+          await addSaved({
+            title: entry.title,
+            tmdbId: entry.tmdbId,
+            posterUrl: entry.posterUrl,
+            reason: '',
+            rating: 0,
+            providers: [],
+            type: entry.type ?? 'movie',
+            titleEn: '',
+            overview: '',
+            backdrop: null,
+            date: entry.date,
+            runtime: null,
+            seasons: null,
+            country: [],
+            director: null,
+            cast: [],
+            watchLink: null,
+          });
+        }
+        // web `handleResave` (saved/page.tsx:254-281) 는 refreshData 만 — toast 없음.
+        // native 도 정본 정합 위해 toast 미발사. resave 결과는 카드의 저장 배지로 확인.
+        await refreshAll();
+      } finally {
+        setResavingId(null);
+      }
+    },
+    [resavingId, hydrateEntry, refreshAll],
+  );
+
+  /**
+   * 배치 H — history 항목 탭 → DetailSheet 진입.
+   * web `handleHistoryClick` (saved/page.tsx:284-293) 정합:
+   *   이미 saved 면 그 recommendation 으로, 아니면 hydrate 후 열기. 실패 시 무시.
+   */
+  const handleHistoryPress = useCallback(
+    async (entry: RecHistoryEntry) => {
+      const existing = items.find(
+        (s) => s.recommendation.tmdbId === entry.tmdbId,
+      );
+      if (existing) {
+        handleOpenDetail(existing.recommendation);
+        return;
+      }
+      const full = await hydrateEntry(entry);
+      if (!full) return;
+      handleOpenDetail(full);
+    },
+    [items, hydrateEntry, handleOpenDetail],
   );
 
   // W5 Task F — long-press → ActionSheet [상세보기 / 아카이브(또는 해제) / 삭제 / 취소].
@@ -447,12 +588,16 @@ export default function SavedScreen() {
     if (archivedCount > 0) {
       base.push({ key: 'archived', label: '아카이브', count: archivedCount });
     }
+    // 배치 H — '히스토리' 탭은 항상 노출 (web saved/page.tsx:438 정본 동일).
+    base.push({ key: 'history', label: '히스토리', count: history.length });
     return base;
-  }, [items, reports, archivedIds]);
+  }, [items, reports, archivedIds, history.length]);
 
   // P2 배치 A — "필터" 트리거 노출 조건. web saved/page.tsx:536-540 정합.
   // OTT 가 2종 이상일 때만 필터 의미 있음.
-  const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
+  // 배치 H — history 뷰에서는 OTT 필터/정렬 의미 없음 → 트리거 숨김 (web 정본 동일).
+  const showFilterTrigger =
+    items.length > 0 && availableOTTs.length > 1 && viewFilter !== 'history';
   const hasActiveFilter = ottFilter !== null || groupByOTT || sortBy !== 'saved';
 
   // viewMode 토글 버튼 1개 — web saved/page.tsx 의 3-way segmented 정합.
@@ -484,10 +629,18 @@ export default function SavedScreen() {
       <View style={styles.header}>
         <View style={styles.titleWrap}>
           <Text style={styles.title}>저장한 작품</Text>
-          <Text style={styles.counter}>{ottFilteredItems.length}개</Text>
+          {/* 배치 H — history 뷰에서는 추천 기록 갯수를 카운터로 표시
+              (native 고유 카운터 — saved 갯수를 보여주면 history 맥락과 어긋남). */}
+          <Text style={styles.counter}>
+            {viewFilter === 'history'
+              ? `${history.length}개`
+              : `${ottFilteredItems.length}개`}
+          </Text>
         </View>
-        {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김. */}
-        {items.length > 0 ? (
+        {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김.
+            배치 H — history 뷰에서는 grid/list/preview 무의미 → 숨김
+            (web saved/page.tsx:461 `saved.length > 0 && viewFilter !== "history"` 정합). */}
+        {items.length > 0 && viewFilter !== 'history' ? (
           <View
             style={styles.segmented}
             accessibilityRole="tablist"
@@ -519,8 +672,9 @@ export default function SavedScreen() {
 
       {/* W5 Task F — ViewFilter 탭 행 (web `SavedFilters` underline 패턴 정합).
           P2 배치 A — 우측에 "필터 ▾" 트리거 추가 (web SavedFilters 정합).
-          items 0 일 때는 탭 의미 없음 → 숨김. */}
-      {items.length > 0 && (
+          배치 H — items 0 이어도 history 가 있으면 탭 행 노출 (web saved/page.tsx:531
+          `saved.length > 0 || history.length > 0` 정합 — '히스토리' 탭 접근 보장). */}
+      {(items.length > 0 || history.length > 0) && (
         <View style={styles.filterBar}>
           <ScrollView
             horizontal
@@ -576,8 +730,9 @@ export default function SavedScreen() {
       )}
 
       {/* P2 배치 A — 활성 필터 chip 행 (web SavedFilters 활성 chip 정합).
-          OTT 또는 그룹화 적용 시에만 노출. 탭하면 즉시 제거. */}
-      {items.length > 0 && (ottFilter !== null || groupByOTT) && (
+          OTT 또는 그룹화 적용 시에만 노출. 탭하면 즉시 제거.
+          배치 H — history 뷰에서는 OTT chip 무의미 → 숨김 (web `showActiveChips` 정합). */}
+      {items.length > 0 && viewFilter !== 'history' && (ottFilter !== null || groupByOTT) && (
         <View style={styles.activeChipsRow}>
           {ottFilter !== null && (
             <Pressable
@@ -615,7 +770,71 @@ export default function SavedScreen() {
         </View>
       )}
 
-      {items.length === 0 ? (
+      {/* 배치 H — Watch Stats 카드. web saved/page.tsx:552-591 정합.
+          watched / archived 탭에서 시청 리포트가 1건 이상일 때 노출.
+          loved/good/meh/dropped 중 0 인 항목은 숨김 (web 정본 동일). */}
+      {stats.total > 0 &&
+        (viewFilter === 'watched' || viewFilter === 'archived') && (
+          <View style={styles.statsWrap}>
+            <View style={styles.statsCard}>
+              <View style={styles.statsTextCol}>
+                <Text style={styles.statsLabel}>시청 리포트</Text>
+                <View style={styles.statsRow}>
+                  {stats.loved > 0 && (
+                    <Text style={styles.statLoved}>인생작 {stats.loved}</Text>
+                  )}
+                  {stats.good > 0 && (
+                    <Text style={styles.statGood}>재밌었어 {stats.good}</Text>
+                  )}
+                  {stats.meh > 0 && (
+                    <Text style={styles.statMeh}>그저 그래 {stats.meh}</Text>
+                  )}
+                  {stats.dropped > 0 && (
+                    <Text style={styles.statDropped}>
+                      안 맞았어 {stats.dropped}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <Text style={styles.statsTotal}>{stats.total}</Text>
+            </View>
+          </View>
+        )}
+
+      {viewFilter === 'history' ? (
+        // 배치 H — 히스토리 뷰. web saved/page.tsx:595-671 정합.
+        // 추천 기록을 날짜별 그룹(오늘/어제/이전)으로 가로 스크롤 표시.
+        history.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>아직 추천 기록이 없어요</Text>
+            <Text style={styles.emptyHint}>Discover에서 카드를 넘겨 보세요</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.historyScroll}>
+            {historyGroups.map((group) => (
+              <View key={group.label} style={styles.historyGroup}>
+                <Text style={styles.historyGroupLabel}>{group.label}</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.historyRow}
+                >
+                  {group.items.map((entry) => (
+                    <HistoryCard
+                      key={entry.tmdbId}
+                      entry={entry}
+                      isSaved={savedIdSet.has(entry.tmdbId)}
+                      isResaving={resavingId === entry.tmdbId}
+                      onPress={handleHistoryPress}
+                      onResave={handleResave}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ))}
+          </ScrollView>
+        )
+      ) : items.length === 0 ? (
         // P3 — 빈 상태 카피 정본 일치 (web saved/page.tsx:673-678 책장 메타포, Round 3 v2 잠금).
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>책장이 비어 있어요</Text>
@@ -1082,6 +1301,79 @@ function ListCard({
   );
 }
 
+/**
+ * HistoryCard — 배치 H. 히스토리 뷰의 가로 스크롤 카드.
+ * web `apps/web/src/app/saved/page.tsx:614-665` 의 history 항목 카드 정합.
+ *  - 포스터 64×96 + 우상단 저장 배지(하트, isSaved 일 때).
+ *  - 제목 1줄.
+ *  - 미저장 항목은 하단 '저장' 버튼 → resave (hydrate 후 책장에 담기).
+ *  - 카드 탭 = DetailSheet 진입 (저장됐으면 그 rec, 아니면 hydrate).
+ */
+function HistoryCard({
+  entry,
+  isSaved,
+  isResaving,
+  onPress,
+  onResave,
+}: {
+  entry: RecHistoryEntry;
+  isSaved: boolean;
+  isResaving: boolean;
+  onPress: (entry: RecHistoryEntry) => void;
+  onResave: (entry: RecHistoryEntry) => void;
+}) {
+  return (
+    <View style={styles.historyCard}>
+      <Pressable
+        onPress={() => onPress(entry)}
+        accessibilityRole="button"
+        accessibilityLabel={`${entry.title}${isSaved ? ' (저장됨)' : ''} 상세보기`}
+        style={({ pressed }) => [pressed && { opacity: 0.85 }]}
+      >
+        <View style={styles.historyPosterFrame}>
+          {entry.posterUrl ? (
+            <Image
+              source={{ uri: entry.posterUrl }}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={150}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.fallback]}>
+              <Text style={styles.historyPosterFallback}>N</Text>
+            </View>
+          )}
+          {isSaved && (
+            <View style={styles.historySavedBadge}>
+              <IconSave size={8} color={colors.accent} filled />
+            </View>
+          )}
+        </View>
+        <Text style={styles.historyTitle} numberOfLines={1}>
+          {entry.title}
+        </Text>
+      </Pressable>
+      {/* 미저장 항목 — '저장' 버튼. web saved/page.tsx:648-663 정합.
+          이미 저장됐으면 버튼 미노출 (배지로 충분). */}
+      {!isSaved && (
+        <Pressable
+          onPress={() => onResave(entry)}
+          disabled={isResaving}
+          accessibilityRole="button"
+          accessibilityLabel={`${entry.title} 저장`}
+          accessibilityState={{ disabled: isResaving }}
+          style={[styles.historyResaveBtn, isResaving && { opacity: 0.5 }]}
+          hitSlop={4}
+        >
+          <Text style={styles.historyResaveText}>
+            {isResaving ? '저장 중' : '저장'}
+          </Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
@@ -1458,5 +1750,131 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: spacing.md,
     gap: spacing.md,
+  },
+  // 배치 H — Watch Stats 카드. web saved/page.tsx:554-590 정합.
+  // mx-5 mt-2 mb-3 + p-3 + surface 배경 + 미세 그림자.
+  statsWrap: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm + 4,
+  },
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 4,
+    padding: spacing.sm + 4,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadowsNative.sm,
+  },
+  statsTextCol: {
+    flex: 1,
+  },
+  statsLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm + 4,
+    marginTop: 6,
+  },
+  // 4종 reaction 색상 — web text-accent / text-secondary / text-muted / text-danger 정합.
+  statLoved: {
+    fontSize: 12,
+    color: colors.accent,
+  },
+  statGood: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  statMeh: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  statDropped: {
+    fontSize: 12,
+    color: colors.danger,
+  },
+  // web "font-data text-2xl font-bold" — Geist Mono 24px bold.
+  statsTotal: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.textPrimary,
+    fontFamily: fontsV2.data,
+  },
+  // 배치 H — 히스토리 뷰. web saved/page.tsx:597-671 정합.
+  historyScroll: {
+    paddingBottom: spacing.lg,
+  },
+  historyGroup: {
+    marginBottom: spacing.lg + 4,
+  },
+  // web "px-5 mb-2" + "text-xs font-medium text-muted".
+  historyGroupLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textMuted,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  // web "flex gap-3 px-5 overflow-x-auto".
+  historyRow: {
+    flexDirection: 'row',
+    gap: spacing.sm + 4,
+    paddingHorizontal: spacing.lg,
+  },
+  // web "flex-shrink-0 w-16" — 카드 폭 64.
+  historyCard: {
+    width: 64,
+  },
+  // web "relative w-16 h-24 rounded-md" — 포스터 64×96.
+  historyPosterFrame: {
+    width: 64,
+    height: 96,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  historyPosterFallback: {
+    color: colors.textMuted,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  // web "absolute top-0.5 right-0.5 w-4 h-4 rounded-full bg-accent-dim".
+  historySavedBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentDim,
+  },
+  // web "text-xs mt-1 truncate".
+  historyTitle: {
+    fontSize: 12,
+    color: colors.textPrimary,
+    marginTop: 4,
+  },
+  // web "mt-1 w-full py-1 text-xs surface border".
+  historyResaveBtn: {
+    marginTop: 4,
+    minHeight: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  historyResaveText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
   },
 });

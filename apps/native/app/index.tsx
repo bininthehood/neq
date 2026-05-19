@@ -35,6 +35,7 @@ import {
   consumePrefetchedRecommendations,
 } from '../lib/api';
 import {
+  addRecHistory,
   getAccountPrefs,
   getSaved,
   hasOnboarded,
@@ -270,6 +271,28 @@ export default function DiscoverScreen() {
           setRecs(data);
           setTopIdx(0);
           setState('ready');
+          // 배치 H — 추천 기록 누적 (web `useRecommendations.ts:413` 정합).
+          // non-streaming 폴백 분기 — 배치 전체를 기록.
+          void addRecHistory(
+            data.map((r) => ({
+              title: r.title,
+              tmdbId: r.tmdbId,
+              posterUrl: r.posterUrl,
+              type: r.type,
+            })),
+          );
+        } else {
+          // 배치 H — 추천 기록 누적 (web `useRecommendations.ts:271/413` 정합).
+          // streaming 분기 — 배치 전체(collected)가 완성된 직후 1회 기록.
+          // web 도 streamed/non-streamed 모두 collected 완성 후 addRecHistory 호출.
+          void addRecHistory(
+            collected.map((r) => ({
+              title: r.title,
+              tmdbId: r.tmdbId,
+              posterUrl: r.posterUrl,
+              type: r.type,
+            })),
+          );
         }
       } catch (e) {
         setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류');

@@ -15,6 +15,10 @@ import type {
 const SAVED_KEY = 'neq_saved';
 const WATCH_REPORTS_KEY = 'neq_watch_reports';
 const ARCHIVE_KEY = 'neq_archived';
+// 배치 H — 추천 기록(rec history). web `apps/web/src/lib/store.ts:32` HISTORY_KEY 와 동일.
+// Discover 에서 추천 배치가 로드될 때마다 누적되는 글로벌(페르소나 무관) 기록.
+// sync 대상 아님 — web 도 `sync.ts` 에 rec_history 가 없는 디바이스 로컬 전용 데이터.
+const HISTORY_KEY = 'neq_rec_history';
 const DEVICE_ID_KEY = 'neq_device_id';
 const ACCOUNT_PREFS_KEY = 'neq_account_prefs';
 const ONBOARDED_KEY = 'neq_onboarded';
@@ -151,6 +155,64 @@ export async function unarchiveItem(tmdbId: number): Promise<void> {
 export async function isArchived(tmdbId: number): Promise<boolean> {
   const ids = await getArchivedIds();
   return ids.includes(tmdbId);
+}
+
+// ---------- rec history (배치 H) ----------
+//
+// web `apps/web/src/lib/store.ts:345-373` 의 Rec History 와 1:1 정합.
+// Discover 에서 추천 배치가 로드/표시될 때마다 호출되어 작품을 누적 기록.
+// "이전에 추천받았지만 저장 안 한 작품을 다시 찾을 수 있게" 하는 글로벌 기록.
+//
+// 정합 포인트 (web 정본):
+//   - 키: 'neq_rec_history' (web HISTORY_KEY 와 동일 문자열).
+//   - 최대 100건 (web MAX_HISTORY). 초과 시 오래된 것부터 drop.
+//   - 신규 항목을 앞에 prepend → 최근 추천이 위로.
+//   - 이미 있는 tmdbId 는 skip (날짜 갱신 안 함 — web 동일).
+//   - date 는 'YYYY-MM-DD' (로컬 X — web 은 toISOString().slice(0,10) = UTC date).
+//   - sync 대상 아님 — web 도 sync.ts 에 rec_history 가 없는 디바이스 로컬 전용.
+//
+// 기록 시점: `app/index.tsx` 의 `load()` 에서 추천 배치가 완성된 직후
+// (web `useRecommendations.ts:271/413` — recommendation_loaded 직후와 동일 지점).
+
+const MAX_HISTORY = 100;
+
+/**
+ * 추천 기록 1건. web `apps/web/src/lib/store.ts:349-355` RecHistoryEntry 정합.
+ */
+export interface RecHistoryEntry {
+  title: string;
+  tmdbId: number;
+  posterUrl: string | null;
+  date: string;
+  type?: 'movie' | 'series';
+}
+
+export async function getRecHistory(): Promise<RecHistoryEntry[]> {
+  return safeGet<RecHistoryEntry[]>(HISTORY_KEY, []);
+}
+
+/**
+ * 추천 배치를 기록에 누적. web `addRecHistory` (store.ts:362-373) 와 동일 로직.
+ * - 이미 기록된 tmdbId 는 제외.
+ * - 신규 항목을 앞에 붙이고 100건으로 잘라냄.
+ */
+export async function addRecHistory(
+  recs: {
+    title: string;
+    tmdbId: number;
+    posterUrl: string | null;
+    type?: 'movie' | 'series';
+  }[],
+): Promise<void> {
+  const existing = await getRecHistory();
+  const existingIds = new Set(existing.map((e) => e.tmdbId));
+  const date = new Date().toISOString().slice(0, 10);
+  const newEntries = recs
+    .filter((r) => !existingIds.has(r.tmdbId))
+    .map((r) => ({ ...r, date }));
+  if (newEntries.length === 0) return;
+  const updated = [...newEntries, ...existing].slice(0, MAX_HISTORY);
+  await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
 }
 
 // ---------- personas (W5 Task G) ----------
@@ -451,6 +513,7 @@ export async function clearAllUserData(): Promise<void> {
     SAVED_KEY,
     WATCH_REPORTS_KEY,
     ARCHIVE_KEY,
+    HISTORY_KEY,
     ACCOUNT_PREFS_KEY,
     ONBOARDED_KEY,
     TUTORIAL_V3_KEY,
