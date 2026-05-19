@@ -7,7 +7,6 @@ import {
   Dimensions,
   ActivityIndicator,
   Share,
-  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -22,7 +21,7 @@ import * as Haptics from 'expo-haptics';
 import SwipeCard from '../components/SwipeCard';
 import PrevCardOverlay from '../components/PrevCardOverlay';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
-import { IconSearch } from '../components/Icons';
+import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar from '../components/ActionBar';
 import TutorialFlow, {
@@ -46,10 +45,7 @@ import {
 import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
-import {
-  WORDMARK_ASSET,
-  WORDMARK_ASPECT_RATIO,
-} from '../components/onboarding/data';
+import { usePersona } from '../contexts/PersonaContext';
 import type {
   Recommendation,
   RecommendFilter,
@@ -138,6 +134,9 @@ export default function DiscoverScreen() {
       cancelled = true;
     };
   }, []);
+
+  // 페르소나 전환 — Discover 헤더 chip 에서 사용 (web `DiscoverHeader` 정합).
+  const persona = usePersona();
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [state, setState] = useState<LoadState>('idle');
@@ -746,6 +745,35 @@ export default function DiscoverScreen() {
     load({});
   }
 
+  /**
+   * 페르소나 전환 — Discover 헤더 chip dropdown 에서 호출.
+   *
+   * web `apps/web/src/app/discover/page.tsx:615-625` (`onPersonaSwitch`) 정합:
+   *   페르소나가 바뀌면 추천 입력 신호가 달라지므로 필터를 전부 초기화하고
+   *   topIdx 를 0 으로 되돌린 뒤 추천을 새로 로드한다.
+   *
+   * native 매핑:
+   *   - web `rec.abortLoading()` → native 는 명시적 abort 가 없다. switchPersona
+   *     완료 후 `load({})` 를 다시 호출하면 새 fetch 가 시작되고 onCard 가 recs 를
+   *     덮어쓴다 (이전 in-flight fetch 결과보다 나중에 도착). web 의 sessionStorage
+   *     topIdx 제거는 native 에 해당 캐시가 없어 불필요.
+   *   - `persona.switchPersona` 는 async (AsyncStorage) → await 후 load.
+   */
+  function handlePersonaSwitch(id: string) {
+    if (id === persona.activePersonaId) return;
+    void persona.switchPersona(id).then(() => {
+      setFilterType('all');
+      setFilterOrigin('all');
+      setFilterYear('all');
+      setFilterRating('all');
+      setFilterOTTs(new Set());
+      setTopIdx(0);
+      load({});
+    });
+    const target = persona.personas.find((p) => p.id === id);
+    track('persona_switched', { persona_id: id, persona_name: target?.name });
+  }
+
   // W5 Task A — onboarding 가드 결정 전 / redirect 결정 시 빈 화면.
   // 첫 frame 깜빡임 방지 (Discover 의 첫 추천 요청도 시작되지 않음).
   if (onboardCheck !== 'pass') {
@@ -754,30 +782,21 @@ export default function DiscoverScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <View style={styles.header}>
-        <Image
-          source={WORDMARK_ASSET}
-          accessibilityLabel="neq,"
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Pressable
-          style={styles.searchIcon}
-          onPress={() => {
-            // 위임 O #1.2 — 검색 버튼으로 진입 시 initialQuery 비움 (잔해 제거).
-            // WARN-A (2026-05-19 재검증) — search_opened track 추가. Saved/Profile
-            // 의 search 버튼은 이미 호출 중 — 3탭 search 진입 지표 정합.
-            track('search_opened');
-            setSearchInitialQuery('');
-            setSearchOpen(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="검색 열기"
-          hitSlop={8}
-        >
-          <IconSearch size={20} color={colors.textPrimary} />
-        </Pressable>
-      </View>
+      <DiscoverHeader
+        personas={persona.personas}
+        activePersonaId={persona.activePersonaId}
+        activePersona={persona.activePersona}
+        onPersonaSwitch={handlePersonaSwitch}
+        onAddPersona={() => router.push('/profile')}
+        onSearchOpen={() => {
+          // 위임 O #1.2 — 검색 버튼으로 진입 시 initialQuery 비움 (잔해 제거).
+          // WARN-A (2026-05-19 재검증) — search_opened track 추가. Saved/Profile
+          // 의 search 버튼은 이미 호출 중 — 3탭 search 진입 지표 정합.
+          track('search_opened');
+          setSearchInitialQuery('');
+          setSearchOpen(true);
+        }}
+      />
 
       <FilterChips
         filterType={filterType}
@@ -938,28 +957,7 @@ export default function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-  },
-  // 워드마크 이미지 — 기존 fontSize 22 매핑 (height 22, aspect ratio 보존).
-  logo: {
-    height: 22,
-    width: 22 * WORDMARK_ASPECT_RATIO,
-  },
-  searchIcon: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchIconText: {
-    color: colors.textSecondary,
-    fontSize: 22,
-  },
+  // 헤더는 DiscoverHeader 컴포넌트로 분리 (워드마크 + 페르소나 chip + search).
   stackWrap: { flex: 1 },
   stack: { flex: 1, position: 'relative' },
   centered: {
