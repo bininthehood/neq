@@ -181,7 +181,7 @@ DB 미러로 치환해 ~100ms 로 단축. **상태: 2026-05-08 prod 활성화** 
 | `tmdb-refresh-stale.yml` | 매일 08:30 | `tmdb-refresh-stale.ts` | 180일+ stale row → 큐에 추가 |
 | `tmdb-refresh-providers.yml` | 매일 09:00 | `tmdb-refresh-providers.ts` | providers 30일 TTL 트리거 → 큐에 추가 (2026-05-08 신규) |
 | `tmdb-providers-snapshot.yml` | 매일 18:00 | (workflow 내장) | providers 변동 snapshot 보관 |
-| `api-warmup.yml` | 5분 간격 (`*/5 * * * *`) | (workflow 내장 — `/api/warmup` GET 호출) | Vercel function + Supabase admin connection warm 유지 (2026-05-10 신규, cold start 완화) |
+| ~~`api-warmup.yml`~~ | **비활성화 (2026-05-19)** | — | cron-job.org 외부 ping 으로 이전. GH Actions 무료 cron 실제 간격 26~86분 → 5분 보장 실패. 파일은 `disabled_manually` 로 보존 (`gh workflow enable` 복구 가능) |
 
 **활성화 분기 (`apps/web/src/app/api/recommend/route.ts`):**
 ```ts
@@ -229,9 +229,11 @@ const useMirror =
 
 **롤백 (이상 시):** Vercel env `TMDB_MIRROR_ENABLED` 제거 또는 `false` → 즉시 LLM-direct 경로 복귀.
 
-**Cold start 완화 (2026-05-10):**
-- `/api/warmup` endpoint + `api-warmup.yml` 5분 cron — Vercel function + Supabase admin 살림
-- 측정: cold enrich 3164ms → warm 607ms (80% 단축)
+**Cold start 완화 (2026-05-10 도입 → 2026-05-19 cron-job.org 이전):**
+- `/api/warmup` endpoint — Vercel function + Supabase admin connection 살림. `CRON_SECRET` Bearer 인증
+- **ping 운영:** cron-job.org 5분 간격 외부 GET (2026-05-19~). 기존 `api-warmup.yml` GH Actions cron 은 무료 tier 실제 간격 26~86분으로 5분 보장 실패 → 이전. 워크플로는 `disabled_manually` 로 보존
+- `CRON_SECRET` 은 hex 64자 (특수문자 없음 — 폼/헤더 필드 mangling 방지). warmup·notif 5종·tmdb-snapshot 7 워크플로 공유. 교체 지점: GitHub repo secret + Vercel env 2곳
+- 측정: cold enrich 3164ms → warm 607ms (80% 단축, 도입 직후 1회성)
 - 모니터링 SQL (PostHog HogQL) — cold 빈도 추적:
   ```sql
   SELECT
@@ -245,7 +247,7 @@ const useMirror =
     AND properties.streamed = true
   GROUP BY day ORDER BY day
   ```
-  cold_pct 가 5월 10일 이후 감소하면 warmup 효과. 정상 mirror enrich = 400~800ms.
+  cron-job.org 이전(5/19) 후 cold_pct 감소하면 warmup 효과. 정상 mirror enrich = 400~800ms.
 
 **측정 산출물:**
 - `_workspace/tmdb-providers-backfill-plan-2026-05-08.md` (audit + backfill STOP 결정)
