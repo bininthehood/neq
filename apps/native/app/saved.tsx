@@ -367,7 +367,9 @@ export default function SavedScreen() {
         </View>
       ) : viewMode === 'list' ? (
         // 위임 O #2 — List 뷰. 1열 가로 카드 (60×90 포스터).
+        // key 로 grid FlatList 와 별개 인스턴스 강제 — numColumns on-the-fly 변경 invariant 회피.
         <FlatList
+          key="saved-list"
           data={filteredItems}
           keyExtractor={(s) => String(s.recommendation.tmdbId)}
           contentContainerStyle={styles.listContent}
@@ -382,7 +384,9 @@ export default function SavedScreen() {
         />
       ) : (
         // 기본 그리드 뷰
+        // key 로 list FlatList 와 별개 인스턴스 강제 — numColumns on-the-fly 변경 invariant 회피.
         <FlatList
+          key="saved-grid"
           data={filteredItems}
           keyExtractor={(s) => String(s.recommendation.tmdbId)}
           numColumns={COLS}

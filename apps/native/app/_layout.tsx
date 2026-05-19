@@ -179,6 +179,9 @@ function TabsWithGuard() {
                 탭바에서 숨김 (라우트 자체는 그대로 작동, router.replace 만 진입). */}
             <Tabs.Screen name="onboarding/index" options={{ href: null }} />
             <Tabs.Screen name="onboarding/complete" options={{ href: null }} />
+            {/* share/[id] 도 동적 라우트로 자동 등록됨 — 탭바에서 숨김
+                (Universal Link / 공유 진입 전용, 발견·저장·프로필 3탭만 노출). */}
+            <Tabs.Screen name="share/[id]" options={{ href: null }} />
           </Tabs>
   );
 }
