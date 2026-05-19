@@ -116,7 +116,11 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
         >
           <IconSave
             size={24}
-            color={saveActive ? colors.accent : colors.textPrimary}
+            // 신규-1 (2026-05-19 재검증) — Save 아이콘은 항상 어두운 bg 색.
+            // B-5b 로 saveBtnActive 배경이 amber 가 된 뒤 amber 아이콘이면 amber-on-amber
+            // 대비 소실. web ActionBar 정본도 항상 `var(--bg)` 고정.
+            // idle: surfaceRaised 배경 위 bg 색 = 충분한 대비. active: amber 배경 위 bg 색 = 또렷.
+            color={colors.bg}
             filled={saveActive}
           />
         </Pressable>
@@ -152,14 +156,19 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 17,
   },
+  // 2026-05-06 A1 — Save 버튼 1.5px 잉크 윤곽 (idle border / active accent).
+  // web ActionBar 정합 — Quiet Ink 잉크 윤곽 정체성.
   saveBtn: {
     width: 56,
     height: 56,
     backgroundColor: colors.surfaceRaised,
     borderRadius: radius.xl,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
   saveBtnActive: {
     backgroundColor: colors.accent,
+    borderColor: colors.accent,
   },
   saveBtnFlash: {
     shadowColor: colors.accent,

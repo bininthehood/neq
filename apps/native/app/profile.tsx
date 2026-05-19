@@ -20,11 +20,11 @@ import {
 import { wipeCloudData } from '../lib/sync';
 import { calcMonthlyWatch, type MonthlyWatchResult } from '../lib/profile-stats';
 import type { WatchReport } from '../lib/types';
-import { colors, radius, spacing } from '../lib/tokens';
-import { fonts } from '@neq/design';
+import { colors, radius, spacing, fontsV2 } from '../lib/tokens';
 import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
-import { IconClose } from '../components/Icons';
+import SearchSheet from '../components/SearchSheet';
+import { IconClose, IconSearch } from '../components/Icons';
 import { track } from '../lib/analytics';
 
 interface Stats {
@@ -48,6 +48,8 @@ export default function ProfileScreen() {
   });
   const [reportsRaw, setReportsRaw] = useState<WatchReport[]>([]);
   const [deviceId, setDeviceId] = useState('');
+  // 헤더 search 버튼 → SearchSheet 자체 마운트 (web `profile/page.tsx` 정합).
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     const [saved, reports, s, did] = await Promise.all([
@@ -115,8 +117,22 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* 헤더 — 좌:title / 우:search. web profile/page.tsx 헤더 정합 (3탭 공통 search). */}
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
+        <Pressable
+          style={styles.searchBtn}
+          onPress={() => {
+            // web profile/page.tsx:122 정합 — search_opened 이벤트 발사.
+            track('search_opened');
+            setSearchOpen(true);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="검색 열기"
+          hitSlop={8}
+        >
+          <IconSearch size={18} color={colors.textMuted} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -289,8 +305,20 @@ export default function ProfileScreen() {
               {deviceId.slice(0, 8)}…
             </Text>
           </View>
+          {/* TMDB attribution — TMDB 라이선스 의무 (앱 내 표기 필수).
+              web profile/page.tsx:198-201 문구 그대로. */}
+          <Text style={styles.attribution}>
+            This product uses TMDB and the TMDB APIs but is not endorsed,
+            certified, or otherwise approved by TMDB.
+          </Text>
         </View>
       </ScrollView>
+
+      {/* SearchSheet — Profile 페이지 자체 마운트. 헤더 search 버튼으로 진입. */}
+      <SearchSheet
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -298,6 +326,9 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.md,
@@ -305,7 +336,14 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 26,
-    fontFamily: fonts.display,
+    // 2026-04-29 fontsV2 전환 — display = Instrument Serif. web profile 제목 정합.
+    fontFamily: fontsV2.display,
+  },
+  searchBtn: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: spacing.xl },
@@ -363,7 +401,8 @@ const styles = StyleSheet.create({
   statValue: {
     color: colors.accent,
     fontSize: 28,
-    fontFamily: fonts.data,
+    // 2026-04-29 fontsV2 — data = Geist Mono. web 통계 숫자 정합.
+    fontFamily: fontsV2.data,
   },
   statLabel: {
     color: colors.textMuted,
@@ -393,7 +432,7 @@ const styles = StyleSheet.create({
   monthlyHeader: {
     color: colors.textSecondary,
     fontSize: 10,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.data,
     fontWeight: '500',
     textTransform: 'uppercase',
     letterSpacing: 1.2,
@@ -424,7 +463,7 @@ const styles = StyleSheet.create({
   monthlyMonthLabel: {
     color: colors.textMuted,
     fontSize: 10,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.data,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
@@ -479,5 +518,15 @@ const styles = StyleSheet.create({
   infoValue: {
     color: colors.textSecondary,
     fontSize: 12,
+  },
+  // TMDB attribution — web profile/page.tsx:198 의 mt-4 pt-3 border-t 정합.
+  attribution: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: spacing.md,
+    paddingTop: spacing.sm + 4,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
 });

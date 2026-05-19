@@ -824,12 +824,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
+  // anti-slop #6 예외 2 + 2026-05-02 amber 누적 분배 정책 — reason 박스는
+  // 면(accentDim) 금지 → 선(borderLeft 2px accent). web DESIGN.md L36 정합.
   reasonBox: {
     marginTop: spacing.md,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: spacing.sm + 2,
-    backgroundColor: colors.accentDim,
-    borderRadius: radius.md,
+    paddingLeft: spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.accentBorder,
   },
   reasonText: {
     color: colors.textSecondary,

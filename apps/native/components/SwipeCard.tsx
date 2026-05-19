@@ -2,18 +2,19 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   Easing,
   type SharedValue,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
-import { buildMetaInfo, getOTTIcon } from '@neq/core';
-import { fonts, fontsV2, easings, durations } from '@neq/design';
+import { getOTTIcon } from '@neq/core';
+import { fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
+import { IconStar } from './Icons';
 
 interface Props {
   rec: Recommendation;
@@ -41,6 +42,54 @@ interface Props {
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SPRING_BEZIER = Easing.bezier(...easings.spring);
+// M-1 (2026-05-19 정합 audit) — depth 전환 곡선. PWA SwipeCard 는 depth 를 스프링으로
+// 애니메이션하지 않고 단순 `transform 0.3s ease-out` 으로 보간한다. native 도 동일하게
+// withTiming + ease-move (대칭 가속-감속) 으로 — `withSpring(damping:14)` 의 과한
+// 오버슈트("디용~") 제거.
+const DEPTH_BEZIER = Easing.bezier(...easings.move);
+
+// ─────────────────────────────────────────────────────
+// CardVariantA RN 포팅 — 2026-05-19 native↔PWA 정합 audit C-1.
+// 정본: apps/web/src/components/cards/CardVariantA.tsx + cards/parts.tsx.
+// 기존 native cardContent(자체 레이아웃)를 폐기하고 PWA 풀블리드 카드를 1:1 포팅.
+// 카테고리 라벨/색 (web cards/types.ts CAT_LABEL / CAT_COLOR_VAR 정합).
+// movie/series/variety 3종 — variety(예능) 누락 시 카드가 "영화"로 오표기된다.
+// ─────────────────────────────────────────────────────
+
+type CardCategory = 'movie' | 'series' | 'variety';
+
+const CAT_LABEL: Record<CardCategory, string> = {
+  movie: '영화',
+  series: '시리즈',
+  variety: '예능',
+};
+const CAT_COLOR: Record<CardCategory, string> = {
+  movie: colors.catMovie,
+  series: colors.catSeries,
+  variety: colors.catVariety,
+};
+
+/** 카테고리 칩 — bg-overlay + cat 색 + 1px 보더(cat 색 25%). web CatChip 정합. */
+function CatChip({ type }: { type: CardCategory }) {
+  const color = CAT_COLOR[type];
+  return (
+    <BlurView intensity={20} tint="dark" style={styles.catChip}>
+      <Text style={[styles.catChipText, { color, borderColor: color }]}>
+        {CAT_LABEL[type]}
+      </Text>
+    </BlurView>
+  );
+}
+
+/** 평점 칩 — bg-overlay + radius-sm + blur. web Rating(IconStar + tabular-nums) 정합. */
+function RatingChip({ value }: { value: number }) {
+  return (
+    <BlurView intensity={20} tint="dark" style={styles.ratingChip}>
+      <IconStar size={11} color={colors.accent} />
+      <Text style={styles.ratingText}>{value.toFixed(1)}</Text>
+    </BlurView>
+  );
+}
 
 export default function SwipeCard({
   rec,
@@ -58,7 +107,11 @@ export default function SwipeCard({
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
   useEffect(() => {
-    animatedDepth.value = withSpring(depth, { damping: 14, stiffness: 180 });
+    // M-1 — depth 전환은 timing(ease-move). PWA 와 동일하게 오버슈트 없는 보간.
+    animatedDepth.value = withTiming(depth, {
+      duration: durations.steady,
+      easing: DEPTH_BEZIER,
+    });
   }, [depth, animatedDepth]);
 
   useEffect(() => {
@@ -94,7 +147,9 @@ export default function SwipeCard({
     // tx/ty: top 카드만 drag 반영
     let tx = isTop ? effectiveDragX : 0;
     let ty = isTop ? dragYSafe * 0.6 + yOffset : yOffset;
-    let rot = isTop && effectiveDragX < 0 ? Math.max(effectiveDragX * 0.04, -8) : 0;
+    // M-3 (2026-05-19 정합 audit) — 좌 스와이프 회전을 PWA 정합으로.
+    // 계수 0.04→0.06, 상한 -8→-15deg. (우 방향은 native prevOverlay 모델이라 0 유지.)
+    let rot = isTop && effectiveDragX < 0 ? Math.max(effectiveDragX * 0.06, -15) : 0;
     let scale = baseScale;
     let opacity = 1;
     if (isTop && dragYSafe > 30) {
@@ -128,20 +183,41 @@ export default function SwipeCard({
       ],
       opacity: safe(opacity, 1),
       // 2026-05-18 — SIGABRT 진짜 원인: Fabric `zIndex` prop 은 `std::optional<int>`.
-      // `10 - d` (d=animatedDepth.value, withSpring 결과 = double) 가 9.9 같은 비정수면
+      // `10 - d` (d=animatedDepth.value, withTiming 결과 = double) 가 9.9 같은 비정수면
       // folly::to<long long, double> 변환 실패 → ConversionError → cloneShadow abort.
       // Math.round 로 정수 강제.
       zIndex: Math.round(10 - d),
     };
   });
 
+  // C-1 — CardVariantA 풀블리드 레이아웃 RN 포팅.
+  // 신규-2 (2026-05-19 재검증) — 카테고리 3종 매핑. Recommendation.type 은 현재
+  // 'movie'|'series' 2종이나(@neq/core), variety(예능) 가 데이터 모델에 추가될
+  // 경우 카드가 'movie' 로 흡수되지 않도록 3종 매핑으로 선반영. web cards/types.ts
+  // CardCategory 3종 정본 정합.
+  const type: CardCategory =
+    rec.type === 'series'
+      ? 'series'
+      : (rec.type as string) === 'variety'
+        ? 'variety'
+        : 'movie';
+  const year = rec.date ? rec.date.slice(0, 4) : '';
+  const titleEn = rec.titleEn || rec.title;
+  // subscription provider 우선 (web mapRecToWork 정합), 최대 6개.
+  const otts = rec.providers
+    .filter((p) => !p.category || p.category === 'subscription')
+    .slice(0, 6);
+  const infoVisible = isTop && !isDragging && !immersive;
+
   const cardContent = (
     <>
+      {/* full-bleed poster */}
       {rec.posterUrl ? (
         <Image
           source={{ uri: rec.posterUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
+          contentPosition="top"
           transition={200}
         />
       ) : (
@@ -150,48 +226,54 @@ export default function SwipeCard({
         </View>
       )}
 
-      <Text style={styles.ratingText}>★ {rec.rating.toFixed(1)}</Text>
-      <Text style={styles.typeText}>
-        {rec.type === 'series' ? '시리즈' : '영화'}
-      </Text>
+      {/* bottom gradient overlay — 텍스트 가독. CardVariantA: 0%~50% transparent,
+          92% bg-overlay-heavy, 100% bg-overlay-solid. */}
+      <LinearGradient
+        colors={['transparent', 'transparent', colors.overlayHeavy, colors.overlaySolid]}
+        locations={[0, 0.5, 0.92, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
 
       {depth <= 1 && (
         <>
-          <LinearGradient
-            colors={['transparent', 'rgba(18,17,14,0.6)', colors.bg]}
-            locations={[0, 0.5, 1]}
-            style={[styles.infoGradient, { opacity: isTop && !isDragging && !immersive ? 1 : 0 }]}
-            pointerEvents="none"
-          />
+          {/* top row — cat chip(좌) + rating chip(우) */}
           <View
-            style={[styles.infoContent, { opacity: isTop && !isDragging && !immersive ? 1 : 0 }]}
+            style={[styles.topRow, { opacity: infoVisible ? 1 : 0 }]}
             pointerEvents="none"
           >
+            <CatChip type={type} />
+            <RatingChip value={rec.rating} />
+          </View>
+
+          {/* bottom — year·titleEn / title / reason / otts */}
+          <View
+            style={[styles.bottomInfo, { opacity: infoVisible ? 1 : 0 }]}
+            pointerEvents="none"
+          >
+            <Text style={styles.subTitle} numberOfLines={1}>
+              {year ? `${year} · ${titleEn}` : titleEn}
+            </Text>
             <Text style={styles.title}>{rec.title}</Text>
-            <View style={styles.metaRow}>
-              {buildMetaInfo(rec) ? (
-                <Text style={styles.metaText}>{buildMetaInfo(rec)}</Text>
-              ) : null}
-              {rec.providers.length > 0 && (
-                <View style={styles.providerIcons}>
-                  {rec.providers.slice(0, 4).map((p) => {
-                    const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
-                    return iconUrl ? (
-                      <Image
-                        key={p.name}
-                        source={{ uri: iconUrl }}
-                        style={styles.providerIcon}
-                        contentFit="contain"
-                        transition={0}
-                      />
-                    ) : null;
-                  })}
-                </View>
-              )}
-            </View>
-            <View style={styles.reasonBox}>
-              <Text style={styles.reasonText}>{rec.reason}</Text>
-            </View>
+            <Text style={styles.reason} numberOfLines={3}>
+              {rec.reason}
+            </Text>
+            {otts.length > 0 && (
+              <View style={styles.ottRow}>
+                {otts.map((p) => {
+                  const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
+                  return iconUrl ? (
+                    <Image
+                      key={p.name}
+                      source={{ uri: iconUrl }}
+                      style={styles.ottChip}
+                      contentFit="contain"
+                      transition={0}
+                    />
+                  ) : null;
+                })}
+              </View>
+            )}
           </View>
         </>
       )}
@@ -208,9 +290,15 @@ const styles = StyleSheet.create({
     bottom: 8,
     left: 12,
     right: 12,
-    borderRadius: radius.xl,
+    borderRadius: radius.xl, // T-1 정정 후 16px (PWA --radius-xl 정합)
     overflow: 'hidden',
     backgroundColor: colors.surface,
+    // C-2 — CardVariantA boxShadow var(--shadow-lg) = 0 8px 32px rgba(0,0,0,0.5).
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 32,
+    elevation: 12,
   },
   fallback: {
     backgroundColor: colors.surface,
@@ -218,85 +306,97 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fallbackText: {
+    fontFamily: fontsV2.display, // PosterFallback: font-display 'N' (web parts.tsx)
     color: colors.textMuted,
-    fontSize: 64,
-    fontWeight: '700',
+    fontSize: 48,
+  },
+  // top row — CardVariantA: top/left/right 14, space-between, align-items flex-start
+  topRow: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  // CatChip — padding 4×10, radius-sm, bg-overlay(BlurView), text-xs 600
+  catChip: {
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
+  catChipText: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: -0.05,
+    borderWidth: 1,
+    borderRadius: radius.sm,
+  },
+  // Rating 칩 — padding 4×10, radius-sm, bg-overlay(BlurView)
+  ratingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
   },
   ratingText: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
+    fontFamily: fontsV2.data, // Geist Mono tabular-nums (web Rating 정합)
     color: colors.accent,
-    fontFamily: fonts.data,
-    fontSize: 14,
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  typeText: {
-    position: 'absolute',
-    top: spacing.md,
-    left: spacing.md,
-    color: colors.textPrimary,
-    fontSize: 13,
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  infoGradient: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 280,
-  },
-  infoContent: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: spacing.lg,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 30,
-    // 2026-05-18 Fix B — fontsV2.display (Instrument Serif) 적용. web `'핀치' - Finch` 정합.
-    // ratingText/typeText/metaText 는 fonts.data/dataReg (Outfit) 유지 — 사용자 요청.
-    fontFamily: fontsV2.display,
-    lineHeight: 36,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: 6,
-  },
-  metaText: {
-    color: colors.textMuted,
     fontSize: 12,
-    fontFamily: fonts.dataReg,
+    fontWeight: '600',
   },
-  providerIcons: {
+  // bottom info — CardVariantA: left/right 18, bottom 16
+  bottomInfo: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 16,
+  },
+  // year · titleEn — Instrument Serif italic, text-sm(13), accent, letterSpacing 0.02em
+  subTitle: {
+    fontFamily: fontsV2.displayItalic,
+    fontStyle: 'italic',
+    fontSize: 13,
+    color: colors.accent,
+    letterSpacing: 0.26,
+    marginBottom: 6,
+  },
+  // title — font-body(Pretendard→RN system) 700, text-2xl(28), letterSpacing -0.025em,
+  // lineHeight 1.15. native 가 거꾸로 세리프를 쓰던 오류 정정 → 시스템 폰트 700.
+  title: {
+    fontFamily: fontsV2.body, // undefined → RN system font (iOS San Francisco)
+    fontWeight: '700',
+    fontSize: 28,
+    color: colors.textPrimary,
+    letterSpacing: -0.7,
+    lineHeight: 32,
+    marginBottom: 10,
+  },
+  // reason — font-body 400, text-sm(13), rgba(237,237,239,0.85), lineHeight 1.4, maxWidth 85%
+  reason: {
+    fontFamily: fontsV2.body,
+    fontWeight: '400',
+    fontSize: 13,
+    color: 'rgba(237,237,239,0.85)',
+    lineHeight: 18,
+    marginBottom: 12,
+    maxWidth: '85%',
+  },
+  // OTT — gap 6, OttChip 22×22 radius-sm
+  ottRow: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 6,
     alignItems: 'center',
   },
-  providerIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: 3,
+  ottChip: {
+    width: 22,
+    height: 22,
+    borderRadius: radius.sm,
     backgroundColor: colors.surface,
-  },
-  reasonBox: {
-    marginTop: spacing.sm + 4,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm + 4,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: radius.md,
-  },
-  reasonText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
   },
 });

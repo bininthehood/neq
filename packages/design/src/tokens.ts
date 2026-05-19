@@ -86,12 +86,18 @@ export const spacing = {
 // Radius
 // ─────────────────────────────────────────────────────
 
+// 2026-05-19 — radius 정정 (native↔PWA 정합 audit T-1).
+// 기존 native JS 상수 `lg:16 / xl:24` 가 `tokens.css`(`--radius-lg:12 --radius-xl:16`)
+// 및 DESIGN.md L178-184 와 어긋나 native 가 모든 radius 를 한 단계씩 크게 렌더했다.
+// tokens.css / DESIGN.md 정본 값으로 일치시킴. (web src 는 radius JS 상수를 import 하지
+// 않고 CSS 변수만 사용 — `@neq/design` 내부 컴포넌트도 `var(--radius-*)` 만 사용 →
+// 이 수정은 native 렌더에만 영향, web 영향 0.)
 export const radius = {
   sm: 4,
   md: 8,
-  lg: 16,
-  xl: 24,
-  full: 9999,                         // 신규
+  lg: 12,                             // 카드, 버튼 (tokens.css --radius-lg)
+  xl: 16,                             // 메인 카드, 바텀시트 (tokens.css --radius-xl)
+  full: 9999,
 } as const;
 
 // ─────────────────────────────────────────────────────

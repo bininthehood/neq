@@ -89,3 +89,65 @@ export function IconSearch({ size = 20, color = '#000' }: IconProps) {
     </Svg>
   );
 }
+
+// IconStar — SwipeCard Rating 칩용. web `Icons.tsx` IconStar path 포팅 (C-1).
+// 기존 native SwipeCard 의 `★` 유니코드 문자를 SVG 로 대체 (Iconography 정합).
+export function IconStar({ size = 11, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M12 2l2.4 7.2H22l-6 4.8 2.4 7.2L12 16.4l-6.4 4.8 2.4-7.2-6-4.8h7.6L12 2z" />
+    </Svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────
+// BottomNav 탭 아이콘 — 2026-05-19 native↔PWA 정합 audit E-1.
+// 정본: `_design-handoff/Phase 4 - Full Prototype.html` L168-184 TabIcon* +
+//       web `apps/web/src/components/Icons.tsx` IconDiscover/IconBookmark/IconUser.
+// 기존 native BottomNav 가 텍스트 이모지 (◉ ♡ ◎) 사용 → SVG 로 통일 (5/18 Fix C 누락분).
+// viewBox 20×20, currentColor 위임 (focused 색은 호출처에서 주입).
+// ─────────────────────────────────────────────────────
+
+// Discover — active: 외곽 circle + 중앙 dot / inactive: 외곽 circle + diamond.
+export function IconDiscover({ size = 20, color = '#000', active = false }: IconProps & { active?: boolean }) {
+  if (active) {
+    return (
+      <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+        <Circle cx="10" cy="10" r="7.5" stroke={color} strokeWidth={1.5} />
+        <Circle cx="10" cy="10" r="2" fill={color} />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Circle cx="10" cy="10" r="7.5" stroke={color} strokeWidth={1.4} />
+      <Path d="M13 7L11 11L7 13L9 9L13 7Z" stroke={color} strokeWidth={1.2} strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+// Saved — Bookmark (Heart 아님 — Phase 4 정본). active 시 안쪽 fillOpacity 0.18.
+export function IconBookmark({ size = 20, color = '#000', active = false }: IconProps & { active?: boolean }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M5 3h10v15l-5-3.5L5 18V3z"
+        stroke={color}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        fill={active ? color : 'none'}
+        fillOpacity={active ? 0.18 : 0}
+      />
+    </Svg>
+  );
+}
+
+// Profile — head circle + body arc.
+export function IconUser({ size = 20, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Circle cx="10" cy="7" r="3.2" stroke={color} strokeWidth={1.5} />
+      <Path d="M3.5 17C4.5 13.8 7 12 10 12s5.5 1.8 6.5 5" stroke={color} strokeWidth={1.5} strokeLinecap="round" fill="none" />
+    </Svg>
+  );
+}

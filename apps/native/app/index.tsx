@@ -69,21 +69,29 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // (feedback_swipe_ux.md 잠금: save 480ms / pass 360ms)
 const SWIPE_THRESHOLD = 70;
 const PREV_OVERLAY_TRIGGER = 0.3;
+// pass dismiss 의 advance(topIdx++) 콜백 타이밍. feedback_swipe_ux.md 잠금 (pass 360ms).
 const PASS_DISMISS_MS = durations.swipePassDismiss; // 360
 const SAVE_ABSORB_MS = durations.swipeSaveDismiss; // 480
+// M-2 (native↔PWA 정합): pass dismiss 의 *시각 슬라이드* duration.
+// PWA pass 카드 = CSS `transition: transform 0.3s` → 300ms 동안 화면 밖으로 슬라이드.
+// advance(PASS_DISMISS_MS=360) 와 분리 — 시각 transition(300) < 콜백 타이머(360) 구조를
+// PWA 와 동일하게 맞춘다. durations 토큰에 300 값이 없어 명명 상수로 신설.
+const PASS_DISMISS_SLIDE_MS = 300;
 
 /**
- * 사이클 2 worklet화: pass dismiss 시각 곡선.
+ * 사이클 2 worklet화 + M-2 정합: pass dismiss 시각 곡선.
  *
  * 기존: `setDragX(-SCREEN_WIDTH)` JS 스레드 setState → RN bridge → 다음 frame 적용
  *       → 60fps 보장 어려움. qa-tester 평가에서 web CSS transition 보다 떨림 보고됨.
  *
  * 신규: `useSharedValue` + `withTiming(target, { easing })` 으로 UI 스레드 worklet 구동.
- *       - duration: 360ms (durations.swipePassDismiss)
- *       - easing: Easing.bezier(...easings.exit) — 점점 빨라지며 퇴장 (`[0.5, 0, 0.75, 0]`)
- *       - 종료 콜백에서 runOnJS 로 nextCard 호출 + sharedValue 리셋
+ *       - duration: 300ms (PASS_DISMISS_SLIDE_MS) — PWA `transform 0.3s` 정합
+ *       - easing: Easing.bezier(...easings.spring) — 미세 오버슈트 30% (`[0.34, 1.3, 0.64, 1]`)
+ *         PWA pass 카드의 `cubic-bezier(0.34, 1.3, 0.64, 1)` 와 동일 곡선.
+ *       - advance(topIdx++) + sharedValue 리셋은 withTiming 콜백이 아니라
+ *         별도 360ms 타이머(JS)에서 — 시각 슬라이드(300) 와 advance(360) 분리.
  */
-const PASS_DISMISS_BEZIER = Easing.bezier(...easings.exit);
+const PASS_DISMISS_BEZIER = Easing.bezier(...easings.spring);
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -174,6 +182,18 @@ export default function DiscoverScreen() {
   // 사이클 2: pass dismiss worklet 곡선용 sharedValue.
   // 0 = idle, 음수값 = 좌측 dismiss 진행. SwipeCard 가 dragX 대신 이 값을 사용.
   const dismissX = useSharedValue(0);
+  // M-2: pass advance(topIdx++) 타이머 핸들. 시각 슬라이드(300ms)와 분리된
+  // 360ms 콜백을 들고 있다가, 연속 스와이프 시 이전 타이머를 취소해 어긋남을 막는다.
+  const passAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 언마운트 시 대기 중이던 advance 타이머 정리 (setState-after-unmount 방지).
+  useEffect(() => {
+    return () => {
+      if (passAdvanceTimer.current) {
+        clearTimeout(passAdvanceTimer.current);
+        passAdvanceTimer.current = null;
+      }
+    };
+  }, []);
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -421,22 +441,35 @@ export default function DiscoverScreen() {
   }
 
   /**
-   * 사이클 2 worklet화 — pass dismiss 시각 곡선.
+   * 사이클 2 worklet화 + M-2 정합 — pass dismiss 시각 곡선 / advance 분리.
    *
    * 기존 (JS state setter):
    *   setDragX(-SCREEN_WIDTH) 1회 호출 → React re-render → SwipeCard 의 useAnimatedStyle
    *   re-evaluate. 변위가 한 step 으로 점프하기 때문에 RN 측 자체 transition 이 없어
    *   사용자 인지에 "스냅" 처럼 느껴짐. qa-tester P1.
    *
-   * 신규 (Reanimated 3 worklet):
-   *   `dismissX.value = withTiming(-SCREEN_WIDTH, { duration: 360, easing })`
-   *   UI 스레드에서 보간 — 60fps 보장. 종료 콜백에서 `runOnJS(advance)` 로 topIdx
-   *   증가 + dismissX 0 으로 리셋.
+   * M-2 정합 (native↔PWA audit P1):
+   *   PWA pass 카드 = CSS `transition: transform 0.3s cubic-bezier(0.34,1.3,0.64,1)` →
+   *   ① 300ms 동안 spring(미세 오버슈트) 곡선으로 화면 밖 슬라이드
+   *   ② 그 뒤 360ms 시점에 topIdx 증가 (advance).
    *
-   * 정량: durations.swipePassDismiss=360ms, easings.exit (점점 빨라지며 퇴장).
+   *   따라서 시각 슬라이드와 advance 를 분리한다:
+   *     - 시각 슬라이드: `withTiming(-SCREEN_WIDTH, { duration: 300, easing: spring })`
+   *       — UI 스레드 보간, 콜백 없음. 카드는 300ms 에 화면 밖(-SCREEN_WIDTH) 도달.
+   *     - advance: 별도 360ms JS 타이머에서 `advancePassIndex()` + `dismissX = 0` 리셋.
+   *       300~360ms 구간 동안 dismissX 는 -SCREEN_WIDTH 에 머물러 카드가 화면 밖에
+   *       유지된다 (300ms 에 리셋하면 카드가 화면 안으로 튀어 들어옴). 360ms 에
+   *       topIdx 가 +1 되는 *그 순간* dismissX 를 0 으로 — 새 top 카드가 정상 위치.
+   *
+   * 정량: 시각 슬라이드 PASS_DISMISS_SLIDE_MS=300, advance PASS_DISMISS_MS=360,
+   *       easings.spring (미세 오버슈트 30%, PWA cubic-bezier 와 동일 곡선).
    */
   function advancePassIndex() {
     setTopIdx((i) => Math.min(i + 1, recs.length));
+    // topIdx 가 바뀌는 것과 동시에 리셋 — 새 top 카드 위에서 dismissX 가 0 이어야
+    // 정상 위치. 360ms 타이머에서만 호출되므로 300~360ms 구간엔 -SCREEN_WIDTH 유지.
+    dismissX.value = 0;
+    passAdvanceTimer.current = null;
   }
   function dismissThenNext() {
     if (!recs[topIdx]) return;
@@ -445,19 +478,22 @@ export default function DiscoverScreen() {
     setIsDragging(false);
     setDragX(0);
     setDragY(0);
-    // worklet 곡선 시작. 종료 후 runOnJS 콜백으로 advance + 리셋.
-    dismissX.value = withTiming(
-      -SCREEN_WIDTH,
-      { duration: PASS_DISMISS_MS, easing: PASS_DISMISS_BEZIER },
-      (finished) => {
-        'worklet';
-        if (finished) {
-          runOnJS(advancePassIndex)();
-          // 다음 카드 위에서 dismissX 가 0 이어야 정상 위치 — 즉시 리셋.
-          dismissX.value = 0;
-        }
-      },
-    );
+    // 연속 스와이프 안전: 직전 pass 의 advance 타이머가 아직 살아 있으면 즉시 소진.
+    // (대기 중이던 advance 를 누락 없이 먼저 처리 → 카드/인덱스 어긋남 방지)
+    if (passAdvanceTimer.current) {
+      clearTimeout(passAdvanceTimer.current);
+      passAdvanceTimer.current = null;
+      advancePassIndex();
+    }
+    // ① 시각 슬라이드 — 300ms spring 곡선. UI 스레드 보간, 완료 콜백 없음.
+    dismissX.value = withTiming(-SCREEN_WIDTH, {
+      duration: PASS_DISMISS_SLIDE_MS,
+      easing: PASS_DISMISS_BEZIER,
+    });
+    // ② advance — 360ms JS 타이머. topIdx++ 와 dismissX 리셋을 동시에.
+    passAdvanceTimer.current = setTimeout(() => {
+      advancePassIndex();
+    }, PASS_DISMISS_MS);
   }
 
   function toPrev() {
@@ -729,9 +765,14 @@ export default function DiscoverScreen() {
           style={styles.searchIcon}
           onPress={() => {
             // 위임 O #1.2 — 검색 버튼으로 진입 시 initialQuery 비움 (잔해 제거).
+            // WARN-A (2026-05-19 재검증) — search_opened track 추가. Saved/Profile
+            // 의 search 버튼은 이미 호출 중 — 3탭 search 진입 지표 정합.
+            track('search_opened');
             setSearchInitialQuery('');
             setSearchOpen(true);
           }}
+          accessibilityRole="button"
+          accessibilityLabel="검색 열기"
           hitSlop={8}
         >
           <IconSearch size={20} color={colors.textPrimary} />

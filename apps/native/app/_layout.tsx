@@ -32,31 +32,29 @@ import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
 import { track } from '../lib/analytics';
+import { IconDiscover, IconBookmark, IconUser } from '../components/Icons';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// 2026-05-19 native↔PWA 정합 audit E-1 — 탭 아이콘이 텍스트 이모지(◉♡◎)였던 것을
+// 핸드오프 정본 SVG 아이콘으로 교체. `icon` prop 은 (color, active) 를 받아 SVG 를
+// 반환하는 렌더 함수 — focused 색 위임.
 function TabItem({
   icon,
   label,
   focused,
 }: {
-  icon: string;
+  icon: (props: { color: string; active: boolean }) => React.ReactNode;
   label: string;
   focused: boolean;
 }) {
+  const tint = focused ? colors.accent : colors.textMuted;
   return (
-    <View style={{ alignItems: 'center', gap: 2, minWidth: 60 }}>
+    <View style={{ alignItems: 'center', gap: 3, minWidth: 60 }}>
+      {icon({ color: tint, active: focused })}
       <Text
         style={{
-          color: focused ? colors.accent : colors.textMuted,
-          fontSize: 18,
-        }}
-      >
-        {icon}
-      </Text>
-      <Text
-        style={{
-          color: focused ? colors.accent : colors.textMuted,
+          color: tint,
           fontSize: 10,
           fontWeight: focused ? '700' : '500',
         }}
@@ -154,7 +152,11 @@ function TabsWithGuard() {
               name="index"
               options={{
                 tabBarIcon: ({ focused }) => (
-                  <TabItem icon="◉" label="발견" focused={focused} />
+                  <TabItem
+                    icon={({ color, active }) => <IconDiscover color={color} active={active} />}
+                    label="발견"
+                    focused={focused}
+                  />
                 ),
               }}
             />
@@ -162,7 +164,11 @@ function TabsWithGuard() {
               name="saved"
               options={{
                 tabBarIcon: ({ focused }) => (
-                  <TabItem icon="♡" label="저장" focused={focused} />
+                  <TabItem
+                    icon={({ color, active }) => <IconBookmark color={color} active={active} />}
+                    label="저장"
+                    focused={focused}
+                  />
                 ),
               }}
             />
@@ -170,15 +176,19 @@ function TabsWithGuard() {
               name="profile"
               options={{
                 tabBarIcon: ({ focused }) => (
-                  <TabItem icon="◎" label="프로필" focused={focused} />
+                  <TabItem
+                    icon={({ color }) => <IconUser color={color} />}
+                    label="프로필"
+                    focused={focused}
+                  />
                 ),
               }}
             />
-            {/* W5 Task A 회귀 fix — Tabs 가 app/ 폴더의 모든 라우트를 자동으로
-                탭으로 등록하므로 onboarding/* 도 ▼ 탭으로 노출됨. href: null 로
-                탭바에서 숨김 (라우트 자체는 그대로 작동, router.replace 만 진입). */}
-            <Tabs.Screen name="onboarding/index" options={{ href: null }} />
-            <Tabs.Screen name="onboarding/complete" options={{ href: null }} />
+            {/* 2026-05-19 native↔PWA 정합 audit (구조 #1) — onboarding/ 에 `_layout.tsx`
+                (<Stack/>) 를 추가해 expo-router 가 onboarding 을 단일 그룹 노드로 합침.
+                그 노드 자체에 href:null 을 주어 합성 placeholder 탭(▼) 제거.
+                결과: 탭바 = 발견·저장·프로필 3개. (라우트는 router.replace 로 정상 진입.) */}
+            <Tabs.Screen name="onboarding" options={{ href: null }} />
             {/* share/[id] 도 동적 라우트로 자동 등록됨 — 탭바에서 숨김
                 (Universal Link / 공유 진입 전용, 발견·저장·프로필 3탭만 노출). */}
             <Tabs.Screen name="share/[id]" options={{ href: null }} />

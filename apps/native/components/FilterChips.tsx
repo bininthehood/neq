@@ -307,8 +307,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: 'transparent',
   },
+  // 2026-05-06 결정 — 칩 selected = solid amber fill + inverse text.
+  // accentDim 면 패턴(이전 결정 잔재)은 anti-slop #6 예외 2(reason 한정) 위반.
+  // web FilterChips: background var(--accent) + color var(--text-inverse).
   optionActive: {
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.accent,
   },
   optionText: {
     color: colors.textSecondary,
@@ -316,7 +319,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   optionTextActive: {
-    color: colors.accent,
+    color: colors.textInverse,
     fontWeight: '600',
   },
 });
