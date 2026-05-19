@@ -20,6 +20,7 @@ import Svg, { Rect, Line, Path, Polyline } from 'react-native-svg';
 import { getOTTIcon } from '@neq/core';
 import {
   getSaved,
+  addSaved,
   removeSaved,
   getWatchReports,
   addWatchReport,
@@ -30,6 +31,7 @@ import {
 } from '../lib/store';
 import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
 import { colors, radius, spacing, fontsV2 } from '../lib/tokens';
+import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
@@ -162,6 +164,9 @@ export default function SavedScreen() {
   // P2 배치 A — 카드 내 reaction 입력 ('봤어요?'). web saved/page.tsx:66 reportingId 정합.
   const [reportingId, setReportingId] = useState<number | null>(null);
 
+  // 배치 G — 카드 삭제 시 undo toast (데이터 손실 방지).
+  const toast = useToast();
+
   const refreshAll = useCallback(async () => {
     const [savedList, reportsList, archived] = await Promise.all([
       getSaved(),
@@ -220,6 +225,11 @@ export default function SavedScreen() {
   }, []);
 
   async function handleRemove(tmdbId: number) {
+    // 배치 G — 삭제 전에 rec + 시청 리포트 보존 → undo toast 시 복원.
+    // web `saved/page.tsx:295-313` handleRemove 정합.
+    const target = items.find((s) => s.recommendation.tmdbId === tmdbId);
+    const prevReport = reports[tmdbId];
+
     await removeSaved(tmdbId);
     // 작품 삭제 시 시청 리포트도 함께 제거 (web saved/page.tsx:299-300 정합).
     await removeWatchReport(tmdbId);
@@ -230,6 +240,22 @@ export default function SavedScreen() {
       delete next[tmdbId];
       return next;
     });
+
+    // undo toast — "책장에서 뺐어요 · 실행 취소". 누르면 삭제 복원.
+    if (target) {
+      toast.show('remove', {
+        ctx: { title: target.recommendation.title },
+        onAction: () => {
+          // 복원은 비동기 store 쓰기 + 로컬 state 즉시 반영.
+          void (async () => {
+            await addSaved(target.recommendation);
+            if (prevReport) await addWatchReport(tmdbId, prevReport);
+            // store 가 savedAt 을 새로 찍으므로 정렬 정합 위해 refreshAll 로 재로드.
+            await refreshAll();
+          })();
+        },
+      });
+    }
   }
 
   // P2 배치 A — reaction 기록. web saved/page.tsx:315-319 handleReport 정합.

@@ -31,6 +31,7 @@ import { colors } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
+import { ToastProvider } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import { IconDiscover, IconBookmark, IconUser } from '../components/Icons';
 
@@ -118,7 +119,11 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
           <SafeAreaProvider>
             <StatusBar style="light" />
-            <TabsWithGuard />
+            {/* ToastProvider — SafeAreaProvider 내부 마운트 (toast viewport 가
+                useSafeAreaInsets 사용). 탭 화면 전역에서 useToast() 접근 가능. */}
+            <ToastProvider>
+              <TabsWithGuard />
+            </ToastProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </PersonaProvider>

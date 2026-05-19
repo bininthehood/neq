@@ -46,6 +46,7 @@ import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
 import { usePersona } from '../contexts/PersonaContext';
+import { useToast } from '../contexts/ToastContext';
 import type {
   Recommendation,
   RecommendFilter,
@@ -178,6 +179,8 @@ export default function DiscoverScreen() {
   const [detailOpenCount, setDetailOpenCount] = useState(0);
 
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
+  // 배치 G — 첫 카드 힌트 worklet 측 1회 게이트 (0=미발사, 1=발사됨).
+  const firstCardHintGate = useSharedValue(0);
   // 사이클 2: pass dismiss worklet 곡선용 sharedValue.
   // 0 = idle, 음수값 = 좌측 dismiss 진행. SwipeCard 가 dragX 대신 이 값을 사용.
   const dismissX = useSharedValue(0);
@@ -196,6 +199,13 @@ export default function DiscoverScreen() {
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // 배치 G — 첫 카드 힌트. web `useSwipeGesture.ts:131-133` 정합:
+  //   첫 카드(topIdx===0)에서 우로 일정 거리 드래그하면 "첫 번째 작품이에요" 안내.
+  // web 은 별도 firstCardHint state + top 배너지만, native 는 toast 인프라로 통합.
+  // 세션당 1회만 — ref 로 중복 발사 차단 (드래그 도중 onUpdate 가 다발 호출).
+  const firstCardHintShownRef = useRef(false);
+  const toast = useToast();
   // 위임 O #1.2 — DetailSheet Cast 클릭 시 SearchSheet 진입용 initialQuery.
   // 빈 문자열 = 일반 검색 진입 (잔해 제거). 인물 이름 = Cast 클릭 진입.
   const [searchInitialQuery, setSearchInitialQuery] = useState('');
@@ -632,6 +642,16 @@ export default function DiscoverScreen() {
     dismissThenNext();
   }
 
+  // 배치 G — 첫 카드 힌트. 첫 카드(topIdx===0)에서 우 드래그 시 1회 toast.
+  // web `useSwipeGesture.ts:131-133` 의 setFirstCardHint(true) 정합.
+  // 튜토리얼이 떠 있는 동안엔 발사하지 않음 (TutorialFlow 가 이미 안내 중 — 중복 회피).
+  function showFirstCardHint() {
+    if (firstCardHintShownRef.current) return;
+    if (tutorialActive) return;
+    firstCardHintShownRef.current = true;
+    toast.show('info', { ctx: { message: '첫 번째 작품이에요' }, duration: 1800 });
+  }
+
   const pan = Gesture.Pan()
     .onBegin(() => {
       runOnJS(setIsDragging)(true);
@@ -651,6 +671,18 @@ export default function DiscoverScreen() {
           runOnJS(setPrevActive)(false);
           runOnJS(setDragX)(e.translationX);
           runOnJS(setDragY)(0);
+          // 배치 G — 첫 카드(prevRec 없음 = topIdx 0) 우 드래그 30px+ → 힌트.
+          // web `useSwipeGesture.ts:133` 의 `dx > 30` 임계 정합. firstCardHintGate
+          // shared value 로 worklet 측 1회 게이트 — runOnJS 다발 호출 방지.
+          // (showFirstCardHint 의 ref 가드가 JS 측 멱등성도 별도 보장.)
+          if (
+            !prevRec &&
+            e.translationX > 30 &&
+            firstCardHintGate.value === 0
+          ) {
+            firstCardHintGate.value = 1;
+            runOnJS(showFirstCardHint)();
+          }
         }
       } else {
         // vertical — G1-A: ↑ 추적 제거. 아래 방향 (save) 만 dragY 로 추적.
