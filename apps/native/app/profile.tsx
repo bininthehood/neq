@@ -8,7 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, router } from 'expo-router';
 import Constants from 'expo-constants';
 import {
   getSaved,
@@ -18,12 +18,18 @@ import {
   clearAllUserData,
 } from '../lib/store';
 import { wipeCloudData } from '../lib/sync';
-import { calcMonthlyWatch, type MonthlyWatchResult } from '../lib/profile-stats';
-import type { WatchReport } from '../lib/types';
+import {
+  calcMonthlyWatch,
+  calcTypeDistribution,
+  calcOTTDistribution,
+  type MonthlyWatchResult,
+} from '../lib/profile-stats';
+import type { WatchReport, SavedItem } from '../lib/types';
 import { colors, radius, spacing, fontsV2 } from '../lib/tokens';
 import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
 import SearchSheet from '../components/SearchSheet';
+import DistributionChart from '../components/DistributionChart';
 import { IconClose, IconSearch } from '../components/Icons';
 import { track } from '../lib/analytics';
 
@@ -47,6 +53,8 @@ export default function ProfileScreen() {
     dropped: 0,
   });
   const [reportsRaw, setReportsRaw] = useState<WatchReport[]>([]);
+  // 타입/OTT 분포 차트용 원본 saved 배열 (web `profile/page.tsx:37` savedRaw 정합).
+  const [savedRaw, setSavedRaw] = useState<SavedItem[]>([]);
   const [deviceId, setDeviceId] = useState('');
   // 헤더 search 버튼 → SearchSheet 자체 마운트 (web `profile/page.tsx` 정합).
   const [searchOpen, setSearchOpen] = useState(false);
@@ -60,6 +68,7 @@ export default function ProfileScreen() {
     ]);
 
     setSavedCount(saved.length);
+    setSavedRaw(saved);
     setStats(s);
     setReportsRaw(reports);
     setDeviceId(did);
@@ -84,6 +93,10 @@ export default function ProfileScreen() {
     [reportsRaw],
   );
 
+  // 타입/OTT 분포 — web `profile/page.tsx:70-71` 정합. saved 기반, 빈 배열이면 섹션 숨김.
+  const typeDist = useMemo(() => calcTypeDistribution(savedRaw), [savedRaw]);
+  const ottDist = useMemo(() => calcOTTDistribution(savedRaw), [savedRaw]);
+
   useFocusEffect(
     useCallback(() => {
       refresh();
@@ -107,6 +120,14 @@ export default function ProfileScreen() {
             await clearAllUserData();
             void wipeCloudData();
             await refresh();
+            // 전역 PersonaContext 도 갱신 — clearAllUserData 가 neq_personas 를
+            // 비우지만 Provider state 는 stale 이라, refresh 없이는 Discover 헤더
+            // 페르소나 chip 이 삭제된 페르소나 기준으로 계속 노출됨 (WARN-E).
+            await persona.refresh();
+            // web `profile/page.tsx:98` 정합 — 초기화 후 빈 Profile 에 머물지 않고
+            // Discover 로 이동. expo-router 는 `/` 가 Discover 탭(index.tsx).
+            // replace — 초기화된 Profile 을 뒤로가기 스택에 남기지 않음.
+            router.replace('/');
           },
         },
       ],
@@ -226,6 +247,30 @@ export default function ProfileScreen() {
             </View>
           )}
         </View>
+
+        {/* 작품 비중 — type(영화/시리즈) 분포 (web `InsightSections.tsx:99-140` 정합).
+            saved 0편이거나 type 집계 0일 때 빈 배열 → 섹션 숨김.
+            우측 값 = 퍼센트. 라벨 폭 좁음(48). */}
+        {typeDist.length > 0 && (
+          <DistributionChart
+            title="Library · 작품 비중"
+            rows={typeDist}
+            valueMode="percent"
+            labelWidth={48}
+          />
+        )}
+
+        {/* OTT 분포 — provider 상위 5 (web `InsightSections.tsx:142-187` 정합).
+            providers 있는 saved 0건이면 빈 배열 → 섹션 숨김.
+            우측 값 = 작품 수(count). 라벨 폭 넓음(72, OTT 이름 김). */}
+        {ottDist.length > 0 && (
+          <DistributionChart
+            title="Channels · 자주 모인 OTT"
+            rows={ottDist}
+            valueMode="count"
+            labelWidth={72}
+          />
+        )}
 
         {/* W5 Task F — 월별 시청 분포 (web `InsightSections.tsx:189-240` 정합).
             최근 12개월 막대 차트. reports.total === 0 일 때 섹션 숨김.
