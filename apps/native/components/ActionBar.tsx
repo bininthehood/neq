@@ -6,7 +6,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { colors, radius, spacing, easings, durations } from '../lib/tokens';
+import { colors, radius, spacing, easings, durations, shadowsNative } from '../lib/tokens';
 import { IconRewind, IconShare, IconInfo, IconRefresh, IconSave } from './Icons';
 
 interface Props {
@@ -158,6 +158,7 @@ const styles = StyleSheet.create({
   },
   // 2026-05-06 A1 — Save 버튼 1.5px 잉크 윤곽 (idle border / active accent).
   // web ActionBar 정합 — Quiet Ink 잉크 윤곽 정체성.
+  // T-2 — idle boxShadow var(--shadow-md). web ActionBar 가 항상 적용하는 깊이감.
   saveBtn: {
     width: 56,
     height: 56,
@@ -165,6 +166,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1.5,
     borderColor: colors.border,
+    ...shadowsNative.md,
   },
   saveBtnActive: {
     backgroundColor: colors.accent,

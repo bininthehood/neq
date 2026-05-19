@@ -11,7 +11,7 @@ import {
   type FilterYear,
   type FilterRating,
 } from '@neq/core';
-import { colors, radius, spacing } from '../lib/tokens';
+import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
 
 type DropdownKey = 'type' | 'origin' | 'year' | 'rating' | 'ott' | null;
 
@@ -279,9 +279,12 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '600',
   },
+  // E-2 (2026-05-19 정합 audit) — caret 은 web 정합으로 fontSize 11 + opacity 0.3.
+  // web FilterChips 의 `<span aria-hidden style={{ fontSize: 11, opacity: 0.3 }}>` 정합.
   caret: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
+    opacity: 0.3,
   },
   panel: {
     position: 'absolute',
@@ -294,11 +297,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.surfaceRaised,
     borderRadius: radius.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 8,
+    // T-2 — dropdown 그림자 var(--shadow-dropdown). shadowsNative 헬퍼 경유.
+    ...shadowsNative.dropdown,
     zIndex: 100,
   },
   option: {

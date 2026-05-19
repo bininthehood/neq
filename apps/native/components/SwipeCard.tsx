@@ -13,8 +13,21 @@ import Animated, {
 import type { Recommendation } from '../lib/types';
 import { getOTTIcon } from '@neq/core';
 import { fontsV2, easings, durations } from '@neq/design';
-import { colors, radius, spacing } from '../lib/tokens';
+import { colors, radius, shadowsNative } from '../lib/tokens';
 import { IconStar } from './Icons';
+
+/**
+ * hex(#RRGGBB) → rgba 문자열 변환. CatChip 보더의 25% alpha 처리용.
+ * web CatChip 은 `color-mix(in srgb, ${color} 25%, transparent)` 를 쓰지만 RN 은
+ * color-mix 미지원 → 카테고리 색을 직접 alpha 적용. (2026-05-19 정합 audit)
+ */
+function hexAlpha(hex: string, alpha: number): string {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 interface Props {
   rec: Recommendation;
@@ -69,12 +82,18 @@ const CAT_COLOR: Record<CardCategory, string> = {
   variety: colors.catVariety,
 };
 
-/** 카테고리 칩 — bg-overlay + cat 색 + 1px 보더(cat 색 25%). web CatChip 정합. */
+/** 카테고리 칩 — bg-overlay + cat 색 + 1px 보더(cat 색 25% alpha). web CatChip 정합.
+ *  web `parts.tsx` 의 `color-mix(in srgb, ${color} 25%, transparent)` 를 RN alpha 로 변환. */
 function CatChip({ type }: { type: CardCategory }) {
   const color = CAT_COLOR[type];
   return (
     <BlurView intensity={20} tint="dark" style={styles.catChip}>
-      <Text style={[styles.catChipText, { color, borderColor: color }]}>
+      <Text
+        style={[
+          styles.catChipText,
+          { color, borderColor: hexAlpha(color, 0.25) },
+        ]}
+      >
         {CAT_LABEL[type]}
       </Text>
     </BlurView>
@@ -226,11 +245,13 @@ export default function SwipeCard({
         </View>
       )}
 
-      {/* bottom gradient overlay — 텍스트 가독. CardVariantA: 0%~50% transparent,
-          92% bg-overlay-heavy, 100% bg-overlay-solid. */}
+      {/* bottom gradient overlay — 텍스트 가독. CardVariantA 정합 3-stop:
+          50% transparent → 92% bg-overlay-heavy → 100% bg-overlay-solid.
+          RN LinearGradient 는 첫 stop 이전 구간을 첫 색으로 평탄 채움 →
+          0~50% transparent 는 stop 명시 불필요(PWA 3-stop 구조와 동일). */}
       <LinearGradient
-        colors={['transparent', 'transparent', colors.overlayHeavy, colors.overlaySolid]}
-        locations={[0, 0.5, 0.92, 1]}
+        colors={['transparent', colors.overlayHeavy, colors.overlaySolid]}
+        locations={[0.5, 0.92, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -293,12 +314,8 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl, // T-1 정정 후 16px (PWA --radius-xl 정합)
     overflow: 'hidden',
     backgroundColor: colors.surface,
-    // C-2 — CardVariantA boxShadow var(--shadow-lg) = 0 8px 32px rgba(0,0,0,0.5).
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 32,
-    elevation: 12,
+    // C-2 / T-2 — CardVariantA boxShadow var(--shadow-lg). shadowsNative 헬퍼 경유.
+    ...shadowsNative.lg,
   },
   fallback: {
     backgroundColor: colors.surface,

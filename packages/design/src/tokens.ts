@@ -112,6 +112,72 @@ export const shadows = {
   toast: '0 2px 12px rgba(0,0,0,0.40)',
 } as const;
 
+/**
+ * shadows 토큰의 RN 변환 (2026-05-19 native↔PWA 정합 audit T-2).
+ *
+ * web 은 CSS box-shadow 문자열(`shadows`)을 그대로 쓰지만 RN 은
+ * `shadowColor/shadowOffset/shadowOpacity/shadowRadius`(iOS) + `elevation`(Android)
+ * 개별 prop 을 요구한다. native 컴포넌트가 그림자를 하드코딩하던 것을 단일 출처로 통합.
+ *
+ * - CSS box-shadow `offsetX offsetY blur rgba(r,g,b,a)` 를 1:1 매핑.
+ *   shadowColor 는 alpha 를 제외한 검정(#000), shadowOpacity 가 alpha 를 담당.
+ * - elevation(Android)은 blur 반경에 근사 — Android 그림자는 정밀 제어 불가.
+ * - **순수 JS 객체** 반환 (react-native 타입/런타임 미import) → web 번들 영향 0.
+ *   호출처(native)에서 `ViewStyle` 로 spread.
+ *
+ * 사용: `<View style={[styles.card, shadowsNative.lg]} />`
+ */
+export interface ShadowNativeStyle {
+  shadowColor: string;
+  shadowOffset: { width: number; height: number };
+  shadowOpacity: number;
+  shadowRadius: number;
+  elevation: number;
+}
+
+export const shadowsNative = {
+  // 0 1px 3px rgba(0,0,0,0.20)
+  sm: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  // 0 4px 16px rgba(0,0,0,0.30)
+  md: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  // 0 8px 32px rgba(0,0,0,0.50)
+  lg: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 32,
+    elevation: 12,
+  },
+  // 0 4px 20px rgba(0,0,0,0.50)
+  dropdown: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  // 0 2px 12px rgba(0,0,0,0.40)
+  toast: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+} as const satisfies Record<string, ShadowNativeStyle>;
+
 // ─────────────────────────────────────────────────────
 // Typography — scale (rem). 네이티브는 px 변환: 기준 16px × rem
 // ─────────────────────────────────────────────────────
@@ -240,6 +306,7 @@ export type Colors = typeof colors;
 export type Spacing = typeof spacing;
 export type Radius = typeof radius;
 export type Shadows = typeof shadows;
+export type ShadowsNative = typeof shadowsNative;
 export type FontSize = typeof fontSize;
 export type FontSizePx = typeof fontSizePx;
 export type Fonts = typeof fonts;

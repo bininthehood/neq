@@ -3,6 +3,7 @@ export {
   spacing,
   radius,
   shadows,
+  shadowsNative,
   fontSize,
   fontSizePx,
   fonts,

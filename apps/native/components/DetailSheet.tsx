@@ -11,7 +11,7 @@ import {
   Share,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { IconClose } from './Icons';
+import { IconClose, IconShare } from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -518,7 +518,13 @@ export default function DetailSheet({
                 />
               )}
 
-              <Pressable style={styles.shareBtn} onPress={handleShare}>
+              <Pressable
+                style={styles.shareBtn}
+                onPress={handleShare}
+                accessibilityRole="button"
+                accessibilityLabel={`${rec.title} 공유하기`}
+              >
+                <IconShare size={16} color={colors.textSecondary} />
                 <Text style={styles.shareText}>공유하기</Text>
               </Pressable>
             </ScrollView>
@@ -729,7 +735,7 @@ function RelatedRow({
                 />
               ) : (
                 <View style={styles.relatedPosterFallback}>
-                  <Text style={styles.relatedPosterFallbackText}>◇</Text>
+                  <Text style={styles.relatedPosterFallbackText}>N</Text>
                 </View>
               )}
             </View>
@@ -826,15 +832,18 @@ const styles = StyleSheet.create({
   },
   // anti-slop #6 예외 2 + 2026-05-02 amber 누적 분배 정책 — reason 박스는
   // 면(accentDim) 금지 → 선(borderLeft 2px accent). web DESIGN.md L36 정합.
+  // V-2 (2026-05-19 정합 audit) — web DetailBody `pl-3 py-1 text-sm` 정확 정합:
+  // paddingLeft 16→12, paddingVertical 4 추가, reasonText fontSize 14→13.
   reasonBox: {
     marginTop: spacing.md,
-    paddingLeft: spacing.md,
+    paddingLeft: 12,
+    paddingVertical: 4,
     borderLeftWidth: 2,
     borderLeftColor: colors.accentBorder,
   },
   reasonText: {
     color: colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     lineHeight: 20,
   },
   // 위임 O #1.1 — Cast row 가로 스크롤 (web CastRow 시각 정합).
@@ -948,17 +957,25 @@ const styles = StyleSheet.create({
     color: colors.accent,
     fontSize: 12,
   },
+  // B-6 (2026-05-19 정합 audit) — web DetailSheet 공유 버튼 정합:
+  // surface-raised bg + 1px border + text-secondary (amber 박탈 — 보조 액션 amber
+  // 금지 정책 DESIGN.md L38) + radius-lg + IconShare + py-3 px-4 + text-sm 500.
   shareBtn: {
     marginTop: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    borderWidth: 1,
-    borderColor: colors.accentBorder,
-    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
   },
   shareText: {
-    color: colors.accent,
-    fontSize: 14,
+    color: colors.textSecondary,
+    fontSize: 13,
     fontWeight: '500',
   },
   // 관련 작품 (F3) — neko-detail-sheet.jsx SimilarStrip
@@ -1008,9 +1025,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.surface,
   },
+  // E-3 (2026-05-19 정합 audit) — `◇` 기하 문자 제거. PosterFallback 의 'N' 글자 패턴
+  // (web parts.tsx PosterImage / native SwipeCard fallbackText 정합) 으로 통일.
   relatedPosterFallbackText: {
+    fontFamily: fontsV2.display,
     color: colors.textMuted,
-    fontSize: 20,
+    fontSize: 28,
   },
   relatedTitle: {
     color: colors.textPrimary,
