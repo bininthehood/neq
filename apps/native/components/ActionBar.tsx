@@ -80,7 +80,10 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
           accessibilityLabel="공유"
           hitSlop={4}
         >
-          <IconShare size={20} color={colors.textMuted} />
+          {/* 2026-05-20 정합 — Rewind/Detail/Refresh 가 모두 18 인데 Share 만 20 이라
+              ActionBar 4 아이콘 사이즈가 비일관. native 18 통일.
+              (PWA 는 모두 17 — 추후 전체 정합 트랙에서 4개 동시 17 검토 가능.) */}
+          <IconShare size={18} color={colors.textMuted} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
