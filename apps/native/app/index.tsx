@@ -209,9 +209,14 @@ export default function DiscoverScreen() {
   // 진입 가능. DetailSheet 의 rec 는 `searchSelectedRec ?? currentRec` 우선순위.
   // 닫을 때 searchSelectedRec=null 로 복원.
   const [searchSelectedRec, setSearchSelectedRec] = useState<Recommendation | null>(null);
-  // 2026-05-20 — BottomSheetModal 마이그레이션 후 `returnToDetailAfterSearch` /
-  // `returnToSearchAfterDetail` flag 모두 제거. 라이브러리 z-stacking 으로 두 sheet
-  // 자연 동시 mount → 위 sheet 닫혀도 아래 sheet state 자동 보존. flag 우회 불필요.
+  // 2026-05-20 (revised) — DetailSheet Cast 진입으로 SearchSheet 가 열린 상태 표시.
+  // RN Modal 은 OS native API 라 두 개 동시 z-stack 안 됨 (iOS UIKit 제한). 그래서
+  // DetailSheet 닫고 SearchSheet 만 열림 → SearchSheet 닫힐 때 이 flag 보고 DetailSheet
+  // 자동 복귀. PWA 의 z-stacking 동작과 인지 동등하지만 native Modal 제약 우회.
+  const [returnToDetailAfterSearch, setReturnToDetailAfterSearch] = useState(false);
+  // 2026-05-20 — 역방향: SearchSheet 작품 탭 → DetailSheet 진입 흐름에서 DetailSheet
+  // 닫을 때 SearchSheet 자동 복귀 + 검색어 유지 (사용자 보고).
+  const [returnToSearchAfterDetail, setReturnToSearchAfterDetail] = useState(false);
 
   // 배치 G — 첫 카드 힌트. web `useSwipeGesture.ts:131-133` 정합:
   //   첫 카드(topIdx===0)에서 우로 일정 거리 드래그하면 "첫 번째 작품이에요" 안내.
@@ -1086,25 +1091,43 @@ export default function DiscoverScreen() {
           setDetailOpen(false);
           // 검색 진입 detail 닫을 때 selected rec cleanup (다음 진입 시 stack rec 복귀).
           setSearchSelectedRec(null);
+          // Search → Work → Detail 흐름이면 SearchSheet 자동 복귀 + 검색어 유지.
+          if (returnToSearchAfterDetail) {
+            setReturnToSearchAfterDetail(false);
+            setSearchOpen(true);
+          }
         }}
         onSearchPerson={(name) => {
-          // 2026-05-20 — BottomSheetModal z-stack 으로 단순화.
-          //   DetailSheet 유지 + SearchSheet 위에 stack. SearchSheet 닫혀도 DetailSheet
-          //   그대로 보임 (라이브러리 stack 관리). PWA z-stacking 패턴 직접 구현.
+          // 2026-05-20 (revised) — RN Modal z-stack 제약 우회.
+          //   PWA: detail.closeDetail() 호출하지 않고 SearchSheet 위에 띄움(z-stack).
+          //   native: OS native Modal API 라 두 개 동시 visible=true 면 위 Modal 이
+          //   안 올라오고 잔재 남음 → DetailSheet 닫고 SearchSheet 열되, SearchSheet
+          //   닫을 때 returnToDetailAfterSearch flag 로 DetailSheet 자동 복귀.
+          //   인지 결과는 PWA z-stacking 과 동등.
           track('detail_to_search_person', { name, from: 'discover' });
+          setDetailOpen(false);
           setSearchInitialQuery(name);
           setSearchOpen(true);
+          setReturnToDetailAfterSearch(true);
         }}
       />
 
       <SearchSheet
         visible={searchOpen}
-        onClose={() => setSearchOpen(false)}
+        onClose={() => {
+          setSearchOpen(false);
+          // Cast 진입으로 열린 SearchSheet 라면 DetailSheet 자동 복귀.
+          if (returnToDetailAfterSearch) {
+            setReturnToDetailAfterSearch(false);
+            setDetailOpen(true);
+          }
+        }}
         initialQuery={searchInitialQuery}
+        // 작품 탭 흐름에서 DetailSheet 진입 후 복귀 가능 → 검색 컨텍스트 보존.
+        preserveStateOnClose={returnToSearchAfterDetail}
         onWorkSelected={(rec) => {
-          // 2026-05-20 — BottomSheetModal z-stack. SearchSheet 그대로 두고 DetailSheet
-          // 를 위에 stack → Detail 닫으면 Search 자동 노출 + state(query/data/scroll/focus)
-          // 완전 보존. setSearchOpen(false) 호출 안 함.
+          // 2026-05-20 — 검색 결과 작품 탭 → SearchSheet 닫고 새 rec 으로 DetailSheet.
+          // PWA 의 SearchSheet 내부 detail panel 패턴은 별도 트랙 — 우선 단순 흐름.
           track('detail_opened', {
             tmdb_id: rec.tmdbId,
             title: rec.title,
@@ -1112,6 +1135,12 @@ export default function DiscoverScreen() {
             source: 'search_result',
           });
           setSearchSelectedRec(rec);
+          setSearchOpen(false);
+          // 작품 탭은 새 DetailSheet 진입이라 returnToDetail flag 클리어 (이전 DetailSheet
+          // 의 rec 으로 복귀하면 안 되고, 새 rec 의 DetailSheet 가 떠야 함).
+          setReturnToDetailAfterSearch(false);
+          // 반면 returnToSearchAfterDetail=true 로 — DetailSheet 닫으면 SearchSheet 복귀.
+          setReturnToSearchAfterDetail(true);
           setDetailOpen(true);
         }}
       />

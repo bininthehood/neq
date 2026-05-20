@@ -1,22 +1,27 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  Modal,
   Pressable,
   ScrollView,
+  Dimensions,
   Linking,
   Share,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { IconClose, IconShare } from './Icons';
-import {
-  BottomSheetModal,
-  BottomSheetBackdrop,
-  BottomSheetScrollView,
-  type BottomSheetBackdropProps,
-  type BottomSheetScrollViewMethods,
-} from '@gorhom/bottom-sheet';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+  Easing,
+} from 'react-native-reanimated';
 import type {
   CastMember,
   Recommendation,
@@ -24,25 +29,30 @@ import type {
   RelatedWorksResponse,
 } from '../lib/types';
 import { getOTTLink, getOTTIcon } from '@neq/core';
-import { fonts, fontsV2 } from '@neq/design';
+import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env } from '../lib/env';
 
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9;
+const CLOSE_THRESHOLD = SHEET_MAX_HEIGHT * 0.3; // 30% 드래그 시 닫기
+
 /**
- * 2026-05-20 — @gorhom/bottom-sheet 마이그레이션.
+ * DetailSheet morph 모션 — Handoff v2 D3 + Phase C 정합.
+ * web (`useDetailSheet`: DETAIL_ENTER_MS=450, DETAIL_EXIT_MS=350,
+ * cubic-bezier(0.32, 0.72, 0.24, 1)) 와 정확 일치.
  *
- * 변경 배경: 이전엔 RN `<Modal>` + 자체 translateY/pan/dim 으로 모든 시트 동작 구현.
- * RN Modal 은 OS-level (UIWindow/Dialog) API 라 두 개 동시 z-stack 불가능 →
- * DetailSheet 위 SearchSheet 띄우면 backstage modal 의 state/focus 손실 회귀.
- *
- * BottomSheetModal 은 React tree 안 absolute view + 자체 stack 관리 → 다중 sheet
- * 동시 mount + z-stacking + 위 sheet 닫혀도 아래 sheet state 보존. enter/exit
- * 애니메이션은 라이브러리 내장 (충분히 자연스러움, Material Design 정합).
- *
- * snap point: 90% (이전 SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9 와 동일).
+ * 채택 결정 (frontend-builder, Phase C-3):
+ *   - 옵션 A) spring damping/stiffness 튜닝으로 ~450ms 만들기 → 미세 오버슈트가 남아
+ *     web 의 단방향 감속(0.32, 0.72, 0.24, 1)과 다른 인지를 줌. 기각.
+ *   - 옵션 B) **Easing.bezier(0.32, 0.72, 0.24, 1) + withTiming(450/350)** → 채택.
+ *     이유: 단일 소스(packages/design durations.detailEnter/Exit, easings.detailMorph) +
+ *     web 과 인지 100% 정합 + 100ms+ 인지 차이 즉시 해소.
  */
-const SNAP_POINTS = ['90%'];
+const DETAIL_BEZIER = Easing.bezier(...easings.detailMorph);
+const DETAIL_ENTER_MS = durations.detailEnter; // 450
+const DETAIL_EXIT_MS = durations.detailExit;   // 350
 
 interface Props {
   rec: Recommendation | null;
@@ -73,9 +83,8 @@ export default function DetailSheet({
   onClose,
   onSearchPerson,
 }: Props) {
-  const sheetRef = useRef<BottomSheetModal>(null);
-  const scrollRef = useRef<BottomSheetScrollViewMethods>(null);
-  const snapPoints = useMemo(() => SNAP_POINTS, []);
+  const translateY = useSharedValue(SHEET_MAX_HEIGHT);
+  const scrollRef = useRef<ScrollView>(null);
 
   // 관련 작품 카드 클릭 시 sheet 내부에서 rec 을 교체. F3 spec — 새 sheet 교체 단순화.
   const [relatedRec, setRelatedRec] = useState<Recommendation | null>(null);
@@ -101,19 +110,30 @@ export default function DetailSheet({
     setSynopsisExpanded(false);
   }, [rec?.tmdbId]);
 
-  // 2026-05-20 — BottomSheetModal ref API. visible prop 변화 시 present/dismiss.
-  // 부모 호출처 시그니처 (visible/onClose prop) 보존 — 라이브러리 ref 패턴은 내부 캡슐화.
   useEffect(() => {
-    if (visible && rec) {
-      sheetRef.current?.present();
+    if (visible) {
+      // Phase C-3: web (DETAIL_ENTER_MS=450, cubic-bezier(0.32, 0.72, 0.24, 1)) 와 정합.
+      translateY.value = withTiming(0, {
+        duration: DETAIL_ENTER_MS,
+        easing: DETAIL_BEZIER,
+      });
+      // W5 Task C 7.1 — `detail_opened` 발사는 호출처가 담당.
+      // (web 정본 `apps/web/src/components/discover/DetailSheet.tsx` 와 동일하게
+      // sheet 컴포넌트 내부에서는 발사하지 않는다. source 분기를 호출처가 정확히
+      // 알기 때문 — card_tap / action_bar / saved_tap 등.)
+      // 이전 native 구현은 source='native_detail_sheet' 로 중복 발사 → 제거.
     } else {
-      sheetRef.current?.dismiss();
-      // sheet 닫힘 → state reset (관련 작품 교체 잔재 정리)
+      // Phase C-3: web (DETAIL_EXIT_MS=350) 와 정합.
+      translateY.value = withTiming(SHEET_MAX_HEIGHT, {
+        duration: DETAIL_EXIT_MS,
+        easing: DETAIL_BEZIER,
+      });
+      // sheet 닫힘 → state reset
       setRelatedRec(null);
       setRelated(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, rec]);
+  }, [visible, translateY]);
 
   // 위임 O #1.3 — Cast 사진 lazy fetch.
   // sheet 가 visible 이고 rec.castMembers 가 비어있으면 /api/tmdb/credits 1회 호출.
@@ -222,20 +242,45 @@ export default function DetailSheet({
     [rec],
   );
 
-  // 2026-05-20 — pan / sheetStyle / dimStyle 제거. BottomSheetModal 의 내장
-  // enablePanDownToClose + backdrop 으로 대체. backdrop 컴포넌트는 closeOnPress.
-  const renderBackdrop = useCallback(
-    (props: BottomSheetBackdropProps) => (
-      <BottomSheetBackdrop
-        {...props}
-        appearsOnIndex={0}
-        disappearsOnIndex={-1}
-        pressBehavior="close"
-        opacity={0.6}
-      />
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        translateY.value = e.translationY;
+      }
+    })
+    .onEnd((e) => {
+      if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
+        // Phase C-3: drag close 도 web exit 정량과 정합.
+        translateY.value = withTiming(
+          SHEET_MAX_HEIGHT,
+          { duration: DETAIL_EXIT_MS, easing: DETAIL_BEZIER },
+          () => {
+            runOnJS(onClose)();
+          },
+        );
+      } else {
+        // 스냅백은 짧게 — drag 도중 손을 뗀 경우라 snappy 한 복귀가 자연스럽음.
+        // web 도 동일하게 transition transform (450ms) 로 복귀하지만, 드래그 미달 케이스라
+        // 변위가 작아 시간 차이 인지가 작음. 일관 유지 위해 enter 정량 사용.
+        translateY.value = withTiming(0, {
+          duration: DETAIL_ENTER_MS,
+          easing: DETAIL_BEZIER,
+        });
+      }
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateY.value,
+      [0, SHEET_MAX_HEIGHT],
+      [1, 0],
+      Extrapolation.CLAMP,
     ),
-    [],
-  );
+  }));
 
   async function handleShare() {
     if (!rec) return;
@@ -283,34 +328,48 @@ export default function DetailSheet({
   if (!rec) return null;
 
   return (
-    <BottomSheetModal
-      ref={sheetRef}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      enableDynamicSizing={false}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={styles.sheet}
-      handleIndicatorStyle={styles.handleBar}
-      onDismiss={onClose}
-      accessibilityLabel={`${rec.title} 상세 정보`}
+    <Modal
+      visible={visible}
+      animationType="none"
+      transparent
+      onRequestClose={onClose}
+      statusBarTranslucent
     >
-      <View style={styles.closeRow}>
-        <Pressable
-          style={styles.closeBtn}
-          onPress={onClose}
-          hitSlop={8}
-          accessibilityLabel="닫기"
-          accessibilityRole="button"
-        >
-          <IconClose size={20} color={colors.textPrimary} />
-        </Pressable>
-      </View>
-      <BottomSheetScrollView
-        ref={scrollRef}
-        style={styles.body}
-        contentContainerStyle={styles.bodyContent}
-        showsVerticalScrollIndicator={false}
+      <View
+        style={StyleSheet.absoluteFill}
+        accessibilityViewIsModal
+        accessibilityLabel={`${rec.title} 상세 정보`}
       >
+        <Animated.View style={[styles.dim, dimStyle]}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={onClose}
+            accessibilityLabel="닫기"
+            accessibilityRole="button"
+          />
+        </Animated.View>
+
+        <GestureDetector gesture={pan}>
+          <Animated.View style={[styles.sheet, sheetStyle]}>
+            <View style={styles.handleRow}>
+              <View style={styles.handleBar} />
+              <Pressable
+                style={styles.closeBtn}
+                onPress={onClose}
+                hitSlop={8}
+                accessibilityLabel="닫기"
+                accessibilityRole="button"
+              >
+                <IconClose size={20} color={colors.textPrimary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              ref={scrollRef}
+              style={styles.body}
+              contentContainerStyle={styles.bodyContent}
+              showsVerticalScrollIndicator={false}
+            >
               <Text style={styles.title} accessibilityRole="header">
                 {rec.title}
               </Text>
@@ -480,8 +539,11 @@ export default function DetailSheet({
                 <IconShare size={16} color={colors.textSecondary} />
                 <Text style={styles.shareText}>공유하기</Text>
               </Pressable>
-      </BottomSheetScrollView>
-    </BottomSheetModal>
+            </ScrollView>
+          </Animated.View>
+        </GestureDetector>
+      </View>
+    </Modal>
   );
 }
 
@@ -741,27 +803,40 @@ function RelatedRow({
 }
 
 const styles = StyleSheet.create({
-  // 2026-05-20 — BottomSheetModal 마이그레이션 후 styles 정리.
-  // dim/sheet outer/handleRow 제거 — 라이브러리 내장 (backdropComponent + sheet wrap +
-  // handle indicator). backgroundStyle + handleIndicatorStyle 로 시각 정합 유지.
+  dim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlayHeavy,
+  },
   sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: SHEET_MAX_HEIGHT,
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
   },
-  // 라이브러리의 handle indicator 직접 스타일 (PWA rounded-full + height 4).
+  handleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  // 2026-05-20 PWA 정합 — PWA DetailSheet handle bar `rounded-full` (= radius:9999).
+  // 기존 borderRadius:2 는 약간 깎인 모서리. height 4 의 완전 원형 = radius:2 도 가능하지만
+  // Tailwind rounded-full 은 height/2 가 아닌 999 (full pill).
   handleBar: {
+    position: 'absolute',
+    top: spacing.md,
+    left: '50%',
+    marginLeft: -20,
     width: 40,
     height: 4,
     borderRadius: 999,
     backgroundColor: colors.border,
-  },
-  // 닫기 버튼만 별도 row — handle 위쪽 라이브러리가 처리, 우상단 close 버튼만 자체 배치.
-  closeRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
   },
   closeBtn: {
     width: 44,
@@ -770,6 +845,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 'auto',
   },
   closeIcon: {
     color: colors.textSecondary,

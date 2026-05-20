@@ -16,7 +16,6 @@
     "@expo-google-fonts/geist-mono": "^0.4.2",
     "@expo-google-fonts/instrument-serif": "^0.4.1",
     "@expo-google-fonts/outfit": "^0.4.3",
-    "@gorhom/bottom-sheet": "^5.2.14",
     "@neq/core": "*",
     "@neq/design": "*",
     "@react-native-async-storage/async-storage": "2.2.0",
