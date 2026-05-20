@@ -36,6 +36,13 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "825b73f8-107d-48fe-8dde-726fc07b122f"
+      }
+    },
+    "owner": "bininthehood"
   }
 }
