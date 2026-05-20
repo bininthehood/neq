@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Tabs, router, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, Pressable } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
@@ -143,11 +144,17 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
           <SafeAreaProvider>
             <StatusBar style="light" />
-            {/* ToastProvider — SafeAreaProvider 내부 마운트 (toast viewport 가
-                useSafeAreaInsets 사용). 탭 화면 전역에서 useToast() 접근 가능. */}
-            <ToastProvider>
-              <TabsWithGuard />
-            </ToastProvider>
+            {/* 2026-05-20 — BottomSheetModalProvider. DetailSheet/SearchSheet 가
+                react-native Modal (OS-level) → @gorhom/bottom-sheet 의 BottomSheetModal
+                (React tree 안 absolute view + z-stacking) 으로 전환. 동시 다중 sheet
+                mount 가능, state/focus 보존. */}
+            <BottomSheetModalProvider>
+              {/* ToastProvider — SafeAreaProvider 내부 마운트 (toast viewport 가
+                  useSafeAreaInsets 사용). 탭 화면 전역에서 useToast() 접근 가능. */}
+              <ToastProvider>
+                <TabsWithGuard />
+              </ToastProvider>
+            </BottomSheetModalProvider>
           </SafeAreaProvider>
         </GestureHandlerRootView>
       </PersonaProvider>

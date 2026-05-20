@@ -24,7 +24,7 @@
  *   - 선택된 작품 상세 패널 (저장/OTT/상세) — D10n 후속 트랙
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'; // useCallback 활용 (WorkCard)
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -34,21 +34,14 @@ import {
   Pressable,
   ActivityIndicator,
   Keyboard,
-  Modal,
-  Dimensions,
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  runOnJS,
-  interpolate,
-  Extrapolation,
-  Easing,
-} from 'react-native-reanimated';
+import {
+  BottomSheetModal,
+  BottomSheetBackdrop,
+  type BottomSheetBackdropProps,
+} from '@gorhom/bottom-sheet';
 import {
   resolveSearchUiState,
   buildCategoryGroups,
@@ -64,19 +57,12 @@ import type {
 import { env } from '../lib/env';
 import { colors, radius, spacing } from '../lib/tokens';
 import { IconClose } from './Icons';
-import { fonts, easings } from '@neq/design';
+import { fonts } from '@neq/design';
 import { Illust } from './Illust';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9;
-const CLOSE_THRESHOLD = SHEET_MAX_HEIGHT * 0.3;
-
-// 2026-05-20 — PWA SearchSheet 정합. 기존 `withSpring(damping:20, stiffness:160)` 는
-// underdamped 스프링(ζ≈0.79) 으로 ~700px 이동거리에 큰 진폭 오버슈트("띠용") 발생.
-// PWA 는 `transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1)` = `easings.spring` 곡선의
-// 짧은 미세 오버슈트 30% — withTiming 으로 동일 인지 재현.
-const SHEET_ENTER_BEZIER = Easing.bezier(...easings.spring);
-const SHEET_ENTER_MS = 300;
+// 2026-05-20 — @gorhom/bottom-sheet 마이그레이션 (DetailSheet 와 동일).
+// snap point 90% — 이전 SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9 정합.
+const SNAP_POINTS = ['90%'];
 
 interface Props {
   visible: boolean;
@@ -94,14 +80,9 @@ interface Props {
    * detail panel 정합은 별도 트랙(D10n+) — 우선 단순 흐름 (sheet 전환).
    */
   onWorkSelected?: (rec: Recommendation) => void;
-  /**
-   * 2026-05-20 — true 면 visible=false 시 query/data 리셋 안 함.
-   * 작품 탭 → DetailSheet 진입 흐름에서 검색 컨텍스트 보존용. DetailSheet 닫고
-   * SearchSheet 재오픈 시 이전 검색어/결과 그대로 복귀 (사용자 보고: "검색어가
-   * 유지되는게 자연스러워 보입니다"). 일반 close (취소 버튼/dim 탭) 일 때는
-   * 부모가 false 로 두고 리셋 동작 유지.
-   */
-  preserveStateOnClose?: boolean;
+  // 2026-05-20 — preserveStateOnClose prop 제거. BottomSheetModal z-stack 이라
+  // SearchSheet 가 위 sheet (DetailSheet) 떠 있어도 mount 유지 → state 자동 보존.
+  // visible=false 가 되는 시점은 사용자가 명시적으로 닫을 때만 → reset 항상 안전.
 }
 
 export default function SearchSheet({
@@ -109,7 +90,6 @@ export default function SearchSheet({
   onClose,
   initialQuery,
   onWorkSelected,
-  preserveStateOnClose = false,
 }: Props) {
   const [query, setQuery] = useState('');
   const [data, setData] = useState<GroupedSearchResponse | null>(null);
@@ -124,7 +104,21 @@ export default function SearchSheet({
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const translateY = useSharedValue(SHEET_MAX_HEIGHT);
+  const sheetRef = useRef<BottomSheetModal>(null);
+  const snapPoints = useMemo(() => SNAP_POINTS, []);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        pressBehavior="close"
+        opacity={0.6}
+      />
+    ),
+    [],
+  );
 
   // ─────────────────────────────────────────────────────
   // grouped fetch — AbortController 로 빠른 입력 시 이전 fetch 취소.
@@ -201,32 +195,27 @@ export default function SearchSheet({
     };
   }, []);
 
-  // visible 토글 — 열릴 때 미세 spring(bezier) up, 닫힐 때 timing down + 상태 리셋.
-  // PWA SearchSheet 와 동일 곡선 — 큰 오버슈트 없는 짧은 진입.
+  // 2026-05-20 — BottomSheetModal ref present/dismiss + state cleanup.
+  // visible=false 진입은 사용자가 명시적으로 닫을 때만 (BottomSheetModal z-stack 으로
+  // DetailSheet 가 위에 떠도 SearchSheet visible 은 true 유지). 따라서 reset 항상 안전.
   useEffect(() => {
     if (visible) {
-      translateY.value = withTiming(0, {
-        duration: SHEET_ENTER_MS,
-        easing: SHEET_ENTER_BEZIER,
-      });
+      sheetRef.current?.present();
     } else {
-      translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 280 });
-      // 2026-05-20 — preserveStateOnClose 면 query/data 유지 (DetailSheet → 복귀 흐름).
+      sheetRef.current?.dismiss();
       // in-flight fetch 는 어느 경우든 취소 (안 끝난 요청 stale 응답 방지).
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (abortRef.current) abortRef.current.abort();
-      if (!preserveStateOnClose) {
-        setQuery('');
-        setData(null);
-        setIsFetching(false);
-        setHasError(false);
-        // 인물 선택 상태도 같이 정리.
-        setSelectedPersonId(null);
-        setPersonWorks([]);
-        setPersonWorksError(false);
-      }
+      setQuery('');
+      setData(null);
+      setIsFetching(false);
+      setHasError(false);
+      // 인물 선택 상태도 같이 정리.
+      setSelectedPersonId(null);
+      setPersonWorks([]);
+      setPersonWorksError(false);
     }
-  }, [visible, translateY, preserveStateOnClose]);
+  }, [visible]);
 
   // 2026-05-20 — 인물 카드 클릭 핸들러. PWA `handleSelectPerson` 정합:
   //   - 같은 카드 다시 누르면 닫음 (toggle).
@@ -278,35 +267,7 @@ export default function SearchSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialQuery]);
 
-  // pan-down 으로 sheet 닫기
-  const pan = Gesture.Pan()
-    .onUpdate((e) => {
-      if (e.translationY > 0) translateY.value = e.translationY;
-    })
-    .onEnd((e) => {
-      if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
-        translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 220 }, () => {
-          runOnJS(onClose)();
-        });
-      } else {
-        translateY.value = withTiming(0, {
-          duration: SHEET_ENTER_MS,
-          easing: SHEET_ENTER_BEZIER,
-        });
-      }
-    });
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-  const dimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      translateY.value,
-      [0, SHEET_MAX_HEIGHT],
-      [1, 0],
-      Extrapolation.CLAMP,
-    ),
-  }));
+  // 2026-05-20 — pan/sheetStyle/dimStyle 모두 BottomSheetModal 내장으로 대체.
 
   const handleRetry = () => {
     if (query.trim().length > 0) void search(query);
@@ -316,29 +277,22 @@ export default function SearchSheet({
   const groups: CategoryGroup[] = data ? buildCategoryGroups(data) : [];
 
   return (
-    <Modal visible={visible} animationType="none" transparent statusBarTranslucent>
-      <View
-        style={StyleSheet.absoluteFill}
-        accessibilityViewIsModal
-        accessibilityLabel="검색"
-      >
-        <Animated.View style={[styles.dim, dimStyle]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={onClose}
-            accessibilityLabel="검색 닫기"
-            accessibilityRole="button"
-          />
-        </Animated.View>
-
-        <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.sheet, sheetStyle]}>
-            {/* handle */}
-            <View style={styles.handleRow}>
-              <View style={styles.handleBar} />
-            </View>
-
-            {/* search input + 취소 */}
+    <BottomSheetModal
+      ref={sheetRef}
+      snapPoints={snapPoints}
+      enablePanDownToClose
+      enableDynamicSizing={false}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={styles.sheet}
+      handleIndicatorStyle={styles.handleBar}
+      onDismiss={onClose}
+      // 입력창 focus 시 키보드 처리 — content 영역 키보드 위로 밀어올림.
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      accessibilityLabel="검색"
+    >
+      <View style={styles.sheetInner}>
+            {/* search input + 취소 — handle 은 BottomSheetModal 의 내장 indicator 사용. */}
             <View style={styles.searchRow}>
               <View style={styles.searchBox}>
                 <TextInput
@@ -505,10 +459,8 @@ export default function SearchSheet({
                 </ScrollView>
               )}
             </View>
-          </Animated.View>
-        </GestureDetector>
       </View>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
@@ -756,29 +708,20 @@ function PersonWorksPanel({
 // ─────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayHeavy,
-  },
+  // 2026-05-20 — BottomSheetModal 마이그레이션 후 styles 정리. dim/handleRow 제거
+  // (라이브러리 내장). backgroundStyle + handleIndicatorStyle 로 시각 정합 유지.
   sheet: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: SHEET_MAX_HEIGHT,
     backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
   },
-  handleRow: {
-    alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+  sheetInner: {
+    flex: 1,
   },
   handleBar: {
     width: 40,
     height: 4,
-    borderRadius: 2,
+    borderRadius: 999,
     backgroundColor: colors.border,
   },
 
