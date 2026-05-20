@@ -906,11 +906,11 @@ export default function DiscoverScreen() {
   // W5 Task A — onboarding 가드 결정 전 / redirect 결정 시 빈 화면.
   // 첫 frame 깜빡임 방지 (Discover 의 첫 추천 요청도 시작되지 않음).
   if (onboardCheck !== 'pass') {
-    return <SafeAreaView style={styles.container} edges={['top', 'bottom']} />;
+    return <SafeAreaView style={styles.container} edges={['top']} />;
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <DiscoverHeader
         personas={persona.personas}
         activePersonaId={persona.activePersonaId}

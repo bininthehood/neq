@@ -622,8 +622,10 @@ export default function SavedScreen() {
     );
   };
 
+  // 2026-05-20 — SafeAreaView edges 에서 'bottom' 제거. BottomTabs 자체 bottom inset
+  // 처리와 중복되어 FlatList 마지막 row 가 잘리는 회귀 (사용자 보고). ['top'] 만 처리.
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       {/* 3-슬롯 헤더 — 좌:title / 중앙:viewMode 토글 / 우:search.
           web saved/page.tsx 헤더 (좌 H1 / 중앙 grid·list·preview / 우 search) 정합. */}
       <View style={styles.header}>

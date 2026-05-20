@@ -3,7 +3,7 @@ import { Tabs, router, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, Easing } from 'react-native';
+import { View, Text, Pressable } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { hasOnboarded } from '../lib/store';
 import {
@@ -63,6 +63,30 @@ function TabItem({
         {label}
       </Text>
     </View>
+  );
+}
+
+// 2026-05-20 — 탭 press 시 active 효과 (사용자 보고: "탭이 잘 작동되지 않는 체감").
+// React Navigation v7 의 기본 tabBarButton 은 iOS 에서 highlight 가 거의 없어
+// animation:'none' 즉시 전환과 결합 시 사용자가 탭 동작을 인지하지 못함.
+// 커스텀 Pressable 로 pressed 상태 시 opacity 0.4 + scale 0.92 적용 → 명확한 시각
+// 피드백. tabBarButton 의 props type 은 react-navigation v7 자체 정의라 외부
+// noexport 가 일반적 — any 로 받아 children/onPress 등 그대로 위임.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ActiveTabBarButton(props: any) {
+  const baseStyle = typeof props.style === 'function' ? null : props.style;
+  return (
+    <Pressable
+      {...props}
+      style={({ pressed }: { pressed: boolean }) => [
+        baseStyle,
+        pressed && {
+          opacity: 0.4,
+          transform: [{ scale: 0.92 }],
+        },
+      ]}
+      android_ripple={null}
+    />
   );
 }
 
@@ -151,58 +175,23 @@ function TabsWithGuard() {
             },
         tabBarShowLabel: false,
         sceneStyle: { backgroundColor: colors.bg },
-        // 2026-05-20 — PWA 탭 전환 정합 (`apps/web/src/app/template.tsx` +
-        // `globals.css @keyframes tabSlideInRight/Left`).
+        // 2026-05-20 (v3) — 시장 표준 정합. 즉시 전환 (no animation).
         //
-        // 명세:
-        //   - 인덱스 증가 (Discover→Saved→Profile): translateX 40 → 0, opacity 0 → 1
-        //   - 인덱스 감소: translateX -40 → 0, opacity 0 → 1
-        //   - duration 280ms, easing cubic-bezier(0.32, 0.72, 0.24, 1) (= detailMorph)
+        // 결정 배경: PWA tabSlideInRight 정합(translateX 40 + opacity 0→1) 을 native
+        // BottomTabs 구조에서 그대로 재현하려 했지만, PWA 는 SPA 라 이전 탭 unmount →
+        // 새 탭만 슬라이드. native 는 두 탭 모두 mount 상태로 동시 슬라이드 → 사용자
+        // 인지 "두 탭이 옆으로 도망가고 옆에서 들어오는" 어색한 모션 + 280ms 지연.
         //
-        // React Navigation v7 의 `current.progress` 는 각 scene 의 상대 위치 (types.d.ts):
-        //   -1 = 자기 인덱스 < active 인덱스
-        //    0 = 자기가 active
-        //   +1 = 자기 인덱스 > active 인덱스
+        // 시장 보편 패턴: Twitter / Instagram / TikTok / iOS UITabBarController 기본
+        // 모두 즉시 전환 (0ms, no animation). bottom tab 처럼 빈번한 전환에 모션은
+        // 인지적 노이즈만 추가.
         //
-        // 인덱스 증가 (Discover→Saved) 시:
-        //   - 새 active=Saved 입장: progress +1 → 0   (Saved 가 Discover 보다 인덱스 큼)
-        //   - 이전 active=Discover 입장: progress 0 → -1
-        // → PWA 정합 (새 탭이 오른쪽에서 진입, 이전 탭이 왼쪽으로 퇴장) =
-        //   progress +1 → translateX +40, progress -1 → translateX -40.
-        //
-        // interpolate output:
-        //   progress -1 → translateX -40, opacity 0   (왼쪽으로 퇴장 / 왼쪽에서 진입)
-        //   progress  0 → translateX   0, opacity 1
-        //   progress +1 → translateX +40, opacity 0   (오른쪽에서 진입 / 오른쪽으로 퇴장)
-        //
-        // 이전 active 탭도 슬라이드 아웃 — PWA 는 새 탭만 슬라이드(이전은 unmount)
-        // 지만 native 는 두 탭이 동시 mount 라 대칭 슬라이드가 자연스러움.
-        // animation preset 으로 transition 활성화 (animationEnabled 효과) +
-        // sceneStyleInterpolator/transitionSpec 으로 PWA 정합 곡선 override.
-        animation: 'fade',
-        sceneStyleInterpolator: ({ current }) => ({
-          sceneStyle: {
-            transform: [
-              {
-                translateX: current.progress.interpolate({
-                  inputRange: [-1, 0, 1],
-                  outputRange: [-40, 0, 40],
-                }),
-              },
-            ],
-            opacity: current.progress.interpolate({
-              inputRange: [-1, 0, 1],
-              outputRange: [0, 1, 0],
-            }),
-          },
-        }),
-        transitionSpec: {
-          animation: 'timing',
-          config: {
-            duration: 280,
-            easing: Easing.bezier(0.32, 0.72, 0.24, 1),
-          },
-        },
+        // lazy:false 유지 — 가시 3탭 startup pre-mount 로 첫 진입 layout 갭 차단.
+        // (별도 Tabs.Screen options 에서 개별 설정 — onboarding/share[id] 는 default lazy.)
+        animation: 'none',
+        // 2026-05-20 — 탭 press 시 active 효과. 즉시 전환과 결합 시 사용자가 탭
+        // 동작을 인지하지 못한다는 보고 → Pressable pressed 상태 opacity+scale.
+        tabBarButton: (props) => <ActiveTabBarButton {...props} />,
       }}
     >
             {/* 2026-05-20 — 가시 3탭은 lazy:false 로 startup pre-mount.

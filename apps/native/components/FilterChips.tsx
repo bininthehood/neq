@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ScrollView,
+  Modal,
+} from 'react-native';
 import {
   TYPE_LABELS,
   ORIGIN_LABELS,
@@ -49,6 +56,12 @@ export default function FilterChips({
   onOTTChange,
 }: Props) {
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
+  // 2026-05-20 — chip row 의 viewport 절대 좌표 측정. dropdown 패널 위치 결정용.
+  // openDropdown 변경 시 측정 → Modal 안 panel top = chipRowRect.y + chipRowRect.h.
+  const wrapRef = useRef<View>(null);
+  const [chipRowRect, setChipRowRect] = useState<{ y: number; h: number } | null>(
+    null,
+  );
 
   const ottLabel =
     filterOTTs.size === 0
@@ -58,7 +71,16 @@ export default function FilterChips({
         : `OTT ${filterOTTs.size}개`;
 
   function toggle(key: DropdownKey) {
-    setOpenDropdown((prev) => (prev === key ? null : key));
+    setOpenDropdown((prev) => {
+      const next = prev === key ? null : key;
+      // 열 때만 측정 — closed → open 전이.
+      if (next !== null && wrapRef.current) {
+        wrapRef.current.measureInWindow((_x, y, _w, h) => {
+          setChipRowRect({ y, h });
+        });
+      }
+      return next;
+    });
   }
 
   function Chip({
@@ -116,7 +138,7 @@ export default function FilterChips({
   }
 
   return (
-    <View style={styles.wrap}>
+    <View ref={wrapRef} style={styles.wrap}>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -156,8 +178,38 @@ export default function FilterChips({
         )}
       </ScrollView>
 
-      {openDropdown && (
-        <View style={styles.panel}>
+      {/* 2026-05-20 — dropdown 외부 탭 시 닫기 (사용자 보고). PWA FilterChips 는
+          `<div className="fixed inset-0" onClick={close}>` backdrop + panel 패턴.
+          native 정합 위해 Modal(transparent, animationType=none) 안에 backdrop
+          Pressable + panel. panel 위치는 chip row 의 measureInWindow 결과로 결정. */}
+      <Modal
+        visible={openDropdown !== null}
+        transparent
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={() => setOpenDropdown(null)}
+      >
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => setOpenDropdown(null)}
+          accessibilityLabel="필터 닫기"
+        >
+          {/* panel 자체 Pressable 로 wrap → 안 클릭이 backdrop 까지 propagation
+              안 됨. onPress 빈 함수 = 이벤트 흡수만. */}
+          <Pressable
+            onPress={() => {}}
+            style={[
+              styles.panel,
+              {
+                position: 'absolute',
+                top: chipRowRect
+                  ? chipRowRect.y + chipRowRect.h - spacing.sm
+                  : 100,
+                left: spacing.md,
+                right: spacing.md,
+              },
+            ]}
+          >
           {openDropdown === 'type' &&
             TYPE_OPTIONS.map((t) => (
               <Option
@@ -234,8 +286,9 @@ export default function FilterChips({
               })}
             </>
           )}
-        </View>
-      )}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }

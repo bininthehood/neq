@@ -137,6 +137,33 @@ export default function ProfileScreen() {
   const typeDist = useMemo(() => calcTypeDistribution(savedRaw), [savedRaw]);
   const ottDist = useMemo(() => calcOTTDistribution(savedRaw), [savedRaw]);
 
+  // 2026-05-20 — default persona 의 favorites 자동 표시 fix.
+  //
+  // 회귀: native 의 default persona 는 onboarding step 에서 saved 만 시드되고
+  // persona.favorites 는 빈 배열 유지 (`OnboardingStepFavorites.tsx:28` 주석:
+  // "saved 가 favorites 신호"). 그래서 PersonaSection 의 default 페르소나가 항상
+  // '아직 5픽이 없어요' 로 표시되는 결함 (사용자 보고: 시청 리포트 5개 작성해도
+  // 동일 메시지).
+  //
+  // 해결: PersonaSection 에 전달 직전 default persona 의 favorites 가 비어 있으면
+  // 시청 시그널 (loved/good + saved 교집합) → 그 외 saved 상위 5개 순서로 자동 채움.
+  // 사용자가 명시 생성한 다른 persona 는 그대로.
+  const personasForDisplay = useMemo(() => {
+    return persona.personas.map((p) => {
+      if (p.id !== 'default' || p.favorites.length > 0) return p;
+      if (tasteItems.length > 0) {
+        return { ...p, favorites: tasteItems.slice(0, 5) };
+      }
+      if (savedRaw.length > 0) {
+        return {
+          ...p,
+          favorites: savedRaw.slice(0, 5).map((s) => s.recommendation.title),
+        };
+      }
+      return p;
+    });
+  }, [persona.personas, tasteItems, savedRaw]);
+
   useFocusEffect(
     useCallback(() => {
       refresh();
@@ -205,7 +232,7 @@ export default function ProfileScreen() {
             web 의 PersonaSection 과 동등하지만 native 는 metadata-only 모델 +
             minimal create flow (이름만). favorites 픽 풍부한 UX 는 디자인 확정 후. */}
         <PersonaSection
-          personas={persona.personas}
+          personas={personasForDisplay}
           activePersonaId={persona.activePersonaId}
           onSwitch={(id) => {
             void persona.switchPersona(id);

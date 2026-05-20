@@ -414,29 +414,38 @@ export default function DetailSheet({
 
               {rec.overview ? (() => {
                 // GH-3 #7 — 200자 이상이면 numberOfLines=5 로 클램프 + 토글.
+                // 2026-05-20 PWA 정합 — ChapterMark "Synopsis · 줄거리" + 본문 탭으로도
+                // 토글 (PWA DetailBody.tsx:214 "사용자 요청: 버튼뿐 아니라 synopsis 영역
+                // 자체 클릭 시 토글" 정합).
                 const isLong = rec.overview.length >= SYNOPSIS_THRESHOLD;
                 const collapsed = isLong && !synopsisExpanded;
+                const toggle = () => setSynopsisExpanded((v) => !v);
                 return (
                   <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>줄거리</Text>
-                    <Text
-                      style={styles.overview}
-                      numberOfLines={collapsed ? 5 : undefined}
-                    >
-                      {rec.overview}
-                    </Text>
-                    {isLong && (
+                    <Text style={styles.sectionTitle}>Synopsis · 줄거리</Text>
+                    {isLong ? (
                       <Pressable
-                        onPress={() => setSynopsisExpanded((v) => !v)}
+                        onPress={toggle}
                         accessibilityRole="button"
-                        accessibilityLabel={synopsisExpanded ? '줄거리 접기' : '줄거리 더보기'}
+                        accessibilityLabel={
+                          synopsisExpanded ? '줄거리 접기' : '줄거리 더보기'
+                        }
                         accessibilityState={{ expanded: synopsisExpanded }}
-                        style={styles.synopsisToggle}
                       >
-                        <Text style={styles.synopsisToggleText}>
-                          {synopsisExpanded ? '접기' : '더보기'}
+                        <Text
+                          style={styles.overview}
+                          numberOfLines={collapsed ? 5 : undefined}
+                        >
+                          {rec.overview}
                         </Text>
+                        <View style={styles.synopsisToggle}>
+                          <Text style={styles.synopsisToggleText}>
+                            {synopsisExpanded ? '접기' : '더보기'}
+                          </Text>
+                        </View>
                       </Pressable>
+                    ) : (
+                      <Text style={styles.overview}>{rec.overview}</Text>
                     )}
                   </View>
                 );
