@@ -814,6 +814,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
+  // 2026-05-20 PWA 정합 — PWA DetailSheet handle bar `rounded-full` (= radius:9999).
+  // 기존 borderRadius:2 는 약간 깎인 모서리. height 4 의 완전 원형 = radius:2 도 가능하지만
+  // Tailwind rounded-full 은 height/2 가 아닌 999 (full pill).
   handleBar: {
     position: 'absolute',
     top: spacing.md,
@@ -821,7 +824,7 @@ const styles = StyleSheet.create({
     marginLeft: -20,
     width: 40,
     height: 4,
-    borderRadius: 2,
+    borderRadius: 999,
     backgroundColor: colors.border,
   },
   closeBtn: {
@@ -941,10 +944,12 @@ const styles = StyleSheet.create({
   section: {
     marginTop: spacing.md + 4,
   },
+  // 2026-05-20 PWA 정합 — PWA ChapterMark `font-data text-xs (12px) font-medium uppercase`.
+  // 기존 native: fontSize 11, fontWeight 600 → PWA: 12, 500 정합.
   sectionTitle: {
     color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
     letterSpacing: 1,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,

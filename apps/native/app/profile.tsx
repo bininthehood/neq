@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,12 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useFocusEffect, router } from 'expo-router';
 import Constants from 'expo-constants';
 import {
@@ -25,7 +31,7 @@ import {
   type MonthlyWatchResult,
 } from '../lib/profile-stats';
 import type { WatchReport, SavedItem } from '../lib/types';
-import { colors, radius, spacing, fontsV2 } from '../lib/tokens';
+import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
 import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
 import SearchSheet from '../components/SearchSheet';
@@ -39,6 +45,40 @@ interface Stats {
   good: number;
   meh: number;
   dropped: number;
+}
+
+/**
+ * 2026-05-20 PWA 정합 — 월별 시청 막대 진입 애니메이션.
+ *
+ * PWA `InsightSections.tsx:218` 의 `transition: height 0.5s cubic-bezier(0.16, 1, 0.3, 1)`
+ * 정합. native 는 정적 height 였던 결함 → 0 → heightPx 보간으로 부드러운 진입.
+ *
+ * heightPx 변경 시 (예: 데이터 refresh) 자동 재보간.
+ */
+const MONTHLY_BAR_EASING = Easing.bezier(0.16, 1, 0.3, 1);
+
+function MonthlyBar({
+  heightPx,
+  color,
+}: {
+  heightPx: number;
+  color: string;
+}) {
+  const h = useSharedValue(0);
+  useEffect(() => {
+    h.value = withTiming(heightPx, {
+      duration: 500,
+      easing: MONTHLY_BAR_EASING,
+    });
+  }, [heightPx, h]);
+  const animStyle = useAnimatedStyle(() => ({
+    height: h.value,
+  }));
+  return (
+    <Animated.View
+      style={[styles.monthlyBar, { backgroundColor: color }, animStyle]}
+    />
+  );
 }
 
 export default function ProfileScreen() {
@@ -291,16 +331,9 @@ export default function ProfileScreen() {
                 return (
                   <View key={i} style={styles.monthlyBucket}>
                     <View style={styles.monthlyBarFrame}>
-                      <View
-                        style={[
-                          styles.monthlyBar,
-                          {
-                            height: heightPx,
-                            backgroundColor: b.isCurrent
-                              ? colors.accent
-                              : colors.accentDim,
-                          },
-                        ]}
+                      <MonthlyBar
+                        heightPx={heightPx}
+                        color={b.isCurrent ? colors.accent : colors.accentDim}
                       />
                     </View>
                     <Text
@@ -443,11 +476,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm + 4,
   },
+  // 2026-05-20 PWA 정합 — PWA profile/page.tsx `boxShadow: "var(--shadow-sm)"`.
+  // native 는 그림자 없어 평면적 인지. shadowsNative.sm 으로 정합.
   statCard: {
     flex: 1,
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    ...shadowsNative.sm,
   },
   statValue: {
     color: colors.accent,
