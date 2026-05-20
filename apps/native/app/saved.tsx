@@ -1024,11 +1024,16 @@ export default function SavedScreen() {
       />
 
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는
-          DetailSheet Cast 클릭으로 진입 (web saved/page.tsx 정합). */}
+          DetailSheet Cast 클릭으로 진입 (web saved/page.tsx 정합).
+          2026-05-20 — 작품 탭 → 기존 saved 의 detailRec 영역에 표시 (handleOpenDetail). */}
       <SearchSheet
         visible={searchOpen}
         onClose={() => setSearchOpen(false)}
         initialQuery={searchInitialQuery}
+        onWorkSelected={(rec) => {
+          setSearchOpen(false);
+          handleOpenDetail(rec);
+        }}
       />
 
       {/* P2 배치 A — 필터 sheet. OTT 선택 + 정렬 + OTT별 그룹화 토글 (web SavedFilterSheet 정합). */}

@@ -94,6 +94,14 @@ interface Props {
    * detail panel 정합은 별도 트랙(D10n+) — 우선 단순 흐름 (sheet 전환).
    */
   onWorkSelected?: (rec: Recommendation) => void;
+  /**
+   * 2026-05-20 — true 면 visible=false 시 query/data 리셋 안 함.
+   * 작품 탭 → DetailSheet 진입 흐름에서 검색 컨텍스트 보존용. DetailSheet 닫고
+   * SearchSheet 재오픈 시 이전 검색어/결과 그대로 복귀 (사용자 보고: "검색어가
+   * 유지되는게 자연스러워 보입니다"). 일반 close (취소 버튼/dim 탭) 일 때는
+   * 부모가 false 로 두고 리셋 동작 유지.
+   */
+  preserveStateOnClose?: boolean;
 }
 
 export default function SearchSheet({
@@ -101,11 +109,18 @@ export default function SearchSheet({
   onClose,
   initialQuery,
   onWorkSelected,
+  preserveStateOnClose = false,
 }: Props) {
   const [query, setQuery] = useState('');
   const [data, setData] = useState<GroupedSearchResponse | null>(null);
   const [isFetching, setIsFetching] = useState(false);
   const [hasError, setHasError] = useState(false);
+  // 2026-05-20 — PWA 정합. 인물 카드 클릭 시 person-works 표시 (필모그래피).
+  // selectedPersonId 가 매칭되는 PeopleCarousel 항목 아래에 inline 카로셀 노출.
+  const [selectedPersonId, setSelectedPersonId] = useState<number | null>(null);
+  const [personWorks, setPersonWorks] = useState<SearchResult[]>([]);
+  const [personWorksLoading, setPersonWorksLoading] = useState(false);
+  const [personWorksError, setPersonWorksError] = useState(false);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -196,15 +211,57 @@ export default function SearchSheet({
       });
     } else {
       translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 280 });
-      // 닫을 때 쿼리/결과 리셋 + in-flight 취소
+      // 2026-05-20 — preserveStateOnClose 면 query/data 유지 (DetailSheet → 복귀 흐름).
+      // in-flight fetch 는 어느 경우든 취소 (안 끝난 요청 stale 응답 방지).
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
       if (abortRef.current) abortRef.current.abort();
-      setQuery('');
-      setData(null);
-      setIsFetching(false);
-      setHasError(false);
+      if (!preserveStateOnClose) {
+        setQuery('');
+        setData(null);
+        setIsFetching(false);
+        setHasError(false);
+        // 인물 선택 상태도 같이 정리.
+        setSelectedPersonId(null);
+        setPersonWorks([]);
+        setPersonWorksError(false);
+      }
     }
-  }, [visible, translateY]);
+  }, [visible, translateY, preserveStateOnClose]);
+
+  // 2026-05-20 — 인물 카드 클릭 핸들러. PWA `handleSelectPerson` 정합:
+  //   - 같은 카드 다시 누르면 닫음 (toggle).
+  //   - 다른 카드 누르면 갈아탐.
+  //   - /api/tmdb/person-works?id=X&dept=Directing|Acting 호출 → top 10.
+  const handleSelectPerson = useCallback(
+    async (person: PersonResult) => {
+      if (selectedPersonId === person.id) {
+        setSelectedPersonId(null);
+        setPersonWorks([]);
+        setPersonWorksError(false);
+        return;
+      }
+      setSelectedPersonId(person.id);
+      setPersonWorks([]);
+      setPersonWorksError(false);
+      setPersonWorksLoading(true);
+      try {
+        const dept =
+          person.knownForDept === 'Directing' ? 'Directing' : 'Acting';
+        const res = await fetch(
+          `${env.API_BASE_URL}/api/tmdb/person-works?id=${person.id}&dept=${dept}`,
+        );
+        if (!res.ok) throw new Error(`person-works failed (${res.status})`);
+        const works = (await res.json()) as SearchResult[];
+        setPersonWorks(Array.isArray(works) ? works.slice(0, 10) : []);
+      } catch {
+        setPersonWorksError(true);
+        setPersonWorks([]);
+      } finally {
+        setPersonWorksLoading(false);
+      }
+    },
+    [selectedPersonId],
+  );
 
   // 위임 O #1.2 — initialQuery 자동 주입.
   // visible=true 전이 시 또는 visible 한 상태에서 initialQuery 가 바뀌면
@@ -408,11 +465,41 @@ export default function SearchSheet({
                         />
                       )}
                       {g.key === 'directors' && (
-                        <PeopleCarousel items={data.directors} />
+                        <PeopleCarousel
+                          items={data.directors}
+                          selectedId={selectedPersonId}
+                          onSelect={handleSelectPerson}
+                        />
                       )}
                       {g.key === 'actors' && (
-                        <PeopleCarousel items={data.actors} />
+                        <PeopleCarousel
+                          items={data.actors}
+                          selectedId={selectedPersonId}
+                          onSelect={handleSelectPerson}
+                        />
                       )}
+                      {/* 2026-05-20 — 선택된 인물의 person-works 카로셀 (그 인물이
+                          현재 group 에 속해있을 때만). PWA SearchSheet 의 inline
+                          panel 동작 정합. */}
+                      {(g.key === 'directors' || g.key === 'actors') &&
+                        selectedPersonId !== null &&
+                        (g.key === 'directors' ? data.directors : data.actors).some(
+                          (p) => p.id === selectedPersonId,
+                        ) && (
+                          <PersonWorksPanel
+                            loading={personWorksLoading}
+                            error={personWorksError}
+                            works={personWorks}
+                            onSelect={onWorkSelected}
+                            onRetry={() => {
+                              const p = (g.key === 'directors'
+                                ? data.directors
+                                : data.actors
+                              ).find((x) => x.id === selectedPersonId);
+                              if (p) void handleSelectPerson(p);
+                            }}
+                          />
+                        )}
                     </View>
                   ))}
                 </ScrollView>
@@ -520,12 +607,20 @@ function WorkCard({
 }
 
 // ─────────────────────────────────────────────────────
-// PeopleCarousel — 감독/배우 공용 (인물 클릭 진입은 별도 트랙)
+// PeopleCarousel — 감독/배우. 2026-05-20 PWA 정합 — 인물 클릭 시 person-works 표시.
 // ─────────────────────────────────────────────────────
 
 const PERSON_CARD_W = 96;
 
-function PeopleCarousel({ items }: { items: PersonResult[] }) {
+function PeopleCarousel({
+  items,
+  selectedId,
+  onSelect,
+}: {
+  items: PersonResult[];
+  selectedId: number | null;
+  onSelect: (p: PersonResult) => void;
+}) {
   return (
     <FlatList
       data={items}
@@ -537,19 +632,47 @@ function PeopleCarousel({ items }: { items: PersonResult[] }) {
       ItemSeparatorComponent={() => <View style={{ width: spacing.sm + 4 }} />}
       snapToInterval={PERSON_CARD_W + spacing.sm + 4}
       decelerationRate="fast"
-      renderItem={({ item }) => <PersonCard person={item} />}
+      renderItem={({ item }) => (
+        <PersonCard
+          person={item}
+          isSelected={item.id === selectedId}
+          onSelect={onSelect}
+        />
+      )}
     />
   );
 }
 
-function PersonCard({ person }: { person: PersonResult }) {
+function PersonCard({
+  person,
+  isSelected,
+  onSelect,
+}: {
+  person: PersonResult;
+  isSelected: boolean;
+  onSelect: (p: PersonResult) => void;
+}) {
   const knownForText =
     person.knownFor.length > 0
       ? person.knownFor.map((k) => k.title).join(', ')
       : null;
   return (
-    <View style={styles.personCard} accessibilityLabel={person.name}>
-      <View style={styles.personAvatar}>
+    <Pressable
+      onPress={() => onSelect(person)}
+      accessibilityLabel={`${person.name} 필모그래피 ${isSelected ? '닫기' : '보기'}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: isSelected }}
+      style={({ pressed }) => [
+        styles.personCard,
+        pressed && { opacity: 0.6 },
+      ]}
+    >
+      <View
+        style={[
+          styles.personAvatar,
+          isSelected && { borderColor: colors.accent, borderWidth: 2 },
+        ]}
+      >
         {person.profileUrl ? (
           <Image
             source={{ uri: person.profileUrl }}
@@ -563,7 +686,13 @@ function PersonCard({ person }: { person: PersonResult }) {
           </Text>
         )}
       </View>
-      <Text style={styles.personName} numberOfLines={1}>
+      <Text
+        style={[
+          styles.personName,
+          isSelected && { color: colors.accent, fontWeight: '600' },
+        ]}
+        numberOfLines={1}
+      >
         {person.name}
       </Text>
       {knownForText && (
@@ -571,6 +700,53 @@ function PersonCard({ person }: { person: PersonResult }) {
           {knownForText}
         </Text>
       )}
+    </Pressable>
+  );
+}
+
+// 2026-05-20 — 선택된 인물의 필모그래피 panel. PWA SearchSheet 의 inline panel 정합.
+function PersonWorksPanel({
+  loading,
+  error,
+  works,
+  onSelect,
+  onRetry,
+}: {
+  loading: boolean;
+  error: boolean;
+  works: SearchResult[];
+  onSelect?: (rec: Recommendation) => void;
+  onRetry: () => void;
+}) {
+  if (loading) {
+    return (
+      <View style={styles.personWorksLoading}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+  if (error) {
+    return (
+      <View style={styles.personWorksError}>
+        <Text style={styles.personWorksErrorText}>필모그래피를 불러올 수 없어요</Text>
+        <Pressable
+          onPress={onRetry}
+          accessibilityRole="button"
+          accessibilityLabel="다시 시도"
+          style={({ pressed }) => [
+            styles.retryBtn,
+            pressed && styles.retryBtnPressed,
+          ]}
+        >
+          <Text style={styles.retryText}>다시 시도</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (works.length === 0) return null;
+  return (
+    <View style={styles.personWorksWrap}>
+      <WorksCarousel items={works} onSelect={onSelect} />
     </View>
   );
 }
@@ -800,5 +976,24 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
     width: '100%',
+  },
+  // 2026-05-20 — person-works inline panel (PWA SearchSheet 정합).
+  personWorksWrap: {
+    marginTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  personWorksLoading: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  personWorksError: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  personWorksErrorText: {
+    color: colors.textMuted,
+    fontSize: 13,
   },
 });
