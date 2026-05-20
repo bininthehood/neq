@@ -69,7 +69,7 @@ const SAVED_VIEW_KEY = 'neq_saved_view';
  * W5 Task F / 배치 H — Saved 화면 view filter (web `SavedFilters.tsx` 와 정합).
  * 배치 H 에서 'history' 추가 → web 정본과 동일하게 5종 노출:
  *  - "all"       : 전체 (아카이브 hide)
- *  - "unwatched" : 안 봤어요 (시청 리포트 없음)
+ *  - "unwatched" : 안 본 작품 (시청 리포트 없음)
  *  - "watched"   : 시청 완료 (loved/good/meh/dropped 어떤 reaction 이라도 있음)
  *  - "archived"  : 아카이브 (사용자가 명시적으로 숨긴 작품) — 0개면 탭 숨김
  *  - "history"   : 히스토리 (Discover 에서 추천받은 작품 누적 기록 — 날짜별 그룹)
@@ -581,7 +581,7 @@ export default function SavedScreen() {
     const archivedCount = archivedIds.size;
     const base: { key: ViewFilter; label: string; count: number }[] = [
       { key: 'all', label: '전체', count: activeItems.length },
-      { key: 'unwatched', label: '안 봤어요', count: unwatchedCount },
+      { key: 'unwatched', label: '안 본 작품', count: unwatchedCount },
       { key: 'watched', label: '시청 완료', count: watchedCount },
     ];
     // 아카이브 0개일 때는 탭 숨김 (web 정본 동일 — saved/page.tsx:437).
