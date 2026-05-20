@@ -97,7 +97,7 @@ export function DetailBody({
       return;
     }
     let cancelled = false;
-    const url = `/api/tmdb/related?work_id=${rec.tmdbId}&type=${rec.type === "series" ? "series" : "movie"}`;
+    const url = `/api/tmdb/related?work_id=${rec.tmdbId}&type=${rec.type === "movie" ? "movie" : "series"}`;
 
     Promise.resolve()
       .then(() => {
@@ -152,7 +152,7 @@ export function DetailBody({
     const hasNamesOnly = !!rec.director || (rec.cast?.length ?? 0) > 0;
     if (!hasNamesOnly) return;
 
-    const url = `/api/tmdb/credits?id=${rec.tmdbId}&type=${rec.type === "series" ? "series" : "movie"}`;
+    const url = `/api/tmdb/credits?id=${rec.tmdbId}&type=${rec.type === "movie" ? "movie" : "series"}`;
     Promise.resolve()
       .then(() => fetch(url))
       .then((r) => (r && r.ok ? r.json() : null))

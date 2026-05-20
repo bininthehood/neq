@@ -12,33 +12,44 @@ export interface DistributionRow {
   color: string;
 }
 
-/** type (movie/series) 비중 */
+/** type (movie/series/variety) 비중 — 2026-05-20 variety 3종 확장 */
 export function calcTypeDistribution(
   saved: ReturnType<typeof getSaved>,
 ): DistributionRow[] {
   if (saved.length === 0) return [];
   let movie = 0;
   let series = 0;
+  let variety = 0;
   for (const s of saved) {
     if (s.recommendation.type === "movie") movie += 1;
     else if (s.recommendation.type === "series") series += 1;
+    else if (s.recommendation.type === "variety") variety += 1;
   }
-  const total = movie + series;
+  const total = movie + series + variety;
   if (total === 0) return [];
-  return [
+  const rows: DistributionRow[] = [
     {
       label: "영화",
       value: Math.round((movie / total) * 100),
       count: movie,
-      color: "var(--accent)",
+      color: "var(--cat-movie)",
     },
     {
       label: "시리즈",
       value: Math.round((series / total) * 100),
       count: series,
-      color: "#9B8AE0",
+      color: "var(--cat-series)",
     },
   ];
+  if (variety > 0) {
+    rows.push({
+      label: "예능",
+      value: Math.round((variety / total) * 100),
+      count: variety,
+      color: "var(--cat-variety)",
+    });
+  }
+  return rows;
 }
 
 /** OTT(provider) 분포 — 상위 5개 */

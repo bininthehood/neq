@@ -12,7 +12,8 @@ import { useState } from "react";
 interface Work {
   title: string;
   titleEn: string;
-  type: "movie" | "series";
+  // 2026-05-20 — variety(예능) 3종 확장. Recommendation.type 정합.
+  type: "movie" | "series" | "variety";
   tmdbId: number;
   posterUrl: string | null;
   backdrop: string | null;
@@ -88,7 +89,11 @@ export default function ShareClient({ work }: { work: Work }) {
               </span>
             </div>
             <span className="text-xs text-muted px-2 py-1 rounded-md bg-overlay backdrop-blur-sm">
-              {work.type === "series" ? "시리즈" : "영화"}
+              {work.type === "series"
+                ? "시리즈"
+                : work.type === "variety"
+                  ? "예능"
+                  : "영화"}
             </span>
           </div>
           <h1 className="font-display text-3xl font-bold">{work.title}</h1>

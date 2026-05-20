@@ -32,7 +32,10 @@ export interface CastMember {
 export interface Recommendation {
   title: string;
   titleEn: string;
-  type: 'movie' | 'series';
+  // 2026-05-20 — variety(예능) 3종 확장. PWA discover.ts FilterType 과 RecommendFilter
+  // 는 이미 3종이었지만 응답 type 은 2종만 → UI 가 series 로만 분류해 카테고리 칩이
+  // "시리즈"로 오표기되던 회귀. 서버 enrichment 시 TV + Reality/Talk 장르 통과 시 'variety'.
+  type: 'movie' | 'series' | 'variety';
   reason: string;
   tmdbId: number;
   posterUrl: string | null;

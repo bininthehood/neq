@@ -155,7 +155,8 @@ export default function DetailSheet({
 
     let cancelled = false;
     const controller = new AbortController();
-    const type = rec.type === 'series' ? 'series' : 'movie';
+    // 2026-05-20 — variety 는 TMDB 에서 TV(series). movie 외 모두 series 로 매핑.
+    const type = rec.type === 'movie' ? 'movie' : 'series';
     fetch(
       `${env.API_BASE_URL}/api/tmdb/credits?id=${rec.tmdbId}&type=${type}`,
       { signal: controller.signal },
@@ -186,7 +187,8 @@ export default function DetailSheet({
     let cancelled = false;
     setRelatedLoading(true);
     setRelated(null);
-    const type = rec.type === 'series' ? 'series' : 'movie';
+    // 2026-05-20 — variety 는 TMDB 에서 TV(series). movie 외 모두 series 로 매핑.
+    const type = rec.type === 'movie' ? 'movie' : 'series';
     fetch(`${env.API_BASE_URL}/api/tmdb/related?work_id=${rec.tmdbId}&type=${type}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: RelatedWorksResponse | null) => {

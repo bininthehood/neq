@@ -3,6 +3,7 @@ import { parse as parsePartialJSON } from "partial-json";
 import { posterUrl } from "../tmdb";
 import type { Recommendation, WatchFeedback } from "../types";
 import type { CuratedPick, EnrichedCandidate, TokenUsage } from "./types";
+import { VARIETY_GENRE_IDS } from "../discover-types";
 
 const openai = new OpenAI();
 
@@ -463,10 +464,23 @@ export function buildRecommendationObject(
     candidate.item.original_name ??
     candidate.item.title;
 
+  // 2026-05-20 — variety 변별 (Recommendation.type 3종 확장).
+  // TV (`candidate.type === 'series'`) + genre_ids 에 Reality(10764) / Talk(10767)
+  // 포함 시 'variety'. 그 외는 candidate.type 그대로. UI 카드 카테고리 칩이
+  // "예능"으로 올바르게 표기되고, 필터/분포 통계도 정확해짐.
+  const isVariety =
+    candidate.type === "series" &&
+    (candidate.item.genre_ids ?? []).some((g) =>
+      VARIETY_GENRE_IDS.includes(g),
+    );
+  const recType: "movie" | "series" | "variety" = isVariety
+    ? "variety"
+    : candidate.type;
+
   return {
     title: candidate.item.title,
     titleEn,
-    type: candidate.type,
+    type: recType,
     reason,
     tmdbId: candidate.id,
     posterUrl: posterUrl(candidate.item.poster_path),

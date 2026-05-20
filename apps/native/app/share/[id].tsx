@@ -172,7 +172,11 @@ export default function ShareScreen() {
               </View>
               <View style={styles.badge}>
                 <Text style={styles.badgeTextMuted}>
-                  {rec.type === 'series' ? '시리즈' : '영화'}
+                  {rec.type === 'series'
+                    ? '시리즈'
+                    : rec.type === 'variety'
+                      ? '예능'
+                      : '영화'}
                 </Text>
               </View>
             </View>

@@ -1203,7 +1203,10 @@ function ListCard({
   const rec = item.recommendation;
   const meta: string[] = [];
   if (rec.type === 'movie' && rec.runtime) meta.push(`${rec.runtime}분`);
-  if (rec.type === 'series' && rec.seasons) meta.push(`시즌 ${rec.seasons}`);
+  // 2026-05-20 — variety(예능) 도 시즌 단위 (TMDB TV 자료구조). series 와 동일 처리.
+  if ((rec.type === 'series' || rec.type === 'variety') && rec.seasons) {
+    meta.push(`시즌 ${rec.seasons}`);
+  }
 
   return (
     // a11y: 카드 root 는 accessible={false} — 카드 탭과 트레일링 reaction 칩이

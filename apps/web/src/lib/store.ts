@@ -351,7 +351,7 @@ export interface RecHistoryEntry {
   tmdbId: number;
   posterUrl: string | null;
   date: string;
-  type?: "movie" | "series";
+  type?: "movie" | "series" | "variety";
 }
 
 export function getRecHistory(): RecHistoryEntry[] {
@@ -360,7 +360,7 @@ export function getRecHistory(): RecHistoryEntry[] {
 }
 
 export function addRecHistory(
-  recs: { title: string; tmdbId: number; posterUrl: string | null; type?: "movie" | "series" }[],
+  recs: { title: string; tmdbId: number; posterUrl: string | null; type?: "movie" | "series" | "variety" }[],
 ) {
   const existing = getRecHistory();
   const existingIds = new Set(existing.map((e) => e.tmdbId));

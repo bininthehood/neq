@@ -33,7 +33,11 @@ export default function MockCard({ rec }: { rec: Recommendation }) {
 
       <Text style={styles.ratingText}>★ {rec.rating.toFixed(1)}</Text>
       <Text style={styles.typeText}>
-        {rec.type === 'series' ? '시리즈' : '영화'}
+        {rec.type === 'series'
+          ? '시리즈'
+          : rec.type === 'variety'
+            ? '예능'
+            : '영화'}
       </Text>
 
       <LinearGradient

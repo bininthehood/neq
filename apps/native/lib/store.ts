@@ -184,7 +184,7 @@ export interface RecHistoryEntry {
   tmdbId: number;
   posterUrl: string | null;
   date: string;
-  type?: 'movie' | 'series';
+  type?: 'movie' | 'series' | 'variety';
 }
 
 export async function getRecHistory(): Promise<RecHistoryEntry[]> {
@@ -201,7 +201,7 @@ export async function addRecHistory(
     title: string;
     tmdbId: number;
     posterUrl: string | null;
-    type?: 'movie' | 'series';
+    type?: 'movie' | 'series' | 'variety';
   }[],
 ): Promise<void> {
   const existing = await getRecHistory();

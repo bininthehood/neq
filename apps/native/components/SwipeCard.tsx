@@ -281,13 +281,13 @@ export function CardInner({
   immersive: boolean;
   depth: number;
 }) {
-  // 신규-2 (2026-05-19 재검증) — 카테고리 3종 매핑. Recommendation.type 은 현재
-  // 'movie'|'series' 2종이나(@neq/core), variety(예능) 가 데이터 모델에 추가될
-  // 경우 카드가 'movie' 로 흡수되지 않도록 3종 매핑으로 선반영.
+  // 2026-05-20 — Recommendation.type 3종 (`'movie' | 'series' | 'variety'`) 확장 완료.
+  // 서버 enrichment 가 TV + Reality/Talk 장르 통과 시 'variety' 라벨. as string 캐스팅
+  // 제거하고 직접 매핑.
   const type: CardCategory =
     rec.type === 'series'
       ? 'series'
-      : (rec.type as string) === 'variety'
+      : rec.type === 'variety'
         ? 'variety'
         : 'movie';
   const year = rec.date ? rec.date.slice(0, 4) : '';

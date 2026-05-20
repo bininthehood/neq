@@ -82,7 +82,15 @@ export function mapRecToWork(rec: Recommendation): CardWork {
     rating: rec.rating,
     poster: rec.posterUrl,
     backdrop: rec.backdrop,
-    cat: rec.type === "series" ? "series" : "movie",
+    // 2026-05-20 — variety(예능) 3종 매핑. Recommendation.type 확장 후 서버
+    // enrichment 가 TV + Reality/Talk 장르를 'variety' 로 라벨링 → 카드 카테고리 칩
+    // "예능"으로 올바르게 표기.
+    cat:
+      rec.type === "series"
+        ? "series"
+        : rec.type === "variety"
+          ? "variety"
+          : "movie",
     otts,
     runtime: rec.runtime,
     seasons: rec.seasons,
