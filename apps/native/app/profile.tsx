@@ -298,12 +298,12 @@ export default function ProfileScreen() {
               )}
               {stats.good > 0 && (
                 <Text style={[styles.reactionText, styles.reactionGood]}>
-                  재밌었어 {stats.good}
+                  괜찮았어 {stats.good}
                 </Text>
               )}
               {stats.meh > 0 && (
                 <Text style={[styles.reactionText, styles.reactionMeh]}>
-                  그저 그래 {stats.meh}
+                  별로였어 {stats.meh}
                 </Text>
               )}
               {stats.dropped > 0 && (

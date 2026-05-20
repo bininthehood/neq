@@ -40,7 +40,7 @@ import { track } from '../lib/analytics';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
 import SavedHero from '../components/SavedHero';
-import { IconSearch, IconSave } from '../components/Icons';
+import { IconSearch, IconSave, IconArchive } from '../components/Icons';
 import SavedFilterSheet from '../components/saved/SavedFilterSheet';
 import ReactionOverlay from '../components/saved/ReactionOverlay';
 import ReactionLabel from '../components/saved/ReactionLabel';
@@ -786,10 +786,10 @@ export default function SavedScreen() {
                     <Text style={styles.statLoved}>인생작 {stats.loved}</Text>
                   )}
                   {stats.good > 0 && (
-                    <Text style={styles.statGood}>재밌었어 {stats.good}</Text>
+                    <Text style={styles.statGood}>괜찮았어 {stats.good}</Text>
                   )}
                   {stats.meh > 0 && (
-                    <Text style={styles.statMeh}>그저 그래 {stats.meh}</Text>
+                    <Text style={styles.statMeh}>별로였어 {stats.meh}</Text>
                   )}
                   {stats.dropped > 0 && (
                     <Text style={styles.statDropped}>
@@ -919,12 +919,14 @@ export default function SavedScreen() {
                     item={s}
                     report={reports[s.recommendation.tmdbId]}
                     isReporting={reportingId === s.recommendation.tmdbId}
+                    isArchived={archivedIds.has(s.recommendation.tmdbId)}
                     onPress={handleOpenDetail}
                     onLongPress={handleLongPress}
                     onStartReport={setReportingId}
                     onReport={handleReport}
                     onUndoReport={handleUndoReport}
                     onCancelReport={() => setReportingId(null)}
+                    onArchiveToggle={handleArchiveToggle}
                   />
                 ))}
               </View>
@@ -937,12 +939,14 @@ export default function SavedScreen() {
                     index={i}
                     report={reports[s.recommendation.tmdbId]}
                     isReporting={reportingId === s.recommendation.tmdbId}
+                    isArchived={archivedIds.has(s.recommendation.tmdbId)}
                     onPress={handleOpenDetail}
                     onLongPress={handleLongPress}
                     onStartReport={setReportingId}
                     onReport={handleReport}
                     onUndoReport={handleUndoReport}
                     onCancelReport={() => setReportingId(null)}
+                    onArchiveToggle={handleArchiveToggle}
                   />
                 ))}
               </View>
@@ -963,12 +967,14 @@ export default function SavedScreen() {
               item={item}
               report={reports[item.recommendation.tmdbId]}
               isReporting={reportingId === item.recommendation.tmdbId}
+              isArchived={archivedIds.has(item.recommendation.tmdbId)}
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
               onStartReport={setReportingId}
               onReport={handleReport}
               onUndoReport={handleUndoReport}
               onCancelReport={() => setReportingId(null)}
+              onArchiveToggle={handleArchiveToggle}
             />
           )}
         />
@@ -988,12 +994,14 @@ export default function SavedScreen() {
               index={index}
               report={reports[item.recommendation.tmdbId]}
               isReporting={reportingId === item.recommendation.tmdbId}
+              isArchived={archivedIds.has(item.recommendation.tmdbId)}
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
               onStartReport={setReportingId}
               onReport={handleReport}
               onUndoReport={handleUndoReport}
               onCancelReport={() => setReportingId(null)}
+              onArchiveToggle={handleArchiveToggle}
             />
           )}
         />
@@ -1050,23 +1058,27 @@ function PosterCard({
   index,
   report,
   isReporting,
+  isArchived,
   onPress,
   onLongPress,
   onStartReport,
   onReport,
   onUndoReport,
   onCancelReport,
+  onArchiveToggle,
 }: {
   item: SavedItem;
   index: number;
   report: WatchReaction | undefined;
   isReporting: boolean;
+  isArchived: boolean;
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
   onStartReport: (tmdbId: number) => void;
   onReport: (tmdbId: number, reaction: WatchReaction) => void;
   onUndoReport: (tmdbId: number) => void;
   onCancelReport: () => void;
+  onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
   const tall = index % 3 === 0;
@@ -1161,6 +1173,26 @@ function PosterCard({
         </Pressable>
       )}
 
+      {/* 2026-05-20 — 우상단 아카이브 토글 (PWA SavedList 정합). report 있거나 이미
+          archived 일 때만 노출. long-press ActionSheet 와 동시 제공 — 명시적 UI 진입로. */}
+      {!isReporting && (report || isArchived) && (
+        <Pressable
+          onPress={() => onArchiveToggle(rec.tmdbId)}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isArchived ? `${rec.title} 아카이브 해제` : `${rec.title} 아카이브`
+          }
+          accessibilityState={{ selected: isArchived }}
+          style={styles.archiveChip}
+          hitSlop={4}
+        >
+          <IconArchive
+            size={14}
+            color={isArchived ? colors.accent : colors.textMuted}
+          />
+        </Pressable>
+      )}
+
       {/* isReporting 시 reaction 선택 overlay — 카드 전체 덮음. */}
       {isReporting && (
         <ReactionOverlay
@@ -1183,22 +1215,26 @@ function ListCard({
   item,
   report,
   isReporting,
+  isArchived,
   onPress,
   onLongPress,
   onStartReport,
   onReport,
   onUndoReport,
   onCancelReport,
+  onArchiveToggle,
 }: {
   item: SavedItem;
   report: WatchReaction | undefined;
   isReporting: boolean;
+  isArchived: boolean;
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
   onStartReport: (tmdbId: number) => void;
   onReport: (tmdbId: number, reaction: WatchReaction) => void;
   onUndoReport: (tmdbId: number) => void;
   onCancelReport: () => void;
+  onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
   const meta: string[] = [];
@@ -1291,6 +1327,26 @@ function ListCard({
             </Pressable>
           )}
         </View>
+      )}
+
+      {/* 2026-05-20 — ListCard 우상단 archive 토글 (PWA SavedList 정합). report 있거나
+          이미 archived 일 때만 노출. long-press ActionSheet 와 동시 제공. */}
+      {!isReporting && (report || isArchived) && (
+        <Pressable
+          onPress={() => onArchiveToggle(rec.tmdbId)}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isArchived ? `${rec.title} 아카이브 해제` : `${rec.title} 아카이브`
+          }
+          accessibilityState={{ selected: isArchived }}
+          style={styles.listArchiveChip}
+          hitSlop={4}
+        >
+          <IconArchive
+            size={14}
+            color={isArchived ? colors.accent : colors.textMuted}
+          />
+        </Pressable>
       )}
 
       {/* isReporting 시 reaction 선택 overlay — 카드 전체 덮음 (compact 모드). */}
@@ -1639,6 +1695,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: colors.accent,
+  },
+  // 2026-05-20 — 우상단 archive 토글 칩 (PWA SavedList 정합).
+  archiveChip: {
+    position: 'absolute',
+    top: spacing.xs,
+    right: spacing.xs,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: colors.overlay,
+  },
+  // ListCard 우측 archive 칩 — listReportChip 옆 정렬.
+  listArchiveChip: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    marginRight: spacing.xs,
   },
   // List 뷰 스타일.
   listContent: {

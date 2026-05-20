@@ -204,6 +204,11 @@ export default function DiscoverScreen() {
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // 2026-05-20 — SearchSheet 작품 탭 → DetailSheet 진입 시 표시할 Recommendation.
+  // currentRec (discover stack 의 현재 카드) 와 별개 상태 — 두 곳 모두에서 DetailSheet
+  // 진입 가능. DetailSheet 의 rec 는 `searchSelectedRec ?? currentRec` 우선순위.
+  // 닫을 때 searchSelectedRec=null 로 복원.
+  const [searchSelectedRec, setSearchSelectedRec] = useState<Recommendation | null>(null);
 
   // 배치 G — 첫 카드 힌트. web `useSwipeGesture.ts:131-133` 정합:
   //   첫 카드(topIdx===0)에서 우로 일정 거리 드래그하면 "첫 번째 작품이에요" 안내.
@@ -1071,15 +1076,22 @@ export default function DiscoverScreen() {
       </View>
 
       <DetailSheet
-        rec={currentRec ?? null}
+        // 2026-05-20 — 검색 결과 작품 탭 시 searchSelectedRec 우선, 아니면 stack 의 현재 카드.
+        rec={searchSelectedRec ?? currentRec ?? null}
         visible={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        onSearchPerson={(name) => {
-          // 위임 O #1.2 — Cast 클릭 → DetailSheet 닫고 SearchSheet 자동 검색.
-          // 동선: DetailSheet 닫음 → initialQuery 세팅 → SearchSheet 오픈.
-          // SearchSheet 의 visible 전이 effect 가 initialQuery 를 query 로 주입하고 검색.
-          track('detail_to_search_person', { name, from: 'discover' });
+        onClose={() => {
           setDetailOpen(false);
+          // 검색 진입 detail 닫을 때 selected rec cleanup (다음 진입 시 stack rec 복귀).
+          setSearchSelectedRec(null);
+        }}
+        onSearchPerson={(name) => {
+          // 2026-05-20 — PWA 정합 (`apps/web/src/app/discover/page.tsx:723-728`):
+          //   "detail.closeDetail() 호출하지 않음 — DetailSheet 유지하면서 SearchSheet
+          //    을 위에 띄움. SearchSheet cancel 시 자연스럽게 DetailSheet 이 다시
+          //    노출됨 (z-stacking)."
+          // RN Modal 도 transparent 면 stacking 가능. setDetailOpen(false) 제거 →
+          // SearchSheet 가 DetailSheet 위에 띄워짐 → 검색창 닫으면 DetailSheet 복귀.
+          track('detail_to_search_person', { name, from: 'discover' });
           setSearchInitialQuery(name);
           setSearchOpen(true);
         }}
@@ -1089,6 +1101,19 @@ export default function DiscoverScreen() {
         visible={searchOpen}
         onClose={() => setSearchOpen(false)}
         initialQuery={searchInitialQuery}
+        onWorkSelected={(rec) => {
+          // 2026-05-20 — 검색 결과 작품 탭 → SearchSheet 닫고 DetailSheet 띄움.
+          // PWA 의 SearchSheet 내부 detail panel 패턴은 별도 트랙 — 우선 단순 흐름.
+          track('detail_opened', {
+            tmdb_id: rec.tmdbId,
+            title: rec.title,
+            providers_count: rec.providers.length,
+            source: 'search_result',
+          });
+          setSearchSelectedRec(rec);
+          setSearchOpen(false);
+          setDetailOpen(true);
+        }}
       />
 
       {/* W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).

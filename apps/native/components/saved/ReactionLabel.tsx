@@ -14,9 +14,11 @@ export const REACTION_BADGES: Record<
   WatchReaction,
   { label: string; color: string; bg: string }
 > = {
+  // 2026-05-20 — 입력 라벨(ReactionOverlay.tsx: 인생작/괜찮았어/별로였어/안 맞았어)과
+  // 통일. 사용자가 '괜찮았어' 선택 후 표시 '재밌었어' 로 바뀌어 불일치 보고.
   loved: { label: '인생작', color: colors.textPrimary, bg: colors.accentDim },
-  good: { label: '재밌었어', color: colors.textSecondary, bg: colors.surfaceRaised },
-  meh: { label: '그저 그래', color: colors.textMuted, bg: colors.surface },
+  good: { label: '괜찮았어', color: colors.textSecondary, bg: colors.surfaceRaised },
+  meh: { label: '별로였어', color: colors.textMuted, bg: colors.surface },
   dropped: { label: '안 맞았어', color: colors.danger, bg: colors.dangerDim },
 };
 

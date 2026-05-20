@@ -24,7 +24,7 @@
  *   - 선택된 작품 상세 패널 (저장/OTT/상세) — D10n 후속 트랙
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react'; // useCallback 활용 (WorkCard)
 import {
   View,
   Text,
@@ -58,6 +58,7 @@ import {
 import type {
   GroupedSearchResponse,
   PersonResult,
+  Recommendation,
   SearchResult,
 } from '../lib/types';
 import { env } from '../lib/env';
@@ -87,9 +88,20 @@ interface Props {
    * (web `apps/web/src/components/discover/SearchSheet.tsx` initialQuery prop 동등.)
    */
   initialQuery?: string;
+  /**
+   * 2026-05-20 — 작품 탭 시 hydrate 후 부모로 Recommendation 전달.
+   * 부모는 SearchSheet 닫고 DetailSheet 띄우는 흐름. PWA 의 SearchSheet 내부
+   * detail panel 정합은 별도 트랙(D10n+) — 우선 단순 흐름 (sheet 전환).
+   */
+  onWorkSelected?: (rec: Recommendation) => void;
 }
 
-export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
+export default function SearchSheet({
+  visible,
+  onClose,
+  initialQuery,
+  onWorkSelected,
+}: Props) {
   const [query, setQuery] = useState('');
   const [data, setData] = useState<GroupedSearchResponse | null>(null);
   const [isFetching, setIsFetching] = useState(false);
@@ -390,7 +402,10 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
                       </View>
 
                       {g.key === 'works' && (
-                        <WorksCarousel items={data.works} />
+                        <WorksCarousel
+                          items={data.works}
+                          onSelect={onWorkSelected}
+                        />
                       )}
                       {g.key === 'directors' && (
                         <PeopleCarousel items={data.directors} />
@@ -417,7 +432,13 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
 const WORK_CARD_W = 112;
 const WORK_CARD_H = 168; // 2:3
 
-function WorksCarousel({ items }: { items: SearchResult[] }) {
+function WorksCarousel({
+  items,
+  onSelect,
+}: {
+  items: SearchResult[];
+  onSelect?: (rec: Recommendation) => void;
+}) {
   return (
     <FlatList
       data={items}
@@ -429,14 +450,47 @@ function WorksCarousel({ items }: { items: SearchResult[] }) {
       ItemSeparatorComponent={() => <View style={{ width: spacing.sm + 4 }} />}
       snapToInterval={WORK_CARD_W + spacing.sm + 4}
       decelerationRate="fast"
-      renderItem={({ item }) => <WorkCard item={item} />}
+      renderItem={({ item }) => <WorkCard item={item} onSelect={onSelect} />}
     />
   );
 }
 
-function WorkCard({ item }: { item: SearchResult }) {
+function WorkCard({
+  item,
+  onSelect,
+}: {
+  item: SearchResult;
+  onSelect?: (rec: Recommendation) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const handlePress = useCallback(async () => {
+    if (!onSelect || loading) return;
+    setLoading(true);
+    try {
+      const type = item.mediaType === 'tv' ? 'series' : 'movie';
+      const res = await fetch(
+        `${env.API_BASE_URL}/api/tmdb/hydrate?id=${item.id}&type=${type}`,
+      );
+      if (!res.ok) return;
+      const rec = (await res.json()) as Recommendation;
+      onSelect(rec);
+    } catch {
+      // 실패 시 silent — 사용자가 다시 시도 가능
+    } finally {
+      setLoading(false);
+    }
+  }, [item, onSelect, loading]);
   return (
-    <View style={styles.workCard} accessibilityLabel={`${item.title}`}>
+    <Pressable
+      onPress={handlePress}
+      disabled={loading || !onSelect}
+      style={({ pressed }) => [
+        styles.workCard,
+        pressed && { opacity: 0.6 },
+      ]}
+      accessibilityLabel={item.title}
+      accessibilityRole="button"
+    >
       <View style={styles.workPosterFrame}>
         {item.posterUrl ? (
           <Image
@@ -461,7 +515,7 @@ function WorkCard({ item }: { item: SearchResult }) {
         {item.year ? ` · ${item.year}` : ''}
         {item.rating > 0 ? ` · ★ ${item.rating.toFixed(1)}` : ''}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

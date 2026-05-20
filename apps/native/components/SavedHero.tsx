@@ -75,7 +75,9 @@ export default function SavedHero({
           <Image
             source={{ uri: heroRec.posterUrl }}
             style={StyleSheet.absoluteFill}
-            contentFit="contain"
+            // 2026-05-20 — 사용자 요청: 미리보기 포스터 화면 꽉 차게.
+            // contain (비율 유지, 좌우 검은 여백) → cover (영역 가득, 가장자리 잘림).
+            contentFit="cover"
             transition={0}
           />
         ) : (
@@ -179,13 +181,13 @@ export default function SavedHero({
 
 const styles = StyleSheet.create({
   wrap: { flex: 1, minHeight: 0 },
+  // 2026-05-20 — 사용자 요청: 미리보기 hero 가 화면 좌우 끝까지 + 중앙 영역 확장.
+  // 기존 marginHorizontal: spacing.lg (24px) + borderRadius: radius.lg 제거 → 풀블리드.
   hero: {
     flex: 1,
-    marginHorizontal: spacing.lg,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
     backgroundColor: colors.surface,
     minHeight: 0,
+    overflow: 'hidden',
   },
   heroFallback: {
     backgroundColor: colors.surface,

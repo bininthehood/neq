@@ -94,6 +94,41 @@ export function IconSearch({ size = 20, color = '#000' }: IconProps) {
   );
 }
 
+// IconArchive — PWA `Icons.tsx` IconArchive 정합. 박스 + 뚜껑 + 라벨.
+// Saved 카드 우상단 아카이브 토글 버튼용. report 있거나 isArchived 일 때만 노출.
+export function IconArchive({ size = 16, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
+      {/* 뚜껑 */}
+      <Path
+        d="M2 3 H14 V6 H2 Z"
+        stroke={color}
+        strokeWidth={1.4}
+        strokeLinecap="square"
+        fill="none"
+      />
+      {/* 박스 */}
+      <Path
+        d="M3 6 H13 V14 H3 Z"
+        stroke={color}
+        strokeWidth={1.4}
+        strokeLinecap="square"
+        fill="none"
+      />
+      {/* 라벨 */}
+      <Line
+        x1="6"
+        y1="9.5"
+        x2="10"
+        y2="9.5"
+        stroke={color}
+        strokeWidth={1.4}
+        strokeLinecap="square"
+      />
+    </Svg>
+  );
+}
+
 // 2026-05-20 — FilterChips / SavedFilters 공용 chevron. web `▾` 글리프 (fontSize 11)
 // 가 native 시스템 폰트에서 작고 흐릿하게 렌더 → 가독성 부족. SVG polyline 으로
 // 명확한 v 모양 + 적절한 크기. SavedFilters 의 자체 IconChevronDown 도 향후 이걸로 통일.
