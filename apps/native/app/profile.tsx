@@ -370,18 +370,24 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  // 2026-05-20 — Saved/Discover 헤더와 통일 (사용자 보고: 3탭 헤더 위치 불일치).
+  // 기존: paddingTop spacing.lg + paddingBottom spacing.md → ~84px (검색 버튼 44 포함).
+  // Saved/Discover 는 height: 48 고정. Profile 도 동일하게 맞춰 3탭 헤더 좌표 일치.
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    height: 48,
   },
+  // Saved 정합 — fontSize 28 + Instrument Serif + fontWeight 500 + letterSpacing -0.7.
+  // lineHeight 36 으로 ascender 클리핑 방지 (Saved 와 동일 fix).
   title: {
     color: colors.textPrimary,
-    fontSize: 26,
-    // 2026-04-29 fontsV2 전환 — display = Instrument Serif. web profile 제목 정합.
+    fontSize: 28,
+    fontWeight: '500',
+    letterSpacing: -0.7,
+    lineHeight: 36,
     fontFamily: fontsV2.display,
   },
   searchBtn: {

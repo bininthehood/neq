@@ -56,15 +56,43 @@ interface Props {
    * 지정 시 worklet 안에서 `dragX` 대신 이 값을 사용 (JS state 의존성 제거 → 60fps).
    */
   dismissX?: SharedValue<number>;
+  /**
+   * 2026-05-20 snap-back fix — 이 카드가 현재 dismiss 진행 중인 카드인지 표시.
+   * 부모에서 `dismissingTmdbId === rec.tmdbId` 로 계산. true 일 때만 worklet 에서
+   * dismissX 를 transform 으로 적용.
+   *
+   * 왜 필요한가: 기존 구조에서 dismissX 는 shared value 라 옛 top → 새 top 으로
+   * isTop 이 전이될 때 React commit / UI 메시지 순서에 따라 옛 top 이 한 프레임
+   * 중앙으로 snap 하거나 새 top 이 한 프레임 화면 밖으로 튀는 결함이 있었다.
+   * `isDismissing` 으로 게이트하면 옛 top 만 dismissX 를 읽고, 새 top 은 dragX
+   * (=0) 로 정상 위치 — 한 프레임 점프 0.
+   */
+  isDismissing?: boolean;
+  /**
+   * 2026-05-20 prev overlay 통합 — 이 카드가 prev overlay 모드인지.
+   * true 면 worklet 이 depth/dragX/dismissX 모두 무시하고 prevOverlayX 만 적용.
+   * zIndex 100 으로 stack 의 다른 카드들 위에 깔린다.
+   *
+   * 왜: 기존 `PrevCardOverlay` 와 stack 의 새 top `SwipeCard` 가 별개 component
+   * instance → 별개 native view → BlurView/shadow/image 가 mount/unmount 사이클로
+   * 한 프레임 어긋남(미세 깜빡임). 같은 SwipeCard 컴포넌트로 통합하면 prev →
+   * 새 top 전환이 React key 기반 reconcile 로 *인스턴스 재활용* → native view
+   * 보존 → 깜빡임 0.
+   */
+  isPrev?: boolean;
+  /** prev overlay 모드 위치(translateX) sharedValue. isPrev=true 일 때만 사용. */
+  prevOverlayX?: SharedValue<number>;
 }
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SPRING_BEZIER = Easing.bezier(...easings.spring);
-// M-1 (2026-05-19 정합 audit) — depth 전환 곡선. PWA SwipeCard 는 depth 를 스프링으로
-// 애니메이션하지 않고 단순 `transform 0.3s ease-out` 으로 보간한다. native 도 동일하게
-// withTiming + ease-move (대칭 가속-감속) 으로 — `withSpring(damping:14)` 의 과한
-// 오버슈트("디용~") 제거.
-const DEPTH_BEZIER = Easing.bezier(...easings.move);
+// 2026-05-20 정합 재교정 — depth 전환 곡선. M-1 (5/19) 가 ease-move 로 바꿨으나
+// 대칭 가속-감속은 초반이 느려 새 top 카드가 "settle/loading" 처럼 인지된다.
+// PWA `transform 0.3s ease-out` 진짜 정합으로 단방향 감속(빠른 시작 → 부드러운 안착)
+// 으로 교체. CSS `ease-out` = `cubic-bezier(0, 0, 0.58, 1)`.
+const DEPTH_BEZIER = Easing.bezier(0, 0, 0.58, 1);
+// PWA 와 동일한 300ms (durations.steady=350 은 바텀시트용, depth 보간엔 50ms 과함).
+const DEPTH_MS = 300;
 
 // ─────────────────────────────────────────────────────
 // CardVariantA RN 포팅 — 2026-05-19 native↔PWA 정합 audit C-1.
@@ -126,14 +154,17 @@ export default function SwipeCard({
   absorbing = false,
   saveTargetPoint,
   dismissX,
+  isDismissing = false,
+  isPrev = false,
+  prevOverlayX,
 }: Props) {
   const animatedDepth = useSharedValue(depth);
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
   useEffect(() => {
-    // M-1 — depth 전환은 timing(ease-move). PWA 와 동일하게 오버슈트 없는 보간.
+    // depth 전환 — PWA `transform 0.3s ease-out` 정합. 단방향 감속으로 빠른 시작 → 자연 안착.
     animatedDepth.value = withTiming(depth, {
-      duration: durations.steady,
+      duration: DEPTH_MS,
       easing: DEPTH_BEZIER,
     });
   }, [depth, animatedDepth]);
@@ -157,12 +188,27 @@ export default function SwipeCard({
     // finite number 로 강제. (가시적 동작 동일, 단 NaN race 시 안전한 0 fallback.)
     const safe = (n: number, fallback = 0): number => (Number.isFinite(n) ? n : fallback);
 
+    // 2026-05-20 prev overlay 모드 — depth/dragX/dismissX 모두 무시하고
+    // prevOverlayX 만 translateX 로 적용. scale 1, zIndex 100.
+    // 도착 후 isPrev=false 로 전환 시 dragX=0 → translateX=0, zIndex=10 → 같은
+    // 위치 유지 (translateX 0=0). 인스턴스 재활용으로 native view 보존.
+    if (isPrev && prevOverlayX !== undefined) {
+      return {
+        transform: [{ translateX: safe(prevOverlayX.value) }],
+        opacity: 1,
+        zIndex: 100,
+      };
+    }
+
     const d = safe(animatedDepth.value);
     const baseScale = 1 - d * 0.04;
     const yOffset = d * 12;
 
-    // 사이클 2: dismissX worklet 값이 활성화 (≠0) 면 dragX 대신 사용.
-    const dismissRaw = dismissX !== undefined ? safe(dismissX.value) : 0;
+    // 2026-05-20 — isDismissing 게이트 추가. 이 카드가 dismiss 진행 중일 때만
+    // dismissX 를 transform 으로 적용. 그 외엔 dragX 만 사용 → 옛 top → 새 top
+    // 전이 시 한 프레임 점프 차단.
+    const dismissRaw =
+      isDismissing && dismissX !== undefined ? safe(dismissX.value) : 0;
     const dragXSafe = safe(dragX);
     const dragYSafe = safe(dragY);
     const dismissActive = dismissRaw !== 0;
@@ -214,11 +260,30 @@ export default function SwipeCard({
     };
   });
 
-  // C-1 — CardVariantA 풀블리드 레이아웃 RN 포팅.
+  return (
+    <Animated.View style={[styles.card, cardStyle]}>
+      <CardInner rec={rec} immersive={immersive} depth={depth} />
+    </Animated.View>
+  );
+}
+
+/**
+ * 2026-05-20 — PWA `CardVariantA` 정합 풀블리드 카드 내부 컴포넌트.
+ * `SwipeCard` 와 `PrevCardOverlay` 양쪽에서 재사용 — 우 스와이프 도착 시점에
+ * overlay → 새 top 으로 전환되어도 정보 영역이 100% 동일 → 깜빡임 0.
+ */
+export function CardInner({
+  rec,
+  immersive,
+  depth,
+}: {
+  rec: Recommendation;
+  immersive: boolean;
+  depth: number;
+}) {
   // 신규-2 (2026-05-19 재검증) — 카테고리 3종 매핑. Recommendation.type 은 현재
   // 'movie'|'series' 2종이나(@neq/core), variety(예능) 가 데이터 모델에 추가될
-  // 경우 카드가 'movie' 로 흡수되지 않도록 3종 매핑으로 선반영. web cards/types.ts
-  // CardCategory 3종 정본 정합.
+  // 경우 카드가 'movie' 로 흡수되지 않도록 3종 매핑으로 선반영.
   const type: CardCategory =
     rec.type === 'series'
       ? 'series'
@@ -231,15 +296,9 @@ export default function SwipeCard({
   const otts = rec.providers
     .filter((p) => !p.category || p.category === 'subscription')
     .slice(0, 6);
-  // 2026-05-19 native↔PWA 정합 (항목 4) — 드래그 중에도 정보 영역 유지.
-  // PWA SwipeCard 는 `isDragging` 을 CardVariantA 에 전달하지 않아 드래그 중에도
-  // 제목·설명·OTT·평점 칩이 정적으로 보인다. 기존 native 는 `!isDragging` 으로
-  // 드래그 시 opacity 0 → 좌/우/아래 스와이프·prev overlay 진행 중 정보가 사라져
-  // PWA 와 불일치했다. absorb(save 흡수) 시엔 카드 자체 opacity 가 페이드하므로
-  // 정보도 함께 페이드 — infoVisible 과 무관하게 정상 동작.
-  const infoVisible = isTop && !immersive;
+  const infoVisible = !immersive;
 
-  const cardContent = (
+  return (
     <>
       {/* full-bleed poster */}
       {rec.posterUrl ? (
@@ -248,7 +307,11 @@ export default function SwipeCard({
           style={StyleSheet.absoluteFill}
           contentFit="cover"
           contentPosition="top"
-          transition={200}
+          // 2026-05-20 PWA 정합 — Next/Image 는 placeholder=empty (no fade) 기본.
+          // expo-image transition={200} 은 첫 paint 에 fade-in 발동 → 우 스와이프
+          // prev overlay 진행 중 image 가 점점 진해지는 게 "깜빡임" 으로 인지됐다.
+          // 0 으로 통일해 PWA 와 동일하게 즉시 표시.
+          transition={0}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.fallback]}>
@@ -257,9 +320,7 @@ export default function SwipeCard({
       )}
 
       {/* bottom gradient overlay — 텍스트 가독. CardVariantA 정합 3-stop:
-          50% transparent → 92% bg-overlay-heavy → 100% bg-overlay-solid.
-          RN LinearGradient 는 첫 stop 이전 구간을 첫 색으로 평탄 채움 →
-          0~50% transparent 는 stop 명시 불필요(PWA 3-stop 구조와 동일). */}
+          50% transparent → 92% bg-overlay-heavy → 100% bg-overlay-solid. */}
       <LinearGradient
         colors={['transparent', colors.overlayHeavy, colors.overlaySolid]}
         locations={[0.5, 0.92, 1]}
@@ -311,8 +372,6 @@ export default function SwipeCard({
       )}
     </>
   );
-
-  return <Animated.View style={[styles.card, cardStyle]}>{cardContent}</Animated.View>;
 }
 
 const styles = StyleSheet.create({

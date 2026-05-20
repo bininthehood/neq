@@ -156,7 +156,7 @@ export default function ShareScreen() {
               source={{ uri: heroSrc }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
-              transition={200}
+              transition={0}
             />
           )}
           <LinearGradient

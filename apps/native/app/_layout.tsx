@@ -3,7 +3,7 @@ import { Tabs, router, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text } from 'react-native';
+import { View, Text, Easing } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { hasOnboarded } from '../lib/store';
 import {
@@ -151,11 +151,69 @@ function TabsWithGuard() {
             },
         tabBarShowLabel: false,
         sceneStyle: { backgroundColor: colors.bg },
+        // 2026-05-20 — PWA 탭 전환 정합 (`apps/web/src/app/template.tsx` +
+        // `globals.css @keyframes tabSlideInRight/Left`).
+        //
+        // 명세:
+        //   - 인덱스 증가 (Discover→Saved→Profile): translateX 40 → 0, opacity 0 → 1
+        //   - 인덱스 감소: translateX -40 → 0, opacity 0 → 1
+        //   - duration 280ms, easing cubic-bezier(0.32, 0.72, 0.24, 1) (= detailMorph)
+        //
+        // React Navigation v7 의 `current.progress` 는 각 scene 의 상대 위치 (types.d.ts):
+        //   -1 = 자기 인덱스 < active 인덱스
+        //    0 = 자기가 active
+        //   +1 = 자기 인덱스 > active 인덱스
+        //
+        // 인덱스 증가 (Discover→Saved) 시:
+        //   - 새 active=Saved 입장: progress +1 → 0   (Saved 가 Discover 보다 인덱스 큼)
+        //   - 이전 active=Discover 입장: progress 0 → -1
+        // → PWA 정합 (새 탭이 오른쪽에서 진입, 이전 탭이 왼쪽으로 퇴장) =
+        //   progress +1 → translateX +40, progress -1 → translateX -40.
+        //
+        // interpolate output:
+        //   progress -1 → translateX -40, opacity 0   (왼쪽으로 퇴장 / 왼쪽에서 진입)
+        //   progress  0 → translateX   0, opacity 1
+        //   progress +1 → translateX +40, opacity 0   (오른쪽에서 진입 / 오른쪽으로 퇴장)
+        //
+        // 이전 active 탭도 슬라이드 아웃 — PWA 는 새 탭만 슬라이드(이전은 unmount)
+        // 지만 native 는 두 탭이 동시 mount 라 대칭 슬라이드가 자연스러움.
+        // animation preset 으로 transition 활성화 (animationEnabled 효과) +
+        // sceneStyleInterpolator/transitionSpec 으로 PWA 정합 곡선 override.
+        animation: 'fade',
+        sceneStyleInterpolator: ({ current }) => ({
+          sceneStyle: {
+            transform: [
+              {
+                translateX: current.progress.interpolate({
+                  inputRange: [-1, 0, 1],
+                  outputRange: [-40, 0, 40],
+                }),
+              },
+            ],
+            opacity: current.progress.interpolate({
+              inputRange: [-1, 0, 1],
+              outputRange: [0, 1, 0],
+            }),
+          },
+        }),
+        transitionSpec: {
+          animation: 'timing',
+          config: {
+            duration: 280,
+            easing: Easing.bezier(0.32, 0.72, 0.24, 1),
+          },
+        },
       }}
     >
+            {/* 2026-05-20 — 가시 3탭은 lazy:false 로 startup pre-mount.
+                첫 진입 시 layout/font/image 계산이 한 프레임 후 적용되며 콘텐츠가
+                "움찔" 하던 결함 차단. onboarding/share[id] 는 default(lazy:true) 유지
+                — href:null 숨김 라우트라 startup mount 하면 가드 redirect 와 충돌 →
+                검은 화면 회귀. */}
             <Tabs.Screen
               name="index"
               options={{
+                lazy: false,
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color, active }) => <IconDiscover color={color} active={active} />}
@@ -168,6 +226,7 @@ function TabsWithGuard() {
             <Tabs.Screen
               name="saved"
               options={{
+                lazy: false,
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color, active }) => <IconBookmark color={color} active={active} />}
@@ -180,6 +239,7 @@ function TabsWithGuard() {
             <Tabs.Screen
               name="profile"
               options={{
+                lazy: false,
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color }) => <IconUser color={color} />}

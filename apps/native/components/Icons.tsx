@@ -94,6 +94,24 @@ export function IconSearch({ size = 20, color = '#000' }: IconProps) {
   );
 }
 
+// 2026-05-20 — FilterChips / SavedFilters 공용 chevron. web `▾` 글리프 (fontSize 11)
+// 가 native 시스템 폰트에서 작고 흐릿하게 렌더 → 가독성 부족. SVG polyline 으로
+// 명확한 v 모양 + 적절한 크기. SavedFilters 의 자체 IconChevronDown 도 향후 이걸로 통일.
+export function IconChevronDown({ size = 12, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polyline
+        points="6 9 12 15 18 9"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 // IconStar — SwipeCard Rating 칩용. web `Icons.tsx` IconStar path 포팅 (C-1).
 // 기존 native SwipeCard 의 `★` 유니코드 문자를 SVG 로 대체 (Iconography 정합).
 export function IconStar({ size = 11, color = '#000' }: IconProps) {

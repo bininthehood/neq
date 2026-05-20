@@ -12,6 +12,7 @@ import {
   type FilterRating,
 } from '@neq/core';
 import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
+import { IconChevronDown } from './Icons';
 
 type DropdownKey = 'type' | 'origin' | 'year' | 'rating' | 'ott' | null;
 
@@ -85,7 +86,10 @@ export default function FilterChips({
         <Text style={[styles.chipText, active && styles.chipTextActive]}>
           {label}
         </Text>
-        <Text style={styles.caret}>▾</Text>
+        {/* 2026-05-20 — `▾` 텍스트 글리프(fontSize 11) 는 native 시스템 폰트에서
+            얇고 작게 렌더되어 사용자가 "아이콘이 너무 작음" 보고. SVG IconChevronDown
+            (size 12, strokeWidth 2) 로 교체해 가독성 확보. */}
+        <IconChevronDown size={12} color={colors.textMuted} />
       </Pressable>
     );
   }

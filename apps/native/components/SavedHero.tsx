@@ -76,7 +76,7 @@ export default function SavedHero({
             source={{ uri: heroRec.posterUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="contain"
-            transition={200}
+            transition={0}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.heroFallback]}>
@@ -152,7 +152,7 @@ export default function SavedHero({
                     source={{ uri: item.recommendation.posterUrl }}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
-                    transition={150}
+                    transition={0}
                   />
                 ) : (
                   <View style={[StyleSheet.absoluteFill, styles.heroFallback]}>

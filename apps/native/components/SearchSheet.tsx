@@ -43,11 +43,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withSpring,
   withTiming,
   runOnJS,
   interpolate,
   Extrapolation,
+  Easing,
 } from 'react-native-reanimated';
 import {
   resolveSearchUiState,
@@ -63,12 +63,19 @@ import type {
 import { env } from '../lib/env';
 import { colors, radius, spacing } from '../lib/tokens';
 import { IconClose } from './Icons';
-import { fonts } from '@neq/design';
+import { fonts, easings } from '@neq/design';
 import { Illust } from './Illust';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9;
 const CLOSE_THRESHOLD = SHEET_MAX_HEIGHT * 0.3;
+
+// 2026-05-20 — PWA SearchSheet 정합. 기존 `withSpring(damping:20, stiffness:160)` 는
+// underdamped 스프링(ζ≈0.79) 으로 ~700px 이동거리에 큰 진폭 오버슈트("띠용") 발생.
+// PWA 는 `transform 0.3s cubic-bezier(0.34, 1.3, 0.64, 1)` = `easings.spring` 곡선의
+// 짧은 미세 오버슈트 30% — withTiming 으로 동일 인지 재현.
+const SHEET_ENTER_BEZIER = Easing.bezier(...easings.spring);
+const SHEET_ENTER_MS = 300;
 
 interface Props {
   visible: boolean;
@@ -167,10 +174,14 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
     };
   }, []);
 
-  // visible 토글 — 열릴 때 spring up, 닫힐 때 timing down + 상태 리셋
+  // visible 토글 — 열릴 때 미세 spring(bezier) up, 닫힐 때 timing down + 상태 리셋.
+  // PWA SearchSheet 와 동일 곡선 — 큰 오버슈트 없는 짧은 진입.
   useEffect(() => {
     if (visible) {
-      translateY.value = withSpring(0, { damping: 20, stiffness: 160 });
+      translateY.value = withTiming(0, {
+        duration: SHEET_ENTER_MS,
+        easing: SHEET_ENTER_BEZIER,
+      });
     } else {
       translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 280 });
       // 닫을 때 쿼리/결과 리셋 + in-flight 취소
@@ -209,7 +220,10 @@ export default function SearchSheet({ visible, onClose, initialQuery }: Props) {
           runOnJS(onClose)();
         });
       } else {
-        translateY.value = withSpring(0, { damping: 20, stiffness: 180 });
+        translateY.value = withTiming(0, {
+          duration: SHEET_ENTER_MS,
+          easing: SHEET_ENTER_BEZIER,
+        });
       }
     });
 
@@ -429,7 +443,7 @@ function WorkCard({ item }: { item: SearchResult }) {
             source={{ uri: item.posterUrl }}
             style={styles.workPoster}
             contentFit="cover"
-            transition={150}
+            transition={0}
           />
         ) : (
           <View style={[styles.workPoster, styles.workPosterFallback]}>
@@ -487,7 +501,7 @@ function PersonCard({ person }: { person: PersonResult }) {
             source={{ uri: person.profileUrl }}
             style={styles.personAvatarImg}
             contentFit="cover"
-            transition={150}
+            transition={0}
           />
         ) : (
           <Text style={styles.personAvatarFallback}>

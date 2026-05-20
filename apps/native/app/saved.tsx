@@ -1086,7 +1086,7 @@ function PosterCard({
           source={{ uri: rec.posterUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          transition={200}
+          transition={0}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.fallback]}>
@@ -1224,7 +1224,7 @@ function ListCard({
             source={{ uri: rec.posterUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={150}
+            transition={0}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.fallback]}>
@@ -1336,7 +1336,7 @@ function HistoryCard({
               source={{ uri: entry.posterUrl }}
               style={StyleSheet.absoluteFill}
               contentFit="cover"
-              transition={150}
+              transition={0}
             />
           ) : (
             <View style={[StyleSheet.absoluteFill, styles.fallback]}>
@@ -1396,15 +1396,16 @@ const styles = StyleSheet.create({
   },
   // 2026-05-19 native↔PWA 정합 (항목 3) — web saved/page.tsx h1 정본:
   //   text 'Saved' (영문) / font-display(Instrument Serif) / fontSize 28 /
-  //   fontWeight 500 / letterSpacing -0.025em (28×-0.025=-0.7) / lineHeight 1.
-  // 기존 native 는 한글 '저장한 작품' + fontSize 22 + weight/letterSpacing 미지정.
-  // 영문 'Saved' 는 Instrument Serif 가 자연스럽게 렌더 — web 과 동일 폰트라 정합.
+  //   fontWeight 500 / letterSpacing -0.025em (28×-0.025=-0.7).
+  // 2026-05-20 — lineHeight 28(=fontSize) 은 Instrument Serif 의 ascender 영역을
+  // 잘라 상단 클리핑 발생 (사용자 보고). web 은 line-height 1 도 anonymous box 가
+  // 자체 padding 으로 ascender 보전. native 는 명시적 여유 필요 → 36 (≈1.3×) 으로 상향.
   title: {
     color: colors.textPrimary,
     fontSize: 28,
     fontWeight: '500',
     letterSpacing: -0.7,
-    lineHeight: 28,
+    lineHeight: 36,
     fontFamily: fontsV2.display,
   },
   counter: { color: colors.textMuted, fontSize: 13 },

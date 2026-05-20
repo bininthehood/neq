@@ -386,7 +386,8 @@ export default function DetailSheet({
                     source={{ uri: rec.backdrop }}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
-                    transition={200}
+                    // 2026-05-20 PWA 정합 — Next/Image placeholder=empty (no fade) 기본.
+                    transition={0}
                   />
                 </View>
               )}
@@ -643,7 +644,8 @@ function CastItem({
           source={{ uri: profileUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          transition={150}
+          // 2026-05-20 PWA Next/Image 정합 — no fade.
+          transition={0}
         />
       ) : (
         <Text style={styles.castAvatarFallback}>{name.charAt(0)}</Text>
@@ -771,7 +773,8 @@ function RelatedRow({
                   source={{ uri: w.posterUrl }}
                   style={StyleSheet.absoluteFill}
                   contentFit="cover"
-                  transition={150}
+                  // 2026-05-20 PWA Next/Image 정합 — no fade.
+                  transition={0}
                 />
               ) : (
                 <RelatedPosterFallback title={w.title} />
