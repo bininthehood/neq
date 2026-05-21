@@ -203,6 +203,7 @@ function TabsWithGuard() {
               name="index"
               options={{
                 lazy: false,
+                tabBarAccessibilityLabel: '발견',
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color, active }) => <IconDiscover color={color} active={active} />}
@@ -216,6 +217,7 @@ function TabsWithGuard() {
               name="saved"
               options={{
                 lazy: false,
+                tabBarAccessibilityLabel: '저장',
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color, active }) => <IconBookmark color={color} active={active} />}
@@ -229,6 +231,7 @@ function TabsWithGuard() {
               name="profile"
               options={{
                 lazy: false,
+                tabBarAccessibilityLabel: '프로필',
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color }) => <IconUser color={color} />}
