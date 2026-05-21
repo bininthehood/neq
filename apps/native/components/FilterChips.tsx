@@ -87,17 +87,23 @@ export default function FilterChips({
     active,
     isOpen,
     label,
+    kind,
     onPress,
   }: {
     active: boolean;
     isOpen: boolean;
     label: string;
+    // 안정적 식별자 (라벨이 동적이라 a11y/E2E 매칭 용).
+    kind: '유형' | '국가' | '년도' | '별점' | 'OTT';
     onPress: () => void;
   }) {
     return (
       <Pressable
         onPress={onPress}
         disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={`${kind} 필터`}
+        accessibilityState={{ expanded: isOpen, selected: active }}
         style={[
           styles.chip,
           active && styles.chipActive,
@@ -128,6 +134,9 @@ export default function FilterChips({
     return (
       <Pressable
         onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} 선택`}
+        accessibilityState={{ selected: active }}
         style={[styles.option, active && styles.optionActive]}
       >
         <Text style={[styles.optionText, active && styles.optionTextActive]}>
@@ -148,24 +157,28 @@ export default function FilterChips({
           active={filterType !== 'all'}
           isOpen={openDropdown === 'type'}
           label={TYPE_LABELS[filterType]}
+          kind="유형"
           onPress={() => toggle('type')}
         />
         <Chip
           active={filterOrigin !== 'all'}
           isOpen={openDropdown === 'origin'}
           label={ORIGIN_LABELS[filterOrigin]}
+          kind="국가"
           onPress={() => toggle('origin')}
         />
         <Chip
           active={filterYear !== 'all'}
           isOpen={openDropdown === 'year'}
           label={YEAR_LABELS[filterYear]}
+          kind="년도"
           onPress={() => toggle('year')}
         />
         <Chip
           active={filterRating !== 'all'}
           isOpen={openDropdown === 'rating'}
           label={RATING_LABELS[filterRating]}
+          kind="별점"
           onPress={() => toggle('rating')}
         />
         {availableOTTs.length > 0 && (
@@ -173,6 +186,7 @@ export default function FilterChips({
             active={filterOTTs.size > 0}
             isOpen={openDropdown === 'ott'}
             label={ottLabel}
+            kind="OTT"
             onPress={() => toggle('ott')}
           />
         )}
@@ -195,9 +209,12 @@ export default function FilterChips({
           accessibilityLabel="필터 닫기"
         >
           {/* panel 자체 Pressable 로 wrap → 안 클릭이 backdrop 까지 propagation
-              안 됨. onPress 빈 함수 = 이벤트 흡수만. */}
+              안 됨. onPress 빈 함수 = 이벤트 흡수만. accessible={false} 로 자식
+              Option 들이 a11y tree 에 leaf 로 노출되게 한다 (Pressable wrap 이
+              기본적으로 자식 a11y 흡수). */}
           <Pressable
             onPress={() => {}}
+            accessible={false}
             style={[
               styles.panel,
               {
