@@ -320,7 +320,7 @@ export default function SearchSheet({
       <View
         style={StyleSheet.absoluteFill}
         accessibilityViewIsModal
-        accessibilityLabel="검색"
+        accessibilityLabel="검색 시트"
       >
         <Animated.View style={[styles.dim, dimStyle]}>
           <Pressable
