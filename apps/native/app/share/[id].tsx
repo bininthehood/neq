@@ -30,7 +30,11 @@ export default function ShareScreen() {
   const insets = useSafeAreaInsets();
 
   const tmdbId = Number(params.id);
-  const type: 'movie' | 'series' = params.type === 'series' ? 'series' : 'movie';
+  // displayType: UI 노출용 3종 ('variety' 보존). tmdbType: TMDB API 호출용 2종
+  // (variety 는 TMDB 에서 TV 로 취급). web `apps/web/src/app/share/[id]/page.tsx` 정합.
+  const displayType: 'movie' | 'series' | 'variety' =
+    params.type === 'series' || params.type === 'variety' ? params.type : 'movie';
+  const type: 'movie' | 'series' = displayType === 'movie' ? 'movie' : 'series';
 
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [loading, setLoading] = useState(true);

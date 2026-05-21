@@ -26,7 +26,9 @@ export type CardVariantKey = "A" | "B" | "C" | "default";
  * 카테고리 (3종, DECISIONS.md #26):
  *   - movie / series / variety
  *   사용자 결정으로 v2 디자인의 5종(movie/series/variety/music/book) 무시.
- *   현재 Recommendation.type 은 'movie' | 'series' 만 — variety 는 향후 확장 시.
+ *   Recommendation.type 은 'movie' | 'series' | 'variety' 3종 (2026-05-20 확장).
+ *   variety 변별: TMDB TV + 장르 Reality(10764)/Talk(10767) — recommend/prompt.ts 의
+ *   buildRecommendationObject 또는 api/tmdb/hydrate 에서 판정.
  */
 export type CardCategory = "movie" | "series" | "variety";
 

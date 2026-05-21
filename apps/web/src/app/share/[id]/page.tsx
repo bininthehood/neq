@@ -7,10 +7,13 @@ interface Props {
   searchParams: Promise<{ type?: string }>;
 }
 
-async function fetchWork(id: number, type: "movie" | "series") {
+// variety 는 TMDB 에서 TV 로 취급 (별도 endpoint 없음). 그래서 TMDB API 호출용
+// tmdbType 은 'movie' | 'series' 2종, UI 노출용 displayType 은 3종으로 분리한다.
+async function fetchWork(id: number, displayType: "movie" | "series" | "variety") {
   const TMDB = "https://api.themoviedb.org/3";
   const key = process.env.TMDB_API_KEY;
-  const mediaType = type === "series" ? "tv" : "movie";
+  const tmdbType: "movie" | "series" = displayType === "movie" ? "movie" : "series";
+  const mediaType = tmdbType === "series" ? "tv" : "movie";
 
   const base = await fetch(
     `${TMDB}/${mediaType}/${id}?api_key=${key}&language=ko-KR`,
@@ -21,19 +24,19 @@ async function fetchWork(id: number, type: "movie" | "series") {
   if (!data?.id) return null;
 
   const [details, credits, { providers }] = await Promise.all([
-    getDetails(id, type),
-    getCredits(id, type),
-    getKoreanProviders(id, type),
+    getDetails(id, tmdbType),
+    getCredits(id, tmdbType),
+    getKoreanProviders(id, tmdbType),
   ]);
 
-  const title = type === "movie" ? data.title : data.name;
-  const titleEn = type === "movie" ? data.original_title : data.original_name;
-  const date = type === "movie" ? (data.release_date ?? "") : (data.first_air_date ?? "");
+  const title = tmdbType === "movie" ? data.title : data.name;
+  const titleEn = tmdbType === "movie" ? data.original_title : data.original_name;
+  const date = tmdbType === "movie" ? (data.release_date ?? "") : (data.first_air_date ?? "");
 
   return {
     title: title ?? "",
     titleEn: titleEn ?? "",
-    type,
+    type: displayType,
     tmdbId: id,
     posterUrl: posterUrl(data.poster_path, "w500"),
     backdrop: posterUrl(data.backdrop_path, "w1280"),
@@ -49,13 +52,18 @@ async function fetchWork(id: number, type: "movie" | "series") {
   };
 }
 
+function parseDisplayType(raw: string | undefined): "movie" | "series" | "variety" {
+  if (raw === "series" || raw === "variety") return raw;
+  return "movie";
+}
+
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { id } = await params;
   const { type: rawType } = await searchParams;
   const tmdbId = Number(id);
   if (!tmdbId || isNaN(tmdbId)) return { title: "neq," };
 
-  const type: "movie" | "series" = rawType === "series" ? "series" : "movie";
+  const type = parseDisplayType(rawType);
   const work = await fetchWork(tmdbId, type);
   if (!work) return { title: "neq," };
 
@@ -81,7 +89,7 @@ export default async function SharePage({ params, searchParams }: Props) {
   const { id } = await params;
   const { type: rawType } = await searchParams;
   const tmdbId = Number(id);
-  const type: "movie" | "series" = rawType === "series" ? "series" : "movie";
+  const type = parseDisplayType(rawType);
 
   if (!tmdbId || isNaN(tmdbId)) {
     return (
