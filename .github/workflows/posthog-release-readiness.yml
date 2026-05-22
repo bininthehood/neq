@@ -32,6 +32,13 @@ jobs:
           POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
         run: npx tsx scripts/posthog-release-readiness.ts
 
+      - name: Run stage-timings analysis
+        env:
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+        run: npx tsx scripts/posthog-stage-timings.ts
+
       - name: Comment on tracking issue
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -41,12 +48,18 @@ jobs:
             echo "::warning::GATE_TRACKING_ISSUE variable not set — skipping issue comment"
             echo "----- RESULT -----"
             cat posthog-release-readiness-result.md
+            echo ""
+            echo "----- STAGE TIMINGS -----"
+            cat posthog-stage-timings-result.md
             exit 0
           fi
           gh issue comment "$GATE_TRACKING_ISSUE" --body-file posthog-release-readiness-result.md
+          gh issue comment "$GATE_TRACKING_ISSUE" --body-file posthog-stage-timings-result.md
 
       - name: Upload result artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-readiness-result
-          path: posthog-release-readiness-result.md
+          path: |
+            posthog-release-readiness-result.md
+            posthog-stage-timings-result.md
