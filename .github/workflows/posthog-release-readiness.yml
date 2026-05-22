@@ -1,0 +1,52 @@
+name: PostHog Release Readiness
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: posthog-release-readiness
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --ignore-scripts
+
+      - name: Run release readiness check
+        env:
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+        run: npx tsx scripts/posthog-release-readiness.ts
+
+      - name: Comment on tracking issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GATE_TRACKING_ISSUE: ${{ vars.GATE_TRACKING_ISSUE }}
+        run: |
+          if [ -z "$GATE_TRACKING_ISSUE" ]; then
+            echo "::warning::GATE_TRACKING_ISSUE variable not set — skipping issue comment"
+            echo "----- RESULT -----"
+            cat posthog-release-readiness-result.md
+            exit 0
+          fi
+          gh issue comment "$GATE_TRACKING_ISSUE" --body-file posthog-release-readiness-result.md
+
+      - name: Upload result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-readiness-result
+          path: posthog-release-readiness-result.md
