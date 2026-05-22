@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecommendations, getRecommendationsStreaming } from "@/lib/recommend";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { isTasteGenresEnabled, isOttWeakSignalEnabled } from "@/lib/env";
 
 /** 다양한 플랫폼/프록시 환경에서 클라이언트 IP를 안정적으로 추출 */
 function getClientIp(req: NextRequest): string {
@@ -66,23 +65,20 @@ export async function POST(req: NextRequest) {
     ? rawExcludeIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 300)
     : undefined;
 
-  // V2 (Day 22, P0-2): tasteGenres / subscribedOtt 검증 + flag 분기.
-  //   - flag OFF → 무시하고 빈 배열 (V1 동작 그대로). 클라이언트가 보내도 서버에서 차단.
-  //   - flag ON  → 보낸 값만 사용. 누락/잘못된 타입은 빈 배열로 폴백.
-  // 두 flag는 독립이므로 한 쪽만 ON일 수도 있음.
-  const tasteGenres =
-    isTasteGenresEnabled() && Array.isArray(rawTasteGenres)
-      ? rawTasteGenres
-          .filter((x: unknown): x is string => typeof x === "string")
-          .map((s: string) => s.slice(0, 30))
-          .slice(0, 20)
-      : [];
-  const subscribedOtt =
-    isOttWeakSignalEnabled() && Array.isArray(rawSubscribedOtt)
-      ? rawSubscribedOtt
-          .filter((x: unknown): x is number => typeof x === "number" && Number.isFinite(x))
-          .slice(0, 10)
-      : [];
+  // V2 (Day 22, P0-2): tasteGenres / subscribedOtt 검증.
+  //   2026-05-22 — flag 분기 제거 (default ON). ONBOARDING_V2 와 동일 패턴.
+  //   누락/잘못된 타입은 빈 배열로 폴백.
+  const tasteGenres = Array.isArray(rawTasteGenres)
+    ? rawTasteGenres
+        .filter((x: unknown): x is string => typeof x === "string")
+        .map((s: string) => s.slice(0, 30))
+        .slice(0, 20)
+    : [];
+  const subscribedOtt = Array.isArray(rawSubscribedOtt)
+    ? rawSubscribedOtt
+        .filter((x: unknown): x is number => typeof x === "number" && Number.isFinite(x))
+        .slice(0, 10)
+    : [];
 
   if (favorites !== undefined && !Array.isArray(favorites)) {
     return NextResponse.json(

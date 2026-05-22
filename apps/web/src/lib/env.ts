@@ -8,7 +8,7 @@ function requireEnv(name: string): string {
 // 서버 전용 — 누락 시 throw
 //
 // ⚠️ lazy getter로 export. 본 모듈은 클라이언트(use client) 코드에서도
-// flag 함수(isTasteGenresEnabled 등) 때문에 import되는데, top-level에서
+// flag 함수(isNotificationsEnabled 등) 때문에 import되는데, top-level에서
 // requireEnv 를 평가하면 클라이언트 번들 module evaluation 시
 // process.env.TMDB_API_KEY 가 비어 있어 throw 됨 (Day 21 회귀 fix).
 // 함수로 감싸 호출 시점에만 평가되도록 함. server-only 사용처에서만 호출.
@@ -39,12 +39,6 @@ function readFlag(name: string): boolean {
   // 동적 키 접근(process.env[name])이 아닌 명시적 분기로 처리한다.
   // (Next.js의 환경변수 인라인 규칙)
   switch (name) {
-    case "NEXT_PUBLIC_ONBOARDING_V2":
-      return process.env.NEXT_PUBLIC_ONBOARDING_V2 === "true";
-    case "NEXT_PUBLIC_TASTE_GENRES_ENABLED":
-      return process.env.NEXT_PUBLIC_TASTE_GENRES_ENABLED === "true";
-    case "NEXT_PUBLIC_OTT_WEAK_SIGNAL":
-      return process.env.NEXT_PUBLIC_OTT_WEAK_SIGNAL === "true";
     case "NEXT_PUBLIC_NOTIFICATIONS_ENABLED":
       return process.env.NEXT_PUBLIC_NOTIFICATIONS_ENABLED === "true";
     case "NEXT_PUBLIC_SEARCH_GROUPED":
@@ -54,13 +48,8 @@ function readFlag(name: string): boolean {
   }
 }
 
-export function isTasteGenresEnabled(): boolean {
-  return readFlag("NEXT_PUBLIC_TASTE_GENRES_ENABLED");
-}
-
-export function isOttWeakSignalEnabled(): boolean {
-  return readFlag("NEXT_PUBLIC_OTT_WEAK_SIGNAL");
-}
+// 2026-05-22 — TASTE_GENRES_ENABLED / OTT_WEAK_SIGNAL / ONBOARDING_V2 는
+// default ON 으로 전환됨 (flag 분기 자체 제거). env 변수 미등록 시에도 ON.
 
 export function isNotificationsEnabled(): boolean {
   return readFlag("NEXT_PUBLIC_NOTIFICATIONS_ENABLED");

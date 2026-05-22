@@ -11,7 +11,6 @@ import {
   addRecHistory,
 } from "@/lib/store";
 import { getAccountPrefs } from "@/lib/account-prefs";
-import { isTasteGenresEnabled, isOttWeakSignalEnabled } from "@/lib/env";
 import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear, FilterRating } from "@/lib/discover-types";
 import { track } from "@/lib/analytics";
@@ -32,14 +31,11 @@ function readV2Inputs(): {
   subscribedOttCount: number;
   coldStartVersion: "v1" | "v2";
 } {
-  const tasteOn = isTasteGenresEnabled();
-  const ottOn = isOttWeakSignalEnabled();
-  if (!tasteOn && !ottOn) {
-    return { body: {}, tasteGenresCount: 0, subscribedOttCount: 0, coldStartVersion: "v1" };
-  }
+  // 2026-05-22 — flag 분기 제거 (default ON). prefs 값 직접 사용.
+  // tasteGenres/subscribedOtt 가 비어 있으면 v1, 하나라도 있으면 v2.
   const prefs = getAccountPrefs();
-  const tasteGenres = tasteOn ? prefs.tasteGenres : [];
-  const subscribedOtt = ottOn ? prefs.subscribedOtt : [];
+  const tasteGenres = prefs.tasteGenres;
+  const subscribedOtt = prefs.subscribedOtt;
   const body: { tasteGenres?: string[]; subscribedOtt?: number[] } = {};
   if (tasteGenres.length > 0) body.tasteGenres = tasteGenres;
   if (subscribedOtt.length > 0) body.subscribedOtt = subscribedOtt;

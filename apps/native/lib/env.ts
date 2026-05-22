@@ -31,23 +31,6 @@ export const env = {
 // 스펙: _workspace/onboarding-v2-spec.md §5
 // ─────────────────────────────────────────────
 
-function readFlag(name: string): boolean {
-  switch (name) {
-    case 'EXPO_PUBLIC_ONBOARDING_V2':
-      return process.env.EXPO_PUBLIC_ONBOARDING_V2 === 'true';
-    case 'EXPO_PUBLIC_TASTE_GENRES_ENABLED':
-      return process.env.EXPO_PUBLIC_TASTE_GENRES_ENABLED === 'true';
-    case 'EXPO_PUBLIC_OTT_WEAK_SIGNAL':
-      return process.env.EXPO_PUBLIC_OTT_WEAK_SIGNAL === 'true';
-    default:
-      return false;
-  }
-}
-
-export function isTasteGenresEnabled(): boolean {
-  return readFlag('EXPO_PUBLIC_TASTE_GENRES_ENABLED');
-}
-
-export function isOttWeakSignalEnabled(): boolean {
-  return readFlag('EXPO_PUBLIC_OTT_WEAK_SIGNAL');
-}
+// 2026-05-22 — TASTE_GENRES_ENABLED / OTT_WEAK_SIGNAL / ONBOARDING_V2 는
+// default ON 으로 전환됨 (flag 분기 자체 제거). EAS Build env 미등록 시에도 ON.
+// 후속 flag 추가 시 본 파일에 명시 readFlag 패턴 추가.

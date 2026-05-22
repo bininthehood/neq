@@ -2,17 +2,16 @@
  * Cold Start V2 LLM 입력 (P0-2) 유틸 — 외부 의존 0 순수 함수.
  *
  * web `apps/web/src/hooks/useRecommendations.ts` 의 `readV2Inputs` 1:1 포팅.
- * AsyncStorage / fetch / PostHog 의존성 없이 입력값만 받아 분기 결정 → flag/IO 와 분리해
- * web vitest 로 직접 검증 가능 (D7/D6 패턴 동일).
+ * AsyncStorage / fetch / PostHog 의존성 없이 입력값만 받아 분기 결정 → IO 와 분리해
+ * web vitest 로 직접 검증 가능.
  *
- * 호출자는 별도로 flag 평가와 prefs 조회를 수행한 뒤 본 함수에 전달한다:
+ * 2026-05-22 — flag 분기 default ON 전환. tasteGenresEnabled/ottWeakSignalEnabled
+ * 인자는 보존 (tests + 향후 명시 OFF 옵션 보호). 호출처는 두 인자에 `true` 전달.
  *
- *   const tasteOn = isTasteGenresEnabled();
- *   const ottOn = isOttWeakSignalEnabled();
  *   const prefs = await getAccountPrefs();
  *   const v2 = computeV2Inputs({
- *     tasteGenresEnabled: tasteOn,
- *     ottWeakSignalEnabled: ottOn,
+ *     tasteGenresEnabled: true,
+ *     ottWeakSignalEnabled: true,
  *     tasteGenres: prefs.tasteGenres,
  *     subscribedOtt: prefs.subscribedOtt,
  *   });
@@ -22,7 +21,7 @@
  *   - tasteGenresCount / subscribedOttCount: PostHog 이벤트 속성용 counts
  *   - coldStartVersion: V1 = 둘 다 비어있음, V2 = 하나 이상 포함
  *
- * flag OFF 시 V1 동작 100% 보존 — body 빈 객체, count 0, version v1.
+ * 두 인자가 false 면 V1 동작 100% 보존 — body 빈 객체, count 0, version v1.
  */
 
 export interface V2InputArgs {

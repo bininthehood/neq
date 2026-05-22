@@ -42,7 +42,6 @@ import {
   markTutorialV3Seen,
   toggleSaved,
 } from '../lib/store';
-import { isOttWeakSignalEnabled, isTasteGenresEnabled } from '../lib/env';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
 import { usePersona } from '../contexts/PersonaContext';
@@ -239,8 +238,9 @@ export default function DiscoverScreen() {
         // P0-2 Cold Start V2 입력 — flag ON + 값 있을 때만 body 에 포함.
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
-          tasteGenresEnabled: isTasteGenresEnabled(),
-          ottWeakSignalEnabled: isOttWeakSignalEnabled(),
+          // 2026-05-22 — flag 분기 제거 (default ON). ONBOARDING_V2 와 동일 패턴.
+          tasteGenresEnabled: true,
+          ottWeakSignalEnabled: true,
           tasteGenres: prefs.tasteGenres,
           subscribedOtt: prefs.subscribedOtt,
         });
@@ -337,8 +337,9 @@ export default function DiscoverScreen() {
         // P0-2 V2 입력 — 동일 flag/prefs 기준으로 prefetch 도 일관 유지.
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
-          tasteGenresEnabled: isTasteGenresEnabled(),
-          ottWeakSignalEnabled: isOttWeakSignalEnabled(),
+          // 2026-05-22 — flag 분기 제거 (default ON). ONBOARDING_V2 와 동일 패턴.
+          tasteGenresEnabled: true,
+          ottWeakSignalEnabled: true,
           tasteGenres: prefs.tasteGenres,
           subscribedOtt: prefs.subscribedOtt,
         });
