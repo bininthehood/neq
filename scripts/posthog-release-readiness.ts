@@ -141,6 +141,24 @@ GROUP BY day
 ORDER BY day
 `;
 
+// ── 7) warmup ping 실측 — /api/warmup 의 cron 실행 빈도 + db ping 성공률
+// 2026-05-22 추가. db_ms 500ms+ = cold instance 새 connection.
+const Q_WARMUP_DAILY = `
+SELECT
+  toDate(timestamp) AS day,
+  count(*) AS pings,
+  countIf(properties.ok = true) AS ok_count,
+  round(countIf(properties.ok = true) * 100.0 / count(*), 1) AS ok_pct,
+  round(quantile(0.5)(toFloat(properties.db_ms)), 0) AS db_p50,
+  round(quantile(0.95)(toFloat(properties.db_ms)), 0) AS db_p95,
+  countIf(toFloat(properties.db_ms) > 500) AS cold_likely
+FROM events
+WHERE event = 'warmup_ping'
+  AND timestamp >= now() - INTERVAL 7 DAY
+GROUP BY day
+ORDER BY day
+`;
+
 function num(v: unknown): number | null {
   if (v === null || v === undefined) return null;
   const n = typeof v === "number" ? v : Number(v);
@@ -159,13 +177,14 @@ function pass(actual: number | null, op: "gte" | "lte", target: number): string 
 }
 
 async function main() {
-  const [rLib, rCold, rDau, rErr, rOnb, rEnrich] = await Promise.all([
+  const [rLib, rCold, rDau, rErr, rOnb, rEnrich, rWarmup] = await Promise.all([
     hogQL("latency_by_lib", Q_LATENCY_BY_LIB),
     hogQL("cold_daily", Q_COLD_START_DAILY),
     hogQL("dau_daily", Q_DAU_DAILY),
     hogQL("error_rate", Q_ERROR_RATE),
     hogQL("onboarding", Q_ONBOARDING_FUNNEL),
     hogQL("enrich_daily", Q_ENRICH_DAILY),
+    hogQL("warmup_daily", Q_WARMUP_DAILY),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -252,6 +271,22 @@ async function main() {
   );
   lines.push(`|---|---|---|---|`);
   lines.push(`| ${fmt(started)} | ${fmt(completed)} | ${fmt(compPct, "%")} | ${pass(compN, "gte", 60)} |`);
+  lines.push("");
+
+  // 7. warmup ping
+  lines.push("## 7) warmup ping 실측 (7일) — /api/warmup cron 실행 + db ping");
+  lines.push("");
+  lines.push("| day | pings | ok_pct | db p50 | db p95 | cold_likely (db>500ms) |");
+  lines.push("|---|---|---|---|---|---|");
+  for (const row of rWarmup.results) {
+    const [day, pings, _ok, okPct, p50, p95, cold] = row;
+    lines.push(`| ${fmt(day)} | ${fmt(pings)} | ${fmt(okPct, "%")} | ${fmt(p50, "ms")} | ${fmt(p95, "ms")} | ${fmt(cold)} |`);
+  }
+  lines.push("");
+  lines.push("**해석:**");
+  lines.push("- `pings` < 288 (24h × 12 = 5분 cron) 시 cron-job.org 누락. ping 빈도 자체 부족");
+  lines.push("- `ok_pct` < 100% 시 Supabase db ping 실패 — connection/RLS 이슈");
+  lines.push("- `db_p50` 500ms+ 또는 `cold_likely` 비율 큼 → cold instance 다수, warmup 효과 부족");
   lines.push("");
 
   lines.push("---");

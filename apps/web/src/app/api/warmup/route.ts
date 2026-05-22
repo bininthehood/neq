@@ -21,6 +21,29 @@ import { NextResponse } from "next/server";
 import { isAuthorizedCron } from "@/lib/notifications/cron-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
+// 2026-05-22 — PostHog capture REST 직접 호출 (posthog-node 의존 추가 회피).
+// warmup ping 의 실제 실행 빈도 + db ping 성공률을 PostHog 에서 추적.
+async function trackWarmup(props: Record<string, unknown>): Promise<void> {
+  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
+  if (!key) return;
+  try {
+    await fetch(`${host.replace(/\/$/, "")}/capture/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: key,
+        event: "warmup_ping",
+        distinct_id: "warmup-cron",
+        properties: { ...props, source: "api/warmup" },
+        timestamp: new Date().toISOString(),
+      }),
+    });
+  } catch {
+    // capture 실패는 warmup 응답에 영향 주지 않음
+  }
+}
+
 export async function GET(req: Request) {
   if (!isAuthorizedCron(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -36,6 +59,7 @@ export async function GET(req: Request) {
   // - mirror 경로 (/api/recommend enrich 단계) 와 동일 supabaseAdmin 인스턴스 활용
   // - tmdb_metadata limit 1 — index hit 로 ms 단위 응답
   let dbOk = false;
+  let dbError: string | null = null;
   try {
     const tDb = Date.now();
     const admin = supabaseAdmin();
@@ -45,17 +69,30 @@ export async function GET(req: Request) {
       .limit(1);
     mark("db_ms", tDb);
     if (error) {
+      dbError = error.message;
       console.error("[warmup] db ping failed:", error.message);
     } else {
       dbOk = true;
     }
   } catch (err) {
+    dbError = err instanceof Error ? err.message : String(err);
     console.error("[warmup] supabaseAdmin init failed:", err);
   }
+
+  const total_ms = Date.now() - startedAt;
+
+  // PostHog 측정 — cold start 빈도 + warmup 효과 추적용.
+  // warmup_ping event 의 db_ms 가 500ms+ 면 connection 새로 만든 cold instance.
+  await trackWarmup({
+    ok: dbOk,
+    db_ms: timings.db_ms ?? null,
+    total_ms,
+    db_error: dbError,
+  });
 
   return NextResponse.json({
     ok: dbOk,
     timings,
-    total_ms: Date.now() - startedAt,
+    total_ms,
   });
 }
