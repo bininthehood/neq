@@ -88,16 +88,36 @@ GROUP BY day
 ORDER BY day
 `;
 
+// cold_start (favorites=[]) vs 정상 사용자 분리 — 메트릭 오염 여부 진단
+const Q_BY_COLD_START = `
+SELECT
+  toDate(timestamp) AS day,
+  countIf(properties.cold_start = true) AS cold_n,
+  countIf(properties.cold_start = false) AS warm_n,
+  round(quantile(0.5)(if(properties.cold_start = true, toFloat(properties.srv_enrich_ms), NULL)), 0) AS cold_enrich_p50,
+  round(quantile(0.5)(if(properties.cold_start = false, toFloat(properties.srv_enrich_ms), NULL)), 0) AS warm_enrich_p50,
+  round(quantile(0.5)(if(properties.cold_start = true, toFloat(properties.srv_llm_ms), NULL)), 0) AS cold_llm_p50,
+  round(quantile(0.5)(if(properties.cold_start = false, toFloat(properties.srv_llm_ms), NULL)), 0) AS warm_llm_p50
+FROM events
+WHERE event = 'recommendation_loaded'
+  AND properties.streamed = true
+  AND properties.srv_enrich_ms IS NOT NULL
+  AND timestamp >= now() - INTERVAL 14 DAY
+GROUP BY day
+ORDER BY day
+`;
+
 function fmt(v: unknown, suffix = ""): string {
   if (v === null || v === undefined) return "—";
   return `${v}${suffix}`;
 }
 
 async function main() {
-  const [rStages, rDur, rV2] = await Promise.all([
+  const [rStages, rDur, rV2, rCS] = await Promise.all([
     hogQL("stages", Q_STAGES_DAILY),
     hogQL("duration", Q_DURATION_DAILY),
     hogQL("v2_split", Q_COLD_START_VERSION_DAILY),
+    hogQL("cold_start_split", Q_BY_COLD_START),
   ]);
 
   const today = new Date().toISOString().slice(0, 10);
@@ -147,6 +167,20 @@ async function main() {
   }
   lines.push("");
   lines.push("**해석:** v2 비율 또는 avg_favorites 가 5/13 점프 시 candidate gather 다양화 → mirror miss 증가 가설 지지");
+  lines.push("");
+
+  lines.push("## 4) cold_start (favorites=[]) 분리 — 메트릭 오염 진단");
+  lines.push("");
+  lines.push("| day | cold_n | warm_n | cold enrich p50 | warm enrich p50 | cold llm p50 | warm llm p50 |");
+  lines.push("|---|---|---|---|---|---|---|");
+  for (const row of rCS.results) {
+    const [day, coldN, warmN, ce, we, cl, wl] = row;
+    lines.push(
+      `| ${fmt(day)} | ${fmt(coldN)} | ${fmt(warmN)} | ${fmt(ce, "ms")} | ${fmt(we, "ms")} | ${fmt(cl, "ms")} | ${fmt(wl, "ms")} |`,
+    );
+  }
+  lines.push("");
+  lines.push("**해석:** warm 사용자 (favorites 보유) p50 이 안정적이라면 회귀는 cold_start 호출 (시뮬레이터 fresh state) 오염. cold/warm 둘 다 회귀라면 인프라 회귀.");
   lines.push("");
 
   const md = lines.join("\n");
