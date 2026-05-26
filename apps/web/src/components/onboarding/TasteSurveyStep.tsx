@@ -171,9 +171,9 @@ function OptionRow({
           style={{
             color: selected ? "var(--accent)" : "var(--text-primary)",
             fontWeight: 500,
-            textDecoration: selected ? "underline" : "none",
-            textUnderlineOffset: "3px",
+            textDecorationLine: selected ? "underline" : "none",
             textDecorationThickness: "1px",
+            textUnderlineOffset: "3px",
           }}
         >
           {option.label}

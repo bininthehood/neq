@@ -148,7 +148,12 @@ export default function PersonaSurveyController({
 
       try {
         const res = await fetchSurveyStep(
-          { context: ctx, prevAnswers: answers, step: stepNum },
+          {
+            context: ctx,
+            prevAnswers: answers,
+            step: stepNum,
+            deviceId: getDeviceId(),
+          },
           { token: tokenRef.current },
         );
         if (res.newToken) tokenRef.current = res.newToken;
@@ -271,7 +276,12 @@ export default function PersonaSurveyController({
 
       try {
         const res = await fetchSurveySummary(
-          { context: ctx, prevAnswers: answers, favorites: [] },
+          {
+            context: ctx,
+            prevAnswers: answers,
+            favorites: [],
+            deviceId: getDeviceId(),
+          },
           { token: tokenRef.current },
         );
         track("taste_summary_generated", {

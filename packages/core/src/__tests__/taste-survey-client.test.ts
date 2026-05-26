@@ -38,7 +38,7 @@ describe('fetchSurveyStep', () => {
       jsonResponse(200, VALID_STEP_OUTPUT),
     );
     const out = await fetchSurveyStep(
-      { context: CONTEXT, prevAnswers: [], step: 1 },
+      { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
       { fetchImpl, baseUrl: 'https://neq.app' },
     );
     expect(out.question).toBe('어떤 페이스가 좋아요?');
@@ -54,7 +54,7 @@ describe('fetchSurveyStep', () => {
       jsonResponse(200, VALID_STEP_OUTPUT),
     );
     await fetchSurveyStep(
-      { context: CONTEXT, prevAnswers: [], step: 1 },
+      { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
       { fetchImpl, token: 'abc.xyz' },
     );
     const call = fetchImpl.mock.calls[0][1];
@@ -67,7 +67,7 @@ describe('fetchSurveyStep', () => {
       .mockResolvedValueOnce(jsonResponse(429, { message: 'too many' }));
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl, retries: 1 },
       ),
     ).rejects.toMatchObject({
@@ -83,7 +83,7 @@ describe('fetchSurveyStep', () => {
       .mockResolvedValueOnce(jsonResponse(401, { code: 'invalid_token' }));
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl },
       ),
     ).rejects.toMatchObject({ code: 'invalid_token' });
@@ -95,7 +95,7 @@ describe('fetchSurveyStep', () => {
       .mockResolvedValueOnce(jsonResponse(401, {}));
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl },
       ),
     ).rejects.toMatchObject({ code: 'session_expired' });
@@ -108,7 +108,7 @@ describe('fetchSurveyStep', () => {
       .mockResolvedValueOnce(jsonResponse(503, {}));
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl, retries: 1 },
       ),
     ).rejects.toMatchObject({ code: 'server_error' });
@@ -121,7 +121,7 @@ describe('fetchSurveyStep', () => {
       .mockResolvedValueOnce(jsonResponse(500, {}))
       .mockResolvedValueOnce(jsonResponse(200, VALID_STEP_OUTPUT));
     const out = await fetchSurveyStep(
-      { context: CONTEXT, prevAnswers: [], step: 1 },
+      { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
       { fetchImpl, retries: 1 },
     );
     expect(out.question).toBe('어떤 페이스가 좋아요?');
@@ -135,7 +135,7 @@ describe('fetchSurveyStep', () => {
       .mockResolvedValueOnce(jsonResponse(200, invalid));
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl, retries: 1 },
       ),
     ).rejects.toMatchObject({ code: 'parse_fail' });
@@ -154,7 +154,7 @@ describe('fetchSurveyStep', () => {
     });
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl, retries: 1, timeoutMs: 10 },
       ),
     ).rejects.toMatchObject({ code: 'timeout' });
@@ -164,7 +164,7 @@ describe('fetchSurveyStep', () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(jsonResponse(403, {}));
     await expect(
       fetchSurveyStep(
-        { context: CONTEXT, prevAnswers: [], step: 1 },
+        { context: CONTEXT, prevAnswers: [], step: 1, deviceId: 'test-dev' },
         { fetchImpl },
       ),
     ).rejects.toMatchObject({ code: 'origin_blocked' });
@@ -182,6 +182,7 @@ describe('fetchSurveySummary', () => {
         context: CONTEXT,
         prevAnswers: [],
         favorites: [{ title: '기생충' }],
+        deviceId: 'test-dev',
       },
       { fetchImpl, baseUrl: 'https://neq.app' },
     );
@@ -204,6 +205,7 @@ describe('fetchSurveySummary', () => {
           context: CONTEXT,
           prevAnswers: [],
           favorites: [],
+          deviceId: 'test-dev',
         },
         { fetchImpl, retries: 1 },
       ),

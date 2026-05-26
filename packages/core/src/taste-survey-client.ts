@@ -45,12 +45,19 @@ export interface SurveyStepRequest {
   context: PersonaContext;
   prevAnswers: TasteSurveyAnswer[];
   step: 1 | 2 | 3;
+  /**
+   * 익명 사용자 식별자 (web/native 동일 key). 서버가 token 발급 시
+   * payload 에 stamp 후 검증. 호출자는 반드시 동일 deviceId 유지.
+   */
+  deviceId: string;
 }
 
 export interface SurveySummaryRequest {
   context: PersonaContext;
   prevAnswers: TasteSurveyAnswer[];
   favorites: { title: string; tmdbId?: number }[];
+  /** 익명 사용자 식별자 — step 호출과 동일 deviceId 필수 (token 검증). */
+  deviceId: string;
 }
 
 export interface SurveyClientOptions {
