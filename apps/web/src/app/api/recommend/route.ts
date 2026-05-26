@@ -40,7 +40,16 @@ export async function POST(req: NextRequest) {
     onboardingCount: rawOnboardingCount,
     tasteGenres: rawTasteGenres,
     subscribedOtt: rawSubscribedOtt,
+    tasteSummary: rawTasteSummary,
   } = await req.json();
+
+  // 페르소나 v2 (PR 2): tasteSummary 선택적 입력. 문자열만 허용 (length 가드는
+  // prompt.ts 의 truncateTasteSummary 가 책임). undefined/빈 문자열 → 기존 동작
+  // (IRON RULE REGRESSION).
+  const tasteSummary =
+    typeof rawTasteSummary === 'string' && rawTasteSummary.trim().length > 0
+      ? rawTasteSummary.trim()
+      : undefined;
 
   // savedCount / onboardingCount 검증: 음수/비정수 방어
   const savedCount =
@@ -120,6 +129,7 @@ export async function POST(req: NextRequest) {
             useMirror,
             tasteGenres,
             subscribedOtt,
+            tasteSummary,
           );
           emit({ type: "done" });
         } catch (err) {
@@ -153,6 +163,7 @@ export async function POST(req: NextRequest) {
       useMirror,
       tasteGenres,
       subscribedOtt,
+      tasteSummary,
     );
     // 단계별 ms는 응답 body에 포함. Server-Timing 헤더는 dev tools 호환용 보존
     // (Vercel/Next.js infra가 Server-Timing 헤더를 응답에서 strip하는 동작이 관측되어 body 경유)

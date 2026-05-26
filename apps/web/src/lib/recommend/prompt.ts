@@ -243,8 +243,26 @@ function buildCandidateList(candidates: EnrichedCandidate[]): string {
     .join("\n");
 }
 
-/** sync/streaming 공통 user prompt 빌더. */
-function buildCurationUserPrompt(
+/**
+ * 800자 초과 시 문장 단위 truncate (한국어 자모 깨짐 방지). design doc Token
+ * 길이 가드 — sanity guard. summarize endpoint 도 동일 정책.
+ */
+const TASTE_SUMMARY_MAX_CHARS = 800;
+function truncateTasteSummary(text: string): string {
+  if (text.length <= TASTE_SUMMARY_MAX_CHARS) return text;
+  const sliced = text.slice(0, TASTE_SUMMARY_MAX_CHARS);
+  const match = sliced.match(/[\s\S]*[.!?](?=\s|$)/);
+  if (match) return match[0];
+  return sliced + '...';
+}
+
+/**
+ * sync/streaming 공통 user prompt 빌더.
+ *
+ * REGRESSION test 위해 export. IRON RULE: tasteSummary undefined/빈 문자열
+ * 시 기존 결과와 100% 동일해야 함.
+ */
+export function buildCurationUserPrompt(
   candidates: EnrichedCandidate[],
   favorites: string[],
   feedback: WatchFeedback | undefined,
@@ -252,6 +270,11 @@ function buildCurationUserPrompt(
   onboardingCount: number,
   tasteGenres: string[],
   subscribedOtt: number[],
+  /**
+   * 페르소나 v2 — LLM 동적 취향 설문 결과. undefined 면 기존 동작 (skip,
+   * IRON RULE REGRESSION). 정의되면 [페르소나 취향] 블록으로 추가.
+   */
+  tasteSummary?: string,
 ): string {
   const candidateList = buildCandidateList(candidates);
   const feedbackText = buildFeedbackPrompt(feedback);
@@ -280,11 +303,19 @@ function buildCurationUserPrompt(
   const totalSignal = totalFeedback + savedCount + onboardingCount;
   const modeGuide = buildModeGuide(totalSignal);
 
+  // 페르소나 v2 — tasteSummary 가 있으면 [페르소나 취향] 블록 추가.
+  // undefined 또는 빈 문자열이면 라인 자체 생략 (REGRESSION: 기존 사용자
+  // 결과 100% 동일).
+  const tasteSummaryBlock =
+    tasteSummary && tasteSummary.trim().length > 0
+      ? `\n\n[페르소나 취향]\n${truncateTasteSummary(tasteSummary.trim())}`
+      : '';
+
   return `${modeGuide}
 
 [사용자 취향 기반]
 ${favoritesLabel}: ${favorites.join(", ")}${v2Block}
-${feedbackText}
+${feedbackText}${tasteSummaryBlock}
 
 [후보 ${candidates.length}개]
 ${candidateList}`;
@@ -299,7 +330,8 @@ export async function curateWithLLM(
   savedCount: number = 0,
   onboardingCount: number = 0,
   tasteGenres: string[] = [],
-  subscribedOtt: number[] = []
+  subscribedOtt: number[] = [],
+  tasteSummary?: string,
 ): Promise<{ picks: CuratedPick[]; usage: TokenUsage | null }> {
   if (candidates.length === 0) return { picks: [], usage: null };
 
@@ -311,6 +343,7 @@ export async function curateWithLLM(
     onboardingCount,
     tasteGenres,
     subscribedOtt,
+    tasteSummary,
   );
 
   try {
@@ -371,6 +404,7 @@ export async function curateWithLLMStreaming(
   onPick: (pick: { id: number; reason: string }) => void,
   tasteGenres: string[] = [],
   subscribedOtt: number[] = [],
+  tasteSummary?: string,
 ): Promise<TokenUsage | null> {
   if (candidates.length === 0) return null;
 
@@ -383,6 +417,7 @@ export async function curateWithLLMStreaming(
     onboardingCount,
     tasteGenres,
     subscribedOtt,
+    tasteSummary,
   );
 
   let usage: TokenUsage | null = null;

@@ -197,6 +197,11 @@ export async function getRecommendations(
   // tasteGenres: 강한 신호 (계정 공통 장르). subscribedOtt: 약한 신호 (provider id 배열).
   tasteGenres: string[] = [],
   subscribedOtt: number[] = [],
+  /**
+   * 페르소나 v2 — LLM 동적 취향 설문 결과 (3-5문장 한국어). undefined 면
+   * 기존 동작 (IRON RULE REGRESSION). 정의되면 LLM 큐레이션 prompt 에 prepend.
+   */
+  tasteSummary?: string,
 ): Promise<RecommendResult> {
   const timings: Record<string, number> = {};
   const mark = (key: string, t0: number) => {
@@ -357,7 +362,8 @@ export async function getRecommendations(
     savedCount,
     onboardingCount,
     tasteGenres,
-    subscribedOtt
+    subscribedOtt,
+    tasteSummary,
   );
   mark("llm", tLlm);
 
@@ -449,6 +455,8 @@ export async function getRecommendationsStreaming(
   // V2 (Day 22, P0-2): 비-streaming 변형과 동일. flag OFF/미전송 시 빈 배열 = V1 동작.
   tasteGenres: string[] = [],
   subscribedOtt: number[] = [],
+  /** 페르소나 v2 — non-streaming 변형과 동일 정책. undefined 면 IRON RULE REGRESSION. */
+  tasteSummary?: string,
 ): Promise<void> {
   const timings: Record<string, number> = {};
   const mark = (key: string, t0: number) => {
@@ -518,6 +526,7 @@ export async function getRecommendationsStreaming(
     },
     tasteGenres,
     subscribedOtt,
+    tasteSummary,
   );
   mark("llm", tLlm);
 

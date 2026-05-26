@@ -7,6 +7,10 @@ import type {
   Persona,
   FavoriteMeta,
 } from "./types";
+import type {
+  PersonaContext,
+  TasteSurveyAnswer,
+} from "@neq/core";
 import { USER_DATA_SCHEMA_VERSION } from "./types";
 
 export type { FavoriteMeta } from "./types";
@@ -148,16 +152,51 @@ function updateActivePersona(updater: (p: Persona) => Persona) {
   const activeId = getActivePersonaId();
   const idx = personas.findIndex((p) => p.id === activeId);
   if (idx === -1) return;
-  personas[idx] = updater(personas[idx]);
+  personas[idx] = {
+    ...updater(personas[idx]),
+    // v2: 모든 mutation 시 updatedAt 자동 갱신 (Last-write-wins 정책)
+    updatedAt: new Date().toISOString(),
+  };
+  setPersonas(personas);
+}
+
+/**
+ * 페르소나 v2 — 기존 페르소나의 tasteSummary 갱신 ("취향 설문 다시 받기" 시).
+ * 호출자가 personaId 명시. id 미존재 시 no-op.
+ */
+export function updatePersonaTasteSummary(
+  personaId: string,
+  tasteSummary: string,
+  tasteSurveyAnswers?: TasteSurveyAnswer[],
+) {
+  const personas = getPersonas();
+  const idx = personas.findIndex((p) => p.id === personaId);
+  if (idx === -1) return;
+  personas[idx] = {
+    ...personas[idx],
+    tasteSummary,
+    ...(tasteSurveyAnswers ? { tasteSurveyAnswers } : {}),
+    updatedAt: new Date().toISOString(),
+  };
   setPersonas(personas);
 }
 
 const MAX_PERSONAS = 3;
 
+/**
+ * 페르소나 신규 생성. v2 (2026-05-24 design doc) — extras 인자로 LLM 동적
+ * 설문 결과 (tasteSummary / tasteSurveyAnswers / context) 전달 가능. 기존
+ * 호출자 (favorites + favoritesMeta 만) 영향 0 (extras 는 optional).
+ */
 export function createPersona(
   name: string,
   favorites: string[],
   favoritesMeta: FavoriteMeta[],
+  extras?: {
+    tasteSummary?: string;
+    tasteSurveyAnswers?: TasteSurveyAnswer[];
+    context?: PersonaContext;
+  },
 ): string | null {
   const personas = getPersonas();
   if (personas.length >= MAX_PERSONAS) return null;
@@ -165,6 +204,12 @@ export function createPersona(
   const persona = createEmptyPersona(id, name);
   persona.favorites = favorites;
   persona.favoritesMeta = favoritesMeta;
+  // v2 — extras 가 있으면 신규 필드 채움
+  if (extras?.tasteSummary) persona.tasteSummary = extras.tasteSummary;
+  if (extras?.tasteSurveyAnswers)
+    persona.tasteSurveyAnswers = extras.tasteSurveyAnswers;
+  if (extras?.context) persona.context = extras.context;
+  persona.updatedAt = new Date().toISOString();
   personas.push(persona);
   setPersonas(personas);
   return id;

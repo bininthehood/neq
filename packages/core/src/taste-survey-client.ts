@@ -163,7 +163,14 @@ async function postJson<TOut>(
   throw lastError ?? new SurveyClientError('unknown', 'exhausted retries');
 }
 
-function validateStepOutput(data: unknown): SurveyStepOutput {
+/**
+ * 서버 endpoint 가 응답에 신규 token 동봉 가능 (token 미보유 또는 만료 시
+ * 자동 재발급 path). client 는 caller 에게 그대로 전달, caller 가 sessionStorage
+ * 등에 저장.
+ */
+export type SurveyStepResponse = SurveyStepOutput & { newToken?: string };
+
+function validateStepOutput(data: unknown): SurveyStepResponse {
   if (!data || typeof data !== 'object')
     throw new SurveyClientError('parse_fail', 'step output not object');
   const d = data as Record<string, unknown>;
@@ -175,7 +182,9 @@ function validateStepOutput(data: unknown): SurveyStepOutput {
     throw new SurveyClientError('parse_fail', 'invalid axisHint');
   if (typeof d.shouldContinue !== 'boolean')
     throw new SurveyClientError('parse_fail', 'invalid shouldContinue');
-  return data as SurveyStepOutput;
+  if (d.newToken !== undefined && typeof d.newToken !== 'string')
+    throw new SurveyClientError('parse_fail', 'invalid newToken type');
+  return data as SurveyStepResponse;
 }
 
 function validateSummaryOutput(data: unknown): SurveySummaryOutput {
@@ -195,7 +204,7 @@ function validateSummaryOutput(data: unknown): SurveySummaryOutput {
 export async function fetchSurveyStep(
   request: SurveyStepRequest,
   options: SurveyClientOptions = {},
-): Promise<SurveyStepOutput> {
+): Promise<SurveyStepResponse> {
   const url = `${options.baseUrl ?? ''}/api/onboarding/taste-survey/step`;
   const raw = await postJson<unknown>(url, request, options);
   return validateStepOutput(raw);
