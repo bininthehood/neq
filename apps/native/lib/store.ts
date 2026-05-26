@@ -1,13 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
+import {
+  createPersona as createPersonaCore,
+  deletePersona as deletePersonaCore,
+  getActivePersona as getActivePersonaCore,
+  MAX_PERSONAS,
+} from '@neq/core';
 import type {
   AccountPrefs,
   FavoriteMeta,
   NekoPushSubscriptionJSON,
   NotificationPrefs,
   Persona,
+  PersonaContext,
   Recommendation,
   SavedItem,
+  TasteSurveyAnswer,
   WatchReaction,
   WatchReport,
 } from './types';
@@ -33,8 +41,6 @@ const ACTIVE_PERSONA_KEY = 'neq_active_persona_id';
 // web `localStorage.tutorialV3Shown === "1"` 과 동일한 의미/값.
 // 양 플랫폼이 같은 익명 식별자를 공유하지 않으므로 디바이스별 1회만 노출.
 const TUTORIAL_V3_KEY = 'tutorialV3Shown';
-
-const MAX_PERSONAS = 3;
 
 async function safeGet<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -235,19 +241,10 @@ export async function addRecHistory(
 //
 // web 과 동일한 키 사용 — 향후 storage 통합 시 호환 유지 (현재는 분리된 환경).
 
+// id 8자 short id 정책 유지 (기존 native 호환). packages/core 의 createPersona 는
+// 풀 UUID 를 생성하므로 결과를 받은 뒤 id 만 native 측에서 덮어쓴다.
 function createEmptyPersonaMeta(id: string, name: string): Persona {
-  return {
-    id,
-    name,
-    favorites: [],
-    favoritesMeta: [],
-    // native metadata-only — 아래 3개 필드는 web 타입 호환을 위해 빈 값 유지.
-    // single bucket (store.ts 상단의 SAVED_KEY/WATCH_REPORTS_KEY) 가 실제 데이터 소스.
-    watchReports: [],
-    seenTitles: [],
-    recCache: [],
-    recFilteredCache: {},
-  };
+  return { ...createPersonaCore(name), id };
 }
 
 export async function getPersonas(): Promise<Persona[]> {
@@ -284,23 +281,40 @@ export async function getActivePersona(): Promise<Persona> {
   const personas = await getPersonas();
   const activeId = await getActivePersonaId();
   return (
-    personas.find((p) => p.id === activeId) ??
-    personas[0] ??
+    getActivePersonaCore(personas, activeId) ??
     createEmptyPersonaMeta('default', '기본')
   );
 }
 
+/**
+ * 페르소나 신규 생성. v2 (2026-05-24 design doc) — extras 인자로 LLM 동적
+ * 설문 결과 (tasteSummary / tasteSurveyAnswers / context) 전달 가능. 기존
+ * 호출자 (favorites + favoritesMeta 만) 영향 0 (extras 는 optional).
+ */
 export async function createPersona(
   name: string,
   favorites: string[],
   favoritesMeta: FavoriteMeta[],
+  extras?: {
+    tasteSummary?: string;
+    tasteSurveyAnswers?: TasteSurveyAnswer[];
+    context?: PersonaContext;
+  },
 ): Promise<string | null> {
   const personas = await getPersonas();
   if (personas.length >= MAX_PERSONAS) return null;
   const id = Crypto.randomUUID().slice(0, 8);
-  const persona = createEmptyPersonaMeta(id, name);
-  persona.favorites = favorites;
-  persona.favoritesMeta = favoritesMeta;
+  const persona: Persona = {
+    ...createPersonaCore(name),
+    id,
+    favorites,
+    favoritesMeta,
+    ...(extras?.tasteSummary ? { tasteSummary: extras.tasteSummary } : {}),
+    ...(extras?.tasteSurveyAnswers
+      ? { tasteSurveyAnswers: extras.tasteSurveyAnswers }
+      : {}),
+    ...(extras?.context ? { context: extras.context } : {}),
+  };
   personas.push(persona);
   await setPersonas(personas);
   return id;
@@ -313,15 +327,12 @@ export async function switchPersona(id: string): Promise<void> {
 }
 
 export async function deletePersona(id: string): Promise<void> {
-  let personas = await getPersonas();
-  personas = personas.filter((p) => p.id !== id);
-  if (personas.length === 0) {
-    personas = [createEmptyPersonaMeta('default', '기본')];
-  }
-  await setPersonas(personas);
+  const current = await getPersonas();
+  const next = deletePersonaCore(current, id);
+  await setPersonas(next);
   const activeId = await getActivePersonaId();
   if (activeId === id) {
-    await setActivePersonaId(personas[0].id);
+    await setActivePersonaId(next[0].id);
   }
 }
 

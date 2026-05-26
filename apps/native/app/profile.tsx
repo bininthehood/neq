@@ -39,6 +39,14 @@ import DistributionChart from '../components/DistributionChart';
 import { IconClose, IconSearch } from '../components/Icons';
 import { track } from '../lib/analytics';
 
+/**
+ * Persona v2 (2026-05-24 design) — LLM 동적 취향 설문 flag.
+ * web `apps/web/src/app/profile/page.tsx:28` 정합. EAS Build 시점에 인라인되므로
+ * 환경별 동작을 바꾸려면 Vercel/EAS env 양쪽 동기화 필수.
+ */
+const PERSONA_SURVEY_V2_ENABLED =
+  process.env.EXPO_PUBLIC_PERSONA_SURVEY_V2_ENABLED === 'true';
+
 interface Stats {
   total: number;
   loved: number;
@@ -243,7 +251,17 @@ export default function ProfileScreen() {
             void persona.deletePersona(id);
             track('persona_deleted', { persona_id: id });
           }}
+          useV2Flow={PERSONA_SURVEY_V2_ENABLED}
           onCreate={(name) => {
+            if (PERSONA_SURVEY_V2_ENABLED) {
+              // v2 flow: PersonaSurveyController 라우트로 위임 — name 인자는 무시
+              // (controller 가 autoName 또는 사용자 입력으로 채움).
+              // expo-router typedRoutes 가 dev/CI 환경에서 stale 한 경우가 있어
+              // (`.expo/types/router.d.ts` 는 git ignore — expo start 시 재생성)
+              // 신규 라우트는 untyped 캐스팅으로 통과. 빌드 시 자동 검증.
+              (router.push as (href: string) => void)('/onboarding/taste-survey');
+              return;
+            }
             void persona.createPersona(name, [], []).then((id) => {
               if (id) {
                 void persona.switchPersona(id);

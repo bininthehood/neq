@@ -39,6 +39,12 @@ interface PersonaSectionProps {
   onSwitch: (id: string) => void;
   onDelete: (id: string) => void;
   onCreate: (name: string) => void;
+  /**
+   * Persona v2 진입 모드. true 일 때 "추가" 버튼은 내부 name 입력 모달을
+   * 건너뛰고 즉시 onCreate('') 를 호출 — 부모가 router.push 로 v2 설문
+   * 화면으로 이동한다. 기본 false (기존 minimal name 입력 흐름).
+   */
+  useV2Flow?: boolean;
 }
 
 const MAX_PERSONAS = 3;
@@ -49,6 +55,7 @@ export default function PersonaSection({
   onSwitch,
   onDelete,
   onCreate,
+  useV2Flow = false,
 }: PersonaSectionProps) {
   const [showCreate, setShowCreate] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -131,7 +138,14 @@ export default function PersonaSection({
 
       {personas.length < MAX_PERSONAS ? (
         <Pressable
-          onPress={() => setShowCreate(true)}
+          onPress={() => {
+            if (useV2Flow) {
+              // v2: name 은 controller 의 autoName 이 채움 → 빈 문자열 전달
+              onCreate('');
+            } else {
+              setShowCreate(true);
+            }
+          }}
           style={({ pressed }) => [
             styles.createBtn,
             pressed && styles.createBtnPressed,

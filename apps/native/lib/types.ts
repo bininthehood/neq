@@ -16,6 +16,8 @@ export type {
   UserDataExport,
   UserDataExportV2,
   Persona,
+  PersonaContext,
+  TasteSurveyAnswer,
   FavoriteMeta,
   FilterType,
   FilterOrigin,
