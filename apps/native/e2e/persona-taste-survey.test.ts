@@ -97,7 +97,7 @@ async function pageSourceContains(needle: string): Promise<boolean> {
  * value="radio button" 정규식은 native Pressable accessibilityRole="radio" 의
  * XCUITest 매핑. 4개 옵션 모두 매칭되므로 첫 매칭 확인.
  */
-async function waitForOptions(timeoutMs = 15000): Promise<string | null> {
+async function waitForOptions(timeoutMs = 25000): Promise<string | null> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     const src = await browser.getPageSource();
@@ -147,7 +147,7 @@ describe('Persona v2 — taste survey full flow', () => {
     }
 
     // 3. step 1 LLM 응답 대기 → 옵션 element mount 까지 polling.
-    const firstOption1 = await waitForOptions(15000);
+    const firstOption1 = await waitForOptions(25000);
     await capture('persona-v2-02-step1');
     if (!firstOption1) {
       throw new Error('step 1 옵션 mount 대기 timeout');
@@ -158,7 +158,7 @@ describe('Persona v2 — taste survey full flow', () => {
       throw new Error('step 1 "다음" tap 실패');
 
     // 4. step 2 LLM 응답 대기 + 첫 옵션 탭
-    const firstOption2 = await waitForOptions(15000);
+    const firstOption2 = await waitForOptions(25000);
     await capture('persona-v2-03-step2');
     if (!firstOption2) {
       throw new Error('step 2 옵션 mount 대기 timeout');
@@ -230,13 +230,13 @@ describe('Persona v2 — taste survey full flow', () => {
     }
 
     // step 1 옵션 + 다음
-    const o1 = await waitForOptions(15000);
+    const o1 = await waitForOptions(25000);
     if (!o1) throw new Error('P1 step 1 옵션 mount 대기 timeout');
     if (!(await tapByLabel(o1))) throw new Error(`P1 step 1 옵션 tap 실패`);
     if (!(await tapByLabel('다음'))) throw new Error('P1 step 1 "다음" tap 실패');
 
     // step 2 옵션 + 다음
-    const o2 = await waitForOptions(15000);
+    const o2 = await waitForOptions(25000);
     if (!o2) throw new Error('P1 step 2 옵션 mount 대기 timeout');
     if (!(await tapByLabel(o2))) throw new Error(`P1 step 2 옵션 tap 실패`);
     if (!(await tapByLabel('다음'))) throw new Error('P1 step 2 "다음" tap 실패');
@@ -249,7 +249,7 @@ describe('Persona v2 — taste survey full flow', () => {
       throw new Error('"다시 받기" tap 실패');
 
     // step 2 재진입 — 옵션 mount 까지 대기
-    const o2b = await waitForOptions(15000);
+    const o2b = await waitForOptions(25000);
     if (!o2b) throw new Error('"다시 받기" 후 step 2 옵션 mount 안 됨');
     await capture('persona-v2-07-resurvey-step2');
 

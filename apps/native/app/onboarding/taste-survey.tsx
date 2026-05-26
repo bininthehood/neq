@@ -1,5 +1,5 @@
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
 import PersonaSurveyController from '../../components/onboarding/PersonaSurveyController';
@@ -17,17 +17,21 @@ import { colors } from '../../lib/tokens';
  * QA 회귀 (iOS 26.4): router.replace('/profile') 후 라우트 컴포넌트가 GC 되지
  * 않고 stale 한 상태로 다음 router.push 시 재사용되는 케이스 확인 — phase='done'
  * 잔존으로 SurveyHeader 만 남는 빈 화면. 해결로 useFocusEffect + mountKey 패턴
- * 사용: 매 focus 마다 key 갱신 → React 가 PersonaSurveyController 강제 remount.
+ * 사용: 재-focus 시 (재진입) key 갱신 → React 가 PersonaSurveyController 강제
+ * remount. 첫 focus (initial mount) 는 skip — 그렇지 않으면 mount → setMountKey
+ * → remount → focus → setMountKey 무한 loop.
  */
 export default function TasteSurveyRoute() {
   const router = useRouter();
   const [mountKey, setMountKey] = useState<number>(() => Date.now());
+  const isFirstFocusRef = useRef(true);
 
   useFocusEffect(
     useCallback(() => {
-      // 매 focus 시 controller 강제 remount — 이전 mount 의 phase / token /
-      // refs / inflight 모두 fresh 시작. unmount/remount 가 새 focus 를 트리거
-      // 하지 않으므로 무한 loop 위험 없음.
+      if (isFirstFocusRef.current) {
+        isFirstFocusRef.current = false;
+        return;
+      }
       setMountKey(Date.now());
     }, []),
   );

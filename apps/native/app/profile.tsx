@@ -175,7 +175,11 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh]),
+      // taste-survey 라우트에서 신규 페르소나 생성 후 router.replace('/profile')
+      // 로 복귀할 때 PersonaContext 의 stale state 가 PersonaSection 에 표시되는
+      // 회귀 (iOS QA). 명시 refresh 로 AsyncStorage 재read.
+      void persona.refresh();
+    }, [refresh, persona]),
   );
 
   function handleReset() {
