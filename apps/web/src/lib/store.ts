@@ -7,9 +7,13 @@ import type {
   Persona,
   FavoriteMeta,
 } from "./types";
-import type {
-  PersonaContext,
-  TasteSurveyAnswer,
+import {
+  createPersona as createPersonaCore,
+  deletePersona as deletePersonaCore,
+  getActivePersona as getActivePersonaCore,
+  MAX_PERSONAS as MAX_PERSONAS_CORE,
+  type PersonaContext,
+  type TasteSurveyAnswer,
 } from "@neq/core";
 import { USER_DATA_SCHEMA_VERSION } from "./types";
 
@@ -49,17 +53,11 @@ const MAX_SEEN = 200;
 
 let _migrated = false;
 
+// id 8자 short id 정책 유지 (web v2 마이그레이션 기존 호환). packages/core 의
+// createPersona 는 풀 UUID 를 생성하므로 결과를 받은 뒤 id 만 web 측에서 덮어쓴다.
+// native store.ts 와 동일 wrapper 패턴 (PR 3 정합).
 function createEmptyPersona(id: string, name: string): Persona {
-  return {
-    id,
-    name,
-    favorites: [],
-    favoritesMeta: [],
-    watchReports: [],
-    seenTitles: [],
-    recCache: [],
-    recFilteredCache: {},
-  };
+  return { ...createPersonaCore(name), id };
 }
 
 export function migrateToPersonaV2() {
@@ -141,8 +139,7 @@ export function getActivePersona(): Persona {
   const personas = getPersonas();
   const activeId = getActivePersonaId();
   return (
-    personas.find((p) => p.id === activeId) ??
-    personas[0] ??
+    getActivePersonaCore(personas, activeId) ??
     createEmptyPersona("default", "기본")
   );
 }
@@ -181,12 +178,11 @@ export function updatePersonaTasteSummary(
   setPersonas(personas);
 }
 
-const MAX_PERSONAS = 3;
-
 /**
  * 페르소나 신규 생성. v2 (2026-05-24 design doc) — extras 인자로 LLM 동적
  * 설문 결과 (tasteSummary / tasteSurveyAnswers / context) 전달 가능. 기존
  * 호출자 (favorites + favoritesMeta 만) 영향 0 (extras 는 optional).
+ * packages/core wrapper 패턴 (native store.ts 정합).
  */
 export function createPersona(
   name: string,
@@ -199,17 +195,19 @@ export function createPersona(
   },
 ): string | null {
   const personas = getPersonas();
-  if (personas.length >= MAX_PERSONAS) return null;
+  if (personas.length >= MAX_PERSONAS_CORE) return null;
   const id = crypto.randomUUID().slice(0, 8);
-  const persona = createEmptyPersona(id, name);
-  persona.favorites = favorites;
-  persona.favoritesMeta = favoritesMeta;
-  // v2 — extras 가 있으면 신규 필드 채움
-  if (extras?.tasteSummary) persona.tasteSummary = extras.tasteSummary;
-  if (extras?.tasteSurveyAnswers)
-    persona.tasteSurveyAnswers = extras.tasteSurveyAnswers;
-  if (extras?.context) persona.context = extras.context;
-  persona.updatedAt = new Date().toISOString();
+  const persona: Persona = {
+    ...createPersonaCore(name),
+    id,
+    favorites,
+    favoritesMeta,
+    ...(extras?.tasteSummary ? { tasteSummary: extras.tasteSummary } : {}),
+    ...(extras?.tasteSurveyAnswers
+      ? { tasteSurveyAnswers: extras.tasteSurveyAnswers }
+      : {}),
+    ...(extras?.context ? { context: extras.context } : {}),
+  };
   personas.push(persona);
   setPersonas(personas);
   return id;
@@ -231,11 +229,9 @@ export function switchPersona(id: string) {
 }
 
 export function deletePersona(id: string) {
-  let personas = getPersonas();
-  personas = personas.filter((p) => p.id !== id);
-  if (personas.length === 0) {
-    personas = [createEmptyPersona("default", "기본")];
-  }
+  const current = getPersonas();
+  const personas = deletePersonaCore(current, id);
+  // packages/core 의 deletePersona 가 빈 결과 시 default persona 1개 시드.
   setPersonas(personas);
   if (getActivePersonaId() === id) {
     setActivePersonaId(personas[0].id);
