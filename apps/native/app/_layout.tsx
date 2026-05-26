@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Tabs, router, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, Pressable } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
@@ -135,13 +135,19 @@ export default function RootLayout() {
     };
   }, []);
 
-  if (!fontsLoaded && !fontError) return null;
+  // 2026-05-26 layout shift fix — fontsLoaded false 시 null 대신 동일 background 의
+  // 빈 View 노출. splash dismiss → 빈 화면 → 콘텐츠 mount 의 3-step 깜빡임 차단.
+  if (!fontsLoaded && !fontError) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
 
   return (
     <PostHogProvider>
       <PersonaProvider>
         <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
-          <SafeAreaProvider>
+          {/* initialMetrics — useSafeAreaInsets 측정 race 차단. splash 직후
+              SafeAreaView 마진이 늦게 적용되어 콘텐츠가 줄어드는 reflow 방지. */}
+          <SafeAreaProvider initialMetrics={initialWindowMetrics}>
             <StatusBar style="light" />
             {/* ToastProvider — SafeAreaProvider 내부 마운트 (toast viewport 가
                 useSafeAreaInsets 사용). 탭 화면 전역에서 useToast() 접근 가능. */}
