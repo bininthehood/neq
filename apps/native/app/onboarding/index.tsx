@@ -15,6 +15,13 @@ import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNoti
 import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
 
 /**
+ * Persona v2 Hybrid (2026-05-26) — onboarding 끝에 첫 페르소나 생성 단계 추가.
+ * flag ON 시 finalize() 가 setOnboarded() 를 skip 하고 persona-v2 라우트로 위임.
+ */
+const PERSONA_SURVEY_V2_ENABLED =
+  process.env.EXPO_PUBLIC_PERSONA_SURVEY_V2_ENABLED === 'true';
+
+/**
  * Onboarding V2 (D4a, native) — 6단계 router.
  *
  * 단계: welcome → hello → genre → taste → ott → notify → /onboarding/complete
@@ -91,10 +98,16 @@ export default function OnboardingScreen() {
       notify_monthly_report: prefs.notificationPrefs.monthlyReport,
     });
 
-    // web 정본 (OnboardingV2Controller.finalize) 과 동일 — 명시 완료 플래그를 기록해
-    // 이후 root 진입 시 `hasOnboarded()` 가 true 를 반환하도록 한다.
-    await setOnboarded();
+    // Persona v2 Hybrid (2026-05-26) — flag ON 시 setOnboarded 를 v2 라우트에
+    // 위임. PersonaSurveyController onComplete/onCancel 후 setOnboarded()
+    // + router.replace('/') 처리. flag OFF 시 기존 동작 (즉시 setOnboarded
+    // + complete 화면).
+    if (PERSONA_SURVEY_V2_ENABLED) {
+      router.replace('/onboarding/persona-v2');
+      return;
+    }
 
+    await setOnboarded();
     router.replace('/onboarding/complete');
   }
 
