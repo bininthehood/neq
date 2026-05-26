@@ -124,6 +124,8 @@ export default function PersonaSection({
               <Pressable
                 onPress={() => handleDeletePress(p.id, p.name)}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`'${p.name}' 취향 삭제`}
                 style={({ pressed }) => [
                   styles.deleteBtn,
                   pressed && styles.deleteBtnPressed,
