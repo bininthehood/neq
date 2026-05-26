@@ -203,10 +203,13 @@ export default function ProfileScreen() {
             // 비우지만 Provider state 는 stale 이라, refresh 없이는 Discover 헤더
             // 페르소나 chip 이 삭제된 페르소나 기준으로 계속 노출됨 (WARN-E).
             await persona.refresh();
-            // web `profile/page.tsx:98` 정합 — 초기화 후 빈 Profile 에 머물지 않고
-            // Discover 로 이동. expo-router 는 `/` 가 Discover 탭(index.tsx).
-            // replace — 초기화된 Profile 을 뒤로가기 스택에 남기지 않음.
-            router.replace('/');
+            // 초기화 후 onboarding 으로 직접 redirect.
+            // root _layout.tsx 와 app/index.tsx 의 hasOnboarded() 가드는 모두
+            // useEffect([]) 로 mount 1회만 평가 — router.replace('/') 만으로는
+            // onboarding 으로 자동 전환 안 됨 (Discover 화면 stuck). 명시적으로
+            // /onboarding 진입 후, onboarding/complete.tsx 가 setOnboarded() +
+            // router.replace('/') 로 Discover 복귀.
+            router.replace('/onboarding');
           },
         },
       ],
