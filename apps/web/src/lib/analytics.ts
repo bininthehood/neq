@@ -130,4 +130,13 @@ export type NekoEvent =
   // Onboarding V2 (Day 24, P0-4): 알림 인프라
   | "notification_subscribed"
   | "notification_blocked"
-  | "notification_clicked";
+  | "notification_clicked"
+  // Persona v2 (2026-05-24 design) — LLM 동적 취향 설문 7 이벤트.
+  // design doc Open Q3 + Success Criteria 4·7·8 측정 가능 지표.
+  | "taste_survey_started"          // 컨텍스트 선택 직후 진입
+  | "taste_survey_step_completed"   // step 1/2/3 답 제출 시 (step, contentType, companion 동봉)
+  | "taste_survey_abandoned"        // 사용자가 도중 닫음/취소 (abandoned_step 동봉)
+  | "taste_survey_completed"        // summarize 성공 + "맞아요" 수락 (전체 duration_ms)
+  | "taste_summary_generated"       // summarize 응답 도착 (preview 노출 직전, fallback 여부 포함)
+  | "taste_survey_fallback_triggered" // step/summarize 둘 다 — 서버 _fallback 또는 클라 static 진입
+  | "persona_taste_resurveyed";     // "다시 받기" 클릭 — 기존 페르소나 재설문 + 신규 페르소나 retry
