@@ -31,6 +31,9 @@ import {
 import PersonaContextSelector from './PersonaContextSelector';
 import TasteSummaryLoading from './TasteSummaryLoading';
 import TasteSummaryPreview from './TasteSummaryPreview';
+import TasteSurveyFavoritesPicker, {
+  type FavoritePickItem,
+} from './TasteSurveyFavoritesPicker';
 import TasteSurveyStep from './TasteSurveyStep';
 
 /**
@@ -51,6 +54,7 @@ type Phase =
   | 'resume_modal'
   | 'step_loading'
   | 'step_question'
+  | 'favorites_pick'
   | 'summary_loading'
   | 'summary_preview'
   | 'error_modal'
@@ -83,6 +87,7 @@ export default function PersonaSurveyController({
     null,
   );
   const [summary, setSummary] = useState<SurveySummaryOutput | null>(null);
+  const [favorites, setFavorites] = useState<FavoritePickItem[]>([]);
   const [error, setError] = useState<ErrorState | null>(null);
 
   const tokenRef = useRef<string | undefined>(undefined);
@@ -228,8 +233,10 @@ export default function PersonaSurveyController({
         selected_option_id: option.id,
       });
       const isLastStep = (step === 2 && totalSteps === 2) || step === 3;
+      setPrevAnswers(nextAnswers);
       if (isLastStep) {
-        beginSummary(context, nextAnswers);
+        // design doc step 5 — favorites_pick 진입.
+        setPhase('favorites_pick');
       } else {
         beginStep(context, (step + 1) as 2 | 3, nextAnswers);
       }
@@ -237,9 +244,43 @@ export default function PersonaSurveyController({
     [context, currentOutput, prevAnswers, step, totalSteps, beginStep],
   );
 
+  // === favorites_pick 완료 → summarize 진입 ===
+  const handleFavoritesNext = useCallback(
+    (items: FavoritePickItem[]) => {
+      if (!context) return;
+      setFavorites(items);
+      track('taste_survey_step_completed', {
+        step: 'favorites',
+        contentType: context.contentType,
+        companion: context.companion,
+        favorites_count: items.length,
+        skipped: items.length === 0,
+      });
+      beginSummary(context, prevAnswers, items);
+    },
+    [context, prevAnswers],
+  );
+
+  const handleFavoritesSkip = useCallback(() => {
+    if (!context) return;
+    setFavorites([]);
+    track('taste_survey_step_completed', {
+      step: 'favorites',
+      contentType: context.contentType,
+      companion: context.companion,
+      favorites_count: 0,
+      skipped: true,
+    });
+    beginSummary(context, prevAnswers, []);
+  }, [context, prevAnswers]);
+
   // === 통합 요약 호출 ===
   const beginSummary = useCallback(
-    async (ctx: PersonaContext, answers: TasteSurveyAnswer[]) => {
+    async (
+      ctx: PersonaContext,
+      answers: TasteSurveyAnswer[],
+      picked: FavoritePickItem[] = favorites,
+    ) => {
       if (inflightRef.current) return;
       inflightRef.current = true;
       setPrevAnswers(answers);
@@ -254,12 +295,17 @@ export default function PersonaSurveyController({
         personaId: resurveyPersonaId,
       });
 
+      const favoritesPayload = picked.map((p) => ({
+        title: p.title,
+        tmdbId: p.id,
+      }));
+
       try {
         const res = await fetchSurveySummary(
           {
             context: ctx,
             prevAnswers: answers,
-            favorites: [],
+            favorites: favoritesPayload,
             deviceId,
           },
           { token: tokenRef.current, baseUrl: env.API_BASE_URL },
@@ -282,7 +328,7 @@ export default function PersonaSurveyController({
         const fallback = buildFallbackSummary({
           context: ctx,
           prevAnswers: answers,
-          favorites: [],
+          favorites: favoritesPayload,
         });
         if (!fallbackSeenRef.current) {
           fallbackSeenRef.current = true;
@@ -306,7 +352,7 @@ export default function PersonaSurveyController({
         inflightRef.current = false;
       }
     },
-    [resurveyPersonaId, step],
+    [resurveyPersonaId, step, favorites],
   );
 
   // === "맞아요" 수락 → 페르소나 저장 ===
@@ -314,16 +360,23 @@ export default function PersonaSurveyController({
     if (!context || !summary) return;
     const personaName = initialName?.trim() || autoName(context);
     const duration = Date.now() - startedAtRef.current;
-    const newId = await createPersona(personaName, [], [], {
-      tasteSummary: summary.tasteSummary,
-      tasteSurveyAnswers: prevAnswers,
-      context,
-    });
+    // design doc step 5 — favorites pick 결과를 페르소나 favorites 에 동시 저장.
+    const newId = await createPersona(
+      personaName,
+      favorites.map((f) => f.title),
+      favorites.map((f) => ({ id: f.id, title: f.title, posterUrl: f.posterUrl })),
+      {
+        tasteSummary: summary.tasteSummary,
+        tasteSurveyAnswers: prevAnswers,
+        context,
+      },
+    );
     track('taste_survey_completed', {
       contentType: context.contentType,
       companion: context.companion,
       duration_ms: duration,
       answers_count: prevAnswers.length,
+      favorites_count: favorites.length,
       summary_chars: summary.tasteSummary.length,
       persona_created: !!newId,
     });
@@ -335,7 +388,7 @@ export default function PersonaSurveyController({
     } else {
       onCancel();
     }
-  }, [context, summary, prevAnswers, initialName, onComplete, onCancel]);
+  }, [context, summary, prevAnswers, favorites, initialName, onComplete, onCancel]);
 
   // === "다시 받기" ===
   const handleRetry = useCallback(() => {
@@ -455,6 +508,13 @@ export default function PersonaSurveyController({
         />
       )}
 
+      {phase === 'favorites_pick' && (
+        <TasteSurveyFavoritesPicker
+          onNext={handleFavoritesNext}
+          onSkip={handleFavoritesSkip}
+        />
+      )}
+
       {phase === 'summary_loading' && <TasteSummaryLoading />}
 
       {phase === 'summary_preview' && summary && (
@@ -516,9 +576,10 @@ function SurveyHeader({
   totalSteps: 2 | 3;
   onCancel: () => void;
 }) {
-  const stages = 1 + totalSteps + 1;
+  const stages = 1 + totalSteps + 1 + 1;
   let current = 1;
   if (phase === 'step_loading' || phase === 'step_question') current = 1 + step;
+  else if (phase === 'favorites_pick') current = 1 + totalSteps + 1;
   else if (phase === 'summary_loading' || phase === 'summary_preview')
     current = stages;
 
