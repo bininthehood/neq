@@ -49,16 +49,26 @@ import PersonaContextSelector from "./PersonaContextSelector";
 import TasteSurveyStep from "./TasteSurveyStep";
 import TasteSummaryLoading from "./TasteSummaryLoading";
 import TasteSummaryPreview from "./TasteSummaryPreview";
+import TasteSurveyFavoritesPicker, {
+  type FavoritePickItem,
+} from "./TasteSurveyFavoritesPicker";
 
 type Phase =
   | "context_select"
   | "resume_modal"
   | "step_loading"
   | "step_question"
+  | "favorites_pick"
   | "summary_loading"
   | "summary_preview"
   | "error_modal"
   | "done";
+
+interface FavoriteEntry {
+  title: string;
+  tmdbId?: number;
+  posterUrl?: string | null;
+}
 
 interface ErrorState {
   kind: "rate_limit" | "token_invalid" | "generic";
@@ -95,6 +105,7 @@ export default function PersonaSurveyController({
     null,
   );
   const [summary, setSummary] = useState<SurveySummaryOutput | null>(null);
+  const [favorites, setFavorites] = useState<FavoritePickItem[]>([]);
   const [error, setError] = useState<ErrorState | null>(null);
   /** 서버가 발급한 신규 token (TTL 30분). step 호출 간 유지. */
   const tokenRef = useRef<string | undefined>(undefined);
@@ -250,8 +261,10 @@ export default function PersonaSurveyController({
       });
       const isLastStep =
         (step === 2 && totalSteps === 2) || step === 3;
+      setPrevAnswers(nextAnswers);
       if (isLastStep) {
-        beginSummary(context, nextAnswers);
+        // design doc step 5 — favorites_pick step 으로 진입.
+        setPhase("favorites_pick");
       } else {
         beginStep(context, (step + 1) as 2 | 3, nextAnswers);
       }
@@ -259,9 +272,43 @@ export default function PersonaSurveyController({
     [context, currentOutput, prevAnswers, step, totalSteps, beginStep],
   );
 
+  // === favorites_pick 완료 → summarize 진입 ===
+  const handleFavoritesNext = useCallback(
+    (items: FavoritePickItem[]) => {
+      if (!context) return;
+      setFavorites(items);
+      track("taste_survey_step_completed", {
+        step: "favorites",
+        contentType: context.contentType,
+        companion: context.companion,
+        favorites_count: items.length,
+        skipped: items.length === 0,
+      });
+      beginSummary(context, prevAnswers, items);
+    },
+    [context, prevAnswers],
+  );
+
+  const handleFavoritesSkip = useCallback(() => {
+    if (!context) return;
+    setFavorites([]);
+    track("taste_survey_step_completed", {
+      step: "favorites",
+      contentType: context.contentType,
+      companion: context.companion,
+      favorites_count: 0,
+      skipped: true,
+    });
+    beginSummary(context, prevAnswers, []);
+  }, [context, prevAnswers]);
+
   // === 통합 요약 호출 ===
   const beginSummary = useCallback(
-    async (ctx: PersonaContext, answers: TasteSurveyAnswer[]) => {
+    async (
+      ctx: PersonaContext,
+      answers: TasteSurveyAnswer[],
+      picked: FavoritePickItem[] = favorites,
+    ) => {
       if (inflightRef.current) return;
       inflightRef.current = true;
       setPrevAnswers(answers);
@@ -274,12 +321,17 @@ export default function PersonaSurveyController({
         personaId: resurveyPersonaId,
       });
 
+      const favoritesPayload = picked.map((p) => ({
+        title: p.title,
+        tmdbId: p.id,
+      }));
+
       try {
         const res = await fetchSurveySummary(
           {
             context: ctx,
             prevAnswers: answers,
-            favorites: [],
+            favorites: favoritesPayload,
             deviceId: getDeviceId(),
           },
           { token: tokenRef.current },
@@ -303,7 +355,7 @@ export default function PersonaSurveyController({
         const fallback = buildFallbackSummary({
           context: ctx,
           prevAnswers: answers,
-          favorites: [],
+          favorites: favoritesPayload,
         });
         if (!fallbackSeenRef.current) {
           fallbackSeenRef.current = true;
@@ -327,7 +379,7 @@ export default function PersonaSurveyController({
         inflightRef.current = false;
       }
     },
-    [resurveyPersonaId, step],
+    [resurveyPersonaId, step, favorites],
   );
 
   // === "맞아요" 수락 → 페르소나 저장 ===
@@ -335,17 +387,24 @@ export default function PersonaSurveyController({
     if (!context || !summary) return;
     const personaName = initialName?.trim() || autoName(context);
     const duration = Date.now() - startedAtRef.current;
-    // 신규 페르소나 생성 (resurvey 모드는 PR 2-b 미사용 - 추후 enable).
-    const newId = createPersona(personaName, [], [], {
-      tasteSummary: summary.tasteSummary,
-      tasteSurveyAnswers: prevAnswers,
-      context,
-    });
+    // 신규 페르소나 생성 — favorites step 에서 픽한 작품을 favorites 배열에
+    // 동시에 저장 (design doc step 5 — 작품 픽으로 LLM seed).
+    const newId = createPersona(
+      personaName,
+      favorites.map((f) => f.title),
+      favorites.map((f) => ({ id: f.id, title: f.title, posterUrl: f.posterUrl })),
+      {
+        tasteSummary: summary.tasteSummary,
+        tasteSurveyAnswers: prevAnswers,
+        context,
+      },
+    );
     track("taste_survey_completed", {
       contentType: context.contentType,
       companion: context.companion,
       duration_ms: duration,
       answers_count: prevAnswers.length,
+      favorites_count: favorites.length,
       summary_chars: summary.tasteSummary.length,
       persona_created: !!newId,
     });
@@ -359,7 +418,7 @@ export default function PersonaSurveyController({
       // MAX_PERSONAS 도달 — 부모가 toast 처리. 일단 cancel 처럼 동작.
       onCancel();
     }
-  }, [context, summary, prevAnswers, initialName, onComplete, onCancel]);
+  }, [context, summary, prevAnswers, favorites, initialName, onComplete, onCancel]);
 
   // === "다시 받기" → step 2 부터 재진입 (prevAnswers 부분 유지) ===
   const handleRetry = useCallback(() => {
@@ -480,6 +539,13 @@ export default function PersonaSurveyController({
         />
       )}
 
+      {phase === "favorites_pick" && (
+        <TasteSurveyFavoritesPicker
+          onNext={handleFavoritesNext}
+          onSkip={handleFavoritesSkip}
+        />
+      )}
+
       {phase === "summary_loading" && <TasteSummaryLoading />}
 
       {phase === "summary_preview" && summary && (
@@ -543,10 +609,11 @@ function SurveyHeader({
   totalSteps: 2 | 3;
   onCancel: () => void;
 }) {
-  // 진행률 — context(1) + step(1~3) + summary(1) 도합 = 1 + totalSteps + 1
-  const stages = 1 + totalSteps + 1;
+  // 진행률 — context(1) + step(1~3) + favorites(1) + summary(1) 도합
+  const stages = 1 + totalSteps + 1 + 1;
   let current = 1;
   if (phase === "step_loading" || phase === "step_question") current = 1 + step;
+  else if (phase === "favorites_pick") current = 1 + totalSteps + 1;
   else if (phase === "summary_loading" || phase === "summary_preview")
     current = stages;
 

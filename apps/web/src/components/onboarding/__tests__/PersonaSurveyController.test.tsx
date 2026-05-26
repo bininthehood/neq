@@ -162,7 +162,13 @@ describe('PersonaSurveyController — 영화/혼자 happy path', () => {
     fireEvent.click(screen.getByRole('radio', { name: /여운이 남는/ }));
     fireEvent.click(screen.getByRole('button', { name: '다음' }));
 
-    // (4) summary preview 진입
+    // (4a) favorites_pick step 진입 — design doc step 5. 본 테스트는 skip path.
+    await waitFor(() =>
+      expect(screen.getByText('좋아하는 작품도 알려주세요')).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '건너뛰기' }));
+
+    // (4b) summary preview 진입
     await waitFor(() =>
       expect(screen.getByText(SUMMARY_RESPONSE.tasteSummary)).toBeTruthy(),
     );
@@ -298,6 +304,11 @@ describe('PersonaSurveyController — 다시 받기', () => {
     );
     fireEvent.click(screen.getByRole('radio', { name: /여운/ }));
     fireEvent.click(screen.getByRole('button', { name: '다음' }));
+    // favorites_pick — skip
+    await waitFor(() =>
+      expect(screen.getByText('좋아하는 작품도 알려주세요')).toBeTruthy(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: '건너뛰기' }));
     await waitFor(() =>
       expect(screen.getByText(SUMMARY_RESPONSE.tasteSummary)).toBeTruthy(),
     );

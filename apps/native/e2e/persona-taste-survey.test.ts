@@ -168,8 +168,16 @@ describe('Persona v2 — taste survey full flow', () => {
     if (!(await tapByLabel('다음')))
       throw new Error('step 2 "다음" tap 실패');
 
-    // 5. summary preview 도달 — "맞아요" 등장 대기 (LLM summary 최대 12s)
-    if (!(await waitForLabel('맞아요'))) {
+    // 5a. favorites_pick step — 본 케이스는 skip path (건너뛰기) 로 빠른 통과.
+    if (!(await waitForLabel('건너뛰기', 15000))) {
+      throw new Error('favorites_pick "건너뛰기" 미노출');
+    }
+    await capture('persona-v2-03b-favorites');
+    if (!(await tapByLabel('건너뛰기')))
+      throw new Error('"건너뛰기" tap 실패');
+
+    // 5b. summary preview 도달 — "맞아요" 등장 대기 (LLM summary 최대 12s)
+    if (!(await waitForLabel('맞아요', 20000))) {
       throw new Error('summary preview "맞아요" 미노출');
     }
     await browser.pause(400);
@@ -241,8 +249,13 @@ describe('Persona v2 — taste survey full flow', () => {
     if (!(await tapByLabel(o2))) throw new Error(`P1 step 2 옵션 tap 실패`);
     if (!(await tapByLabel('다음'))) throw new Error('P1 step 2 "다음" tap 실패');
 
+    // favorites_pick — skip
+    if (!(await waitForLabel('건너뛰기', 15000)))
+      throw new Error('P1 favorites_pick "건너뛰기" 미노출');
+    if (!(await tapByLabel('건너뛰기'))) throw new Error('P1 "건너뛰기" tap 실패');
+
     // summary 도달 → "다시 받기" tap
-    if (!(await waitForLabel('다시 받기', 15000)))
+    if (!(await waitForLabel('다시 받기', 20000)))
       throw new Error('P1 summary "다시 받기" 미노출');
     await capture('persona-v2-06-summary-retry');
     if (!(await tapByLabel('다시 받기')))
