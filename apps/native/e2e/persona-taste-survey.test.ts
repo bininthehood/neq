@@ -91,6 +91,23 @@ async function pageSourceContains(needle: string): Promise<boolean> {
   return source.includes(needle);
 }
 
+/**
+ * step_question phase 의 옵션 element 가 mount 될 때까지 대기.
+ * SurveyHeader 의 "2/4", "3/4" progress 는 step_loading 도 매칭 → 사용 X.
+ * value="radio button" 정규식은 native Pressable accessibilityRole="radio" 의
+ * XCUITest 매핑. 4개 옵션 모두 매칭되므로 첫 매칭 확인.
+ */
+async function waitForOptions(timeoutMs = 15000): Promise<string | null> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const src = await browser.getPageSource();
+    const m = src.match(/value="radio button"\s+name="([^"]+)"/);
+    if (m?.[1]) return m[1];
+    await browser.pause(400);
+  }
+  return null;
+}
+
 describe('Persona v2 — taste survey full flow', () => {
   before(async () => {
     // 프로필 탭 진입
@@ -119,28 +136,21 @@ describe('Persona v2 — taste survey full flow', () => {
     await browser.pause(300);
     if (!(await tapByLabel('다음'))) throw new Error('컨텍스트 "다음" 탭 실패');
 
-    // 3. step 1 LLM 응답 대기 (최대 12s)
-    //    질문 텍스트 자체는 매번 다르지만, progress "2 / 4" 또는 옵션 a~d 출현으로 식별
-    const step1Ready = await tapByPredicate(
-      `label CONTAINS "2 / 4" OR name CONTAINS "2 / 4"`,
-      { timeout: 12000 },
-    );
-    // 진행률 텍스트 tap 은 무동작 — 단지 mount 확인용. 통과 못 해도 다음 단계로.
-    void step1Ready;
-    await browser.pause(500);
-    await capture('persona-v2-02-step1');
+    // 2a. resume modal 노출 가능성 — 이전 cancel 한 progress 잔재.
+    // "처음부터" 클릭하여 깨끗한 새 시작 보장.
+    await browser.pause(800);
+    const hasResume = await pageSourceContains('이어서 하시겠어요');
+    if (hasResume) {
+      console.log('resume modal 감지 — "처음부터" 클릭');
+      await tapByLabel('처음부터');
+      await browser.pause(500);
+    }
 
-    // step 1 의 첫 옵션 (네 옵션 중 첫 번째) 탭 — accessibilityLabel = option.label.
-    // option label 은 LLM 응답이라 미지 → "다음" 버튼 enabled 까지 page source 의
-    // 라디오 텍스트 첫 항목 후보를 휴리스틱으로 탭. 가장 안전한 방식:
-    // page source 로부터 첫 radio 라벨 추출.
-    const source1 = await browser.getPageSource();
-    const radioMatch1 = source1.match(
-      /AXRadioButton[^"]*"\s+(?:name|label)="([^"]+)"/i,
-    );
-    const firstOption1 = radioMatch1?.[1];
+    // 3. step 1 LLM 응답 대기 → 옵션 element mount 까지 polling.
+    const firstOption1 = await waitForOptions(15000);
+    await capture('persona-v2-02-step1');
     if (!firstOption1) {
-      throw new Error('step 1 의 첫 옵션 라벨 추출 실패');
+      throw new Error('step 1 옵션 mount 대기 timeout');
     }
     if (!(await tapByLabel(firstOption1)))
       throw new Error(`step 1 옵션 "${firstOption1}" tap 실패`);
@@ -148,16 +158,11 @@ describe('Persona v2 — taste survey full flow', () => {
       throw new Error('step 1 "다음" tap 실패');
 
     // 4. step 2 LLM 응답 대기 + 첫 옵션 탭
-    await browser.pause(500);
-    const source2 = await browser.getPageSource();
-    const radioMatch2 = source2.match(
-      /AXRadioButton[^"]*"\s+(?:name|label)="([^"]+)"/i,
-    );
-    const firstOption2 = radioMatch2?.[1];
-    if (!firstOption2) {
-      throw new Error('step 2 의 첫 옵션 라벨 추출 실패');
-    }
+    const firstOption2 = await waitForOptions(15000);
     await capture('persona-v2-03-step2');
+    if (!firstOption2) {
+      throw new Error('step 2 옵션 mount 대기 timeout');
+    }
     if (!(await tapByLabel(firstOption2)))
       throw new Error(`step 2 옵션 "${firstOption2}" tap 실패`);
     if (!(await tapByLabel('다음')))
@@ -174,111 +179,116 @@ describe('Persona v2 — taste survey full flow', () => {
       throw new Error('"맞아요" tap 실패');
 
     // 6. 페르소나 생성 후 onComplete → router.back → profile 로 복귀
-    //    "영화 · 혼자" 라벨이 PersonaSection 에 추가됨
-    await browser.pause(1000);
-    const created = await pageSourceContains('영화 · 혼자');
+    //    "영화 · 혼자" 라벨이 PersonaSection 에 추가됨. router.back transition 가
+    //    iOS 에서 비동기적이라 retry loop (최대 5s).
+    await browser.pause(1500);
+    await capture('persona-v2-05-after-accept');
+
+    // profile 화면이면 탭바의 "프로필" tab 노출. 다른 라우트면 다시 탭 진입.
+    const onProfile =
+      (await pageSourceContains('취향')) &&
+      (await pageSourceContains('+ 새 취향 추가'));
+    if (!onProfile) {
+      console.log('profile 아닌 화면 — 프로필 탭 진입 재시도');
+      await tapTab('프로필');
+      await browser.pause(1200);
+    }
+
+    let created = false;
+    for (let i = 0; i < 5; i++) {
+      if (await pageSourceContains('영화 · 혼자')) {
+        created = true;
+        break;
+      }
+      await browser.pause(800);
+    }
     if (!created) {
+      await capture('persona-v2-05-not-created');
       throw new Error('신규 페르소나 "영화 · 혼자" 가 프로필에 노출되지 않음');
     }
     await capture('persona-v2-05-created');
   });
 
   it('P1 — "다시 받기" → step 2 부터 재진입', async () => {
-    // 새 페르소나 추가 진입
     const enter = await tapByPredicate(
       `label CONTAINS "새 취향" OR name CONTAINS "새 취향"`,
       { timeout: 5000 },
     );
-    if (!enter) {
-      console.warn('"+ 새 취향 추가" 진입 실패 — 페르소나 3개 도달 가능. skip.');
-      return;
+    if (!enter) throw new Error('"+ 새 취향 추가" 진입 실패');
+
+    if (!(await waitForLabel('시리즈')))
+      throw new Error('컨텍스트 selector "시리즈" pill 미노출');
+    if (!(await tapByLabel('시리즈'))) throw new Error('시리즈 pill tap 실패');
+    if (!(await tapByLabel('혼자'))) throw new Error('혼자 pill tap 실패');
+    if (!(await tapByLabel('다음'))) throw new Error('컨텍스트 "다음" tap 실패');
+
+    // resume modal 처리
+    await browser.pause(800);
+    if (await pageSourceContains('이어서 하시겠어요')) {
+      await tapByLabel('처음부터');
+      await browser.pause(500);
     }
 
-    // 컨텍스트 선택 (시리즈/혼자)
-    if (!(await waitForLabel('시리즈'))) {
-      console.warn('컨텍스트 selector 미노출 — skip');
-      return;
-    }
-    await tapByLabel('시리즈');
-    await tapByLabel('혼자');
-    await tapByLabel('다음');
+    // step 1 옵션 + 다음
+    const o1 = await waitForOptions(15000);
+    if (!o1) throw new Error('P1 step 1 옵션 mount 대기 timeout');
+    if (!(await tapByLabel(o1))) throw new Error(`P1 step 1 옵션 tap 실패`);
+    if (!(await tapByLabel('다음'))) throw new Error('P1 step 1 "다음" tap 실패');
 
-    // step 1 첫 옵션 + 다음
-    await browser.pause(2000);
-    const src = await browser.getPageSource();
-    const m = src.match(/AXRadioButton[^"]*"\s+(?:name|label)="([^"]+)"/i);
-    if (!m?.[1]) {
-      console.warn('step 1 옵션 추출 실패 — skip');
-      return;
-    }
-    await tapByLabel(m[1]);
-    await tapByLabel('다음');
-
-    // step 2 첫 옵션 + 다음
-    await browser.pause(2000);
-    const src2 = await browser.getPageSource();
-    const m2 = src2.match(/AXRadioButton[^"]*"\s+(?:name|label)="([^"]+)"/i);
-    if (!m2?.[1]) {
-      console.warn('step 2 옵션 추출 실패 — skip');
-      return;
-    }
-    await tapByLabel(m2[1]);
-    await tapByLabel('다음');
+    // step 2 옵션 + 다음
+    const o2 = await waitForOptions(15000);
+    if (!o2) throw new Error('P1 step 2 옵션 mount 대기 timeout');
+    if (!(await tapByLabel(o2))) throw new Error(`P1 step 2 옵션 tap 실패`);
+    if (!(await tapByLabel('다음'))) throw new Error('P1 step 2 "다음" tap 실패');
 
     // summary 도달 → "다시 받기" tap
-    if (!(await waitForLabel('다시 받기'))) {
-      console.warn('summary "다시 받기" 미노출 — skip');
-      return;
-    }
+    if (!(await waitForLabel('다시 받기', 15000)))
+      throw new Error('P1 summary "다시 받기" 미노출');
     await capture('persona-v2-06-summary-retry');
-    if (!(await tapByLabel('다시 받기'))) {
+    if (!(await tapByLabel('다시 받기')))
       throw new Error('"다시 받기" tap 실패');
-    }
 
-    // step 2 다시 노출되어야 함
-    await browser.pause(2500);
-    const src3 = await browser.getPageSource();
-    const isOnStep2 = src3.includes('3 / 4') || src3.includes('2 / 4');
-    if (!isOnStep2) {
-      throw new Error('"다시 받기" 후 step 2 복귀 미확인');
-    }
+    // step 2 재진입 — 옵션 mount 까지 대기
+    const o2b = await waitForOptions(15000);
+    if (!o2b) throw new Error('"다시 받기" 후 step 2 옵션 mount 안 됨');
     await capture('persona-v2-07-resurvey-step2');
 
-    // 닫기로 정리 (cleanup)
+    // cleanup
     await tapByLabel('설문 닫기');
+    await browser.pause(1000);
   });
 
   it('P2 — 닫기 (✕) → onCancel + abandoned 이벤트', async () => {
-    // 새 페르소나 진입
     const enter = await tapByPredicate(
       `label CONTAINS "새 취향" OR name CONTAINS "새 취향"`,
       { timeout: 5000 },
     );
-    if (!enter) {
-      console.warn('"+ 새 취향 추가" 진입 실패 — 페르소나 3개 도달 가능. skip.');
-      return;
-    }
+    if (!enter) throw new Error('P2 "+ 새 취향 추가" 진입 실패');
 
-    if (!(await waitForLabel('영화'))) {
-      console.warn('컨텍스트 selector 미노출 — skip');
-      return;
-    }
+    if (!(await waitForLabel('영화')))
+      throw new Error('P2 컨텍스트 selector "영화" pill 미노출');
 
-    // 컨텍스트 선택만 하고 다음 단계 진입 후 ✕ 로 닫기
-    await tapByLabel('영화');
-    await tapByLabel('같이');
-    await tapByLabel('다음');
+    if (!(await tapByLabel('영화'))) throw new Error('P2 영화 pill tap 실패');
+    if (!(await tapByLabel('같이'))) throw new Error('P2 같이 pill tap 실패');
+    if (!(await tapByLabel('다음'))) throw new Error('P2 컨텍스트 "다음" tap 실패');
     await browser.pause(1500);
 
-    // ✕ 버튼 (accessibilityLabel = "설문 닫기")
-    if (!(await tapByLabel('설문 닫기'))) {
+    if (!(await tapByLabel('설문 닫기')))
       throw new Error('"설문 닫기" ✕ 버튼 tap 실패');
-    }
 
-    // profile 로 복귀 확인
-    await browser.pause(1000);
-    if (!(await pageSourceContains('취향'))) {
-      throw new Error('profile section "취향" 헤더 미노출 — router.back 실패');
+    await browser.pause(1500);
+    // close 함수가 router.replace('/profile') 호출 → "+ 새 취향 추가" 다시 노출
+    let onProfile = false;
+    for (let i = 0; i < 5; i++) {
+      if (await pageSourceContains('+ 새 취향 추가')) {
+        onProfile = true;
+        break;
+      }
+      await browser.pause(800);
+    }
+    if (!onProfile) {
+      await capture('persona-v2-08-cancel-no-return');
+      throw new Error('cancel 후 profile 복귀 실패');
     }
     await capture('persona-v2-08-cancelled');
   });

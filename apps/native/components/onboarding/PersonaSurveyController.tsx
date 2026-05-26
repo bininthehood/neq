@@ -19,6 +19,7 @@ import {
   type TasteSurveyAnswer,
 } from '@neq/core';
 import { track } from '../../lib/analytics';
+import { env } from '../../lib/env';
 import { createPersona, getDeviceId, switchPersona } from '../../lib/store';
 import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
 import {
@@ -120,7 +121,7 @@ export default function PersonaSurveyController({
             step: stepNum,
             deviceId,
           },
-          { token: tokenRef.current },
+          { token: tokenRef.current, baseUrl: env.API_BASE_URL },
         );
         if (res.newToken) tokenRef.current = res.newToken;
         const fallbackFlag = (res as SurveyStepOutput & { _fallback?: boolean })
@@ -261,7 +262,7 @@ export default function PersonaSurveyController({
             favorites: [],
             deviceId,
           },
-          { token: tokenRef.current },
+          { token: tokenRef.current, baseUrl: env.API_BASE_URL },
         );
         track('taste_summary_generated', {
           contentType: ctx.contentType,
@@ -393,6 +394,12 @@ export default function PersonaSurveyController({
         abandoned_phase: phase,
         abandoned_step: step,
       });
+      // 진행 중 cancel → storage progress 즉시 정리.
+      // 다음 진입 시 resume modal 없이 깨끗한 컨텍스트 selector 부터.
+      // (resume 의도는 사용자가 *닫지 않고 백그라운드 이동* 한 경우에 한정 — 명시
+      // cancel 시 디자인 권장: clean slate. iOS E2E 회귀 결과 누적된 stale progress
+      // 가 다음 wdio session 의 자동 진행 race 를 유발하는 케이스가 있어 명시 정리.)
+      void clearProgress(context);
     }
     onCancel();
   }, [context, phase, step, onCancel]);

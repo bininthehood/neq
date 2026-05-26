@@ -17,8 +17,10 @@ export default function TasteSurveyRoute() {
   const router = useRouter();
 
   function close() {
-    if (router.canGoBack()) router.back();
-    else router.replace('/profile');
+    // QA 회귀 (iOS 26.4): router.back() 호출 후 PersonaSurveyController 가 unmount
+    // 되지 않고 phase='done' state 로 stuck → SurveyHeader 만 남는 케이스 확인.
+    // canGoBack 분기 제거하고 항상 replace 로 강제 — profile 으로 명시 navigation.
+    router.replace('/profile');
   }
 
   return (
