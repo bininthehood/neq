@@ -4,3 +4,6 @@ export * from './discover';
 export * from './ott';
 export * from './country';
 export * from './search';
+export * from './persona';
+export * from './static-survey';
+export * from './taste-survey-client';

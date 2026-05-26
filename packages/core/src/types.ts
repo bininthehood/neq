@@ -176,6 +176,24 @@ export interface GroupedSearchResponse {
   actors: PersonResult[];
 }
 
+/**
+ * 페르소나 생성 시 사용자가 답한 LLM 동적 설문 한 항목 (디버깅·재요약용).
+ * persona v2 (2026-05-24 design doc) — 페르소나당 N=3~4 답 저장.
+ */
+export interface TasteSurveyAnswer {
+  question: string;
+  selectedOption: string;
+}
+
+/**
+ * 페르소나 생성 컨텍스트 — design doc step 1 결과.
+ * 4 컨텍스트 = contentType (3) × companion (2) → 6 조합 (각 contentType 별 혼자/같이).
+ */
+export interface PersonaContext {
+  contentType: 'movie' | 'series' | 'variety';
+  companion: 'alone' | 'together';
+}
+
 export interface Persona {
   id: string;
   name: string;
@@ -185,6 +203,27 @@ export interface Persona {
   seenTitles: string[];
   recCache: Recommendation[];
   recFilteredCache: Record<string, Recommendation[]>;
+  /**
+   * persona v2 신규 — LLM 동적 설문 결과 (3-5 문장 자연어 한국어).
+   * recommend system 프롬프트에 prepend. undefined 면 기존 동작 (skip).
+   * 마이그레이션: 기존 페르소나는 모두 undefined 그대로.
+   */
+  tasteSummary?: string;
+  /**
+   * persona v2 신규 — 원본 설문 답 (디버깅·재요약용). undefined 가능.
+   */
+  tasteSurveyAnswers?: TasteSurveyAnswer[];
+  /**
+   * persona v2 신규 — 페르소나 생성 컨텍스트 (영화·시리즈·예능 × 혼자·같이).
+   * design doc step 1 결과 저장. 기존 페르소나는 undefined.
+   */
+  context?: PersonaContext;
+  /**
+   * persona v2 신규 — sync 충돌 정책 last-write-wins by server timestamp.
+   * 클라 시계 신뢰 X. 모든 mutation 시 server `now()` 또는 클라 ISO (Supabase push 시 서버가 덮어씀).
+   * outside voice HIGH #2 반영. 기존 페르소나는 undefined → push 시 서버가 stamp.
+   */
+  updatedAt?: string;
 }
 
 export interface FavoriteMeta {
