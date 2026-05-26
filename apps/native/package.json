@@ -9,6 +9,8 @@
     "web": "expo start --web",
     "appium": "appium --relaxed-security",
     "capture": "ts-node --transpile-only e2e/capture-now.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e:ios": "wdio run wdio.conf.ts"
   },
   "dependencies": {
