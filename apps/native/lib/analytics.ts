@@ -166,7 +166,16 @@ export type NekoEvent =
   // 알림 인프라
   | 'notification_subscribed'
   | 'notification_blocked'
-  | 'notification_clicked';
+  | 'notification_clicked'
+  // Persona v2 (2026-05-24 design) — LLM 동적 취향 설문 7 이벤트.
+  // web `apps/web/src/lib/analytics.ts` 정합. PR 3 에서 native 도입.
+  | 'taste_survey_started'
+  | 'taste_survey_step_completed'
+  | 'taste_survey_abandoned'
+  | 'taste_survey_completed'
+  | 'taste_summary_generated'
+  | 'taste_survey_fallback_triggered'
+  | 'persona_taste_resurveyed';
 
 /**
  * 테스트 전용 — 큐 길이를 노출하기 위함. 프로덕션 코드는 사용 X.
