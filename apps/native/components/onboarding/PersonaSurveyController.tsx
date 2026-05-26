@@ -70,6 +70,20 @@ interface Props {
   onComplete: (personaId: string) => void;
   onCancel: () => void;
   resurveyPersonaId?: string;
+  /**
+   * Onboarding 통합 모드 — 외부 progress bar (예: 10단계 통합) 사용 시.
+   * 지정되면 자체 SurveyHeader 의 stages/current 계산이 외부 값으로 override.
+   * 또한 ✕ 닫기 버튼이 hide (onboarding 흐름에서 강제 닫기 불가).
+   *
+   * - totalStepsOverride: 전체 단계 수 (예: 10)
+   * - stepOffset: persona 진입 전 단계 수 (예: 3, Welcome/Hello/Genre 후)
+   * 결과: context_select=offset+1, step_q1=offset+2, step_q2/q3=offset+3,
+   *       favorites=offset+4, summary=offset+5.
+   */
+  embedded?: {
+    totalStepsOverride: number;
+    stepOffset: number;
+  };
 }
 
 export default function PersonaSurveyController({
@@ -77,6 +91,7 @@ export default function PersonaSurveyController({
   onComplete,
   onCancel,
   resurveyPersonaId,
+  embedded,
 }: Props) {
   const [phase, setPhase] = useState<Phase>('context_select');
   const [context, setContext] = useState<PersonaContext | null>(null);
@@ -489,6 +504,7 @@ export default function PersonaSurveyController({
         step={step}
         totalSteps={totalSteps}
         onCancel={handleCancel}
+        embedded={embedded}
       />
 
       {phase === 'context_select' && (
@@ -570,33 +586,49 @@ function SurveyHeader({
   step,
   totalSteps,
   onCancel,
+  embedded,
 }: {
   phase: Phase;
   step: 1 | 2 | 3;
   totalSteps: 2 | 3;
   onCancel: () => void;
+  embedded?: { totalStepsOverride: number; stepOffset: number };
 }) {
-  const stages = 1 + totalSteps + 1 + 1;
-  let current = 1;
-  if (phase === 'step_loading' || phase === 'step_question') current = 1 + step;
-  else if (phase === 'favorites_pick') current = 1 + totalSteps + 1;
-  else if (phase === 'summary_loading' || phase === 'summary_preview')
-    current = stages;
+  // 자체 progress 계산 — context(1) + LLM step 1(1) + LLM step 2/3(1) + favorites(1) + summary(1) = 5
+  // step 2 와 step 3 (sharpness) 는 단일 visual 단위로 표시 (사용자 직관 — 둘 다 "동적 질문").
+  let localCurrent = 1;
+  if (phase === 'step_loading' || phase === 'step_question') {
+    localCurrent = step === 1 ? 2 : 3; // step 1 → 2, step 2/3 → 3
+  } else if (phase === 'favorites_pick') {
+    localCurrent = 4;
+  } else if (phase === 'summary_loading' || phase === 'summary_preview') {
+    localCurrent = 5;
+  }
+  const localStages = 5;
+
+  // embedded 모드 — onboarding 통합 progress 사용
+  const stages = embedded ? embedded.totalStepsOverride : localStages;
+  const current = embedded ? embedded.stepOffset + localCurrent : localCurrent;
 
   return (
     <View style={styles.headerWrap}>
       <View style={styles.headerRow}>
-        <Pressable
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel="설문 닫기"
-          style={({ pressed }) => [
-            styles.closeBtn,
-            pressed && { opacity: 0.85 },
-          ]}
-        >
-          <Text style={styles.closeIcon}>✕</Text>
-        </Pressable>
+        {embedded ? (
+          // 통합 모드 — ✕ 자리 placeholder (layout 유지)
+          <View style={styles.closeBtnPlaceholder} />
+        ) : (
+          <Pressable
+            onPress={onCancel}
+            accessibilityRole="button"
+            accessibilityLabel="설문 닫기"
+            style={({ pressed }) => [
+              styles.closeBtn,
+              pressed && { opacity: 0.85 },
+            ]}
+          >
+            <Text style={styles.closeIcon}>✕</Text>
+          </Pressable>
+        )}
 
         <Text style={styles.brand}>neq,</Text>
 
@@ -716,6 +748,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  closeBtnPlaceholder: {
+    width: 32,
+    height: 32,
   },
   closeIcon: {
     color: colors.textSecondary,

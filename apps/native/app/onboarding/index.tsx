@@ -15,6 +15,19 @@ import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNoti
 import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
 
 /**
+ * 통합 10단계 onboarding progress.
+ * welcome(0)/hello(1)/genre(2) → 1·2·3, persona(3) sub-step → 4~8 (5단계,
+ * Controller 가 자체 표시), ott(4)/notify(5) → 9·10.
+ *
+ * StepHeader 와 Controller SurveyHeader 가 같은 total = UNIFIED_TOTAL_STEPS
+ * 를 공유 → 사용자에게 일관된 진행률.
+ */
+const UNIFIED_TOTAL_STEPS = 10;
+const PERSONA_STEP_OFFSET = 3; // persona 진입 직전까지의 step 수 (welcome/hello/genre).
+// persona 안의 sub-step 5종 (context + LLM step1 + LLM step2/3 + favorites + summary)
+// 은 Controller 의 SurveyHeader 가 stepOffset 적용해 4~8 표시.
+
+/**
  * Onboarding V2 (D4a, native) — 6단계 router.
  *
  * 단계: welcome → hello → genre → taste → ott → notify → /onboarding/complete
@@ -99,12 +112,14 @@ export default function OnboardingScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* persona step 은 PersonaSurveyController 가 자체 SurveyHeader (✕ + neq, +
-            progress) 를 가짐 → onboarding StepHeader 와 중복. step=3 일 때만 hide. */}
+        {/* 통합 10단계 progress: welcome(0)/hello(1)/genre(2) → 1·2·3,
+            persona(3) sub-step → 4·5·6·7·8 (Controller 가 자체 표시),
+            ott(4)/notify(5) → 9·10. persona step 은 Controller SurveyHeader 가 진행률
+            대신 표시 → StepHeader hide. */}
         {step !== 3 && (
           <StepHeader
-            current={step}
-            total={TOTAL_STEPS}
+            current={step < 3 ? step : step + 4}
+            total={UNIFIED_TOTAL_STEPS}
             onBack={step > 0 ? goBack : undefined}
           />
         )}
@@ -121,6 +136,10 @@ export default function OnboardingScreen() {
             <PersonaSurveyController
               onComplete={() => goNext({ persona_created: true })}
               onCancel={() => goNext({ persona_created: false })}
+              embedded={{
+                totalStepsOverride: UNIFIED_TOTAL_STEPS,
+                stepOffset: PERSONA_STEP_OFFSET,
+              }}
             />
           )}
           {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}

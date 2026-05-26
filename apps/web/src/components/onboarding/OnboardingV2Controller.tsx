@@ -106,12 +106,21 @@ export default function OnboardingV2Controller() {
     router.push("/onboarding/complete");
   }
 
+  // 통합 10단계 progress 매핑.
+  // welcome(0)/hello(1)/genre(2) → 1·2·3, persona(3) sub-step → 4~8 (Controller
+  // SurveyHeader 가 표시), ott(4)/notify(5) → 9·10.
+  const UNIFIED_TOTAL_STEPS = 10;
+  const PERSONA_STEP_OFFSET = 3;
+  const headerCurrent = step < 3 ? step : step + 4;
+
   return (
     <div className="h-dvh flex flex-col max-w-[480px] mx-auto w-full" style={{ background: "var(--bg)" }}>
-      {/* persona step (3) 은 PersonaSurveyController 자체 SurveyHeader 가짐 →
-          onboarding StepHeader 와 중복. 그 단계에서만 hide. */}
       {step !== 3 && (
-        <StepHeader current={step} total={TOTAL_STEPS} onBack={step > 0 ? goBack : undefined} />
+        <StepHeader
+          current={headerCurrent}
+          total={UNIFIED_TOTAL_STEPS}
+          onBack={step > 0 ? goBack : undefined}
+        />
       )}
 
       {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
@@ -127,6 +136,10 @@ export default function OnboardingV2Controller() {
         <PersonaSurveyController
           onComplete={() => goNext({ persona_created: true })}
           onCancel={() => goNext({ persona_created: false })}
+          embedded={{
+            totalStepsOverride: UNIFIED_TOTAL_STEPS,
+            stepOffset: PERSONA_STEP_OFFSET,
+          }}
         />
       )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}

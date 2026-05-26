@@ -87,6 +87,15 @@ interface Props {
    * updatePersonaTasteSummary 로 갱신. (PR 2-b 미사용, 인터페이스만 마련.)
    */
   resurveyPersonaId?: string;
+  /**
+   * Onboarding 통합 모드 — 외부 progress bar (예: 10단계) 사용 시.
+   * SurveyHeader 의 stages/current 가 외부 값으로 override + ✕ 닫기 hide.
+   * native 의 동일 prop 과 정합.
+   */
+  embedded?: {
+    totalStepsOverride: number;
+    stepOffset: number;
+  };
 }
 
 export default function PersonaSurveyController({
@@ -94,6 +103,7 @@ export default function PersonaSurveyController({
   onComplete,
   onCancel,
   resurveyPersonaId,
+  embedded,
 }: Props) {
   const [phase, setPhase] = useState<Phase>("context_select");
   const [context, setContext] = useState<PersonaContext | null>(null);
@@ -522,6 +532,7 @@ export default function PersonaSurveyController({
         step={step}
         totalSteps={totalSteps}
         onCancel={handleCancel}
+        embedded={embedded}
       />
 
       {phase === "context_select" && (
@@ -603,36 +614,49 @@ function SurveyHeader({
   step,
   totalSteps,
   onCancel,
+  embedded,
 }: {
   phase: Phase;
   step: 1 | 2 | 3;
   totalSteps: 2 | 3;
   onCancel: () => void;
+  embedded?: { totalStepsOverride: number; stepOffset: number };
 }) {
-  // 진행률 — context(1) + step(1~3) + favorites(1) + summary(1) 도합
-  const stages = 1 + totalSteps + 1 + 1;
-  let current = 1;
-  if (phase === "step_loading" || phase === "step_question") current = 1 + step;
-  else if (phase === "favorites_pick") current = 1 + totalSteps + 1;
-  else if (phase === "summary_loading" || phase === "summary_preview")
-    current = stages;
+  // 자체 progress — context(1) + LLM step 1(2) + LLM step 2/3(3) + favorites(4) +
+  // summary(5) = 5 sub-step. step 2 와 step 3 (sharpness) 는 단일 visual 단위.
+  let localCurrent = 1;
+  if (phase === "step_loading" || phase === "step_question") {
+    localCurrent = step === 1 ? 2 : 3;
+  } else if (phase === "favorites_pick") {
+    localCurrent = 4;
+  } else if (phase === "summary_loading" || phase === "summary_preview") {
+    localCurrent = 5;
+  }
+  const localStages = 5;
+  void totalSteps; // legacy prop — embedded 모드에서 unused
+  const stages = embedded ? embedded.totalStepsOverride : localStages;
+  const current = embedded ? embedded.stepOffset + localCurrent : localCurrent;
 
   return (
     <div className="shrink-0 px-6 pt-5 pb-3">
       <div className="flex items-center justify-between min-h-[32px]">
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="설문 닫기"
-          className="w-8 h-8 flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            color: "var(--text-secondary)",
-          }}
-        >
-          <span style={{ fontSize: 16, lineHeight: 1 }}>✕</span>
-        </button>
+        {embedded ? (
+          <div className="w-8 h-8" />
+        ) : (
+          <button
+            type="button"
+            onClick={onCancel}
+            aria-label="설문 닫기"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              color: "var(--text-secondary)",
+            }}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>✕</span>
+          </button>
+        )}
 
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
 
