@@ -26,6 +26,7 @@ import OnboardingStepWelcome from "./OnboardingStepWelcome";
 import OnboardingStepHello from "./OnboardingStepHello";
 import OnboardingStepGenre from "./OnboardingStepGenre";
 import OnboardingStepTaste from "./OnboardingStepTaste";
+import PersonaSurveyController from "./PersonaSurveyController";
 import OnboardingStepOTT from "./OnboardingStepOTT";
 import OnboardingStepNotify from "./OnboardingStepNotify";
 import { STEP_LABELS, TOTAL_STEPS, type StepKey } from "./data";
@@ -96,28 +97,22 @@ export default function OnboardingV2Controller() {
 
     // V1 호환: persona.refresh + onboarding 완료 시각 기록
     persona.refresh();
-    sessionStorage.setItem("neq_onb_completed_ts", String(Date.now()));
-
-    // Persona v2 Hybrid (2026-05-26) — flag ON 시 setOnboarded 를 v2 단계에
-    // 위임. PersonaSurveyController onComplete/onCancel 후 명시 set.
-    // flag OFF 시 기존 동작 (즉시 onboarded + complete 화면).
-    const v2Enabled =
-      process.env.NEXT_PUBLIC_PERSONA_SURVEY_V2_ENABLED === "true";
-    if (v2Enabled) {
-      router.push("/onboarding/persona-v2");
-      return;
-    }
-
     try {
       localStorage.setItem("neq_onboarded", "true");
       localStorage.setItem("neq_onboarding_done", "true");
+      sessionStorage.setItem("neq_onb_completed_ts", String(Date.now()));
     } catch { /* ignore */ }
+
     router.push("/onboarding/complete");
   }
 
   return (
     <div className="h-dvh flex flex-col max-w-[480px] mx-auto w-full" style={{ background: "var(--bg)" }}>
-      <StepHeader current={step} total={TOTAL_STEPS} onBack={step > 0 ? goBack : undefined} />
+      {/* persona step (3) 은 PersonaSurveyController 자체 SurveyHeader 가짐 →
+          onboarding StepHeader 와 중복. 그 단계에서만 hide. */}
+      {step !== 3 && (
+        <StepHeader current={step} total={TOTAL_STEPS} onBack={step > 0 ? goBack : undefined} />
+      )}
 
       {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
       {step === 1 && (
@@ -129,8 +124,9 @@ export default function OnboardingV2Controller() {
         />
       )}
       {step === 3 && (
-        <OnboardingStepTaste
-          onNext={(opts) => goNext(opts?.random ? { random: true, selected_count: 0 } : undefined)}
+        <PersonaSurveyController
+          onComplete={() => goNext({ persona_created: true })}
+          onCancel={() => goNext({ persona_created: false })}
         />
       )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}

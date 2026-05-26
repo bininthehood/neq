@@ -65,7 +65,12 @@ export const NOTIF_OPTIONS: NotifOption[] = [
   { id: 'monthlyReport', title: '월간 리포트',   desc: '매월 1일, 한 달간 본 작품 요약',          defaultOn: true },
 ];
 
-export const STEP_LABELS = ['welcome', 'hello', 'genre', 'taste', 'ott', 'notify'] as const;
+/**
+ * 2026-05-26 — taste (작품선택) 제거 + persona (Persona v2 동적 설문) 추가.
+ * Persona v2 흐름은 자체적으로 favorites_pick step 포함 → 별도 작품선택 단계 중복.
+ * 단일 종합 onboarding 으로 재구성. flag OFF 시 fallback 은 별도 (현 시점 미지원).
+ */
+export const STEP_LABELS = ['welcome', 'hello', 'genre', 'persona', 'ott', 'notify'] as const;
 export type StepKey = typeof STEP_LABELS[number];
 
 export const TOTAL_STEPS = 6;

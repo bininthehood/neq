@@ -9,17 +9,10 @@ import StepHeader from '../../components/onboarding/StepHeader';
 import OnboardingStepWelcome from '../../components/onboarding/OnboardingStepWelcome';
 import OnboardingStepHello from '../../components/onboarding/OnboardingStepHello';
 import OnboardingStepTaste from '../../components/onboarding/OnboardingStepTaste';
-import OnboardingStepFavorites from '../../components/onboarding/OnboardingStepFavorites';
+import PersonaSurveyController from '../../components/onboarding/PersonaSurveyController';
 import OnboardingStepOTT from '../../components/onboarding/OnboardingStepOTT';
 import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNotify';
 import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
-
-/**
- * Persona v2 Hybrid (2026-05-26) — onboarding 끝에 첫 페르소나 생성 단계 추가.
- * flag ON 시 finalize() 가 setOnboarded() 를 skip 하고 persona-v2 라우트로 위임.
- */
-const PERSONA_SURVEY_V2_ENABLED =
-  process.env.EXPO_PUBLIC_PERSONA_SURVEY_V2_ENABLED === 'true';
 
 /**
  * Onboarding V2 (D4a, native) — 6단계 router.
@@ -98,15 +91,6 @@ export default function OnboardingScreen() {
       notify_monthly_report: prefs.notificationPrefs.monthlyReport,
     });
 
-    // Persona v2 Hybrid (2026-05-26) — flag ON 시 setOnboarded 를 v2 라우트에
-    // 위임. PersonaSurveyController onComplete/onCancel 후 setOnboarded()
-    // + router.replace('/') 처리. flag OFF 시 기존 동작 (즉시 setOnboarded
-    // + complete 화면).
-    if (PERSONA_SURVEY_V2_ENABLED) {
-      router.replace('/onboarding/persona-v2');
-      return;
-    }
-
     await setOnboarded();
     router.replace('/onboarding/complete');
   }
@@ -115,11 +99,15 @@ export default function OnboardingScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StepHeader
-          current={step}
-          total={TOTAL_STEPS}
-          onBack={step > 0 ? goBack : undefined}
-        />
+        {/* persona step 은 PersonaSurveyController 가 자체 SurveyHeader (✕ + neq, +
+            progress) 를 가짐 → onboarding StepHeader 와 중복. step=3 일 때만 hide. */}
+        {step !== 3 && (
+          <StepHeader
+            current={step}
+            total={TOTAL_STEPS}
+            onBack={step > 0 ? goBack : undefined}
+          />
+        )}
 
         <View style={styles.body}>
           {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
@@ -129,7 +117,12 @@ export default function OnboardingScreen() {
             />
           )}
           {step === 2 && <OnboardingStepTaste onNext={() => goNext()} />}
-          {step === 3 && <OnboardingStepFavorites onNext={() => goNext()} />}
+          {step === 3 && (
+            <PersonaSurveyController
+              onComplete={() => goNext({ persona_created: true })}
+              onCancel={() => goNext({ persona_created: false })}
+            />
+          )}
           {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
           {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
         </View>

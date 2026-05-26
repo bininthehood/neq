@@ -104,13 +104,13 @@ describe("NOTIF_OPTIONS", () => {
 });
 
 describe("STEP_LABELS / TOTAL_STEPS", () => {
-  it("6단계 + 순서 (welcome → hello → genre → taste → ott → notify)", () => {
+  it("6단계 + 순서 (welcome → hello → genre → persona → ott → notify)", () => {
     expect(TOTAL_STEPS).toBe(6);
     expect(STEP_LABELS).toEqual([
       "welcome",
       "hello",
       "genre",
-      "taste",
+      "persona",
       "ott",
       "notify",
     ]);
