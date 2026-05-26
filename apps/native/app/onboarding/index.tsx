@@ -23,9 +23,8 @@ import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboard
  * 를 공유 → 사용자에게 일관된 진행률.
  */
 const UNIFIED_TOTAL_STEPS = 10;
-const PERSONA_STEP_OFFSET = 3; // persona 진입 직전까지의 step 수 (welcome/hello/genre).
 // persona 안의 sub-step 5종 (context + LLM step1 + LLM step2/3 + favorites + summary)
-// 은 Controller 의 SurveyHeader 가 stepOffset 적용해 4~8 표시.
+// 은 controller 의 onSubStepChange callback 으로 부모 (StepHeader) 가 4~8 표시.
 
 /**
  * Onboarding V2 (D4a, native) — 6단계 router.
@@ -50,6 +49,8 @@ const PERSONA_STEP_OFFSET = 3; // persona 진입 직전까지의 step 수 (welco
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
+  // persona step (3) 내부의 sub-step (1~5). 외부 StepHeader 의 current 계산용.
+  const [personaSubStep, setPersonaSubStep] = useState(1);
 
   const startedAtRef = useRef<number>(Date.now());
   const stepStartRef = useRef<number>(Date.now());
@@ -112,17 +113,26 @@ export default function OnboardingScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* 통합 10단계 progress: welcome(0)/hello(1)/genre(2) → 1·2·3,
-            persona(3) sub-step → 4·5·6·7·8 (Controller 가 자체 표시),
-            ott(4)/notify(5) → 9·10. persona step 은 Controller SurveyHeader 가 진행률
-            대신 표시 → StepHeader hide. */}
-        {step !== 3 && (
-          <StepHeader
-            current={step < 3 ? step : step + 4}
-            total={UNIFIED_TOTAL_STEPS}
-            onBack={step > 0 ? goBack : undefined}
-          />
-        )}
+        {/* 통합 10단계 progress (모든 step 에서 동일 StepHeader 사용):
+            - welcome(0)/hello(1)/genre(2) → 1·2·3
+            - persona(3) sub-step (1~5) → 4·5·6·7·8 (Controller 가 onSubStepChange
+              callback 으로 personaSubStep 갱신)
+            - ott(4)/notify(5) → 9·10
+            persona step 에서 뒤로가기 = subStep 1 (context_select) 일 때만 onboarding
+            goBack (Genre 복귀). 그 외엔 controller 내부 phase 뒤로 미지원 → hide. */}
+        <StepHeader
+          current={
+            step < 3
+              ? step
+              : step === 3
+                ? 3 + (personaSubStep - 1)
+                : step + 4
+          }
+          total={UNIFIED_TOTAL_STEPS}
+          onBack={
+            step > 0 && (step !== 3 || personaSubStep === 1) ? goBack : undefined
+          }
+        />
 
         <View style={styles.body}>
           {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
@@ -137,8 +147,7 @@ export default function OnboardingScreen() {
               onComplete={() => goNext({ persona_created: true })}
               onCancel={() => goNext({ persona_created: false })}
               embedded={{
-                totalStepsOverride: UNIFIED_TOTAL_STEPS,
-                stepOffset: PERSONA_STEP_OFFSET,
+                onSubStepChange: setPersonaSubStep,
               }}
             />
           )}
