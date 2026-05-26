@@ -23,6 +23,10 @@ import {
 import PersonaSection from "@/components/profile/PersonaSection";
 import InsightSections from "@/components/profile/InsightSections";
 import NewPersonaSheet from "@/components/profile/NewPersonaSheet";
+import PersonaSurveyController from "@/components/onboarding/PersonaSurveyController";
+
+const PERSONA_SURVEY_V2_ENABLED =
+  process.env.NEXT_PUBLIC_PERSONA_SURVEY_V2_ENABLED === "true";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -266,8 +270,11 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* 새 취향 바텀시트 */}
-      {showNewPersona && (
+      {/* 새 페르소나 진입점 — flag 분기 (Persona v2 LLM 동적 설문)
+          flag OFF (기본) — 기존 NewPersonaSheet (작품 픽 only)
+          flag ON — PersonaSurveyController (컨텍스트 + LLM 설문 + 통합 요약).
+                    favorites 는 PR 2-b 범위에서 [] 로 생성. 후속에서 통합 예정. */}
+      {showNewPersona && !PERSONA_SURVEY_V2_ENABLED && (
         <NewPersonaSheet
           onClose={() => setShowNewPersona(false)}
           onSubmit={(name, items) => {
@@ -284,6 +291,26 @@ export default function ProfilePage() {
             setShowNewPersona(false);
           }}
         />
+      )}
+
+      {showNewPersona && PERSONA_SURVEY_V2_ENABLED && (
+        <div
+          className="fixed inset-0 z-50"
+          style={{ background: "var(--bg)" }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="새 페르소나 만들기"
+        >
+          <PersonaSurveyController
+            onComplete={(personaId) => {
+              setShowNewPersona(false);
+              persona.refresh();
+              setToast({ kind: "ok", msg: "새 취향이 추가됐어요" });
+              track("persona_created", { name: personaId, source: "v2_survey" });
+            }}
+            onCancel={() => setShowNewPersona(false)}
+          />
+        </div>
       )}
 
       {/* SearchSheet — Profile 페이지 자체 마운트. 헤더 search 버튼으로 진입. */}
