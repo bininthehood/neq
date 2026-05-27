@@ -105,6 +105,11 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
         track("tutorial_completed", { steps_completed: STEPS.length });
         onClose("completed", { stepsCompleted: STEPS.length, atStep: currentStep });
       } else {
+        /* eslint-disable-next-line react-hooks/set-state-in-effect --
+           외부 신호 (userActionSignals) 변동 감지 → 튜토리얼 step 전진.
+           derive 패턴 어려움 — baseline (step 진입 시점 카운트) 과 비교
+           필요. cumulative 카운트로 derive 시 step 전진 타이밍이
+           tutorial UX (각 action 1회만 인정) 와 어긋남. */
         setStepIdx(nextIdx);
       }
     }
