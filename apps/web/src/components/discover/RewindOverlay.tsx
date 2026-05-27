@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import type { Recommendation } from "@/lib/types";
 
 interface RewindOverlayProps {
@@ -26,49 +26,6 @@ export default function RewindOverlay({ cards, onComplete }: RewindOverlayProps)
   // 2장 → 400ms, 10장 → 700ms, 30장+ → 1200ms
   const duration = Math.min(1200, Math.max(400, 200 + totalCards * 50));
 
-  const animate = useCallback((timestamp: number) => {
-    if (!startTimeRef.current) startTimeRef.current = timestamp;
-    const elapsed = timestamp - startTimeRef.current;
-    const progress = Math.min(1, elapsed / duration);
-
-    // easeOutQuart — 처음 빠르게, 마지막에 감속 (되감기 관성)
-    const eased = 1 - Math.pow(1 - progress, 4);
-    const cardIndex = Math.min(
-      totalCards - 1,
-      Math.floor(eased * totalCards)
-    );
-
-    const card = cards[cardIndex];
-
-    // DOM 직접 조작 — setState 없이 60fps
-    if (imgRef.current && card?.posterUrl) {
-      // src가 달라졌을 때만 교체 (불필요한 로드 방지)
-      if (imgRef.current.getAttribute("data-idx") !== String(cardIndex)) {
-        imgRef.current.src = card.posterUrl;
-        imgRef.current.setAttribute("data-idx", String(cardIndex));
-      }
-    }
-
-    // 카운터 업데이트
-    if (counterRef.current) {
-      const remaining = totalCards - cardIndex;
-      counterRef.current.textContent = `${remaining}`;
-    }
-
-    // 프로그레스 바
-    if (containerRef.current) {
-      const bar = containerRef.current.querySelector<HTMLDivElement>("[data-progress]");
-      if (bar) bar.style.transform = `scaleX(${1 - progress})`;
-    }
-
-    if (progress < 1) {
-      rafRef.current = requestAnimationFrame(animate);
-    } else {
-      // 마지막 카드(첫 번째)에서 잠깐 머문 뒤 완료
-      setTimeout(onComplete, 150);
-    }
-  }, [cards, totalCards, duration, onComplete]);
-
   useEffect(() => {
     // prefers-reduced-motion 존중 — 즉시 점프
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -83,12 +40,58 @@ export default function RewindOverlay({ cards, onComplete }: RewindOverlayProps)
       imgRef.current.setAttribute("data-idx", "0");
     }
 
+    // R19: animate 는 useEffect 안 inner 로 정의. self-recursive RAF 의
+    // TDZ ("Cannot access variable before it is declared") 회피 + closure
+    // 로 self-ref. cards/duration 변경 시 effect 재실행으로 새 animate.
+    const animate = (timestamp: number) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const elapsed = timestamp - startTimeRef.current;
+      const progress = Math.min(1, elapsed / duration);
+
+      // easeOutQuart — 처음 빠르게, 마지막에 감속 (되감기 관성)
+      const eased = 1 - Math.pow(1 - progress, 4);
+      const cardIndex = Math.min(
+        totalCards - 1,
+        Math.floor(eased * totalCards)
+      );
+
+      const card = cards[cardIndex];
+
+      // DOM 직접 조작 — setState 없이 60fps
+      if (imgRef.current && card?.posterUrl) {
+        // src가 달라졌을 때만 교체 (불필요한 로드 방지)
+        if (imgRef.current.getAttribute("data-idx") !== String(cardIndex)) {
+          imgRef.current.src = card.posterUrl;
+          imgRef.current.setAttribute("data-idx", String(cardIndex));
+        }
+      }
+
+      // 카운터 업데이트
+      if (counterRef.current) {
+        const remaining = totalCards - cardIndex;
+        counterRef.current.textContent = `${remaining}`;
+      }
+
+      // 프로그레스 바
+      if (containerRef.current) {
+        const bar = containerRef.current.querySelector<HTMLDivElement>("[data-progress]");
+        if (bar) bar.style.transform = `scaleX(${1 - progress})`;
+      }
+
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(animate);
+      } else {
+        // 마지막 카드(첫 번째)에서 잠깐 머문 뒤 완료
+        setTimeout(onComplete, 150);
+      }
+    };
+
     rafRef.current = requestAnimationFrame(animate);
 
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
-  }, [animate, cards, onComplete]);
+  }, [cards, totalCards, duration, onComplete]);
 
   // 첫 카드(=가장 최근에 넘긴 카드)의 포스터를 초기값으로
   const initialPoster = cards[0]?.posterUrl;

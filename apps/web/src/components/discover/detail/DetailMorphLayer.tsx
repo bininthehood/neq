@@ -29,6 +29,11 @@ export function useDetailMorph(
   const [morphTransitioning, setMorphTransitioning] = useState(false);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       FLIP morph 상태머신 reset on phase change. transitioning state 는
+       RAF 시퀀스 (heroRect 측정 → 다음 frame → endRect 로 transition) 와
+       sync 가 필수라 외부 이동 불가. morphPhase 가 user action (sheet open/close)
+       트리거이므로 실질적으로 이벤트 핸들러. */
     if (!morphPhase || !morphRect) {
       setMorphTransitioning(false);
       return;
@@ -76,6 +81,7 @@ export function useDetailMorph(
       cancelAnimationFrame(raf2);
       cancelAnimationFrame(raf3);
     };
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [morphPhase, morphRect]);
 
   return { heroRef, heroRect, morphTransitioning };

@@ -71,10 +71,14 @@ export function DetailBody({
   // GH-3 #7 — Synopsis 더보기/접기 토글.
   // line-clamp-5 (CSS) + 끝에 fade-out gradient 로 잘림 시각화.
   // rec 변경(관련작 클릭으로 교체) 시 자동 접힘으로 reset.
+  // R19 canonical: prev-prop tracking (useEffect 대신). key prop 으로
+  // 전체 unmount 시 lazyCastMembers / related fetch 가 재실행되어 회피.
   const [synopsisExpanded, setSynopsisExpanded] = useState(false);
-  useEffect(() => {
+  const [prevRecId, setPrevRecId] = useState(rec.tmdbId);
+  if (rec.tmdbId !== prevRecId) {
+    setPrevRecId(rec.tmdbId);
     setSynopsisExpanded(false);
-  }, [rec.tmdbId]);
+  }
 
   // 위임 P #3 (2026-05-02) — Cast 사진 lazy hydration.
   // mirror cache 경로 rec 은 castMembers 가 빈 배열 → 사진 안 보임.

@@ -43,6 +43,10 @@ export default function SavedFilterSheet({
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       정통 enter/exit animation 패턴 (mount → RAF → visible → unmount).
+       sync setState 가 enter/exit transition 의 시작점이라 useEffect 외부
+       이동 불가. open prop 이 user 토글이라 실질적으로 이벤트 핸들러. */
     if (open) {
       setMounted(true);
       const r = requestAnimationFrame(() => setVisible(true));
@@ -51,6 +55,7 @@ export default function SavedFilterSheet({
     setVisible(false);
     const t = setTimeout(() => setMounted(false), ANIM_MS);
     return () => clearTimeout(t);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [open]);
 
   useEffect(() => {
