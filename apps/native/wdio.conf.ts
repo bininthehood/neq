@@ -15,7 +15,7 @@ export const config: Options.Testrunner = {
       'appium:platformVersion': '26.4',
       'appium:deviceName': 'iPhone 17 Pro',
       'appium:udid': '4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29',
-      // Expo Go container — 개발 빌드로 전환하면 com.neko.app로 교체
+      // Expo Go container — 개발 빌드로 전환하면 com.neq.app로 교체
       'appium:bundleId': 'host.exp.Exponent',
       'appium:autoLaunch': false,
       'appium:noReset': true,

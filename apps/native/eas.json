@@ -29,7 +29,7 @@
       "ios": {
         "appleId": "TODO_사용자_Apple_ID",
         "ascAppId": "TODO_App_Store_Connect_App_ID",
-        "appleTeamId": "TODO_Apple_Developer_Team_ID"
+        "appleTeamId": "67YXH2WD77"
       },
       "android": {
         "serviceAccountKeyPath": "./google-service-account.json",
