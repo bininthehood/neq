@@ -159,23 +159,27 @@ export default function SavedPage() {
     persistSavedSort(s);
   }, []);
 
-  // preview 모드 hero 자동 선택 — selectedPreviewId 가 sortedSaved 안에 없으면 첫 작품으로.
-  // ottFilter / viewFilter / sort 변경 등으로 목록 변경 시 자동 보정.
-  useEffect(() => {
-    if (viewMode !== "preview") return;
-    if (sortedSaved.length === 0) return;
-    const exists = selectedPreviewId !== null
-      && sortedSaved.some((item) => item.recommendation.tmdbId === selectedPreviewId);
-    if (!exists) {
-      setSelectedPreviewId(sortedSaved[0].recommendation.tmdbId);
-    }
-  }, [viewMode, sortedSaved, selectedPreviewId]);
+  // R19 canonical — derive over store. selectedPreviewId 는 사용자 클릭 의도만
+  // 저장. 실제 표시값은 sortedSaved 변경(필터/정렬) 시 첫 작품으로 자동 clamp.
+  // 기존 useEffect(setSelectedPreviewId) 의 cascading render 제거.
+  const effectivePreviewId = viewMode === "preview" && sortedSaved.length > 0
+    ? (selectedPreviewId !== null
+       && sortedSaved.some((item) => item.recommendation.tmdbId === selectedPreviewId)
+        ? selectedPreviewId
+        : sortedSaved[0].recommendation.tmdbId)
+    : null;
 
   // ottFilter 활성 시 OTT 그룹핑 자동 해제 (그룹 토글 hide 와 동기화).
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       ottFilter 활성 시 groupByOTT 를 영구 false 로 (사용자 재토글 전까지).
+       derive pattern (effective = groupByOTT && !ottFilter) 으로 가면
+       ottFilter 클리어 시 자동 복원되어 UX 변경. 명시 disable + 사유로
+       기존 동작 보존. */
     if (ottFilter && groupByOTT) {
       setGroupByOTT(false);
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [ottFilter, groupByOTT]);
 
   // Saved 작품에서 사용 가능한 OTT 목록 추출 (작품 수 많은 순)
@@ -224,8 +228,13 @@ export default function SavedPage() {
   // 히스토리 날짜별 그룹핑
   const historyGroups = useMemo(() => {
     if (viewFilter !== "history") return [];
+    /* eslint-disable react-hooks/purity --
+       오늘/어제 라벨 매 렌더 재계산. R19 purity 룰은 deterministic 보장
+       불가 (Date) 를 경고하지만, UI 라벨 용도로 stale 허용 — 장시간 세션
+       후 라벨이 한 칸 밀려도 기능 영향 없음. */
     const today = new Date().toISOString().slice(0, 10);
     const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    /* eslint-enable react-hooks/purity */
     const groups: { label: string; items: RecHistoryEntry[] }[] = [
       { label: "오늘", items: [] },
       { label: "어제", items: [] },
@@ -293,6 +302,7 @@ export default function SavedPage() {
     }
     const full = await hydrateEntry(entry);
     if (!full) return;
+    // eslint-disable-next-line react-hooks/purity -- async event handler 안 Date.now() — R19 purity 룰 false positive (render context 아님)
     openDetailFor({ recommendation: full, savedAt: Date.now() });
   };
 
@@ -711,7 +721,7 @@ export default function SavedPage() {
         /* Preview (Coverflow) — SavedHero 위임. groupByOTT 시엔 SavedList 의 OTT 그룹 분기 우선. */
         <SavedHero
           items={sortedSaved}
-          selectedPreviewId={selectedPreviewId}
+          selectedPreviewId={effectivePreviewId}
           reports={reports}
           reportingId={reportingId}
           onSelectPreview={setSelectedPreviewId}
