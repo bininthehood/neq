@@ -43,7 +43,6 @@ import {
   clearProgress,
   loadProgress,
   saveProgress,
-  type SurveyProgress,
 } from "./_lib/survey-storage";
 import PersonaContextSelector from "./PersonaContextSelector";
 import TasteSurveyStep from "./TasteSurveyStep";
@@ -63,12 +62,6 @@ type Phase =
   | "summary_preview"
   | "error_modal"
   | "done";
-
-interface FavoriteEntry {
-  title: string;
-  tmdbId?: number;
-  posterUrl?: string | null;
-}
 
 interface ErrorState {
   kind: "rate_limit" | "token_invalid" | "generic";
@@ -148,6 +141,7 @@ export default function PersonaSurveyController({
       is_resurvey: !!resurveyPersonaId,
     });
     beginStep(picked, 1, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- beginStep 은 forward useCallback (line 147), deps 에 추가 시 정의 순서 circular.
   }, [resurveyPersonaId]);
 
   // === LLM step 호출 + 자동 fallback ===
@@ -302,6 +296,7 @@ export default function PersonaSurveyController({
       });
       beginSummary(context, prevAnswers, items);
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- beginSummary 는 forward useCallback, deps 추가 시 정의 순서 circular.
     [context, prevAnswers],
   );
 
@@ -316,6 +311,7 @@ export default function PersonaSurveyController({
       skipped: true,
     });
     beginSummary(context, prevAnswers, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- beginSummary 는 forward useCallback, deps 추가 시 정의 순서 circular.
   }, [context, prevAnswers]);
 
   // === 통합 요약 호출 ===
@@ -469,6 +465,7 @@ export default function PersonaSurveyController({
       resumed: true,
     });
     beginStep(context, existing.step, existing.prevAnswers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleResumeRestart 는 forward useCallback (다음 함수), deps 추가 시 정의 순서 circular.
   }, [context, beginStep, resurveyPersonaId]);
 
   const handleResumeRestart = useCallback(() => {

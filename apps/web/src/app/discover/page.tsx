@@ -472,6 +472,7 @@ export default function DiscoverPage() {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openDetailTracked/detail/swipe 객체 추가 시 매 렌더 listener 재등록. 핸들러 내부 closure 가 최신 값 참조 보장 (deps 의 핵심 멤버만 명시).
   }, [nextCard, swipe.prevCard, detail.openDetail, detail.closeDetail, personaOpen]);
 
   // 현재 topIdx 기준 다음 4장만 프리로드 (LCP/메인 스레드 보호)
@@ -512,6 +513,7 @@ export default function DiscoverPage() {
     if (remaining <= 10 && !rec.loading && !rec.prefetching && filtered.length > 0) {
       rec.prefetchNextBatch();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rec 객체 전체 추가 시 매 렌더 재실행 (useRecommendations hook 매 렌더 새 객체). loading/prefetching readable values 만 deps 로 충분.
   }, [topIdx, filtered.length, rec.loading, rec.prefetching]);
 
   // TutorialFlow v3 노출 정책:

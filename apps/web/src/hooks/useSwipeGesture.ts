@@ -235,6 +235,7 @@ export function useSwipeGesture({
       }, 350);
       timersRef.current.add(t);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setSwiping 은 React setState (stable identity 보장), deps 불필요.
   }, [swiping, topIdx, prevOverlayX, filteredLength, setTopIdx, onPrevCard]);
 
   const clearTimers = useCallback(() => {
