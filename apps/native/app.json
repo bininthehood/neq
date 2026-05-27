@@ -65,6 +65,12 @@
         "projectId": "825b73f8-107d-48fe-8dde-726fc07b122f"
       }
     },
-    "owner": "bininthehood"
+    "owner": "bininthehood",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/825b73f8-107d-48fe-8dde-726fc07b122f"
+    }
   }
 }
