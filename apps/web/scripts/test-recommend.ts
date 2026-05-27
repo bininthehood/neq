@@ -118,7 +118,7 @@ async function getRecommendations(
   const arr =
     parsed.recommendations ??
     parsed.results ??
-    (Object.values(parsed).find((v: any) => Array.isArray(v)) as any) ??
+    (Object.values(parsed).find((v: unknown) => Array.isArray(v)) as unknown[]) ??
     [];
   return arr as Recommendation[];
 }

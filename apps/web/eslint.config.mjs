@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Serwist 가 빌드 시 생성하는 minified service worker.
+    "public/sw.js",
   ]),
 ]);
 
