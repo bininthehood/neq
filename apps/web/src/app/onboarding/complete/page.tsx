@@ -25,12 +25,16 @@ export default function OnboardingCompletePage() {
   const router = useRouter();
   const [metas, setMetas] = useState<Metas>([]);
   const [slowCopy, setSlowCopy] = useState(false);
-  const mountedAtRef = useRef<number>(Date.now());
+  // line 34 effect 에서 즉시 덮어쓰므로 init 값 불필요 (R19 purity 회피).
+  const mountedAtRef = useRef<number>(0);
   const navigatedRef = useRef(false);
   const shownTrackedRef = useRef(false);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       mount-only localStorage 읽기 (getFavoritesMeta). 정통 mount-effect 패턴. */
     setMetas(getFavoritesMeta().slice(0, 5));
+    /* eslint-enable react-hooks/set-state-in-effect */
     mountedAtRef.current = Date.now();
 
     if (!shownTrackedRef.current) {

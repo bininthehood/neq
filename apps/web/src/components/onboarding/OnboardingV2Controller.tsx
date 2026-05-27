@@ -43,9 +43,13 @@ export default function OnboardingV2Controller() {
   // persona step (3) 내부의 sub-step (1~5). 외부 StepHeader 의 current 계산용.
   const [personaSubStep, setPersonaSubStep] = useState(1);
 
-  // 진입 시각 — onboarding_completed 의 duration_ms 계산용
-  const startedAtRef = useRef<number>(Date.now());
-  // 단계 진입 시각 — onboarding_step_completed 의 duration_ms 계산용
+  // 진입 시각 — onboarding_completed 의 duration_ms 계산용.
+  // 한 번도 mutate 안 함 → useState lazy init 으로 R19 purity 회피.
+  const [startedAt] = useState(() => Date.now());
+  // 단계 진입 시각 — onboarding_step_completed 의 duration_ms 계산용.
+  // line 65 effect 에서 mutate 하므로 useRef. init Date.now() 는 첫 step
+  // duration 의 baseline 이라 의미 있음 → disable + 사유.
+  // eslint-disable-next-line react-hooks/purity -- useRef init Date.now() — 첫 step duration baseline (mutate 되기 전 1회)
   const stepStartRef = useRef<number>(Date.now());
   const startedTrackedRef = useRef(false);
   const lastViewedStepRef = useRef<number>(-1);
@@ -57,19 +61,27 @@ export default function OnboardingV2Controller() {
     track("onboarding_started");
   }, []);
 
-  // 단계 진입 시마다 step_viewed 발사. persona step 을 떠나면 personaSubStep 리셋
-  // (다시 들어왔을 때 헤더가 stale 7/10 → 4/10 으로 점프하는 회귀 차단).
+  // persona step 을 떠나면 personaSubStep 리셋 — R19 canonical prev-prop
+  // tracking (헤더 stale 7/10 → 4/10 점프 회귀 차단).
+  const [prevStepForReset, setPrevStepForReset] = useState(step);
+  if (prevStepForReset !== step) {
+    setPrevStepForReset(step);
+    if (step !== 3) setPersonaSubStep(1);
+  }
+
+  // 단계 진입 시마다 step_viewed 발사 + step 시작 시각 기록 (side effect).
   useEffect(() => {
     if (lastViewedStepRef.current === step) return;
     lastViewedStepRef.current = step;
     stepStartRef.current = Date.now();
     track("onboarding_step_viewed", { step: STEP_LABELS[step] as StepKey });
-    if (step !== 3) setPersonaSubStep(1);
   }, [step]);
 
   // 다음 단계로 이동 — 현재 단계 완료 이벤트 + step++
+  // (event handler 의미. R19 purity false positive 회피용 disable.)
   function goNext(props?: Record<string, string | number | boolean>) {
     const stepKey = STEP_LABELS[step];
+    // eslint-disable-next-line react-hooks/purity -- event handler 안 Date.now() — R19 purity false positive (render context 아님)
     const duration = Date.now() - stepStartRef.current;
     track("onboarding_step_completed", {
       step: stepKey,
@@ -93,7 +105,7 @@ export default function OnboardingV2Controller() {
 
   function finalize() {
     const prefs = getAccountPrefs();
-    const totalDuration = Date.now() - startedAtRef.current;
+    const totalDuration = Date.now() - startedAt;
     track("onboarding_completed", {
       duration_ms: totalDuration,
       tasteGenres_count: prefs.tasteGenres.length,

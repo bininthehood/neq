@@ -43,8 +43,13 @@ export function PersonaProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       mount-only persona V2 마이그레이션 + 초기 refresh (localStorage 읽기).
+       SSR 에선 personas 접근 불가 → 정통 mount-effect 패턴.
+       useSyncExternalStore 마이그레이션은 R19 sprint 후속에서 처리. */
     migrateToPersonaV2();
     refresh();
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [refresh]);
 
   const handleSwitch = useCallback(
