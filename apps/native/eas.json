@@ -28,7 +28,7 @@
     "production": {
       "ios": {
         "appleId": "TODO_사용자_Apple_ID",
-        "ascAppId": "TODO_App_Store_Connect_App_ID",
+        "ascAppId": "6773622396",
         "appleTeamId": "67YXH2WD77"
       },
       "android": {
