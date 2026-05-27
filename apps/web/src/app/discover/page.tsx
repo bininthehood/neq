@@ -169,7 +169,11 @@ export default function DiscoverPage() {
   const isSaved = !!(current && savedIds.has(current.tmdbId));
 
   // --- nextCard ---
+  // swipe 는 line 316 useSwipeGesture 결과 (forward closure ref). nextCard 가
+  // useSwipeGesture 의 input 이라 reorder 시 circular. closure-correct
+  // (runtime 시 항상 존재) — R19 immutability 룰 false positive.
   const nextCard = useCallback(() => {
+    // eslint-disable-next-line react-hooks/immutability
     if (swipe.swipingRef.current) return;
     const cur = filtered[topIdx];
     if (cur) {
@@ -351,6 +355,7 @@ export default function DiscoverPage() {
   // 이전: 탭 → setImmersive 토글 (+ useSwipeGesture 의 onSwipeUp 도 동시 발사 → 이중 동작).
   // 변경: 탭 → DetailSheet 진입만. ArrowUp / ActionBar 진입 경로는 그대로 보존.
   // immersive state 자체는 보존 — 다른 트리거가 없으므로 사실상 false 고정.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- React Compiler 미적용 환경 (next.config 에 experimental.reactCompiler 부재). useCallback 제거 시 매 렌더 재생성 → SwipeCard 등 자식 재렌더 트리거.
   const handleCardTap = useCallback(() => {
     if (swipe.swiping) return;
     openDetailTracked("card_tap");
@@ -443,10 +448,14 @@ export default function DiscoverPage() {
       router.replace("/onboarding");
       return;
     }
+    /* eslint-disable react-hooks/set-state-in-effect --
+       mount-only setup: localStorage 검사 → rec 로드 + saved IDs 동기화.
+       SSR 에서 hasOnboarded/getSaved 접근 불가 → 정통 mount-effect 패턴. */
     setMounted(true);
     rec.loadRecs("all", "all");
     setSavedIds(new Set(saved.map((s) => s.recommendation.tmdbId)));
     return () => { swipe.clearTimers(); rec.abortLoading(); };
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
@@ -514,6 +523,7 @@ export default function DiscoverPage() {
     if (typeof localStorage === "undefined") return;
     const v3Done = localStorage.getItem("tutorialV3Shown") === "1";
     const v2Done = localStorage.getItem("neq_coach_v2_shown") === "1";
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR-safe mount-only localStorage 읽기.
     setTutorialEligible(!v3Done && !v2Done);
   }, []);
   // 첫 카드 로드되면 tutorial 활성화. (eligible=false 면 무시)
@@ -522,6 +532,7 @@ export default function DiscoverPage() {
     if (!mounted) return;
     if (filtered.length === 0) return;
     if (tutorialActive) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derive 어려움: tutorialActive 는 onClose 콜백에서 false 로 전환되는 별도 흐름. derive 시 close 후 재활성화 회귀.
     setTutorialActive(true);
     // tutorialActive 는 의존성에서 제외 — 자기 자신을 트리거하지 않게 함.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -581,6 +592,7 @@ export default function DiscoverPage() {
     // 별점 필터 활성 + retry 여유 있을 때 자동 로드 중 — LoadingScreen.
     if (
       rec.filterRating !== "all"
+      // eslint-disable-next-line react-hooks/refs -- ratingAutoFetchRef 는 prefetch 횟수 카운터. render 중 read-only 분기 판단 (auto-fetch 한도 미만이면 로딩 화면). useState 화 시 mutation 시점 (별점 retry 핸들러) 마다 re-render 발생.
       && (rec.prefetching || ratingAutoFetchRef.current < RATING_AUTO_FETCH_MAX)
     ) {
       return <LoadingScreen filterLabel={`별점 ${rec.filterRating}+`} {...chipsProps} />;
