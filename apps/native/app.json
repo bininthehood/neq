@@ -16,8 +16,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.neq.app",
-      "buildNumber": "1",
-      "associatedDomains": ["applinks:neq.me"],
+      "buildNumber": "6",
+      "associatedDomains": [
+        "applinks:neq.me"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSUserTrackingUsageDescription": "추천 품질 개선을 위해 익명 사용 데이터를 수집해요. 개인 식별 정보는 수집하지 않아요."
@@ -32,7 +34,9 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "permissions": ["INTERNET"],
+      "permissions": [
+        "INTERNET"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -44,7 +48,10 @@
               "pathPrefix": "/share/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
