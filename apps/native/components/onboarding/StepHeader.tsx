@@ -21,14 +21,19 @@ import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
  */
 
 interface StepHeaderProps {
-  current: number; // 0..4
+  current: number; // 0..N-1 (N = total)
   total: number;
   onBack?: () => void;
+  /**
+   * 우상단 건너뛰기 — persona 같은 sub-step 단계에서 빠져나갈 수단이 필요할 때만 활성.
+   */
+  onSkip?: () => void;
+  skipLabel?: string;
 }
 
 const easingMove = Easing.bezier(...easings.move);
 
-export default function StepHeader({ current, total, onBack }: StepHeaderProps) {
+export default function StepHeader({ current, total, onBack, onSkip, skipLabel = '건너뛰기' }: StepHeaderProps) {
   const showBack = current > 0 && !!onBack;
 
   return (
@@ -54,9 +59,21 @@ export default function StepHeader({ current, total, onBack }: StepHeaderProps) 
           resizeMode="contain"
         />
 
-        <Text style={styles.counter}>
-          {current + 1} / {total}
-        </Text>
+        <View style={styles.rightGroup}>
+          <Text style={styles.counter}>
+            {current + 1} / {total}
+          </Text>
+          {onSkip ? (
+            <Pressable
+              onPress={onSkip}
+              hitSlop={12}
+              accessibilityLabel={skipLabel}
+              style={styles.skipBtn}
+            >
+              <Text style={styles.skipIcon}>✕</Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
 
       <View style={styles.progressRow}>
@@ -135,6 +152,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     minWidth: 32,
     textAlign: 'right',
+  },
+  rightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  skipBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipIcon: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 14,
   },
   progressRow: {
     flexDirection: 'row',

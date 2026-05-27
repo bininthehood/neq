@@ -500,8 +500,11 @@ export default function PersonaSurveyController({
   }, []);
 
   // embedded 모드: phase 변화 시 부모 (onboarding) 에 subStep 알림.
+  // modal/done phase 에서는 onSubStepChange 호출 skip — 헤더가 모달 뒤에서
+  // 1 로 fall-through 해 progress 역행하는 회귀 차단.
   useEffect(() => {
     if (!embedded) return;
+    if (phase === 'error_modal' || phase === 'resume_modal' || phase === 'done') return;
     let subStep = 1;
     if (phase === 'step_loading' || phase === 'step_question') {
       subStep = step === 1 ? 2 : 3;
@@ -512,6 +515,20 @@ export default function PersonaSurveyController({
     }
     embedded.onSubStepChange(subStep);
   }, [embedded, phase, step]);
+
+  // === embedded 모드 에러 모달 retry / skip ===
+  // 기본 동작 (profile 진입) 은 닫기 → handleCancel. embedded 모드에서는 사용자가
+  // 빠져나갈 수 없는 trap 차단을 위해 retry 우선, skip 보조 분기.
+  const handleErrorRetry = useCallback(() => {
+    if (!context) {
+      setError(null);
+      setPhase('context_select');
+      return;
+    }
+    if (error?.kind === 'token_invalid') tokenRef.current = undefined;
+    setError(null);
+    beginStep(context, step, prevAnswers);
+  }, [context, error, step, prevAnswers, beginStep]);
 
   return (
     <View style={styles.wrap}>
@@ -578,8 +595,10 @@ export default function PersonaSurveyController({
               : '오류가 발생했어요'
         }
         description={error?.message ?? ''}
-        primaryLabel="닫기"
-        onPrimary={handleErrorDismiss}
+        primaryLabel={embedded ? '다시 시도' : '닫기'}
+        secondaryLabel={embedded ? '건너뛰기' : undefined}
+        onPrimary={embedded ? handleErrorRetry : handleErrorDismiss}
+        onSecondary={embedded ? handleErrorDismiss : undefined}
       />
     </View>
   );

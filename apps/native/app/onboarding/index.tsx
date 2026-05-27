@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Alert, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
 import { colors } from '../../lib/tokens';
@@ -63,11 +63,13 @@ export default function OnboardingScreen() {
     track('onboarding_started');
   }, []);
 
+  // persona step 을 떠나면 personaSubStep 리셋 — 다시 들어왔을 때 헤더 stale 회귀 차단.
   useEffect(() => {
     if (lastViewedStepRef.current === step) return;
     lastViewedStepRef.current = step;
     stepStartRef.current = Date.now();
     track('onboarding_step_viewed', { step: STEP_LABELS[step] as StepKey });
+    if (step !== 3) setPersonaSubStep(1);
   }, [step]);
 
   function goNext(props?: Record<string, string | number | boolean>) {
@@ -109,6 +111,23 @@ export default function OnboardingScreen() {
     router.replace('/onboarding/complete');
   }
 
+  // persona subStep ≥ 2 일 때만 우상단 건너뛰기 노출. LLM 행 / rate-limit trap 차단.
+  const showPersonaSkip = step === 3 && personaSubStep >= 2;
+  function handlePersonaSkip() {
+    Alert.alert(
+      '페르소나 만들기를 건너뛸까요?',
+      '나중에 프로필에서 만들 수 있어요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '건너뛰기',
+          style: 'destructive',
+          onPress: () => goNext({ persona_created: false, skipped_from_header: true }),
+        },
+      ],
+    );
+  }
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -119,7 +138,8 @@ export default function OnboardingScreen() {
               callback 으로 personaSubStep 갱신)
             - ott(4)/notify(5) → 9·10
             persona step 에서 뒤로가기 = subStep 1 (context_select) 일 때만 onboarding
-            goBack (Genre 복귀). 그 외엔 controller 내부 phase 뒤로 미지원 → hide. */}
+            goBack (Genre 복귀). 그 외엔 controller 내부 phase 뒤로 미지원 → hide.
+            대신 우상단 건너뛰기 (subStep≥2) 노출 — LLM 행 / rate-limit trap 차단. */}
         <StepHeader
           current={
             step < 3
@@ -132,6 +152,8 @@ export default function OnboardingScreen() {
           onBack={
             step > 0 && (step !== 3 || personaSubStep === 1) ? goBack : undefined
           }
+          onSkip={showPersonaSkip ? handlePersonaSkip : undefined}
+          skipLabel="페르소나 만들기 건너뛰기"
         />
 
         <View style={styles.body}>

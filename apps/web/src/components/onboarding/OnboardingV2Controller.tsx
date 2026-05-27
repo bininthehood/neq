@@ -25,7 +25,6 @@ import StepHeader from "./StepHeader";
 import OnboardingStepWelcome from "./OnboardingStepWelcome";
 import OnboardingStepHello from "./OnboardingStepHello";
 import OnboardingStepGenre from "./OnboardingStepGenre";
-import OnboardingStepTaste from "./OnboardingStepTaste";
 import PersonaSurveyController from "./PersonaSurveyController";
 import OnboardingStepOTT from "./OnboardingStepOTT";
 import OnboardingStepNotify from "./OnboardingStepNotify";
@@ -52,12 +51,14 @@ export default function OnboardingV2Controller() {
     track("onboarding_started");
   }, []);
 
-  // 단계 진입 시마다 step_viewed 발사
+  // 단계 진입 시마다 step_viewed 발사. persona step 을 떠나면 personaSubStep 리셋
+  // (다시 들어왔을 때 헤더가 stale 7/10 → 4/10 으로 점프하는 회귀 차단).
   useEffect(() => {
     if (lastViewedStepRef.current === step) return;
     lastViewedStepRef.current = step;
     stepStartRef.current = Date.now();
     track("onboarding_step_viewed", { step: STEP_LABELS[step] as StepKey });
+    if (step !== 3) setPersonaSubStep(1);
   }, [step]);
 
   // 다음 단계로 이동 — 현재 단계 완료 이벤트 + step++
@@ -119,6 +120,19 @@ export default function OnboardingV2Controller() {
         ? 3 + (personaSubStep - 1)
         : step + 4;
 
+  // persona step 의 subStep ≥ 2 (LLM 요청 / 답변 / favorites / summary) 에서는
+  // back 정책상 onboarding 으로 복귀가 불가 (controller 내부 phase 뒤로 미지원).
+  // 사용자가 LLM 행이거나 rate-limit 에러 시 빠져나갈 수 없는 trap 방지를 위해
+  // 우상단 건너뛰기 버튼 제공 — 확인 후 onCancel (persona 건너뛰고 OTT 로 진행).
+  const showPersonaSkip = step === 3 && personaSubStep >= 2;
+  function handlePersonaSkip() {
+    if (typeof window !== "undefined") {
+      const ok = window.confirm("페르소나 만들기를 건너뛸까요? 나중에 프로필에서 만들 수 있어요.");
+      if (!ok) return;
+    }
+    goNext({ persona_created: false, skipped_from_header: true });
+  }
+
   return (
     <div className="h-dvh flex flex-col max-w-[480px] mx-auto w-full" style={{ background: "var(--bg)" }}>
       <StepHeader
@@ -127,6 +141,8 @@ export default function OnboardingV2Controller() {
         onBack={
           step > 0 && (step !== 3 || personaSubStep === 1) ? goBack : undefined
         }
+        onSkip={showPersonaSkip ? handlePersonaSkip : undefined}
+        skipLabel="페르소나 만들기 건너뛰기"
       />
 
       {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}
