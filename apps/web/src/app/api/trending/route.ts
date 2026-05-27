@@ -4,6 +4,16 @@ import { posterUrl } from "@/lib/tmdb";
 const TMDB_API_KEY = process.env.TMDB_API_KEY!;
 const BASE = "https://api.themoviedb.org/3";
 
+interface TMDBItem {
+  id: number;
+  title?: string;
+  name?: string;
+  poster_path?: string | null;
+  vote_count?: number;
+  release_date?: string;
+  first_air_date?: string;
+}
+
 // 장르 ID → 다양한 취향 커버
 const GENRE_POOLS = [
   { type: "movie", genre: 28, label: "액션" },
@@ -41,14 +51,14 @@ export async function GET() {
       `${BASE}/${endpoint}?api_key=${TMDB_API_KEY}&language=ko-KR&sort_by=vote_count.desc&vote_average.gte=6.5&with_genres=${pool.genre}&page=${page}`
     );
     const data = await res.json();
-    const results = (data.results ?? []).filter(
-      (r: any) => r.poster_path && (r.vote_count ?? 0) > 100
+    const results: TMDBItem[] = (data.results ?? []).filter(
+      (r: TMDBItem) => r.poster_path && (r.vote_count ?? 0) > 100
     );
     // 이 장르에서 랜덤 2개
-    return shuffle(results).slice(0, 2).map((r: any) => ({
+    return shuffle(results).slice(0, 2).map((r: TMDBItem) => ({
       id: r.id,
       title: r.title ?? r.name,
-      posterUrl: posterUrl(r.poster_path, "w200"),
+      posterUrl: posterUrl(r.poster_path ?? null, "w200"),
       year: (r.release_date ?? r.first_air_date ?? "").slice(0, 4),
     }));
   });

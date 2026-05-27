@@ -70,6 +70,22 @@ interface Props {
   onComplete: (personaId: string) => void;
   onCancel: () => void;
   resurveyPersonaId?: string;
+  /**
+   * Onboarding 통합 모드 — 외부 StepHeader 사용 시.
+   * 지정되면 Controller 의 SurveyHeader 가 hide. 대신 phase 변화 시
+   * onSubStepChange callback 으로 부모 (onboarding) 에 진행 상황 알림.
+   * 부모는 자체 StepHeader 의 progress current 갱신.
+   *
+   * subStep 매핑:
+   *  - context_select → 1
+   *  - step_loading/question (step 1) → 2
+   *  - step_loading/question (step 2 or 3) → 3
+   *  - favorites_pick → 4
+   *  - summary_loading/preview → 5
+   */
+  embedded?: {
+    onSubStepChange: (subStep: number) => void;
+  };
 }
 
 export default function PersonaSurveyController({
@@ -77,6 +93,7 @@ export default function PersonaSurveyController({
   onComplete,
   onCancel,
   resurveyPersonaId,
+  embedded,
 }: Props) {
   const [phase, setPhase] = useState<Phase>('context_select');
   const [context, setContext] = useState<PersonaContext | null>(null);
@@ -482,14 +499,47 @@ export default function PersonaSurveyController({
     getDeviceId().catch(() => undefined);
   }, []);
 
+  // embedded 모드: phase 변화 시 부모 (onboarding) 에 subStep 알림.
+  // modal/done phase 에서는 onSubStepChange 호출 skip — 헤더가 모달 뒤에서
+  // 1 로 fall-through 해 progress 역행하는 회귀 차단.
+  useEffect(() => {
+    if (!embedded) return;
+    if (phase === 'error_modal' || phase === 'resume_modal' || phase === 'done') return;
+    let subStep = 1;
+    if (phase === 'step_loading' || phase === 'step_question') {
+      subStep = step === 1 ? 2 : 3;
+    } else if (phase === 'favorites_pick') {
+      subStep = 4;
+    } else if (phase === 'summary_loading' || phase === 'summary_preview') {
+      subStep = 5;
+    }
+    embedded.onSubStepChange(subStep);
+  }, [embedded, phase, step]);
+
+  // === embedded 모드 에러 모달 retry / skip ===
+  // 기본 동작 (profile 진입) 은 닫기 → handleCancel. embedded 모드에서는 사용자가
+  // 빠져나갈 수 없는 trap 차단을 위해 retry 우선, skip 보조 분기.
+  const handleErrorRetry = useCallback(() => {
+    if (!context) {
+      setError(null);
+      setPhase('context_select');
+      return;
+    }
+    if (error?.kind === 'token_invalid') tokenRef.current = undefined;
+    setError(null);
+    beginStep(context, step, prevAnswers);
+  }, [context, error, step, prevAnswers, beginStep]);
+
   return (
     <View style={styles.wrap}>
-      <SurveyHeader
-        phase={phase}
-        step={step}
-        totalSteps={totalSteps}
-        onCancel={handleCancel}
-      />
+      {!embedded && (
+        <SurveyHeader
+          phase={phase}
+          step={step}
+          totalSteps={totalSteps}
+          onCancel={handleCancel}
+        />
+      )}
 
       {phase === 'context_select' && (
         <PersonaContextSelector onNext={handleContextNext} />
@@ -545,8 +595,10 @@ export default function PersonaSurveyController({
               : '오류가 발생했어요'
         }
         description={error?.message ?? ''}
-        primaryLabel="닫기"
-        onPrimary={handleErrorDismiss}
+        primaryLabel={embedded ? '다시 시도' : '닫기'}
+        secondaryLabel={embedded ? '건너뛰기' : undefined}
+        onPrimary={embedded ? handleErrorRetry : handleErrorDismiss}
+        onSecondary={embedded ? handleErrorDismiss : undefined}
       />
     </View>
   );
@@ -576,6 +628,7 @@ function SurveyHeader({
   totalSteps: 2 | 3;
   onCancel: () => void;
 }) {
+  // 자체 progress (profile 진입 케이스만 사용 — onboarding 은 외부 StepHeader).
   const stages = 1 + totalSteps + 1 + 1;
   let current = 1;
   if (phase === 'step_loading' || phase === 'step_question') current = 1 + step;
@@ -716,6 +769,10 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  closeBtnPlaceholder: {
+    width: 32,
+    height: 32,
   },
   closeIcon: {
     color: colors.textSecondary,

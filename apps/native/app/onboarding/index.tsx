@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { Alert, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
 import { colors } from '../../lib/tokens';
@@ -9,10 +9,22 @@ import StepHeader from '../../components/onboarding/StepHeader';
 import OnboardingStepWelcome from '../../components/onboarding/OnboardingStepWelcome';
 import OnboardingStepHello from '../../components/onboarding/OnboardingStepHello';
 import OnboardingStepTaste from '../../components/onboarding/OnboardingStepTaste';
-import OnboardingStepFavorites from '../../components/onboarding/OnboardingStepFavorites';
+import PersonaSurveyController from '../../components/onboarding/PersonaSurveyController';
 import OnboardingStepOTT from '../../components/onboarding/OnboardingStepOTT';
 import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNotify';
 import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
+
+/**
+ * 통합 10단계 onboarding progress.
+ * welcome(0)/hello(1)/genre(2) → 1·2·3, persona(3) sub-step → 4~8 (5단계,
+ * Controller 가 자체 표시), ott(4)/notify(5) → 9·10.
+ *
+ * StepHeader 와 Controller SurveyHeader 가 같은 total = UNIFIED_TOTAL_STEPS
+ * 를 공유 → 사용자에게 일관된 진행률.
+ */
+const UNIFIED_TOTAL_STEPS = 10;
+// persona 안의 sub-step 5종 (context + LLM step1 + LLM step2/3 + favorites + summary)
+// 은 controller 의 onSubStepChange callback 으로 부모 (StepHeader) 가 4~8 표시.
 
 /**
  * Onboarding V2 (D4a, native) — 6단계 router.
@@ -37,6 +49,8 @@ import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboard
 
 export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
+  // persona step (3) 내부의 sub-step (1~5). 외부 StepHeader 의 current 계산용.
+  const [personaSubStep, setPersonaSubStep] = useState(1);
 
   const startedAtRef = useRef<number>(Date.now());
   const stepStartRef = useRef<number>(Date.now());
@@ -49,11 +63,13 @@ export default function OnboardingScreen() {
     track('onboarding_started');
   }, []);
 
+  // persona step 을 떠나면 personaSubStep 리셋 — 다시 들어왔을 때 헤더 stale 회귀 차단.
   useEffect(() => {
     if (lastViewedStepRef.current === step) return;
     lastViewedStepRef.current = step;
     stepStartRef.current = Date.now();
     track('onboarding_step_viewed', { step: STEP_LABELS[step] as StepKey });
+    if (step !== 3) setPersonaSubStep(1);
   }, [step]);
 
   function goNext(props?: Record<string, string | number | boolean>) {
@@ -91,21 +107,53 @@ export default function OnboardingScreen() {
       notify_monthly_report: prefs.notificationPrefs.monthlyReport,
     });
 
-    // web 정본 (OnboardingV2Controller.finalize) 과 동일 — 명시 완료 플래그를 기록해
-    // 이후 root 진입 시 `hasOnboarded()` 가 true 를 반환하도록 한다.
     await setOnboarded();
-
     router.replace('/onboarding/complete');
+  }
+
+  // persona subStep ≥ 2 일 때만 우상단 건너뛰기 노출. LLM 행 / rate-limit trap 차단.
+  const showPersonaSkip = step === 3 && personaSubStep >= 2;
+  function handlePersonaSkip() {
+    Alert.alert(
+      '페르소나 만들기를 건너뛸까요?',
+      '나중에 프로필에서 만들 수 있어요.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '건너뛰기',
+          style: 'destructive',
+          onPress: () => goNext({ persona_created: false, skipped_from_header: true }),
+        },
+      ],
+    );
   }
 
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        {/* 통합 10단계 progress (모든 step 에서 동일 StepHeader 사용):
+            - welcome(0)/hello(1)/genre(2) → 1·2·3
+            - persona(3) sub-step (1~5) → 4·5·6·7·8 (Controller 가 onSubStepChange
+              callback 으로 personaSubStep 갱신)
+            - ott(4)/notify(5) → 9·10
+            persona step 에서 뒤로가기 = subStep 1 (context_select) 일 때만 onboarding
+            goBack (Genre 복귀). 그 외엔 controller 내부 phase 뒤로 미지원 → hide.
+            대신 우상단 건너뛰기 (subStep≥2) 노출 — LLM 행 / rate-limit trap 차단. */}
         <StepHeader
-          current={step}
-          total={TOTAL_STEPS}
-          onBack={step > 0 ? goBack : undefined}
+          current={
+            step < 3
+              ? step
+              : step === 3
+                ? 3 + (personaSubStep - 1)
+                : step + 4
+          }
+          total={UNIFIED_TOTAL_STEPS}
+          onBack={
+            step > 0 && (step !== 3 || personaSubStep === 1) ? goBack : undefined
+          }
+          onSkip={showPersonaSkip ? handlePersonaSkip : undefined}
+          skipLabel="페르소나 만들기 건너뛰기"
         />
 
         <View style={styles.body}>
@@ -116,7 +164,15 @@ export default function OnboardingScreen() {
             />
           )}
           {step === 2 && <OnboardingStepTaste onNext={() => goNext()} />}
-          {step === 3 && <OnboardingStepFavorites onNext={() => goNext()} />}
+          {step === 3 && (
+            <PersonaSurveyController
+              onComplete={() => goNext({ persona_created: true })}
+              onCancel={() => goNext({ persona_created: false })}
+              embedded={{
+                onSubStepChange: setPersonaSubStep,
+              }}
+            />
+          )}
           {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
           {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
         </View>

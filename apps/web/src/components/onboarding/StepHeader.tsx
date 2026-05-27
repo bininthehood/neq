@@ -13,16 +13,22 @@
  */
 
 interface StepHeaderProps {
-  current: number;          // 0..4
-  total: number;            // 5
+  current: number;          // 0..N-1 (N = total)
+  total: number;
   onBack?: () => void;      // current === 0 이면 부모가 undefined 전달
+  /**
+   * 우상단 건너뛰기/닫기 — persona 같은 sub-step 가 있는 단계에서 사용자가 빠져나갈
+   * 수단이 필요할 때 활성. 기본 비활성 (welcome/hello/genre/ott/notify 는 onBack 만).
+   */
+  onSkip?: () => void;
+  skipLabel?: string;       // 접근성 라벨 (예: "페르소나 만들기 건너뛰기"). 기본 "건너뛰기"
 }
 
-export default function StepHeader({ current, total, onBack }: StepHeaderProps) {
+export default function StepHeader({ current, total, onBack, onSkip, skipLabel = "건너뛰기" }: StepHeaderProps) {
   const showBack = current > 0 && onBack;
   return (
     <div className="shrink-0 px-6 pt-5 pb-3">
-      {/* 1행: 뒤로가기 + 로고 + 진행 라벨 */}
+      {/* 1행: 뒤로가기 + 로고 + 진행 라벨 (+ 건너뛰기) */}
       <div className="flex items-center justify-between min-h-[32px]">
         {showBack ? (
           <button
@@ -48,21 +54,38 @@ export default function StepHeader({ current, total, onBack }: StepHeaderProps) 
           className="h-5 object-contain"
         />
 
-        <div
-          className="text-xs tabular-nums"
-          style={{
-            color: "var(--text-muted)",
-            fontFamily: "var(--font-data)",
-            letterSpacing: "0.05em",
-            minWidth: 32,
-            textAlign: "right",
-          }}
-        >
-          {current + 1} / {total}
+        <div className="flex items-center gap-2">
+          <div
+            className="text-xs tabular-nums"
+            style={{
+              color: "var(--text-muted)",
+              fontFamily: "var(--font-data)",
+              letterSpacing: "0.05em",
+              minWidth: 32,
+              textAlign: "right",
+            }}
+          >
+            {current + 1} / {total}
+          </div>
+          {onSkip ? (
+            <button
+              type="button"
+              onClick={onSkip}
+              aria-label={skipLabel}
+              className="w-8 h-8 flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                color: "var(--text-muted)",
+              }}
+            >
+              <span style={{ fontSize: 14, lineHeight: 1 }}>✕</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {/* 2행: 진행률 bar (5세그먼트) */}
+      {/* 2행: 진행률 bar (total 세그먼트) */}
       <div className="flex gap-1.5 mt-4" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={current + 1}>
         {Array.from({ length: total }, (_, i) => (
           <div

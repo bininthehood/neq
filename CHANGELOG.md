@@ -5,6 +5,19 @@ All notable changes to Neko will be documented in this file.
 > 변경 이력은 사용자·운영 관점의 **의미 있는 변경**만 기록합니다.
 > 세부 커밋 단위 변경은 git log와 [`DEVLOG.md`](./DEVLOG.md) 참조.
 
+## [0.3.3.0] - 2026-05-27
+
+### Changed
+- **온보딩 Hybrid v2** — 5단계 후 첫 페르소나 만들기를 온보딩 단계 4 로 인라인 통합. 1~10 통합 progress (persona 내부 sub-step 5종 = 4~8 매핑). 기존 별도 작품 선택 단계 제거 — persona v2 의 favorites_pick 이 이를 대체
+- 모든 단계가 동일 StepHeader 사용 (헤더 시각 동기화)
+- 우상단 건너뛰기 버튼 — persona LLM 단계에서 빠져나갈 수 없는 trap 차단 (confirm 후 OTT 로 진행)
+- 페르소나 LLM 에러 시 "다시 시도" 우선, "건너뛰기" 보조 분기 (기존: 닫기 → 무음 skip)
+
+### Fixed
+- (Native) 앱 실행 시 초기 layout shift 3건 — splash 배경색, SafeAreaProvider initialMetrics, fonts 로딩 fallback
+- 온보딩에서 persona 끝낸 후 뒤로 돌아왔을 때 progress 헤더가 8/10 으로 stale 표시되던 회귀 차단
+- 페르소나 에러 모달 / 복구 모달 / 완료 phase 동안 헤더 progress 역행하던 회귀 차단
+
 ## [0.3.2.0] - 2026-04-17
 
 ### Added

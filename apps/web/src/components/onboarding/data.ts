@@ -80,8 +80,13 @@ export const NOTIF_OPTIONS: NotifOption[] = [
   { id: 'monthlyReport', title: '월간 리포트',   desc: '매월 1일, 한 달간 본 작품 요약',          defaultOn: true },
 ];
 
-/** 단계 라벨 — 진행률/PostHog 이벤트 step prop 에 사용. genre 추가로 6단계. */
-export const STEP_LABELS = ['welcome', 'hello', 'genre', 'taste', 'ott', 'notify'] as const;
+/**
+ * 단계 라벨 — 진행률/PostHog 이벤트 step prop 에 사용.
+ * 2026-05-26: taste (작품선택) 제거 + persona (Persona v2 동적 설문) 추가.
+ * Persona v2 흐름이 favorites_pick step 자체 포함 → 별도 작품선택 단계 중복 제거.
+ * native data.ts 와 동기화 필수.
+ */
+export const STEP_LABELS = ['welcome', 'hello', 'genre', 'persona', 'ott', 'notify'] as const;
 export type StepKey = typeof STEP_LABELS[number];
 
 export const TOTAL_STEPS = 6;
