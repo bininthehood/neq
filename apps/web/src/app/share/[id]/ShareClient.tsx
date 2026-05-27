@@ -182,6 +182,9 @@ export default function ShareClient({ work }: { work: Work }) {
 
         {/* Branding */}
         <div className="mt-8 flex justify-center">
+          {/* eslint-disable-next-line @next/next/no-img-element --
+              neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+              변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
           <img src="/neq-logo.png" alt="neq," className="h-6 opacity-40" />
         </div>
       </div>

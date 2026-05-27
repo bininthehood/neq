@@ -17,6 +17,10 @@ export default function InstallBanner() {
 
     const ua = navigator.userAgent;
     const nav = navigator as Navigator & { standalone?: boolean };
+    /* eslint-disable react-hooks/set-state-in-effect --
+       SSR-safe mount-only navigator/matchMedia 읽기.
+       서버에서는 platform 판별 불가 → 정통 mount-effect 패턴.
+       beforeinstallprompt 핸들러 안의 setState 는 이벤트 콜백이라 별개. */
     if (/iPhone|iPad|iPod/.test(ua) && !nav.standalone) {
       setPlatform("ios");
       setShow(true);
@@ -35,6 +39,7 @@ export default function InstallBanner() {
         clearTimeout(timer);
       };
     }
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const handleInstall = async () => {

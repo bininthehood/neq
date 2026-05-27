@@ -48,6 +48,9 @@ export default function StepHeader({ current, total, onBack, onSkip, skipLabel =
           <div className="w-8 h-8" aria-hidden="true" />
         )}
 
+        {/* eslint-disable-next-line @next/next/no-img-element --
+            neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+            변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
         <img
           src="/neq-logo.png"
           alt="neq,"

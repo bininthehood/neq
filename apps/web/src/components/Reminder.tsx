@@ -26,8 +26,13 @@ export default function Reminder() {
 
   useEffect(() => {
     const result = computeReminder();
+    /* eslint-disable react-hooks/set-state-in-effect --
+       SSR-safe mount-only localStorage 읽기 (computeReminder 는 localStorage 의존).
+       서버에서는 render 불가 → 정통 mount-effect 패턴.
+       useSyncExternalStore 마이그레이션은 R19 sprint 에서 처리. */
     setShow(result.show);
     setUnwatchedCount(result.count);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const dismiss = useCallback(() => {

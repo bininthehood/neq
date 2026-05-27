@@ -103,10 +103,13 @@ async function postJson<TOut>(
       clearTimeout(timer);
 
       if (res.status === 401) {
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as {
+          code?: string;
+          message?: string;
+        };
         throw new SurveyClientError(
-          data?.code === 'invalid_token' ? 'invalid_token' : 'session_expired',
-          data?.message ?? 'session expired',
+          data.code === 'invalid_token' ? 'invalid_token' : 'session_expired',
+          data.message ?? 'session expired',
           401,
         );
       }

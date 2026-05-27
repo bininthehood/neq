@@ -16,6 +16,9 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
     <div className="flex-1 flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
         {/* 시각적 hero — 로고 라지 */}
+        {/* eslint-disable-next-line @next/next/no-img-element --
+            neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+            변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
         <img
           src="/neq-logo.png"
           alt="neq,"

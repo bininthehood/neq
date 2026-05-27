@@ -20,7 +20,7 @@ interface AdCardProps {
  * 현재 AD_ENABLED = false라서 실제로 렌더되지 않음.
  * 활성화 시 SwipeCard와 동일한 위치에 삽입.
  */
-export default function AdCard({ ad, depth, dragX, isDragging, swiping, isTop }: AdCardProps) {
+export default function AdCard({ ad, depth, dragX, isDragging, swiping: _swiping, isTop }: AdCardProps) {
   const impressionSent = useRef(false);
 
   // 노출 트래킹 — 맨 앞에 올 때 1회

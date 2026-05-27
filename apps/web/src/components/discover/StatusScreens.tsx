@@ -33,6 +33,9 @@ export function LoadingScreen({ filterLabel, ...chips }: LoadingScreenProps) {
       {/* 워드마크 = neq-logo.png 이미지 정본 (DESIGN.md Brand Identity).
           5/2 위임 R #1 후속 — 페르소나 전환 시 텍스트↔이미지 깜빡임 방지. */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element --
+            neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+            변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>
       <FilterChips {...chips} />
@@ -73,6 +76,9 @@ export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
     <div className="h-dvh flex flex-col">
       {/* 위임 R #1 — discover/page.tsx 헤더와 동일 이미지 로고 (회귀 방지) */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element --
+            neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+            변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>
       <FilterChips {...chips} />
@@ -152,6 +158,9 @@ export function EmptyScreen({
     <div className="h-dvh flex flex-col">
       {/* 위임 R #1 — discover/page.tsx 헤더와 동일 이미지 로고 (회귀 방지) */}
       <div className="flex items-center justify-between px-5 py-3 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element --
+            neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+            변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
       </div>
       <FilterChips {...chips} />

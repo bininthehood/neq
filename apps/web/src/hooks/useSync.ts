@@ -73,6 +73,5 @@ export function useSync() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onHide);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 }

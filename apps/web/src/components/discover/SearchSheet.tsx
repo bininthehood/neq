@@ -261,8 +261,13 @@ export default function SearchSheet({
   // D10b — sheet open 시 idle 컨텐츠 (recents / trending / voice 지원) 준비
   useEffect(() => {
     if (!show) return;
+    /* eslint-disable react-hooks/set-state-in-effect --
+       SSR-safe mount-like 패턴 — show=true 일 때만 browser API (SpeechRecognition,
+       localStorage) 읽기. show 전환은 사용자 액션 (검색 버튼) 트리거라
+       실질적으로 이벤트 핸들러 의미. */
     setVoiceSupported(isVoiceSearchSupported());
     setRecents(getRecentSearches());
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     let cancelled = false;
     (async () => {

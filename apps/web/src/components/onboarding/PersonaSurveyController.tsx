@@ -685,6 +685,9 @@ function SurveyHeader({
           <span style={{ fontSize: 16, lineHeight: 1 }}>✕</span>
         </button>
 
+        {/* eslint-disable-next-line @next/next/no-img-element --
+            neq 브랜드 워드마크. next/image 변환 시 LCP / aspect-ratio
+            변화로 깜빡임 발생 (DESIGN.md Brand Identity, 위임 R #1). */}
         <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
 
         <div

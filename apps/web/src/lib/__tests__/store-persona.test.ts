@@ -5,6 +5,7 @@
  * 각 테스트에서 vi.resetModules() + 동적 import 로 격리한다.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import type { Recommendation } from "../types";
 
 // 매 테스트마다 모듈을 새로 로드하기 위한 헬퍼
 async function loadStore() {
@@ -316,7 +317,7 @@ describe("페르소나별 데이터 격리", () => {
 
     const personaBId = store.createPersona("예능", ["a", "b", "c"], []);
 
-    const recs = [{ title: "추천1", tmdbId: 200 }] as any[];
+    const recs = [{ title: "추천1", tmdbId: 200 }] as unknown as Recommendation[];
     store.setRecommendations(recs);
     expect(store.getRecommendations()).toEqual(recs);
 
@@ -536,7 +537,7 @@ describe("clearAllUserData", () => {
       providers: [],
       mediaType: "movie",
       reason: "",
-    } as any);
+    } as unknown as Recommendation);
 
     store.clearAllUserData();
 

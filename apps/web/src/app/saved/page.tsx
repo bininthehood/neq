@@ -97,6 +97,10 @@ export default function SavedPage() {
   };
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect --
+       SSR-safe mount-only localStorage 읽기 (saved/sort/view 복원 + getWatchStats/getArchivedIds/getRecHistory).
+       서버에서는 localStorage 접근 불가 → 정통 mount-effect 패턴.
+       useSyncExternalStore 마이그레이션은 R19 sprint 에서 처리. */
     refreshData();
     // 위임 L #6 — 뷰 모드 복원
     setViewMode(loadSavedView());
@@ -105,7 +109,7 @@ export default function SavedPage() {
       trackedViewRef.current = true;
       track("saved_viewed");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const handleViewModeChange = useCallback((mode: SavedViewMode) => {
