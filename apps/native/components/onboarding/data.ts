@@ -76,6 +76,23 @@ export type StepKey = typeof STEP_LABELS[number];
 export const TOTAL_STEPS = 6;
 
 /**
+ * persona step 의 sub-step 개수 (context_select / step1 / step2-or-3 / favorites_pick / summary).
+ * web data.ts 와 동기화 — 양쪽 동일 값 유지 필수.
+ */
+export const PERSONA_SUB_STEPS = 5;
+
+/** 사용자 화면 통합 progress 의 총 단계. */
+export const UNIFIED_TOTAL_STEPS = TOTAL_STEPS + PERSONA_SUB_STEPS - 1;
+
+/** StepHeader 0-indexed `current` 산식 — web data.ts 의 computeUnifiedHeaderCurrent 와 동일. */
+export function computeUnifiedHeaderCurrent(step: number, personaSubStep: number): number {
+  const personaIdx = STEP_LABELS.indexOf('persona');
+  if (step < personaIdx) return step;
+  if (step === personaIdx) return personaIdx + (personaSubStep - 1);
+  return step + (PERSONA_SUB_STEPS - 1);
+}
+
+/**
  * "neq," 워드마크 이미지 정본 (Phase 5 amber 리컬러링).
  * web `apps/web/public/neq-logo.png` 와 동일 자산.
  *

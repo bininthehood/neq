@@ -91,6 +91,33 @@ export type StepKey = typeof STEP_LABELS[number];
 
 export const TOTAL_STEPS = 6;
 
+/**
+ * persona step 의 sub-step 개수 (context_select / step1 / step2-or-3 / favorites_pick / summary).
+ * Onboarding 진행률 표시는 이 sub-step 을 통합해 1~UNIFIED_TOTAL_STEPS 로 보여준다.
+ */
+export const PERSONA_SUB_STEPS = 5;
+
+/**
+ * 사용자 화면 통합 progress 의 총 단계. STEP_LABELS 의 persona 한 칸이 PERSONA_SUB_STEPS
+ * 칸으로 확장되므로 = TOTAL_STEPS + PERSONA_SUB_STEPS - 1.
+ *
+ * STEP_LABELS 가 변경되면 자동 추종 — 매직 상수 drift 방지 (PR #14 review #7).
+ */
+export const UNIFIED_TOTAL_STEPS = TOTAL_STEPS + PERSONA_SUB_STEPS - 1;
+
+/**
+ * StepHeader 의 0-indexed `current` 값 계산 — step 과 personaSubStep 으로부터.
+ * - step < PERSONA_INDEX: 그대로 (welcome=0 / hello=1 / genre=2)
+ * - step === PERSONA_INDEX: PERSONA_INDEX + (personaSubStep - 1) → 3..7
+ * - step > PERSONA_INDEX: step + (PERSONA_SUB_STEPS - 1) → ott=8 / notify=9
+ */
+export function computeUnifiedHeaderCurrent(step: number, personaSubStep: number): number {
+  const personaIdx = STEP_LABELS.indexOf('persona');
+  if (step < personaIdx) return step;
+  if (step === personaIdx) return personaIdx + (personaSubStep - 1);
+  return step + (PERSONA_SUB_STEPS - 1);
+}
+
 /** 온보딩 픽 작품 — 어느 장르에서 선택된 작품인지 추적 위함 (선택 사항). */
 export interface OnboardingTasteSelection {
   id: number;

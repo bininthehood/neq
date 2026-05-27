@@ -16,7 +16,7 @@
  * 디자인 산출물 NekoOnboarding 함수 매핑.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePersona } from "@/contexts/PersonaContext";
 import { track } from "@/lib/analytics";
@@ -28,7 +28,13 @@ import OnboardingStepGenre from "./OnboardingStepGenre";
 import PersonaSurveyController from "./PersonaSurveyController";
 import OnboardingStepOTT from "./OnboardingStepOTT";
 import OnboardingStepNotify from "./OnboardingStepNotify";
-import { STEP_LABELS, TOTAL_STEPS, type StepKey } from "./data";
+import {
+  STEP_LABELS,
+  TOTAL_STEPS,
+  UNIFIED_TOTAL_STEPS,
+  computeUnifiedHeaderCurrent,
+  type StepKey,
+} from "./data";
 
 export default function OnboardingV2Controller() {
   const router = useRouter();
@@ -109,22 +115,24 @@ export default function OnboardingV2Controller() {
     router.push("/onboarding/complete");
   }
 
-  // 통합 10단계 — welcome(0~2) → 1·2·3, persona(3) sub-step (1~5) → 4·5·6·7·8,
-  // ott/notify(4·5) → 9·10. StepHeader 가 모든 step 에서 노출 — persona sub-step
-  // 은 PersonaSurveyController 의 onSubStepChange callback 으로 갱신.
-  const UNIFIED_TOTAL_STEPS = 10;
-  const headerCurrent =
-    step < 3
-      ? step
-      : step === 3
-        ? 3 + (personaSubStep - 1)
-        : step + 4;
+  // 통합 progress — UNIFIED_TOTAL_STEPS / computeUnifiedHeaderCurrent 는 data.ts 정의.
+  // persona sub-step 은 PersonaSurveyController 의 onSubStepChange callback 으로 갱신.
+  const headerCurrent = computeUnifiedHeaderCurrent(step, personaSubStep);
 
   // persona step 의 subStep ≥ 2 (LLM 요청 / 답변 / favorites / summary) 에서는
   // back 정책상 onboarding 으로 복귀가 불가 (controller 내부 phase 뒤로 미지원).
   // 사용자가 LLM 행이거나 rate-limit 에러 시 빠져나갈 수 없는 trap 방지를 위해
   // 우상단 건너뛰기 버튼 제공 — 확인 후 onCancel (persona 건너뛰고 OTT 로 진행).
   const showPersonaSkip = step === 3 && personaSubStep >= 2;
+
+  // PersonaSurveyController 에 전달하는 embedded prop — 안정 reference 로 묶어
+  // 매 parent render 마다 자식의 onSubStepChange useEffect 가 재발화하지 않도록.
+  // setPersonaSubStep 은 React 가 보장하는 stable identity 이므로 deps 비움 안전.
+  const embeddedProp = useMemo(
+    () => ({ onSubStepChange: setPersonaSubStep }),
+    [],
+  );
+
   function handlePersonaSkip() {
     if (typeof window !== "undefined") {
       const ok = window.confirm("페르소나 만들기를 건너뛸까요? 나중에 프로필에서 만들 수 있어요.");
@@ -158,9 +166,7 @@ export default function OnboardingV2Controller() {
         <PersonaSurveyController
           onComplete={() => goNext({ persona_created: true })}
           onCancel={() => goNext({ persona_created: false })}
-          embedded={{
-            onSubStepChange: setPersonaSubStep,
-          }}
+          embedded={embeddedProp}
         />
       )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}

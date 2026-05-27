@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -12,19 +12,20 @@ import OnboardingStepTaste from '../../components/onboarding/OnboardingStepTaste
 import PersonaSurveyController from '../../components/onboarding/PersonaSurveyController';
 import OnboardingStepOTT from '../../components/onboarding/OnboardingStepOTT';
 import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNotify';
-import { STEP_LABELS, TOTAL_STEPS, type StepKey } from '../../components/onboarding/data';
+import {
+  STEP_LABELS,
+  TOTAL_STEPS,
+  UNIFIED_TOTAL_STEPS,
+  computeUnifiedHeaderCurrent,
+  type StepKey,
+} from '../../components/onboarding/data';
 
 /**
- * 통합 10단계 onboarding progress.
- * welcome(0)/hello(1)/genre(2) → 1·2·3, persona(3) sub-step → 4~8 (5단계,
- * Controller 가 자체 표시), ott(4)/notify(5) → 9·10.
- *
- * StepHeader 와 Controller SurveyHeader 가 같은 total = UNIFIED_TOTAL_STEPS
- * 를 공유 → 사용자에게 일관된 진행률.
+ * 통합 onboarding progress — UNIFIED_TOTAL_STEPS / computeUnifiedHeaderCurrent 는
+ * components/onboarding/data.ts 정의. STEP_LABELS 변경 시 자동 추종.
+ * persona 안의 sub-step 5종 (context + LLM step1 + LLM step2/3 + favorites + summary)
+ * 은 controller 의 onSubStepChange callback 으로 부모 (StepHeader) 가 4~8 표시.
  */
-const UNIFIED_TOTAL_STEPS = 10;
-// persona 안의 sub-step 5종 (context + LLM step1 + LLM step2/3 + favorites + summary)
-// 은 controller 의 onSubStepChange callback 으로 부모 (StepHeader) 가 4~8 표시.
 
 /**
  * Onboarding V2 (D4a, native) — 6단계 router.
@@ -113,6 +114,13 @@ export default function OnboardingScreen() {
 
   // persona subStep ≥ 2 일 때만 우상단 건너뛰기 노출. LLM 행 / rate-limit trap 차단.
   const showPersonaSkip = step === 3 && personaSubStep >= 2;
+
+  // PersonaSurveyController embedded prop 안정 reference — 매 parent render 마다
+  // 자식 useEffect 재발화 차단.
+  const embeddedProp = useMemo(
+    () => ({ onSubStepChange: setPersonaSubStep }),
+    [],
+  );
   function handlePersonaSkip() {
     Alert.alert(
       '페르소나 만들기를 건너뛸까요?',
@@ -141,13 +149,7 @@ export default function OnboardingScreen() {
             goBack (Genre 복귀). 그 외엔 controller 내부 phase 뒤로 미지원 → hide.
             대신 우상단 건너뛰기 (subStep≥2) 노출 — LLM 행 / rate-limit trap 차단. */}
         <StepHeader
-          current={
-            step < 3
-              ? step
-              : step === 3
-                ? 3 + (personaSubStep - 1)
-                : step + 4
-          }
+          current={computeUnifiedHeaderCurrent(step, personaSubStep)}
           total={UNIFIED_TOTAL_STEPS}
           onBack={
             step > 0 && (step !== 3 || personaSubStep === 1) ? goBack : undefined
@@ -168,9 +170,7 @@ export default function OnboardingScreen() {
             <PersonaSurveyController
               onComplete={() => goNext({ persona_created: true })}
               onCancel={() => goNext({ persona_created: false })}
-              embedded={{
-                onSubStepChange: setPersonaSubStep,
-              }}
+              embedded={embeddedProp}
             />
           )}
           {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}

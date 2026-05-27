@@ -15,6 +15,9 @@ import {
   NOTIF_OPTIONS,
   STEP_LABELS,
   TOTAL_STEPS,
+  PERSONA_SUB_STEPS,
+  UNIFIED_TOTAL_STEPS,
+  computeUnifiedHeaderCurrent,
 } from "../data";
 
 describe("GENRE_CHIPS", () => {
@@ -115,5 +118,46 @@ describe("STEP_LABELS / TOTAL_STEPS", () => {
       "notify",
     ]);
     expect(STEP_LABELS).toHaveLength(TOTAL_STEPS);
+  });
+});
+
+describe("UNIFIED_TOTAL_STEPS / PERSONA_SUB_STEPS", () => {
+  it("PERSONA_SUB_STEPS = 5 (context + step1 + step2/3 + favorites + summary)", () => {
+    expect(PERSONA_SUB_STEPS).toBe(5);
+  });
+
+  it("UNIFIED_TOTAL_STEPS = TOTAL_STEPS + PERSONA_SUB_STEPS - 1 (= 10)", () => {
+    expect(UNIFIED_TOTAL_STEPS).toBe(TOTAL_STEPS + PERSONA_SUB_STEPS - 1);
+    expect(UNIFIED_TOTAL_STEPS).toBe(10);
+  });
+});
+
+describe("computeUnifiedHeaderCurrent — 산식 매핑", () => {
+  it("step < persona(3) 일 때 step 그대로", () => {
+    expect(computeUnifiedHeaderCurrent(0, 1)).toBe(0); // welcome → 1/10
+    expect(computeUnifiedHeaderCurrent(1, 1)).toBe(1); // hello → 2/10
+    expect(computeUnifiedHeaderCurrent(2, 1)).toBe(2); // genre → 3/10
+  });
+
+  it("step === persona(3) 일 때 sub-step 1~5 → 3..7 매핑 (4/10 ~ 8/10)", () => {
+    expect(computeUnifiedHeaderCurrent(3, 1)).toBe(3); // context_select → 4/10
+    expect(computeUnifiedHeaderCurrent(3, 2)).toBe(4); // step 1 → 5/10
+    expect(computeUnifiedHeaderCurrent(3, 3)).toBe(5); // step 2/3 → 6/10
+    expect(computeUnifiedHeaderCurrent(3, 4)).toBe(6); // favorites → 7/10
+    expect(computeUnifiedHeaderCurrent(3, 5)).toBe(7); // summary → 8/10
+  });
+
+  it("step > persona(3) 일 때 step + 4 (= step + (PERSONA_SUB_STEPS - 1))", () => {
+    expect(computeUnifiedHeaderCurrent(4, 1)).toBe(8); // ott → 9/10
+    expect(computeUnifiedHeaderCurrent(5, 1)).toBe(9); // notify → 10/10
+  });
+
+  it("subStep 인자는 step !== persona 일 때 무시된다 (stale subStep 안전 가드)", () => {
+    // persona 단계 종료 후 OTT 로 advance 했을 때 personaSubStep 이 stale 5 라도
+    // headerCurrent = 4 + (PERSONA_SUB_STEPS-1) = 8 — subStep 영향 받지 않음
+    expect(computeUnifiedHeaderCurrent(4, 5)).toBe(8);
+    expect(computeUnifiedHeaderCurrent(5, 5)).toBe(9);
+    // step < persona 도 동일
+    expect(computeUnifiedHeaderCurrent(2, 5)).toBe(2);
   });
 });

@@ -1,13 +1,19 @@
 # TODOS
 
+## Completed
+
+### Hybrid onboarding code-cleanup deferrals (v0.3.3.0 review)
+
+- **#3 embedded 인라인 객체 → useMemo:** `OnboardingV2Controller.tsx` / `apps/native/app/onboarding/index.tsx` 의 embedded prop 을 `useMemo` 로 묶음. 매 parent render 마다 자식 useEffect 재발화 차단.
+- **#7 UNIFIED_TOTAL_STEPS / computeUnifiedHeaderCurrent 도출:** `data.ts` 로 이관. `STEP_LABELS.indexOf('persona')` 기반 산식 — STEP_LABELS 변경 시 자동 추종. web 6 unit test 추가.
+- **#8 StepHeader interface comment:** "0..4" → "0..N-1 (N = total)" — web/native 양쪽 이미 적용 확인.
+- **Completed:** v0.3.3.0 후속 (2026-05-27)
+
 ## Open
 
 ### Hybrid onboarding 후속 — informational deferrals (v0.3.3.0 review)
 
 - **Priority:** P2
-- **#3 embedded 인라인 객체:** `OnboardingV2Controller.tsx` / `apps/native/app/onboarding/index.tsx` 의 `embedded={{ onSubStepChange: setPersonaSubStep }}` 인라인 객체 — 매 render 새 reference. `useMemo` 로 안정화. visible bug 0 이지만 useEffect 자주 발화
-- **#7 UNIFIED_TOTAL_STEPS=10 매직:** web/native 양쪽 하드코딩 + `TOTAL_STEPS=6` 와 분리. `STEP_LABELS.length + PERSONA_SUB_STEPS - 1` 로 derive
-- **#8 StepHeader interface comment:** "0..4" → "0..N-1 (N = total)" — comment-only 정정 (이미 web 은 fix 일부 반영, native 도 동기화 검토)
 - **#9 Android splash bg:** `expo-splash-screen` plugin 미등록 — EAS Android build 에서 splash 가 `#12110E` 로 실제 반영되는지 검증 필요. iOS 만 fix 적용된 가능성
 - **#10 Fabric `initialWindowMetrics=null` first install:** Reanimated 4 Fabric 환경에서 첫 cold launch 시 safe-area inset 측정 race 검증 필요 (notched iOS / Android cutout 기기)
 
