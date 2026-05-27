@@ -1,14 +1,30 @@
 /**
  * 네이티브 앱 환경 설정.
  * `app.config.ts`의 `extra`나 `EXPO_PUBLIC_*` 환경변수로 오버라이드 가능.
+ *
+ * 2026-05-27 — root cause fix: metro bundler 의 EXPO_PUBLIC inline plugin 은
+ * **literal access (`process.env.EXPO_PUBLIC_*`)** 만 빌드 시점에 실제 값으로
+ * 변환. 기존 코드의 dynamic key (`process.env[`EXPO_PUBLIC_${key}`]`) 는
+ * production build 에서 inline 안 되어 runtime 에 undefined → Supabase
+ * createClient throw → SIGABRT. 모든 변수를 명시적 literal 로 capture 후
+ * lookup table 로 사용.
  */
 import Constants from 'expo-constants';
 
-function pick(key: string, fallback: string): string {
+// Metro 가 빌드 시점에 각 right-hand side 를 실제 값으로 변환.
+// EAS Build 의 build profile env (또는 environment) 가 worker 에 inject 한 값 사용.
+const ENV_VARS: Record<string, string | undefined> = {
+  API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL,
+  SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  POSTHOG_KEY: process.env.EXPO_PUBLIC_POSTHOG_KEY,
+  POSTHOG_HOST: process.env.EXPO_PUBLIC_POSTHOG_HOST,
+};
+
+function pick(key: keyof typeof ENV_VARS, fallback: string): string {
   const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
   const fromExtra = typeof extra?.[key] === 'string' ? (extra[key] as string) : undefined;
-  const fromEnv = process.env[`EXPO_PUBLIC_${key}`];
-  return fromExtra || fromEnv || fallback;
+  return fromExtra || ENV_VARS[key] || fallback;
 }
 
 export const env = {
