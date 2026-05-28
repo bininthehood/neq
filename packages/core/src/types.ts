@@ -179,10 +179,16 @@ export interface GroupedSearchResponse {
 /**
  * 페르소나 생성 시 사용자가 답한 LLM 동적 설문 한 항목 (디버깅·재요약용).
  * persona v2 (2026-05-24 design doc) — 페르소나당 N=3~4 답 저장.
+ *
+ * 06 진단 B안 (2026-05-28) — axisCategory optional 추가. 다음 step 호출 시
+ * 서버에 prevAnswers 와 함께 전달하면 "사용 금지 카테고리" 추출 가능. 기존
+ * 페르소나 (필드 없음) 도 그대로 동작 — 서버가 axisCategory 부재 시 단순 skip.
  */
 export interface TasteSurveyAnswer {
   question: string;
   selectedOption: string;
+  /** LLM 응답의 axisCategory enum. 클라이언트가 다음 step 호출 시 동봉. */
+  axisCategory?: string;
 }
 
 /**

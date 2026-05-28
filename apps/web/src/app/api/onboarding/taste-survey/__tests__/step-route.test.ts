@@ -62,6 +62,8 @@ function mockLLMSuccess() {
               { id: 'd', label: '무관', hint: '딱히 없음' },
             ],
             axisHint: 'pace',
+            // 06 진단 B안 (2026-05-28) — schema strict enum 강제.
+            axisCategory: 'pace',
           }),
         },
       },
