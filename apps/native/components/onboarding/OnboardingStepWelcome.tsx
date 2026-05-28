@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { colors, spacing, fonts, fontsV2, fontSizePx } from '../../lib/tokens';
 import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 
@@ -10,11 +11,16 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.body}>
+        {/* 2026-05-27 layout shift fix —
+            - RN `Image` → `expo-image`. 정적 require 자산도 즉시 동기 측정 + 캐싱.
+            - logo 박스에 명시 width/height 가 이미 있으므로 박스 크기는 안정.
+            - `contentFit="contain"` (expo-image) = RN `resizeMode="contain"` 정합. */}
         <Image
           source={WORDMARK_ASSET}
           accessibilityLabel="neq,"
           style={styles.logo}
-          resizeMode="contain"
+          contentFit="contain"
+          transition={0}
         />
         <Text style={styles.heading}>오늘의 한 편을{'\n'}고르는 시간</Text>
         <Text style={styles.subtitle}>

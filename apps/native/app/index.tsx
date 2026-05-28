@@ -115,25 +115,36 @@ export default function DiscoverScreen() {
   // 가 사실상 첫 진입 화면이다. 첫 mount 시 `hasOnboarded()` 를 평가해
   // false 면 즉시 `/onboarding` 으로 replace. 깜빡임 방지를 위해 결정 전까지는
   // null 을 렌더 (Tabs 의 scene background = colors.bg 가 그대로 노출).
+  //
+  // 2026-05-27 fix — `useFocusEffect` 로 focus 시마다 재평가.
+  // 기존: `useEffect([])` 한 번만 평가. Tabs `lazy:false` 로 startup pre-mount 된 Discover 는
+  //       onboarding 진입 시 guard 가 redirect 로 잠긴 뒤, `/onboarding/complete` 가
+  //       `router.replace('/')` 해도 Discover 는 이미 mounted 라 useEffect 재실행 X →
+  //       `onboardCheck='redirect'` 잔존 → 빈 SafeAreaView 노출 ("Discover 안 넘어감").
+  // 변경: `useFocusEffect` 의 effect 가 화면이 focus 될 때마다 재평가하므로 onboarding
+  //       완료 후 `router.replace('/')` → Discover focus → `hasOnboarded()` 'true' →
+  //       `onboardCheck='pass'` 로 전환되어 정상 렌더.
   const [onboardCheck, setOnboardCheck] = useState<'pending' | 'pass' | 'redirect'>(
     'pending',
   );
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const ok = await hasOnboarded();
-      if (cancelled) return;
-      if (ok) {
-        setOnboardCheck('pass');
-      } else {
-        setOnboardCheck('redirect');
-        router.replace('/onboarding');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const ok = await hasOnboarded();
+        if (cancelled) return;
+        if (ok) {
+          setOnboardCheck('pass');
+        } else {
+          setOnboardCheck('redirect');
+          router.replace('/onboarding');
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   // 페르소나 전환 — Discover 헤더 chip 에서 사용 (web `DiscoverHeader` 정합).
   const persona = usePersona();

@@ -165,12 +165,23 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
         />
       </View>
 
+      {/* 2026-05-27 (sub-bug a) — body 를 ScrollView 로 감싸 grid 영역이 화면을 넘어도
+          스크롤 가능. FlatList 가 자체 스크롤 모드일 땐 ScrollView 가 비활성 (검색 모드).
+          - showSuggestions 모드: ScrollView 가 grid 8칸 + 여유 패딩 스크롤
+          - showResults 모드: FlatList 자체 스크롤 (기존)
+          keyboardShouldPersistTaps="handled" — 검색 input 활성 중 grid 탭이 키보드 dismiss
+          전에 발화되도록 (네이티브 HIG 정합). */}
       <View style={styles.body}>
         {searching ? (
           <Text style={styles.searchingText}>검색 중...</Text>
         ) : null}
         {showSuggestions ? (
-          <>
+          <ScrollView
+            style={styles.bodyScroll}
+            contentContainerStyle={styles.bodyScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
             <Text style={styles.sectionLabel}>이런 작품은 어때요?</Text>
             <View style={styles.grid}>
               {suggestions.slice(0, 8).map((item) => {
@@ -205,12 +216,13 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
                 );
               })}
             </View>
-          </>
+          </ScrollView>
         ) : null}
         {showResults ? (
           <FlatList
             data={results}
             keyExtractor={(item) => `${item.id}`}
+            keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
               const isSelected = selected.some((s) => s.id === item.id);
               return (
@@ -248,6 +260,9 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
         ) : null}
       </View>
 
+      {/* 2026-05-27 (sub-bug b) — ctaWrap 위 디바이더 추가.
+          body 영역과 CTA 영역의 시각 경계가 없어 콘텐츠가 CTA 와 붙어보이는 결함 fix.
+          colors.borderSubtle (#1F1E1A) — 디자인 토큰 정합, 너무 진하지 않게 hairline. */}
       <View style={styles.ctaWrap}>
         <Pressable
           onPress={() => onNext(selected)}
@@ -265,13 +280,17 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
             {reachedMin ? '다음' : `${RECOMMENDED_SELECT - selected.length}개 더 권장`}
           </Text>
         </Pressable>
+        {/* 2026-05-27 (sub-bug c) — "건너뛰기" 시인성 fix.
+            기존: border + transparent bg → 어두운 박스가 묻혀 보임 + textSecondary 색상.
+            변경: 다른 onboarding step (Hello/Taste/OTT/Notify) 의 skip 패턴 정합 —
+            border 제거 + 텍스트만. 시각적 무게 감소 + 명확한 secondary action. */}
         <Pressable
           onPress={onSkip}
           accessibilityRole="button"
           accessibilityLabel="건너뛰기"
           style={({ pressed }) => [
-            styles.skipCta,
-            pressed && { opacity: 0.85 },
+            styles.skipBtn,
+            pressed && { opacity: 0.7 },
           ]}
         >
           <Text style={styles.skipLabel}>건너뛰기</Text>
@@ -318,7 +337,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: colors.danger ?? '#d54e4e',
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -350,6 +369,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 28,
     paddingTop: spacing.sm,
+  },
+  // 2026-05-27 (sub-bug a) — body 내부 ScrollView 스타일.
+  bodyScroll: {
+    flex: 1,
+  },
+  bodyScrollContent: {
+    paddingBottom: spacing.md,
   },
   searchingText: {
     color: colors.textMuted,
@@ -443,11 +469,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // 2026-05-27 (sub-bug b) — ctaWrap 상단 디바이더. body 와 CTA 영역 시각 경계 명확화.
   ctaWrap: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     paddingTop: spacing.sm + 4,
     gap: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
   },
   cta: {
     width: '100%',
@@ -456,14 +485,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   ctaLabel: { fontSize: 14, fontWeight: '600' },
-  skipCta: {
+  // 2026-05-27 (sub-bug c) — 다른 onboarding step skip 패턴 정합. border 제거 + 텍스트만.
+  skipBtn: {
     width: '100%',
     paddingVertical: 12,
-    borderRadius: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'transparent',
+    justifyContent: 'center',
   },
   skipLabel: {
     color: colors.textSecondary,
