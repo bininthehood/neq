@@ -252,6 +252,8 @@ export default function PersonaSurveyController({
       const answer: TasteSurveyAnswer = {
         question: currentOutput.question,
         selectedOption: option.label,
+        // 06 진단 B안 (2026-05-28) — 다음 step 호출 시 서버가 사용 금지 카테고리 추출.
+        axisCategory: currentOutput.axisCategory,
       };
       const nextAnswers = [...prevAnswers, answer];
       track('taste_survey_step_completed', {

@@ -180,6 +180,27 @@ async function postJson<TOut>(
  */
 export type SurveyStepResponse = SurveyStepOutput & { newToken?: string };
 
+/**
+ * 06 진단 B안 (2026-05-28) — axisCategory enum 검증.
+ * static-survey.ts 의 SurveyAxisCategory 와 동일 12 종. inline 으로 두는 이유:
+ * 타입 import (`SurveyAxisCategory`) 만 사용하면 런타임에 enum 값 없음 → string
+ * 배열로 별도 선언. 서버 route.ts 의 AXIS_CATEGORIES 와 동기 유지 필요.
+ */
+const AXIS_CATEGORIES: readonly string[] = [
+  'pace',
+  'closure',
+  'character',
+  'world',
+  'tone',
+  'era',
+  'intensity',
+  'rhythm',
+  'theme',
+  'rewatch',
+  'context',
+  'emotional_risk',
+];
+
 function validateStepOutput(data: unknown): SurveyStepResponse {
   if (!data || typeof data !== 'object')
     throw new SurveyClientError('parse_fail', 'step output not object');
@@ -190,6 +211,8 @@ function validateStepOutput(data: unknown): SurveyStepResponse {
     throw new SurveyClientError('parse_fail', 'options must be 4');
   if (typeof d.axisHint !== 'string')
     throw new SurveyClientError('parse_fail', 'invalid axisHint');
+  if (typeof d.axisCategory !== 'string' || !AXIS_CATEGORIES.includes(d.axisCategory))
+    throw new SurveyClientError('parse_fail', 'invalid axisCategory');
   if (typeof d.shouldContinue !== 'boolean')
     throw new SurveyClientError('parse_fail', 'invalid shouldContinue');
   if (d.newToken !== undefined && typeof d.newToken !== 'string')

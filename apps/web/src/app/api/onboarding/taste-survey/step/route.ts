@@ -23,6 +23,7 @@ import {
   type PersonaContext,
   type TasteSurveyAnswer,
   type SurveyStepOutput,
+  type SurveyAxisCategory,
 } from '@neq/core';
 import {
   issueToken,
@@ -94,10 +95,30 @@ function getClientIp(req: NextRequest): string {
 
 const LLM_TIMEOUT_MS = 8000;
 
+/**
+ * 06 진단 B안 (2026-05-28) — axis 카테고리 enum. SurveyAxisCategory 와 같은 값.
+ * LLM_SCHEMA 에 string enum 으로 강제, prompt 에 자연어 힌트 둘 다 사용.
+ */
+const AXIS_CATEGORIES: readonly SurveyAxisCategory[] = [
+  'pace',
+  'closure',
+  'character',
+  'world',
+  'tone',
+  'era',
+  'intensity',
+  'rhythm',
+  'theme',
+  'rewatch',
+  'context',
+  'emotional_risk',
+] as const;
+
 interface LLMQuestionOutput {
   question: string;
   options: { id: 'a' | 'b' | 'c' | 'd'; label: string; hint?: string }[];
   axisHint: string;
+  axisCategory: SurveyAxisCategory;
 }
 
 const LLM_SCHEMA = {
@@ -124,23 +145,84 @@ const LLM_SCHEMA = {
         },
       },
       axisHint: { type: 'string' },
+      axisCategory: {
+        type: 'string',
+        enum: [...AXIS_CATEGORIES],
+      },
     },
-    required: ['question', 'options', 'axisHint'],
+    required: ['question', 'options', 'axisHint', 'axisCategory'],
   },
 } as const;
 
-const SYSTEM_PROMPT = `당신은 neko 의 한국 OTT 사용자 콜드스타트 설문 설계자입니다.
-사용자의 메타 취향 축 (페이스, 결말, 주제 무게, 호흡, 분위기 등) 을 끌어내는
-한국어 분기 질문을 생성합니다.
+const SYSTEM_PROMPT = `당신은 neq 의 한국 OTT 사용자 콜드스타트 설문 설계자입니다.
+사용자의 메타 취향을 *발견적으로* 끌어내는 한국어 분기 질문을 생성합니다.
 
-규칙:
-- 질문은 30자 이내, 친근하지만 절제된 톤 (Quiet Ink).
-- 옵션은 정확히 4개. id: a, b, c, d. label 은 짧고 자연스러운 한국어.
-- 옵션 d 는 "무관 / 모름" 등 회피 옵션을 포함하도록 (사용자가 강요받지 않게).
+[메타 취향 축 — axisCategory enum, 매 step 다른 카테고리 사용]
+- pace: 빠른 전개 vs 느린 호흡
+- closure: 명쾌 / 여운 / 반전 결말
+- character: 깊이 / 앙상블 / 도구화된 캐릭터
+- world: 현실 / SF / 판타지 / 시대 배경 / 장르 형식
+- tone: 따뜻 / 긴장 / 재치 / 차가움
+- era: 현재 / 80~90s / 클래식 / 비서구 문화권
+- intensity: 폭력·감정 강도 (얼마나 세게)
+- rhythm: 한 번에 몰아 vs 매일 조금 vs 주말 / 러닝타임
+- theme: 죽음·전쟁·사회 vs 일상·코미디
+- rewatch: 일회성 vs 곱씹는 작품
+- context: 시청 맥락 (배경 / 집중 / 잠들기 전 / 동반자)
+- emotional_risk: 슬픔·불편함 감수도
+
+[step 의도]
+- step 1 = broad. 사용자 폭을 넓게 짚는 질문. 가장 식별력 높은 1개 카테고리.
+- step 2 = contrast. step 1 과 다른 카테고리, 의외의 축으로 대비.
+- step 3 = sharpness. step 1·2 에서 안 잡힌 미세한 결을 잡는 날카로운 질문.
+
+[질문 작성 규칙]
+- 질문은 30자 이내, 친근하지만 절제된 톤 (Quiet Ink). 마케팅 카피·"~한 당신"·이모지 금지.
+- 옵션은 정확히 4개. id 순서 a·b·c·d. label 은 짧고 자연스러운 한국어 (8자 내외 권장).
+- 옵션 d 는 항상 "무관 / 모름 / 잘 모르겠어요" 등 회피 옵션. 사용자에게 강요 금지.
 - hint 는 옵션 label 의 짧은 보조 설명. 한 줄 이내.
-- 이전 답을 보고 자연스러운 다음 질문으로 분기. 같은 축 반복 금지.
+- 같은 axisCategory 두 번 사용 금지. 이전에 쓴 카테고리는 user prompt 에 명시됨.
 
-JSON schema 를 정확히 따르세요.`;
+[좋은 질문 예시]
+GOOD (axisCategory=tone): "어떤 분위기에 마음이 풀려요?"
+  a: 따뜻한 거실 톤 / b: 차갑고 절제된 / c: 들썩이는 / d: 그날 기분 따라
+  → 톤 카테고리를 구체 감각어로 분기. 형용사 강도 차이 있음.
+
+GOOD (axisCategory=era): "어느 시대 정서에 더 끌려요?"
+  a: 지금 이 순간 / b: 80~90년대 / c: 비서구·아시아 결 / d: 시대는 안 따져요
+  → era 카테고리. 단순 연도 X, 정서 결로 묶음.
+
+[진부한 질문 예시 — 피할 것]
+BAD: "어떤 영화가 좋아요?" → 너무 광범위, 메타 축 없음.
+BAD: "장르는 뭘 좋아하세요?" → 장르는 favorites picker 가 잡음. 메타 축이 아님.
+BAD: "감동·재미·긴장 중 뭐?" → 옵션이 의미 단위가 섞여 분기 안 됨.
+
+JSON schema 를 정확히 따르세요. axisCategory 는 위 enum 12종 중 1개 정확히.`;
+
+/**
+ * 06 진단 B안 (2026-05-28) — TasteSurveyAnswer 에서 axisCategory 추출.
+ * client 가 다음 step 호출 시 prevAnswers 항목에 axisCategory 동봉하면 우선 사용.
+ * 미동봉 시 client 영향 0 → 빈 배열 (자연어 힌트 없이 schema enum 만 강제).
+ */
+function extractUsedAxes(
+  prevAnswers: TasteSurveyAnswer[],
+): SurveyAxisCategory[] {
+  const used: SurveyAxisCategory[] = [];
+  for (const a of prevAnswers) {
+    const cand = (a as TasteSurveyAnswer & { axisCategory?: unknown })
+      .axisCategory;
+    if (typeof cand === 'string' && (AXIS_CATEGORIES as readonly string[]).includes(cand)) {
+      used.push(cand as SurveyAxisCategory);
+    }
+  }
+  return used;
+}
+
+function stepIntent(step: number): string {
+  if (step === 1) return 'broad — 사용자 폭을 가장 넓게 짚는 카테고리 1개';
+  if (step === 2) return 'contrast — step 1 과 다른 결, 의외의 축으로 대비';
+  return 'sharpness — step 1·2 에서 안 잡힌 미세한 결을 잡는 날카로운 질문';
+}
 
 function buildUserPrompt(
   context: PersonaContext,
@@ -158,14 +240,28 @@ function buildUserPrompt(
     prevAnswers.length === 0
       ? '(이전 답 없음 — 첫 질문)'
       : prevAnswers
-          .map((a, i) => `${i + 1}. Q: ${a.question} / A: ${a.selectedOption}`)
+          .map((a, i) => {
+            const ax = (a as TasteSurveyAnswer & { axisCategory?: string })
+              .axisCategory;
+            const axisTag = ax ? ` [axisCategory=${ax}]` : '';
+            return `${i + 1}. Q: ${a.question}${axisTag} / A: ${a.selectedOption}`;
+          })
           .join('\n');
+  const usedAxes = extractUsedAxes(prevAnswers);
+  const forbidLine =
+    usedAxes.length > 0
+      ? `금지 axisCategory (이미 사용됨): ${usedAxes.join(', ')}\n다음 질문은 위 카테고리 *외* 의 다른 1종을 선택하세요.`
+      : '아직 사용된 axisCategory 없음. step 의도에 맞는 식별력 높은 카테고리를 선택하세요.';
+
   return `컨텍스트: ${companionLabel} 보는 ${ctxLabel}
-현재 step: ${step}
+현재 step: ${step} (의도: ${stepIntent(step)})
+${forbidLine}
+
 이전 답:
 ${prevSummary}
 
-위 컨텍스트에 맞춰 step ${step} 의 분기 질문 1개와 4 옵션을 생성하세요.`;
+위 컨텍스트와 의도에 맞춰 step ${step} 의 분기 질문 1개와 4 옵션을 생성하세요.
+응답에 axisCategory 를 정확히 1개 포함하세요 (위 금지 목록 외).`;
 }
 
 async function callLLM(
@@ -191,7 +287,8 @@ async function callLLM(
               type: 'json_schema',
               json_schema: LLM_SCHEMA,
             },
-            temperature: 0.7,
+            // 06 진단 B안 (2026-05-28): 다양성 ↑ — 추천엔진 (0.9) 와 동률.
+            temperature: 0.9,
           },
           { signal: controller.signal },
         );
@@ -199,12 +296,14 @@ async function callLLM(
         const content = response.choices[0]?.message?.content;
         if (!content) continue;
         const parsed = JSON.parse(content) as LLMQuestionOutput;
-        // 응답 schema 추가 검증
+        // 응답 schema 추가 검증 — axisCategory enum 포함
         if (
           typeof parsed.question === 'string' &&
           Array.isArray(parsed.options) &&
           parsed.options.length === 4 &&
-          typeof parsed.axisHint === 'string'
+          typeof parsed.axisHint === 'string' &&
+          typeof parsed.axisCategory === 'string' &&
+          (AXIS_CATEGORIES as readonly string[]).includes(parsed.axisCategory)
         ) {
           return parsed;
         }
@@ -315,6 +414,7 @@ export async function POST(req: NextRequest) {
       question: fallback.question,
       options: fallback.options as LLMQuestionOutput['options'],
       axisHint: fallback.axisHint,
+      axisCategory: fallback.axisCategory,
     };
     usedFallback = true;
   }
@@ -329,6 +429,7 @@ export async function POST(req: NextRequest) {
     question: llmOutput.question,
     options: llmOutput.options,
     axisHint: llmOutput.axisHint,
+    axisCategory: llmOutput.axisCategory,
     shouldContinue,
   };
   if (newToken) response.newToken = newToken;

@@ -24,6 +24,8 @@ const VALID_STEP_OUTPUT = {
     { id: 'd', label: '무관' },
   ],
   axisHint: 'pace',
+  // 06 진단 B안 (2026-05-28) — schema enum 강제.
+  axisCategory: 'pace',
   shouldContinue: false,
 };
 

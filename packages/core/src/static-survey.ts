@@ -17,10 +17,37 @@ export interface SurveyOption {
   hint?: string;
 }
 
+/**
+ * 메타 취향 축 카테고리 — LLM 강제 비반복 enum (06 진단 B안, 2026-05-28).
+ *
+ * 평면 5종 ('pace/closure/theme/rhythm/mood') 에서 발견적 12종으로 확장.
+ * 서버는 prevAnswers 에서 사용된 axisCategory 를 추출해 다음 step LLM 호출 시
+ * "사용 금지" 목록으로 전달, JSON schema enum 강제와 prompt 자연어 힌트 둘 다 사용.
+ * static fallback 풀도 동일 카테고리 라벨 사용.
+ */
+export type SurveyAxisCategory =
+  | 'pace'           // 페이스 — 빠른 전개 vs 느린 호흡
+  | 'closure'        // 결말 — 명쾌 vs 여운 vs 반전
+  | 'character'      // 캐릭터 — 깊이 / 앙상블 / 도구화
+  | 'world'          // 세계관 — 현실 / SF / 판타지 / 시대
+  | 'tone'           // 톤·분위기 — 따뜻 / 긴장 / 재치 / 차가움
+  | 'era'            // 시대·문화 — 현재 / 80s / 클래식 / 비서구
+  | 'intensity'      // 강도 — 폭력·감정 강도
+  | 'rhythm'         // 호흡 — binge / 매일 / 주말
+  | 'theme'          // 주제 무게 — 죽음·전쟁 vs 일상·코미디
+  | 'rewatch'        // 재시청성 — 일회성 vs 곱씹는 작품
+  | 'context'        // 시청 맥락 — 배경 / 집중 / 잠들기 전 / 동반자
+  | 'emotional_risk'; // 정서적 위험 — 슬픔·불편함 감수도
+
 export interface SurveyStepOutput {
   question: string;
   options: SurveyOption[];
   axisHint: string;
+  /**
+   * 06 진단 B안 (2026-05-28) — LLM 강제 비반복 enum. static fallback 도 동일 라벨.
+   * 서버가 prevAnswers 의 axisCategory 를 누적해 다음 step 호출 시 금지 목록 전달.
+   */
+  axisCategory: SurveyAxisCategory;
   /**
    * step 2 응답에 한해 의미. true=step 3 추가, false=summarize 진입.
    * outside voice MED #5 — 서버 endpoint 가 sharpness 판정 결과 동봉.
@@ -65,6 +92,7 @@ const MOVIE_ALONE: SurveyStepOutput[] = [
   {
     question: '어떤 페이스가 좋아요?',
     axisHint: '페이스 (pace)',
+    axisCategory: 'pace',
     options: [
       { id: 'a', label: '빠르게 몰입', hint: '긴장감 있는 전개' },
       { id: 'b', label: '천천히 깊게', hint: '호흡이 긴 작품' },
@@ -76,6 +104,7 @@ const MOVIE_ALONE: SurveyStepOutput[] = [
   {
     question: '어떤 결말을 더 좋아해요?',
     axisHint: '결말 (closure)',
+    axisCategory: 'closure',
     options: [
       { id: 'a', label: '명쾌한 마무리', hint: '모든 게 해결되는' },
       { id: 'b', label: '여운이 남는 마무리', hint: '해석의 여지가 있는' },
@@ -87,6 +116,7 @@ const MOVIE_ALONE: SurveyStepOutput[] = [
   {
     question: '어떤 주제를 견딜 수 있어요?',
     axisHint: '주제 무게 (theme weight)',
+    axisCategory: 'theme',
     options: [
       { id: 'a', label: '무거운 주제', hint: '죽음·전쟁·심리 등' },
       { id: 'b', label: '가벼운 주제', hint: '코미디·로맨스 위주' },
@@ -103,7 +133,8 @@ const MOVIE_ALONE: SurveyStepOutput[] = [
 const MOVIE_TOGETHER: SurveyStepOutput[] = [
   {
     question: '같이 보는 사람과 무엇을 공유하고 싶어요?',
-    axisHint: '공유 동기 (shared motive)',
+    axisHint: '공유 동기 (shared context)',
+    axisCategory: 'context',
     options: [
       { id: 'a', label: '같이 웃기', hint: '코미디·가벼운 분위기' },
       { id: 'b', label: '같이 몰입', hint: '긴장감 있는 전개' },
@@ -114,7 +145,8 @@ const MOVIE_TOGETHER: SurveyStepOutput[] = [
   },
   {
     question: '러닝타임은 얼마가 적당해요?',
-    axisHint: '러닝타임 선호',
+    axisHint: '러닝타임 (rhythm)',
+    axisCategory: 'rhythm',
     options: [
       { id: 'a', label: '90분 이하', hint: '짧고 가볍게' },
       { id: 'b', label: '2시간 안팎', hint: '일반적인 길이' },
@@ -125,7 +157,8 @@ const MOVIE_TOGETHER: SurveyStepOutput[] = [
   },
   {
     question: '어떤 분위기가 어울려요?',
-    axisHint: '분위기 (mood)',
+    axisHint: '분위기 (tone)',
+    axisCategory: 'tone',
     options: [
       { id: 'a', label: '따뜻한 분위기', hint: '편안한 감정' },
       { id: 'b', label: '긴장된 분위기', hint: '집중하게 되는' },
@@ -142,7 +175,8 @@ const MOVIE_TOGETHER: SurveyStepOutput[] = [
 const SERIES_ALONE: SurveyStepOutput[] = [
   {
     question: '한 번에 얼마나 보고 싶어요?',
-    axisHint: '시청 호흡 (binge style)',
+    axisHint: '시청 호흡 (rhythm)',
+    axisCategory: 'rhythm',
     options: [
       { id: 'a', label: '몰아보기', hint: '한 시즌 통째로' },
       { id: 'b', label: '하루 1-2 화', hint: '조금씩 오래' },
@@ -153,7 +187,8 @@ const SERIES_ALONE: SurveyStepOutput[] = [
   },
   {
     question: '몇 시즌까지 견딜 수 있어요?',
-    axisHint: '시즌 길이',
+    axisHint: '시즌 길이 (pace)',
+    axisCategory: 'pace',
     options: [
       { id: 'a', label: '1 시즌 단편', hint: '명확한 결말' },
       { id: 'b', label: '2-3 시즌', hint: '적당한 길이' },
@@ -164,7 +199,8 @@ const SERIES_ALONE: SurveyStepOutput[] = [
   },
   {
     question: '캐릭터가 어떻길 바라요?',
-    axisHint: '캐릭터 깊이',
+    axisHint: '캐릭터 깊이 (character)',
+    axisCategory: 'character',
     options: [
       { id: 'a', label: '한 명에 깊이 몰입', hint: '주인공 서사' },
       { id: 'b', label: '여럿이 얽혀', hint: '앙상블 캐스트' },
@@ -181,7 +217,8 @@ const SERIES_ALONE: SurveyStepOutput[] = [
 const SERIES_TOGETHER: SurveyStepOutput[] = [
   {
     question: '같이 보는 사람의 취향은 어때요?',
-    axisHint: '동반자 취향',
+    axisHint: '동반자 취향 (context)',
+    axisCategory: 'context',
     options: [
       { id: 'a', label: '비슷해요', hint: '큰 갈등 없음' },
       { id: 'b', label: '꽤 달라요', hint: '중간 지점이 필요' },
@@ -192,7 +229,8 @@ const SERIES_TOGETHER: SurveyStepOutput[] = [
   },
   {
     question: '새 시즌 기다리는 게 괜찮아요?',
-    axisHint: '갱신 인내심',
+    axisHint: '갱신 인내심 (rhythm)',
+    axisCategory: 'rhythm',
     options: [
       { id: 'a', label: '완결작 선호', hint: '기다리기 싫어요' },
       { id: 'b', label: '진행 중도 OK', hint: '같이 따라가는 재미' },
@@ -203,7 +241,8 @@ const SERIES_TOGETHER: SurveyStepOutput[] = [
   },
   {
     question: '같이 볼 때 어떤 장르가 안전해요?',
-    axisHint: '안전 장르',
+    axisHint: '안전 장르 (world)',
+    axisCategory: 'world',
     options: [
       { id: 'a', label: '드라마·로맨스', hint: '감정선 위주' },
       { id: 'b', label: '범죄·스릴러', hint: '긴장감 위주' },
@@ -220,7 +259,8 @@ const SERIES_TOGETHER: SurveyStepOutput[] = [
 const VARIETY_ALONE: SurveyStepOutput[] = [
   {
     question: '혼자 볼 때 예능은 어떤 역할이에요?',
-    axisHint: '시청 동기',
+    axisHint: '시청 동기 (context)',
+    axisCategory: 'context',
     options: [
       { id: 'a', label: '배경 음악처럼', hint: '집안일하며 흘려보기' },
       { id: 'b', label: '집중해서 즐기기', hint: '제대로 시청' },
@@ -231,7 +271,8 @@ const VARIETY_ALONE: SurveyStepOutput[] = [
   },
   {
     question: '어떤 형식이 더 끌려요?',
-    axisHint: '예능 형식',
+    axisHint: '예능 형식 (world)',
+    axisCategory: 'world',
     options: [
       { id: 'a', label: '관찰 예능', hint: '일상·여행' },
       { id: 'b', label: '토크쇼', hint: '대화·인터뷰' },
@@ -242,7 +283,8 @@ const VARIETY_ALONE: SurveyStepOutput[] = [
   },
   {
     question: '출연자는 누가 좋아요?',
-    axisHint: '출연자 선호',
+    axisHint: '출연자 선호 (character)',
+    axisCategory: 'character',
     options: [
       { id: 'a', label: '익숙한 얼굴', hint: '오래 본 출연자' },
       { id: 'b', label: '새로운 얼굴', hint: '낯선 사람의 매력' },
@@ -259,7 +301,8 @@ const VARIETY_ALONE: SurveyStepOutput[] = [
 const VARIETY_TOGETHER: SurveyStepOutput[] = [
   {
     question: '같이 볼 때 무엇이 가장 중요해요?',
-    axisHint: '공유 가치',
+    axisHint: '공유 가치 (context)',
+    axisCategory: 'context',
     options: [
       { id: 'a', label: '같이 웃기', hint: '폭소 위주' },
       { id: 'b', label: '같이 대화', hint: '이야기거리' },
@@ -270,7 +313,8 @@ const VARIETY_TOGETHER: SurveyStepOutput[] = [
   },
   {
     question: '주로 언제 봐요?',
-    axisHint: '시청 시간대',
+    axisHint: '시청 시간대 (rhythm)',
+    axisCategory: 'rhythm',
     options: [
       { id: 'a', label: '저녁 식사 중', hint: '식탁에서' },
       { id: 'b', label: '주말 낮', hint: '여유 있는 시간' },
@@ -281,7 +325,8 @@ const VARIETY_TOGETHER: SurveyStepOutput[] = [
   },
   {
     question: '한 회 길이는 어느 정도가 좋아요?',
-    axisHint: '회차 길이',
+    axisHint: '회차 길이 (pace)',
+    axisCategory: 'pace',
     options: [
       { id: 'a', label: '30분 이내', hint: '짧고 부담 없게' },
       { id: 'b', label: '1시간 안팎', hint: '제대로 빠져들기' },
