@@ -29,6 +29,23 @@ import DiscoverDeck from "@/components/discover/DiscoverDeck";
 import { useSync } from "@/hooks/useSync";
 import { usePersona } from "@/contexts/PersonaContext";
 import { useToast } from "@neq/design";
+import {
+  createLocalStorageHook,
+  setLocalStorageItem,
+} from "@/hooks/useLocalStorageValue";
+
+// 튜토리얼 노출 정책: tutorialV3Shown / neq_coach_v2_shown 둘 다 1 이면 미노출.
+// useSyncExternalStore 기반 reactive read — write (setLocalStorageItem) 시 즉시 반영.
+const useTutorialV3Shown = createLocalStorageHook(
+  "tutorialV3Shown",
+  (raw) => raw === "1",
+  false,
+);
+const useCoachV2Shown = createLocalStorageHook(
+  "neq_coach_v2_shown",
+  (raw) => raw === "1",
+  false,
+);
 
 const metaInfo = (r: Recommendation) => [
   getPrimaryCountryName(r.country),
@@ -519,15 +536,11 @@ export default function DiscoverPage() {
   // TutorialFlow v3 노출 정책:
   //   - localStorage 키 `tutorialV3Shown` 또는 (기존) `neq_coach_v2_shown` 둘 중 하나라도 1 이면 미노출
   //   - 둘 다 false 이고 첫 카드 로드 완료된 시점에 활성화
-  // mount 직후 1회만 점검. 첫 카드 로드 감지는 별도 effect 에서 filtered.length 의존성으로.
-  const [tutorialEligible, setTutorialEligible] = useState(false);
-  useEffect(() => {
-    if (typeof localStorage === "undefined") return;
-    const v3Done = localStorage.getItem("tutorialV3Shown") === "1";
-    const v2Done = localStorage.getItem("neq_coach_v2_shown") === "1";
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR-safe mount-only localStorage 읽기.
-    setTutorialEligible(!v3Done && !v2Done);
-  }, []);
+  // useSyncExternalStore 기반 reactive — close 시 setLocalStorageItem 호출로
+  // 즉시 false 전환 (기존 setTutorialEligible(false) 명시 호출 불필요).
+  const tutorialV3Shown = useTutorialV3Shown();
+  const coachV2Shown = useCoachV2Shown();
+  const tutorialEligible = !tutorialV3Shown && !coachV2Shown;
   // 첫 카드 로드되면 tutorial 활성화. (eligible=false 면 무시)
   useEffect(() => {
     if (!tutorialEligible) return;
@@ -542,11 +555,10 @@ export default function DiscoverPage() {
 
   const handleTutorialClose = useCallback(
     (_reason: "completed" | "skipped", _payload: { stepsCompleted: number; atStep: TutorialStep }) => {
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem("tutorialV3Shown", "1");
-      }
+      // setLocalStorageItem → useTutorialV3Shown 자동 reactive → tutorialEligible
+      // derive 자동 false 전환 (별도 setTutorialEligible(false) 불필요).
+      setLocalStorageItem("tutorialV3Shown", "1");
       setTutorialActive(false);
-      setTutorialEligible(false);
     },
     [],
   );
