@@ -121,6 +121,11 @@ export default function RootLayout() {
   // 기존: Discover (app/index.tsx) 에만 가드 → Tabs 의 Profile/Saved 로 우회 가능.
   // 변경: root mount 시 hasOnboarded() 평가 후 false 면 즉시 router.replace.
   // Discover 의 가드는 fetch skip 효과를 위해 유지 (중복이지만 안전망).
+  //
+  // 2026-05-27 fix — pending 동안 Tabs 렌더링 차단.
+  // 기존: pending 상태에서도 Tabs 가 렌더되어 lazy:false 의 Discover/Saved/Profile 가
+  //       pre-mount 됨. Discover 가 자기 자신의 guard 로 redirect 평가 → root guard
+  //       와 동시 평가되며 race 발생. pending 동안 빈 View 만 노출해 race 차단.
   const [rootGuard, setRootGuard] = useState<'pending' | 'pass'>('pending');
   useEffect(() => {
     let cancelled = false;
@@ -137,7 +142,11 @@ export default function RootLayout() {
 
   // 2026-05-26 layout shift fix — fontsLoaded false 시 null 대신 동일 background 의
   // 빈 View 노출. splash dismiss → 빈 화면 → 콘텐츠 mount 의 3-step 깜빡임 차단.
+  // 2026-05-27 — rootGuard pending 도 동일 패턴. 결정 전 Tabs 렌더링 차단.
   if (!fontsLoaded && !fontError) {
+    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
+  }
+  if (rootGuard === 'pending') {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
 

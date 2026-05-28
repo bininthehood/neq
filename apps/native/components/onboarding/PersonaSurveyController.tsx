@@ -215,8 +215,15 @@ export default function PersonaSurveyController({
   }
 
   // === 컨텍스트 선택 후 진행 상황 복구 체크 ===
+  // 2026-05-27 — multi-select 적용. additionalContentTypes 는 사용자가 다중 선택한
+  // 부가 콘텐츠 타입 (primary 외). PersonaContext.contentType 은 packages/core 단일
+  // 값 그대로 유지 — 추천 모집단 union 확장은 server-side 변경 필요 (followup).
+  // 현 단계에선 track 이벤트에 동봉해 데이터로만 수집.
   const handleContextNext = useCallback(
-    async (picked: PersonaContext) => {
+    async (
+      picked: PersonaContext,
+      options?: { additionalContentTypes?: PersonaContext['contentType'][] },
+    ) => {
       setContext(picked);
       const existing = await loadProgress(picked);
       if (existing && existing.prevAnswers.length > 0) {
@@ -224,10 +231,14 @@ export default function PersonaSurveyController({
         return;
       }
       startedAtRef.current = Date.now();
+      // track properties 는 Primitive 만 허용 — 배열은 join 으로 정규화.
+      const extra = options?.additionalContentTypes ?? [];
       track('taste_survey_started', {
         contentType: picked.contentType,
         companion: picked.companion,
         is_resurvey: !!resurveyPersonaId,
+        additional_content_types: extra.join(','),
+        additional_content_types_count: extra.length,
       });
       beginStep(picked, 1, []);
     },
