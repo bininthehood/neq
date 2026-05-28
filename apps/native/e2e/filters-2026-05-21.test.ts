@@ -111,6 +111,16 @@ async function openChipDropdown(kind: string): Promise<boolean> {
 // ──────────────────────────────────────────────────────────
 describe('B4 — 필터칩 회귀', () => {
   before(async () => {
+    // spec audit (2026-05-28) — 이전 spec 의 onboarding 상태 leak 방지.
+    // forceResetApp + onboarded state 확인 후 "발견" 탭 진입.
+    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    await forceResetApp();
+    if (await pageSourceContains('시작하기')) {
+      throw new Error(
+        'before: 앱이 onboarding (welcome) 화면. filters spec 은 onboarded 상태 가정. ' +
+        '수동 onboarding 완료 후 재실행 필요.',
+      );
+    }
     await tapTab('발견');
     await browser.pause(1500);
     await ensureChipsVisible();

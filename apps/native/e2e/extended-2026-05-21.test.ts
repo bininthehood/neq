@@ -118,6 +118,15 @@ async function longPress(x: number, y: number, durationMs = 800) {
 // ──────────────────────────────────────────────────────────
 describe('B1 — Onboarding 진입 경로', () => {
   before(async () => {
+    // spec audit (2026-05-28) — 이전 spec 의 onboarding 상태 leak 방지.
+    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    await forceResetApp();
+    if (await pageSourceContains('시작하기')) {
+      throw new Error(
+        'before: 앱이 onboarding 화면. extended B1 은 onboarded 상태 가정. ' +
+        '수동 onboarding 완료 후 재실행 필요.',
+      );
+    }
     await browser.pause(2000);
     await ensureBackToDiscover();
   });
@@ -156,6 +165,12 @@ describe('B1 — Onboarding 진입 경로', () => {
 // ──────────────────────────────────────────────────────────
 describe('B2 — Saved 필터/정렬/검색', () => {
   before(async () => {
+    // spec audit (2026-05-28) — isolation.
+    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    await forceResetApp();
+    if (await pageSourceContains('시작하기')) {
+      throw new Error('before: 앱이 onboarding 화면. B2 는 onboarded 상태 가정.');
+    }
     await ensureBackToDiscover();
   });
 
@@ -261,6 +276,12 @@ describe('B2 — Saved 필터/정렬/검색', () => {
 // ──────────────────────────────────────────────────────────
 describe('B3 — Report + Archive', () => {
   before(async () => {
+    // spec audit (2026-05-28) — isolation.
+    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    await forceResetApp();
+    if (await pageSourceContains('시작하기')) {
+      throw new Error('before: 앱이 onboarding 화면. B3 는 onboarded 상태 가정.');
+    }
     await ensureBackToDiscover();
     await tapTab('저장');
     await browser.pause(1200);

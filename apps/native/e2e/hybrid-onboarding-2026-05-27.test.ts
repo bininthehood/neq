@@ -159,7 +159,15 @@ async function resetIfOnboarded(): Promise<void> {
 describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
   before(async () => {
     await capture('hybrid-00-initial');
-    await resetIfOnboarded();
+    // spec audit (2026-05-28) — terminate + launch 로 isolation 보장.
+    // 단, 앱 데이터 reset 까지는 아님 (forceResetApp 는 process restart 만).
+    // onboarded 상태면 기존 "프로필 → 모든 데이터 초기화" 경로 시도 (fallback).
+    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    await forceResetApp();
+    if (!(await pageSourceContains('시작하기'))) {
+      // 아직 onboarded 상태 — destructive reset 시도
+      await resetIfOnboarded();
+    }
     await browser.pause(2000);
     await capture('hybrid-01-after-reset');
   });
