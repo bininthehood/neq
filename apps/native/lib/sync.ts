@@ -10,7 +10,7 @@ import {
   getAccountPrefs,
   setAccountPrefs,
   defaultAccountPrefs,
-  getActivePersonaId,
+  isDefaultPersonaBucket,
 } from './store';
 import type { AccountPrefs, SavedItem, WatchReport } from './types';
 
@@ -72,7 +72,11 @@ export async function pushToServer(): Promise<{ success: boolean; pushed: number
   // W5 Task G — non-default persona 가 활성일 때 watch_reports / account_prefs 동기화 skip.
   // web `apps/web/src/lib/sync.ts:94, 134-135, 152-153` 와 동일한 v1 sync limitation.
   // saved_items 는 글로벌이므로 항상 동기화.
-  const isDefaultPersona = (await getActivePersonaId()) === 'default';
+  //
+  // 2026-05-28 — 시드 페르소나 제거 후 'default' id 직접 비교 → personas[0] 기반
+  // bucket 판정으로 변경 (`isDefaultPersonaBucket`). 첫 페르소나는 사용자가 명시
+  // 생성한 UUID id 라도 personas[0] 이므로 default bucket 으로 간주 → sync 정상.
+  const isDefaultPersona = await isDefaultPersonaBucket();
   let pushed = 0;
 
   try {
@@ -151,7 +155,9 @@ export async function pullFromServer(): Promise<{ success: boolean; pulled: numb
   // 이유: store setter 들이 single bucket 에 쓰기 때문에 서버 데이터(default 기준)가
   // 활성 persona 와 무관하게 덮어써질 위험. saved 는 글로벌이므로 큰 문제 없지만
   // watch_reports / account_prefs 가 섞이는 것 방지. v2 sync (persona-aware) 에서 해제.
-  if ((await getActivePersonaId()) !== 'default') {
+  //
+  // 2026-05-28 — 시드 페르소나 제거 후 personas[0] = default bucket 으로 의미 재정의.
+  if (!(await isDefaultPersonaBucket())) {
     console.log('[sync] pull skipped — non-default persona active (v1 limitation)');
     return { success: true, pulled: 0 };
   }

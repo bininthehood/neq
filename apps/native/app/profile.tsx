@@ -156,9 +156,15 @@ export default function ProfileScreen() {
   // 해결: PersonaSection 에 전달 직전 default persona 의 favorites 가 비어 있으면
   // 시청 시그널 (loved/good + saved 교집합) → 그 외 saved 상위 5개 순서로 자동 채움.
   // 사용자가 명시 생성한 다른 persona 는 그대로.
+  //
+  // 2026-05-28 — 시드 페르소나 제거 후 'default' id 비교 → 첫 페르소나(personas[0])
+  // 로 의미 재정의. minimal name-only 플로우로 만든 첫 페르소나도 favorites 비어
+  // 있을 수 있으므로 동일 보정 적용.
   const personasForDisplay = useMemo(() => {
+    const firstId = persona.personas[0]?.id;
     return persona.personas.map((p) => {
-      if (p.id !== 'default' || p.favorites.length > 0) return p;
+      const isFirst = p.id === firstId;
+      if (!isFirst || p.favorites.length > 0) return p;
       if (tasteItems.length > 0) {
         return { ...p, favorites: tasteItems.slice(0, 5) };
       }

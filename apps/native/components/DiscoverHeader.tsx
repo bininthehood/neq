@@ -144,8 +144,11 @@ export default function DiscoverHeader({
           ref={chipRef}
           onPress={openDropdown}
           accessibilityRole="button"
+          // 2026-05-28 — 시드 페르소나 제거 후 '기본' 폴백 의미 상실.
+          // showChip 가드(personas.length > 1) 가 있으므로 activePersona 는 사실상 존재 보장.
+          // 안전 폴백은 빈 문자열로 — UI 에 '기본' 잔재 노출 방지.
           accessibilityLabel={`취향 전환: 현재 ${
-            activePersona?.name ?? '기본'
+            activePersona?.name ?? ''
           } (${personas.length}개 중)`}
           style={({ pressed }) => [
             styles.chip,
@@ -158,7 +161,7 @@ export default function DiscoverHeader({
             style={[styles.chipLabel, open && styles.chipLabelOpen]}
             numberOfLines={1}
           >
-            {activePersona?.name ?? '기본'}
+            {activePersona?.name ?? ''}
           </Text>
           <Chevron open={open} />
         </Pressable>

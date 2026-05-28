@@ -85,7 +85,9 @@ export default function PersonaSection({
 
       {personas.map((p) => {
         const isActive = p.id === activePersonaId;
-        const canDelete = !isActive && p.id !== 'default';
+        // 2026-05-28 — 시드 페르소나 제거: 'default' id 비교 → 페르소나 1개 가드 +
+        // 활성 페르소나 가드. 활성 아니고 페르소나가 2개 이상일 때만 삭제 허용.
+        const canDelete = !isActive && personas.length > 1;
         const favoritesLabel =
           p.favorites.length > 0
             ? p.favorites.slice(0, 3).join(', ') +
