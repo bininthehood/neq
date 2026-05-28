@@ -240,12 +240,18 @@ export default function DiscoverScreen() {
   const [immersive, setImmersive] = useState(false);
 
   const load = useCallback(
-    async (filter: RecommendFilter = {}) => {
+    async (
+      filter: RecommendFilter = {},
+      opts?: { excludeIds?: number[] },
+    ) => {
       setState('loading');
       setErrorMsg(null);
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
+        // 2026-05-28 — 새로고침/필터변경/재시도 시 현재 stack 의 tmdbId 를
+        // excludeIds 로 전달해 LLM 후보 dedup. prefetch (line 347) 와 정합.
+        const excludeIds = opts?.excludeIds;
         // P0-2 Cold Start V2 입력 — flag ON + 값 있을 때만 body 에 포함.
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
@@ -267,6 +273,7 @@ export default function DiscoverScreen() {
             filter,
             favorites,
             savedCount: saved.length,
+            excludeIds,
             ...v2.body,
           },
           {
@@ -294,6 +301,7 @@ export default function DiscoverScreen() {
             filter,
             favorites,
             savedCount: saved.length,
+            excludeIds,
             ...v2.body,
           });
           setRecs(data);
@@ -464,7 +472,9 @@ export default function DiscoverScreen() {
     if (nextState.rating !== undefined) setFilterRating(nextRating);
     if (nextState.otts !== undefined) setFilterOTTs(nextOtts);
 
-    load(toApiFilter(nextType, nextOrigin, nextYear, nextRating, nextOtts));
+    load(toApiFilter(nextType, nextOrigin, nextYear, nextRating, nextOtts), {
+      excludeIds: recs.map((r) => r.tmdbId),
+    });
   }
 
   useFocusEffect(
@@ -691,7 +701,10 @@ export default function DiscoverScreen() {
 
   function handleRefresh() {
     const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
-    load(filter);
+    // 2026-05-28 — 새로고침 시 현재 stack tmdbId 들을 dedup 시드로 전달.
+    // 사용자 보고: "새로고침 후 같은 작품이 또 나옴". excludeIds 미전송이
+    // 결정적 원인 (`_workspace/22_refresh_dedup_analysis.md`).
+    load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
   }
 
   // Stage 4 D1 / G1-A (Handoff v2 Phase B+C): 탭 = DetailSheet 단일 진입.
@@ -928,11 +941,20 @@ export default function DiscoverScreen() {
     track('persona_switched', { persona_id: id, persona_name: target?.name });
   }
 
-  // W5 Task A — onboarding 가드 결정 전 / redirect 결정 시 빈 화면.
-  // 첫 frame 깜빡임 방지 (Discover 의 첫 추천 요청도 시작되지 않음).
-  if (onboardCheck !== 'pass') {
-    return <SafeAreaView style={styles.container} edges={['top']} />;
-  }
+  // 2026-05-28 mount race fix (build 9 회귀):
+  //   onboard guard 의 빈 SafeAreaView early-return 제거. DiscoverHeader (검색 버튼
+  //   `~검색 열기`) 가 첫 frame 부터 a11y tree 에 노출되어야 E2E 의 5s `tapByLabel`
+  //   폴 안에 잡힌다. 기존 `pending` 단계에서 빈 SafeAreaView 만 렌더 → 헤더 미마운트
+  //   → mount race 실패 (build 9: 4 regression + hybrid + persona 6 케이스).
+  //
+  //   guard 자체는 유지 — `useEffect([load, onboardCheck])` 가 'pass' 일 때만 추천
+  //   fetch (anon 사용자가 onboarding 결과 반영 못한 cold-start 추천을 받지 않게).
+  //   redirect 분기는 useFocusEffect 안에서 router.replace('/onboarding') 호출 중 →
+  //   화면이 즉시 onboarding 으로 전환되므로 헤더가 잠깐 보이더라도 사용자 인지
+  //   거의 없음. (root `_layout.tsx` 의 redirect effect 도 병행.)
+  //
+  //   stack/ActionBar slot 도 항상 렌더 — state === 'loading' 분기로 처리 중이라
+  //   onboardCheck 가 pending 인 동안엔 추천이 비어 있어 loading state 가 노출됨.
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -985,7 +1007,10 @@ export default function DiscoverScreen() {
           <View style={styles.centered}>
             <Text style={styles.errorTitle}>요청이 실패했어요</Text>
             <Text style={styles.errorDetail}>{errorMsg}</Text>
-            <Pressable style={styles.resetBtn} onPress={() => load()}>
+            <Pressable
+              style={styles.resetBtn}
+              onPress={() => load(undefined, { excludeIds: recs.map((r) => r.tmdbId) })}
+            >
               <Text style={styles.resetText}>다시 시도</Text>
             </Pressable>
           </View>

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Image,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 import {
   buildFallbackSummary,
   fetchSurveyStep,
@@ -664,7 +666,12 @@ function SurveyHeader({
           <Text style={styles.closeIcon}>✕</Text>
         </Pressable>
 
-        <Text style={styles.brand}>neq,</Text>
+        <Image
+          source={WORDMARK_ASSET}
+          accessibilityLabel="neq,"
+          style={styles.brandLogo}
+          resizeMode="contain"
+        />
 
         <Text
           style={styles.headerProgress}
@@ -792,12 +799,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 16,
   },
-  brand: {
-    color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
-    fontSize: 18,
-    letterSpacing: -0.2,
+  brandLogo: {
+    // StepHeader logo (20px) 와 정합 — onboarding 시 워드마크 시각 동일성 유지.
+    height: 20,
+    width: 20 * WORDMARK_ASPECT_RATIO,
   },
   headerProgress: {
     color: colors.textMuted,
