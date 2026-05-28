@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
-  getFavoritesMeta,
   getFavorites,
   getSaved,
   getWatchReports,
   getSeenTitles,
 } from "@/lib/store";
+import { useFavoritesMeta } from "@/hooks/use-store-value";
 import { track } from "@/lib/analytics";
 import { consumeStreamingNDJSON } from "@/lib/recommend-stream";
 import type { Recommendation } from "@/lib/types";
@@ -19,11 +19,11 @@ const MIN_DISPLAY_MS = 1500;
 const TIMEOUT_MS = 30000;
 const SLOW_COPY_THRESHOLD_MS = 5000;
 
-type Metas = ReturnType<typeof getFavoritesMeta>;
-
 export default function OnboardingCompletePage() {
   const router = useRouter();
-  const [metas, setMetas] = useState<Metas>([]);
+  // R19: useFavoritesMeta() useSyncExternalStore — 기존 useState + useEffect
+  // (set-state-in-effect disable) 제거. mount 시점에 정확한 값으로 첫 렌더.
+  const metas = useFavoritesMeta().slice(0, 5);
   const [slowCopy, setSlowCopy] = useState(false);
   // line 34 effect 에서 즉시 덮어쓰므로 init 값 불필요 (R19 purity 회피).
   const mountedAtRef = useRef<number>(0);
@@ -31,10 +31,6 @@ export default function OnboardingCompletePage() {
   const shownTrackedRef = useRef(false);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect --
-       mount-only localStorage 읽기 (getFavoritesMeta). 정통 mount-effect 패턴. */
-    setMetas(getFavoritesMeta().slice(0, 5));
-    /* eslint-enable react-hooks/set-state-in-effect */
     mountedAtRef.current = Date.now();
 
     if (!shownTrackedRef.current) {

@@ -28,6 +28,27 @@ function safeParse<T>(key: string, fallback: T): T {
   }
 }
 
+// === Subscribe pattern (R19 useSyncExternalStore 통합) ===
+//
+// store mutation 시 notify() 호출 → 등록된 listener 전체 실행.
+// hooks/use-store-value.ts 의 useSaved/useWatchReports/... 가 구독.
+// 같은 탭 안 reactive update 가 자동으로 컴포넌트에 반영됨.
+//
+// cross-tab sync 는 추후 storage event 통합 시 (Phase 3) 추가.
+
+const listeners = new Set<() => void>();
+
+export function subscribeStore(callback: () => void): () => void {
+  listeners.add(callback);
+  return () => {
+    listeners.delete(callback);
+  };
+}
+
+function notifyStore(): void {
+  listeners.forEach((cb) => cb());
+}
+
 // === localStorage keys ===
 
 const PERSONAS_KEY = "neq_personas";
@@ -122,6 +143,7 @@ export function getPersonas(): Persona[] {
 
 export function setPersonas(personas: Persona[]) {
   localStorage.setItem(PERSONAS_KEY, JSON.stringify(personas));
+  notifyStore();
 }
 
 export function getActivePersonaId(): string {
@@ -132,6 +154,7 @@ export function getActivePersonaId(): string {
 
 export function setActivePersonaId(id: string) {
   localStorage.setItem(ACTIVE_PERSONA_KEY, JSON.stringify(id));
+  notifyStore();
 }
 
 export function getActivePersona(): Persona {
@@ -316,11 +339,13 @@ export function addSaved(rec: Recommendation) {
   if (saved.some((s) => s.recommendation.tmdbId === rec.tmdbId)) return;
   saved.push({ recommendation: rec, savedAt: Date.now() });
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+  notifyStore();
 }
 
 export function removeSaved(tmdbId: number) {
   const saved = getSaved().filter((s) => s.recommendation.tmdbId !== tmdbId);
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+  notifyStore();
 }
 
 // === Watch Reports (per-persona) ===
@@ -375,12 +400,14 @@ export function archiveItem(tmdbId: number) {
   if (!ids.includes(tmdbId)) {
     ids.push(tmdbId);
     localStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
+    notifyStore();
   }
 }
 
 export function unarchiveItem(tmdbId: number) {
   const ids = getArchivedIds().filter((id) => id !== tmdbId);
   localStorage.setItem(ARCHIVE_KEY, JSON.stringify(ids));
+  notifyStore();
 }
 
 // === Rec History (global) ===
@@ -411,6 +438,7 @@ export function addRecHistory(
     .map((r) => ({ ...r, date }));
   const updated = [...newEntries, ...existing].slice(0, MAX_HISTORY);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+  notifyStore();
 }
 
 // === Seen Titles (per-persona) ===
@@ -511,6 +539,7 @@ export function importUserData(raw: unknown): ImportResult {
 
   localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
   localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archived));
+  notifyStore();
 
   const personas = getPersonas();
   const totalWatchReports = personas.reduce((n, p) => n + p.watchReports.length, 0);
@@ -553,4 +582,5 @@ export function clearAllUserData() {
     .forEach((k) => localStorage.removeItem(k));
   sessionStorage.removeItem("neq_top_idx");
   _migrated = false;
+  notifyStore();
 }

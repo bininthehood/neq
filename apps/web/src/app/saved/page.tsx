@@ -2,19 +2,20 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
-  getSaved,
   removeSaved,
-  getWatchReports,
   addWatchReport,
   removeWatchReport,
-  getWatchStats,
-  getArchivedIds,
   archiveItem,
   unarchiveItem,
-  getRecHistory,
   addSaved,
 } from "@/lib/store";
 import type { RecHistoryEntry } from "@/lib/store";
+import {
+  useSaved,
+  useWatchReports,
+  useArchivedIds,
+  useRecHistory,
+} from "@/hooks/use-store-value";
 import type { SavedItem, WatchReaction, Recommendation } from "@/lib/types";
 import Image from "next/image";
 import PosterFallback from "@/components/PosterFallback";
@@ -52,7 +53,32 @@ import { useToast } from "@neq/design";
 export type { SavedSort };
 
 export default function SavedPage() {
-  const [saved, setSaved] = useState<SavedItem[]>([]);
+  // R19: useSyncExternalStore 기반 reactive read. store mutation (addSaved/
+  // archiveItem/addWatchReport 등) 시 자동 갱신 → refreshData() 명시 호출 불필요.
+  const saved = useSaved();
+  const reportsList = useWatchReports();
+  const archivedIdsArr = useArchivedIds();
+  const history = useRecHistory();
+
+  // reports list → Map (O(n) 매 렌더, useMemo 로 cache)
+  const reports = useMemo<Record<number, WatchReaction>>(() => {
+    const map: Record<number, WatchReaction> = {};
+    for (const r of reportsList) {
+      map[r.tmdbId] = r.reaction;
+    }
+    return map;
+  }, [reportsList]);
+
+  const stats = useMemo(() => ({
+    total: reportsList.length,
+    loved: reportsList.filter((r) => r.reaction === "loved").length,
+    good: reportsList.filter((r) => r.reaction === "good").length,
+    meh: reportsList.filter((r) => r.reaction === "meh").length,
+    dropped: reportsList.filter((r) => r.reaction === "dropped").length,
+  }), [reportsList]);
+
+  const archivedIds = useMemo(() => new Set(archivedIdsArr), [archivedIdsArr]);
+
   /**
    * detailItem 만 페이지가 보유. detailY/detailAnimating/detailBodyRef + 모션/터치 핸들러는
    * 사용자 직접 테스트 #4: `useDetailSheet` hook 으로 일원화 (Discover 와 동일 source).
@@ -64,13 +90,9 @@ export default function SavedPage() {
   const searchSheet = useDetailSheet();
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
   const [reportingId, setReportingId] = useState<number | null>(null);
-  const [reports, setReports] = useState<Record<number, WatchReaction>>({});
-  const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [groupByOTT, setGroupByOTT] = useState(false);
   const [ottFilter, setOttFilter] = useState<string | null>(null);
-  const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
-  const [history, setHistory] = useState<RecHistoryEntry[]>([]);
   // 뷰 모드 (grid|list|preview). 첫 mount 시 localStorage 에서 복원.
   const [viewMode, setViewMode] = useState<SavedViewMode>("grid");
   // preview 모드 hero 작품 id. 카드 탭으로 변경. 첫 진입 시 첫 작품 자동 선택 (effect 처리).
@@ -80,36 +102,18 @@ export default function SavedPage() {
   const toast = useToast();
   const trackedViewRef = useRef(false);
 
-  const refreshData = () => {
-    // 한 번만 읽고 Map으로 변환 (O(n))
-    setSaved(getSaved());
-
-    const reportsList = getWatchReports();
-    const reportsMap: Record<number, WatchReaction> = {};
-    for (const r of reportsList) {
-      reportsMap[r.tmdbId] = r.reaction;
-    }
-    setReports(reportsMap);
-
-    setStats(getWatchStats());
-    setArchivedIds(new Set(getArchivedIds()));
-    setHistory(getRecHistory());
-  };
-
   useEffect(() => {
+    // 위임 L #6 — 뷰 모드 복원 (lib/store 무관 — 별도 localStorage key).
     /* eslint-disable react-hooks/set-state-in-effect --
-       SSR-safe mount-only localStorage 읽기 (saved/sort/view 복원 + getWatchStats/getArchivedIds/getRecHistory).
-       서버에서는 localStorage 접근 불가 → 정통 mount-effect 패턴.
-       useSyncExternalStore 마이그레이션은 R19 sprint 에서 처리. */
-    refreshData();
-    // 위임 L #6 — 뷰 모드 복원
+       mount-only localStorage 읽기 (loadSavedView/loadSavedSort).
+       Phase 2-2 (sort/view createLocalStorageHook 적용) 에서 제거 예정. */
     setViewMode(loadSavedView());
     setSortBy(loadSavedSort());
+    /* eslint-enable react-hooks/set-state-in-effect */
     if (!trackedViewRef.current) {
       trackedViewRef.current = true;
       track("saved_viewed");
     }
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const handleViewModeChange = useCallback((mode: SavedViewMode) => {
@@ -290,7 +294,6 @@ export default function SavedPage() {
         watchLink: null,
       });
     }
-    refreshData();
   };
 
   /** 히스토리 항목 클릭 시: saved면 그 기반으로, 아니면 hydrate 후 임시 SavedItem으로 detail 열기 */
@@ -313,15 +316,13 @@ export default function SavedPage() {
     removeSaved(tmdbId);
     removeWatchReport(tmdbId);
     if (reportingId === tmdbId) setReportingId(null);
-    refreshData();
     if (target) {
       toast.show("remove", {
         ctx: { title: target.recommendation.title },
         onAction: () => {
           addSaved(target.recommendation);
           if (prevReport) addWatchReport(tmdbId, prevReport);
-          refreshData();
-        },
+              },
       });
     }
   };
@@ -329,12 +330,10 @@ export default function SavedPage() {
   const handleReport = (tmdbId: number, reaction: WatchReaction) => {
     addWatchReport(tmdbId, reaction);
     setReportingId(null);
-    refreshData();
   };
 
   const handleUndoReport = (tmdbId: number) => {
     removeWatchReport(tmdbId);
-    refreshData();
   };
 
   const handleArchiveToggle = useCallback((id: number) => {
@@ -343,7 +342,6 @@ export default function SavedPage() {
     } else {
       archiveItem(id);
     }
-    refreshData();
   }, [archivedIds]);
 
   const openDetailFor = useCallback((item: SavedItem) => {
@@ -394,7 +392,6 @@ export default function SavedPage() {
           ctx: { title: rec.title },
           onAction: () => {
             addSaved(rec);
-            refreshData();
           },
         });
       } else {
@@ -408,14 +405,11 @@ export default function SavedPage() {
           ctx: { title: rec.title },
           onAction: () => {
             removeSaved(id);
-            refreshData();
           },
         });
       }
-      refreshData();
     },
     // savedIdSet 은 saved derived → saved 의존성으로 충분.
-    // toast 는 stable. refreshData 는 매 render 새 함수지만 effect 의존성 아니므로 OK.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [saved, toast],
   );
