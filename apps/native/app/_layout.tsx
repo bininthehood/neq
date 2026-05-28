@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Tabs, router, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
@@ -118,35 +118,25 @@ export default function RootLayout() {
   }, []);
 
   // W5 Task A 회귀 fix — root 레벨 onboarding 가드.
-  // 기존: Discover (app/index.tsx) 에만 가드 → Tabs 의 Profile/Saved 로 우회 가능.
-  // 변경: root mount 시 hasOnboarded() 평가 후 false 면 즉시 router.replace.
-  // Discover 의 가드는 fetch skip 효과를 위해 유지 (중복이지만 안전망).
+  // Discover (app/index.tsx) 의 useFocusEffect 가드와 함께 작동. root mount 시
+  // hasOnboarded() 평가 후 false 면 즉시 router.replace. setRootGuard 같은 토글
+  // 상태 없이 effect 만으로 처리 — 2026-05-28 fix.
   //
-  // 2026-05-27 fix — pending 동안 Tabs 렌더링 차단.
-  // 기존: pending 상태에서도 Tabs 가 렌더되어 lazy:false 의 Discover/Saved/Profile 가
-  //       pre-mount 됨. Discover 가 자기 자신의 guard 로 redirect 평가 → root guard
-  //       와 동시 평가되며 race 발생. pending 동안 빈 View 만 노출해 race 차단.
-  const [rootGuard, setRootGuard] = useState<'pending' | 'pass'>('pending');
+  // 2026-05-27 시도 → 2026-05-28 revert:
+  // 'pending'/'pass' state + pending 동안 빈 View 차단 패턴을 도입했으나, Provider
+  // tree 와 빈 View 사이 전환이 children 전체를 매 cycle 마다 unmount/remount
+  // 시키며 무한 loop 유발 (5/28 시뮬레이터 검증: _layout 2292번 mount, 빈 검은
+  // 화면 영구 노출). race 차단은 Discover 의 useFocusEffect 만으로 충분.
   useEffect(() => {
-    let cancelled = false;
     (async () => {
       const ok = await hasOnboarded();
-      if (cancelled) return;
       if (!ok) router.replace('/onboarding');
-      setRootGuard('pass');
     })();
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   // 2026-05-26 layout shift fix — fontsLoaded false 시 null 대신 동일 background 의
   // 빈 View 노출. splash dismiss → 빈 화면 → 콘텐츠 mount 의 3-step 깜빡임 차단.
-  // 2026-05-27 — rootGuard pending 도 동일 패턴. 결정 전 Tabs 렌더링 차단.
   if (!fontsLoaded && !fontError) {
-    return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
-  }
-  if (rootGuard === 'pending') {
     return <View style={{ flex: 1, backgroundColor: colors.bg }} />;
   }
 
