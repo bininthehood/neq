@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.neq.app",
+      "sha256_cert_fingerprints": [
+        "DE:3A:93:67:66:77:F0:24:3F:71:F3:75:F4:97:35:A7:20:3C:3D:A2:52:55:1E:93:01:BE:C0:DD:A9:2D:A6:AB"
+      ]
+    }
+  }
+]

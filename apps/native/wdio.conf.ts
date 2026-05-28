@@ -22,6 +22,20 @@ const udid = isTestFlight
 const deviceName = isTestFlight
   ? (process.env.IOS_DEVICE_NAME ?? 'iPhone')
   : 'iPhone 17 Pro';
+const platformVersion = isTestFlight
+  ? (process.env.IOS_PLATFORM_VERSION ?? '26.5')
+  : '26.4';
+
+// 실기기 (TestFlight) 전용 — WDA 자동 빌드를 위한 dev signing.
+// xcodeOrgId 는 eas.json submit profile 의 appleTeamId 와 동일.
+const testFlightExtras: Partial<WebdriverIO.Capabilities> = isTestFlight
+  ? {
+      'appium:xcodeOrgId': process.env.IOS_TEAM_ID ?? '67YXH2WD77',
+      'appium:xcodeSigningId': 'Apple Development',
+      'appium:showXcodeLog': true,
+      'appium:webDriverAgentUrl': process.env.WDA_URL,
+    }
+  : {};
 
 export const config: Options.Testrunner = {
   runner: 'local',
@@ -34,7 +48,7 @@ export const config: Options.Testrunner = {
     {
       platformName: 'iOS',
       'appium:automationName': 'XCUITest',
-      'appium:platformVersion': '26.4',
+      'appium:platformVersion': platformVersion,
       'appium:deviceName': deviceName,
       'appium:udid': udid,
       'appium:bundleId': bundleId,
@@ -42,6 +56,7 @@ export const config: Options.Testrunner = {
       'appium:noReset': true,
       'appium:newCommandTimeout': 240,
       'appium:wdaLocalPort': 8100,
+      ...testFlightExtras,
     } as WebdriverIO.Capabilities,
   ],
 
