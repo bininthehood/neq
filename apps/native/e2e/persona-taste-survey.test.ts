@@ -110,9 +110,20 @@ async function waitForOptions(timeoutMs = 25000): Promise<string | null> {
 
 describe('Persona v2 — taste survey full flow', () => {
   before(async () => {
-    // 프로필 탭 진입
+    // spec audit (2026-05-28) — 이전 spec 의 onboarding 상태 leak 방지.
+    // forceResetApp + onboarding skip check + 프로필 탭 진입 (helper 의 강화 tapTab).
+    const { forceResetApp } = await import('./_helpers');
+    await forceResetApp();
+    // onboarding 화면 (welcome) 인 경우 프로필 탭 부재 — 명확한 에러
+    const onWelcome = await pageSourceContains('시작하기');
+    if (onWelcome) {
+      throw new Error(
+        'before: 앱이 onboarding (welcome) 화면. persona-taste-survey 는 onboarded 상태 가정. ' +
+        '수동 reset (앱 데이터 초기화) + onboarding 완료 후 재실행 필요.',
+      );
+    }
     const ok = await tapTab('프로필');
-    if (!ok) throw new Error('프로필 탭 진입 실패 — 앱 mount 미확인');
+    if (!ok) throw new Error('프로필 탭 진입 실패 — 앱 mount 미확인 (탭바 미렌더)');
     await browser.pause(800);
     await capture('persona-v2-00-profile');
   });
