@@ -247,29 +247,40 @@ function createEmptyPersonaMeta(id: string, name: string): Persona {
   return { ...createPersonaCore(name), id };
 }
 
+/**
+ * 2026-05-28 — "1 생성 = 1 페르소나" 모델로 단순화.
+ *
+ * 기존: 첫 호출 시 `[{id:'default', name:'기본'}]` 시드 자동 생성 → 사용자가
+ *   onboarding 에서 첫 페르소나 만들어도 "기본" + 사용자 페르소나 2개로 노출.
+ *
+ * 현재: 빈 배열 그대로 반환. 페르소나는 onboarding 완주 또는 profile "+ 새 취향
+ *   추가" 에서만 생성. `activePersonaId` 와 `activePersona` 도 null/'' 가능 상태로.
+ *
+ * 호환:
+ *   - 기존 사용자(이미 'default' 시드를 가진 디바이스)는 그대로 유지. 의도적
+ *     마이그레이션 없음 (회귀 위험 mid). QA/본인 디바이스는 시뮬레이터 AsyncStorage
+ *     clear 또는 Profile "모든 데이터 초기화" 로 reset.
+ */
 export async function getPersonas(): Promise<Persona[]> {
-  const personas = await safeGet<Persona[]>(PERSONAS_KEY, []);
-  if (personas.length === 0) {
-    // 첫 호출 — default 페르소나 시드. 사용자가 명시 생성하지 않아도 active 상태 보장.
-    const seed: Persona[] = [createEmptyPersonaMeta('default', '기본')];
-    await AsyncStorage.setItem(PERSONAS_KEY, JSON.stringify(seed));
-    return seed;
-  }
-  return personas;
+  return safeGet<Persona[]>(PERSONAS_KEY, []);
 }
 
 export async function setPersonas(personas: Persona[]): Promise<void> {
   await AsyncStorage.setItem(PERSONAS_KEY, JSON.stringify(personas));
 }
 
+/**
+ * 활성 페르소나 id. 페르소나 미생성 상태에서는 빈 문자열 반환.
+ * 호출자는 '' 케이스 (= 페르소나 없음) 를 안전하게 처리해야 한다.
+ */
 export async function getActivePersonaId(): Promise<string> {
   const raw = await AsyncStorage.getItem(ACTIVE_PERSONA_KEY).catch(() => null);
-  if (!raw) return 'default';
+  if (!raw) return '';
   try {
     const parsed = JSON.parse(raw);
-    return typeof parsed === 'string' ? parsed : 'default';
+    return typeof parsed === 'string' ? parsed : '';
   } catch {
-    return 'default';
+    return '';
   }
 }
 
@@ -277,13 +288,36 @@ export async function setActivePersonaId(id: string): Promise<void> {
   await AsyncStorage.setItem(ACTIVE_PERSONA_KEY, JSON.stringify(id));
 }
 
-export async function getActivePersona(): Promise<Persona> {
+/**
+ * 활성 페르소나. 페르소나 미생성 또는 active id 가 stale 이면 null.
+ * 페르소나가 있되 active id 가 일치 안 하면 personas[0] 폴백.
+ */
+export async function getActivePersona(): Promise<Persona | null> {
   const personas = await getPersonas();
+  if (personas.length === 0) return null;
   const activeId = await getActivePersonaId();
-  return (
-    getActivePersonaCore(personas, activeId) ??
-    createEmptyPersonaMeta('default', '기본')
-  );
+  return getActivePersonaCore(personas, activeId) ?? personas[0];
+}
+
+/**
+ * sync 정책용 헬퍼 — "activePersona 가 사실상 default bucket 인가?"
+ *
+ * 시드 페르소나 제거(2026-05-28) 이전: id === 'default' 로 판정. 이후: 페르소나가
+ * 1개뿐이거나 active 가 첫 페르소나(personas[0])일 때 = default bucket 정합.
+ *
+ * 의미: native sync 는 watch_reports / account_prefs 를 single bucket 에만 저장 →
+ * 첫 페르소나는 글로벌 bucket 과 동일하므로 sync 정상. 두 번째 이후 페르소나
+ * 활성 시점부터 v1 sync limitation (web `sync.ts` 와 동일) 으로 push/pull skip.
+ *
+ * 페르소나 없음(personas=[]): legacy 'default' 시점과 동일하게 true 로 간주 —
+ * onboarding 진행 전에도 saved_items sync 정상 동작 유지.
+ */
+export async function isDefaultPersonaBucket(): Promise<boolean> {
+  const personas = await getPersonas();
+  if (personas.length === 0) return true;
+  if (personas.length === 1) return true;
+  const activeId = await getActivePersonaId();
+  return personas[0].id === activeId;
 }
 
 /**
@@ -332,7 +366,9 @@ export async function deletePersona(id: string): Promise<void> {
   await setPersonas(next);
   const activeId = await getActivePersonaId();
   if (activeId === id) {
-    await setActivePersonaId(next[0].id);
+    // 빈 배열 가능 (2026-05-28 시드 제거 이후 — 마지막 페르소나 삭제 시).
+    // 빈 문자열로 active 리셋 — 호출자가 personas=[] 케이스 처리.
+    await setActivePersonaId(next.length > 0 ? next[0].id : '');
   }
 }
 

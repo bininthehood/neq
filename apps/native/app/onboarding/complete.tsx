@@ -138,10 +138,14 @@ export default function OnboardingCompleteScreen() {
 
     // favoritesMeta 비동기 로드 — getActivePersona() 가 AsyncStorage 호출.
     // 로드 전엔 fallback (amber dot) 5개 표시 → 로드 후 포스터 교체. 시각 끊김 없음.
+    // 2026-05-28 — 시드 페르소나 제거 후 getActivePersona 는 null 가능.
+    // null/빈 favoritesMeta → fallback dot 유지.
     (async () => {
       try {
         const persona = await getActivePersona();
-        setFavoritesMeta(persona.favoritesMeta.slice(0, POSTER_COUNT));
+        if (persona) {
+          setFavoritesMeta(persona.favoritesMeta.slice(0, POSTER_COUNT));
+        }
       } catch {
         // 무시 — fallback dot 유지
       }
