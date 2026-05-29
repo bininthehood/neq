@@ -156,6 +156,10 @@ export default function SavedScreen() {
   // DetailSheet Cast 클릭 시에도 진입 — searchInitialQuery 에 인물명 주입.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitialQuery, setSearchInitialQuery] = useState('');
+  // 2026-05-29 — Discover 정합. SearchSheet 결과 클릭으로 진입한 DetailSheet 추적.
+  // DetailSheet 닫힐 때 true 면 SearchSheet 자동 복귀 + 검색 컨텍스트 보존.
+  const [returnToSearchAfterDetail, setReturnToSearchAfterDetail] =
+    useState(false);
   // W5 Task F — view filter + archive 상태.
   // web `apps/web/src/app/saved/page.tsx:69/72` 와 1:1 정합.
   const [viewFilter, setViewFilter] = useState<ViewFilter>('all');
@@ -1016,7 +1020,15 @@ export default function SavedScreen() {
       <DetailSheet
         rec={detailRec}
         visible={detailOpen}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false);
+          // 2026-05-29 — Discover 정합. SearchSheet 결과 클릭으로 진입한
+          // DetailSheet 라면 닫을 때 SearchSheet 자동 복귀 + 검색 컨텍스트 보존.
+          if (returnToSearchAfterDetail) {
+            setReturnToSearchAfterDetail(false);
+            setSearchOpen(true);
+          }
+        }}
         onSearchPerson={(name) => {
           track('detail_to_search_person', { name, from: 'saved' });
           setDetailOpen(false);
@@ -1027,14 +1039,18 @@ export default function SavedScreen() {
 
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는
           DetailSheet Cast 클릭으로 진입 (web saved/page.tsx 정합).
-          2026-05-20 — 작품 탭 → 기존 saved 의 detailRec 영역에 표시 (handleOpenDetail). */}
+          2026-05-20 — 작품 탭 → 기존 saved 의 detailRec 영역에 표시 (handleOpenDetail).
+          2026-05-29 — preserveStateOnClose + returnToSearchAfterDetail 추가
+          (Discover 정합). DetailSheet 닫을 때 검색 컨텍스트 복원. */}
       <SearchSheet
         visible={searchOpen}
         onClose={() => setSearchOpen(false)}
         initialQuery={searchInitialQuery}
+        preserveStateOnClose={returnToSearchAfterDetail}
         onWorkSelected={(rec) => {
           setSearchOpen(false);
           handleOpenDetail(rec);
+          setReturnToSearchAfterDetail(true);
         }}
       />
 
