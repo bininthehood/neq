@@ -36,6 +36,7 @@ import {
   Keyboard,
   Modal,
   Dimensions,
+  useWindowDimensions,
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -62,6 +63,14 @@ import type {
   SearchResult,
 } from '../lib/types';
 import { env } from '../lib/env';
+import { track } from '../lib/analytics';
+import {
+  addRecentSearch,
+  getRecentSearches,
+  removeRecentSearch,
+  type RecentSearch,
+  type TrendingItem,
+} from '../lib/recent-searches';
 import { colors, radius, spacing } from '../lib/tokens';
 import { IconClose } from './Icons';
 import { fonts, easings } from '@neq/design';
@@ -121,6 +130,9 @@ export default function SearchSheet({
   const [personWorks, setPersonWorks] = useState<SearchResult[]>([]);
   const [personWorksLoading, setPersonWorksLoading] = useState(false);
   const [personWorksError, setPersonWorksError] = useState(false);
+  // 2026-05-29 — PWA 정합. idle 상태에서 Recent + Trending 노출 (D10b 패턴).
+  const [recents, setRecents] = useState<RecentSearch[]>([]);
+  const [trending, setTrending] = useState<TrendingItem[]>([]);
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -154,6 +166,8 @@ export default function SearchSheet({
       if (controller.signal.aborted) return;
       setData(body);
       setIsFetching(false);
+      // 2026-05-29 — recent 기록은 명시 의도 (submit 또는 결과 클릭) 시점에만 (PWA
+      // 정책과 의도적 차이). 디바운싱 중간 키스트로크가 누적 저장되는 회귀 차단.
     } catch (err) {
       if (controller.signal.aborted) return;
       // RN fetch 에서 AbortError 는 DOMException 이 아니라 일반 Error 로 올 수 있음.
@@ -202,6 +216,31 @@ export default function SearchSheet({
     };
   }, []);
 
+  // 2026-05-29 — sheet open 시 idle 컨텐츠 (Recent / Trending) 준비 (PWA D10b 정합).
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    (async () => {
+      const latest = await getRecentSearches();
+      if (cancelled) return;
+      setRecents(latest);
+    })();
+    (async () => {
+      try {
+        const res = await fetch(`${env.API_BASE_URL}/api/trending`);
+        if (!res.ok) return;
+        const data = (await res.json()) as TrendingItem[];
+        if (cancelled) return;
+        setTrending(Array.isArray(data) ? data : []);
+      } catch {
+        // 무시 — trending 은 보조 컨텐츠
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [visible]);
+
   // visible 토글 — 열릴 때 미세 spring(bezier) up, 닫힐 때 timing down + 상태 리셋.
   // PWA SearchSheet 와 동일 곡선 — 큰 오버슈트 없는 짧은 진입.
   useEffect(() => {
@@ -229,6 +268,26 @@ export default function SearchSheet({
     }
   }, [visible, translateY, preserveStateOnClose]);
 
+  // 2026-05-29 — recent 기록 헬퍼. 현재 query 가 의미 있을 때만 add + UI 갱신.
+  // 호출 시점 — onSubmitEditing (return 키) / 결과 클릭 (작품 / 인물).
+  // fetch 안에서 자동 add 하지 않음 — 디바운싱 중간 키스트로크 누적 회귀 차단.
+  const confirmRecent = useCallback(async () => {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) return;
+    await addRecentSearch(trimmed);
+    const latest = await getRecentSearches();
+    setRecents(latest);
+  }, [query]);
+
+  // 결과 작품 클릭 wrapper — parent onWorkSelected 호출 직전에 recent 기록.
+  const handleSelectWork = useCallback(
+    (rec: Recommendation) => {
+      void confirmRecent();
+      onWorkSelected?.(rec);
+    },
+    [confirmRecent, onWorkSelected],
+  );
+
   // 2026-05-20 — 인물 카드 클릭 핸들러. PWA `handleSelectPerson` 정합:
   //   - 같은 카드 다시 누르면 닫음 (toggle).
   //   - 다른 카드 누르면 갈아탐.
@@ -241,6 +300,8 @@ export default function SearchSheet({
         setPersonWorksError(false);
         return;
       }
+      // 명시 선택이므로 recent 기록 — 인물 결과 클릭 시점.
+      void confirmRecent();
       setSelectedPersonId(person.id);
       setPersonWorks([]);
       setPersonWorksError(false);
@@ -261,7 +322,7 @@ export default function SearchSheet({
         setPersonWorksLoading(false);
       }
     },
-    [selectedPersonId],
+    [selectedPersonId, confirmRecent],
   );
 
   // 위임 O #1.2 — initialQuery 자동 주입.
@@ -350,9 +411,19 @@ export default function SearchSheet({
                   placeholderTextColor={colors.textMuted}
                   style={styles.input}
                   autoCorrect={false}
-                  autoFocus
+                  // 2026-05-29 — visible 가드. 3 SearchSheet 가 동시 mount (lazy:false)
+                  // 되어 있어 background 의 input 이 key 이벤트 받거나 autoFocus
+                  // 잔재로 race 가능 (Profile 검색 결과 empty 회귀 보고).
+                  // editable={visible} + autoFocus={visible} 으로 비활성 탭의 input
+                  // 비활성화.
+                  editable={visible}
+                  autoFocus={visible}
                   returnKeyType="search"
-                  onSubmitEditing={() => Keyboard.dismiss()}
+                  onSubmitEditing={() => {
+                    // 명시 의도 — return 키 (search). recent 기록.
+                    void confirmRecent();
+                    Keyboard.dismiss();
+                  }}
                   accessibilityLabel="검색"
                 />
                 {query.length > 0 && (
@@ -388,11 +459,16 @@ export default function SearchSheet({
             {/* body */}
             <View style={styles.body}>
               {uiState === 'idle' && (
-                <View style={styles.idleWrap}>
-                  <Text style={styles.hint}>
-                    작품, 감독, 배우 이름으로 검색해보세요
-                  </Text>
-                </View>
+                <IdleContent
+                  recents={recents}
+                  trending={trending}
+                  onApplyQuery={handleInput}
+                  onRemoveRecent={async (q) => {
+                    await removeRecentSearch(q);
+                    const latest = await getRecentSearches();
+                    setRecents(latest);
+                  }}
+                />
               )}
 
               {uiState === 'loading' && (
@@ -468,7 +544,7 @@ export default function SearchSheet({
                       {g.key === 'works' && (
                         <WorksCarousel
                           items={data.works}
-                          onSelect={onWorkSelected}
+                          onSelect={handleSelectWork}
                         />
                       )}
                       {g.key === 'directors' && (
@@ -497,7 +573,7 @@ export default function SearchSheet({
                             loading={personWorksLoading}
                             error={personWorksError}
                             works={personWorks}
-                            onSelect={onWorkSelected}
+                            onSelect={handleSelectWork}
                             onRetry={() => {
                               const p = (g.key === 'directors'
                                 ? data.directors
@@ -522,6 +598,117 @@ export default function SearchSheet({
 // ─────────────────────────────────────────────────────
 // WorksCarousel — 작품 카로셀 (FlatList horizontal, snap)
 // ─────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────
+// IdleContent — query 비어있을 때 (Recent / Trending) (PWA D10b 정합).
+// ─────────────────────────────────────────────────────
+
+function IdleContent({
+  recents,
+  trending,
+  onApplyQuery,
+  onRemoveRecent,
+}: {
+  recents: RecentSearch[];
+  trending: TrendingItem[];
+  onApplyQuery: (q: string) => void;
+  onRemoveRecent: (q: string) => void;
+}) {
+  if (recents.length === 0 && trending.length === 0) {
+    return (
+      <View style={styles.idleWrap}>
+        <Text style={styles.hint}>작품, 감독, 배우 이름으로 검색해보세요</Text>
+      </View>
+    );
+  }
+  return (
+    <ScrollView
+      style={styles.idleScroll}
+      contentContainerStyle={styles.idleContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      {recents.length > 0 && (
+        <View accessibilityLabel="최근 검색어">
+          <Text style={styles.sectionHead}>RECENT · 최근 검색</Text>
+          <View style={styles.chipRow}>
+            {recents.slice(0, 7).map((r) => (
+              <RecentChip
+                key={r.query}
+                query={r.query}
+                onApply={() => onApplyQuery(r.query)}
+                onRemove={() => onRemoveRecent(r.query)}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+      {trending.length > 0 && (
+        <View accessibilityLabel="지금 떠오르는" style={styles.trendingSection}>
+          <Text style={styles.sectionHead}>TRENDING · 지금 떠오르는</Text>
+          <View style={styles.chipRow}>
+            {trending.slice(0, 6).map((t) => (
+              <TrendingChip
+                key={t.id}
+                label={t.title}
+                onPress={() => {
+                  onApplyQuery(t.title);
+                  track('search_trending_clicked', { tmdb_id: t.id, title: t.title });
+                }}
+              />
+            ))}
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function RecentChip({
+  query,
+  onApply,
+  onRemove,
+}: {
+  query: string;
+  onApply: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View style={styles.recentChip}>
+      <Pressable
+        onPress={onApply}
+        accessibilityRole="button"
+        accessibilityLabel={`${query} 다시 검색`}
+        style={({ pressed }) => [styles.recentChipBody, pressed && styles.chipPressed]}
+      >
+        <Text style={styles.recentChipMark}>↺ </Text>
+        <Text style={styles.recentChipText}>{query}</Text>
+      </Pressable>
+      <Pressable
+        onPress={onRemove}
+        accessibilityRole="button"
+        accessibilityLabel={`${query} 검색 기록에서 제거`}
+        hitSlop={8}
+        style={({ pressed }) => [styles.recentChipRemove, pressed && styles.chipPressed]}
+      >
+        <IconClose size={9} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+}
+
+function TrendingChip({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label} 검색`}
+      style={({ pressed }) => [styles.trendingChip, pressed && styles.chipPressed]}
+    >
+      <Text style={styles.trendingChipText}>{label}</Text>
+    </Pressable>
+  );
+}
 
 const WORK_CARD_W = 112;
 const WORK_CARD_H = 168; // 2:3
@@ -552,9 +739,12 @@ function WorksCarousel({
 function WorkCard({
   item,
   onSelect,
+  mode = 'carousel',
 }: {
   item: SearchResult;
   onSelect?: (rec: Recommendation) => void;
+  /** 2026-05-29 — PWA 정합. 인물 필모그래피는 3열 그리드 ('grid'), 검색 결과는 가로 ('carousel'). */
+  mode?: 'carousel' | 'grid';
 }) {
   const [loading, setLoading] = useState(false);
   const handlePress = useCallback(async () => {
@@ -574,18 +764,19 @@ function WorkCard({
       setLoading(false);
     }
   }, [item, onSelect, loading]);
+  const isGrid = mode === 'grid';
   return (
     <Pressable
       onPress={handlePress}
       disabled={loading || !onSelect}
       style={({ pressed }) => [
-        styles.workCard,
+        isGrid ? styles.workCardGrid : styles.workCard,
         pressed && { opacity: 0.6 },
       ]}
       accessibilityLabel={item.title}
       accessibilityRole="button"
     >
-      <View style={styles.workPosterFrame}>
+      <View style={isGrid ? styles.workPosterFrameGrid : styles.workPosterFrame}>
         {item.posterUrl ? (
           <Image
             source={{ uri: item.posterUrl }}
@@ -601,14 +792,16 @@ function WorkCard({
           </View>
         )}
       </View>
-      <Text style={styles.workTitle} numberOfLines={1}>
+      <Text style={isGrid ? styles.workTitleGrid : styles.workTitle} numberOfLines={2}>
         {item.title}
       </Text>
-      <Text style={styles.workMeta} numberOfLines={1}>
-        {item.mediaType === 'tv' ? '시리즈' : '영화'}
-        {item.year ? ` · ${item.year}` : ''}
-        {item.rating > 0 ? ` · ★ ${item.rating.toFixed(1)}` : ''}
-      </Text>
+      {!isGrid && (
+        <Text style={styles.workMeta} numberOfLines={1}>
+          {item.mediaType === 'tv' ? '시리즈' : '영화'}
+          {item.year ? ` · ${item.year}` : ''}
+          {item.rating > 0 ? ` · ★ ${item.rating.toFixed(1)}` : ''}
+        </Text>
+      )}
     </Pressable>
   );
 }
@@ -712,6 +905,39 @@ function PersonCard({
 }
 
 // 2026-05-20 — 선택된 인물의 필모그래피 panel. PWA SearchSheet 의 inline panel 정합.
+/**
+ * 2026-05-29 — 인물 필모그래피 3열 그리드 (PWA SelectedPersonPanel 정합).
+ * 가로 스크롤 → 그리드 변경. WorkCard 의 mode='grid' 사용.
+ *
+ * 카드 width 는 화면 폭에서 panel margin/padding/gap 빼고 정확히 1/3 로 계산.
+ * RN flexbox 의 percent width 가 gap 과 충돌해 wrap 발생하던 회귀 해소.
+ */
+const PERSON_PANEL_MARGIN_H = 24; // marginHorizontal: spacing.lg
+const PERSON_PANEL_PADDING = 16; // padding: spacing.md
+const PERSON_GRID_GAP = 10; // spacing.sm + 2
+
+function WorksGrid({
+  items,
+  onSelect,
+}: {
+  items: SearchResult[];
+  onSelect?: (rec: Recommendation) => void;
+}) {
+  const { width: screenWidth } = useWindowDimensions();
+  const innerWidth =
+    screenWidth - 2 * PERSON_PANEL_MARGIN_H - 2 * PERSON_PANEL_PADDING;
+  const cardWidth = Math.floor((innerWidth - 2 * PERSON_GRID_GAP) / 3);
+  return (
+    <View style={styles.worksGrid}>
+      {items.map((w) => (
+        <View key={`pw-${w.id}-${w.mediaType}`} style={{ width: cardWidth }}>
+          <WorkCard item={w} onSelect={onSelect} mode="grid" />
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function PersonWorksPanel({
   loading,
   error,
@@ -727,33 +953,37 @@ function PersonWorksPanel({
 }) {
   if (loading) {
     return (
-      <View style={styles.personWorksLoading}>
-        <ActivityIndicator color={colors.accent} />
+      <View style={styles.personWorksWrap}>
+        <View style={styles.personWorksLoading}>
+          <ActivityIndicator color={colors.accent} />
+        </View>
       </View>
     );
   }
   if (error) {
     return (
-      <View style={styles.personWorksError}>
-        <Text style={styles.personWorksErrorText}>필모그래피를 불러올 수 없어요</Text>
-        <Pressable
-          onPress={onRetry}
-          accessibilityRole="button"
-          accessibilityLabel="다시 시도"
-          style={({ pressed }) => [
-            styles.retryBtn,
-            pressed && styles.retryBtnPressed,
-          ]}
-        >
-          <Text style={styles.retryText}>다시 시도</Text>
-        </Pressable>
+      <View style={styles.personWorksWrap}>
+        <View style={styles.personWorksError}>
+          <Text style={styles.personWorksErrorText}>필모그래피를 불러올 수 없어요</Text>
+          <Pressable
+            onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel="다시 시도"
+            style={({ pressed }) => [
+              styles.retryBtn,
+              pressed && styles.retryBtnPressed,
+            ]}
+          >
+            <Text style={styles.retryText}>다시 시도</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
   if (works.length === 0) return null;
   return (
     <View style={styles.personWorksWrap}>
-      <WorksCarousel items={works} onSelect={onSelect} />
+      <WorksGrid items={works} onSelect={onSelect} />
     </View>
   );
 }
@@ -830,6 +1060,60 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   hint: { color: colors.textMuted, fontSize: 14 },
+  // 2026-05-29 — IdleContent (Recent + Trending) 스타일. PWA D10b 정합.
+  idleScroll: { flex: 1 },
+  idleContent: { paddingBottom: spacing.md },
+  sectionHead: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs + 2,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
+  },
+  trendingSection: { marginTop: spacing.xs },
+  // Recent chip — 라벨 + × 버튼 분리된 split chip.
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+  },
+  recentChipBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: spacing.sm + 4,
+    paddingRight: 6,
+    paddingVertical: 6,
+  },
+  recentChipMark: { color: colors.textMuted, fontSize: 12 },
+  recentChipText: { color: colors.textPrimary, fontSize: 12, fontWeight: '500' },
+  recentChipRemove: {
+    paddingLeft: 4,
+    paddingRight: spacing.sm + 2,
+    paddingVertical: 6,
+  },
+  chipPressed: { opacity: 0.7 },
+  // Trending chip — accent dim 배경 단일 버튼.
+  trendingChip: {
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.accentDim,
+    borderWidth: 1,
+    borderColor: colors.accentDim,
+  },
+  trendingChipText: { color: colors.accent, fontSize: 12, fontWeight: '500' },
 
   // loading
   centered: {
@@ -984,10 +1268,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     width: '100%',
   },
-  // 2026-05-20 — person-works inline panel (PWA SearchSheet 정합).
+  // 2026-05-29 — person-works inline panel (PWA SelectedPersonPanel 정합).
+  // `mx-6 mt-2 p-4 rounded-lg + surface 배경 + border + 상단 amber-border-light`
+  // 정합. 선택 인물 카드 바로 아래 카드처럼 부착되어 시각적 연결.
   personWorksWrap: {
-    marginTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.xs + 2,
+    marginBottom: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderTopColor: colors.accentBorder,
   },
   personWorksLoading: {
     paddingVertical: spacing.lg,
@@ -1002,5 +1295,33 @@ const styles = StyleSheet.create({
   personWorksErrorText: {
     color: colors.textMuted,
     fontSize: 13,
+  },
+  // 2026-05-29 — 3열 그리드 (PWA `grid grid-cols-3 gap-2.5` 정합).
+  // gap 으로 행/열 균등. RN 0.71+ flexbox gap 지원.
+  // 카드 width 는 WorksGrid 가 useWindowDimensions 으로 계산해 외부 View 에 적용.
+  // workCardGrid 자체는 부모 폭(외부 View)을 100% 사용.
+  worksGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10, // PERSON_GRID_GAP 동기 — 행 + 열 간격
+  },
+  workCardGrid: {
+    width: '100%',
+  },
+  workPosterFrameGrid: {
+    width: '100%',
+    aspectRatio: 2 / 3,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  workTitleGrid: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 4,
+    lineHeight: 14,
   },
 });

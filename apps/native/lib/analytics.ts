@@ -141,6 +141,7 @@ export type NekoEvent =
   | 'search_item_selected'
   | 'search_item_saved'
   | 'search_ott_clicked'
+  | 'search_trending_clicked'
   // 프로필
   | 'profile_viewed'
   | 'data_reset'
