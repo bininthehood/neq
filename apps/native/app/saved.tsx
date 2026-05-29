@@ -626,36 +626,17 @@ export default function SavedScreen() {
   // 처리와 중복되어 FlatList 마지막 row 가 잘리는 회귀 (사용자 보고). ['top'] 만 처리.
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* 3-슬롯 헤더 — 좌:title / 중앙:viewMode 토글 / 우:search.
-          web saved/page.tsx 헤더 (좌 H1 / 중앙 grid·list·preview / 우 search) 정합. */}
+      {/* 헤더 — 좌:title (자연 폭) / 우:search (자연 폭) / 중앙:viewMode 토글 (absolute center).
+          web saved/page.tsx 헤더 (좌 H1 / 중앙 grid·list·preview / 우 search) 정합.
+          2026-05-29 — 사용자 피드백:
+            (1) titleWrap 의 카운터 (n개) 제거 — 필터 행에서 이미 확인 가능.
+            (2) viewMode segmented 를 header 정중앙 (absolute center). 3슬롯 flex:1
+                패턴은 RN 픽셀 라운딩으로 미세 오프셋 발생 → 절대 위치로 확정.
+                title/search 는 양 끝 (justify-content: space-between). */}
       <View style={styles.header}>
-        <View style={styles.titleWrap}>
+        <View style={styles.titleSlot}>
           <Text style={styles.title}>Saved</Text>
-          {/* 배치 H — history 뷰에서는 추천 기록 갯수를 카운터로 표시
-              (native 고유 카운터 — saved 갯수를 보여주면 history 맥락과 어긋남). */}
-          <Text style={styles.counter}>
-            {viewFilter === 'history'
-              ? `${history.length}개`
-              : `${ottFilteredItems.length}개`}
-          </Text>
         </View>
-        {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김.
-            배치 H — history 뷰에서는 grid/list/preview 무의미 → 숨김
-            (web saved/page.tsx:461 `saved.length > 0 && viewFilter !== "history"` 정합). */}
-        {items.length > 0 && viewFilter !== 'history' ? (
-          <View
-            style={styles.segmented}
-            accessibilityRole="tablist"
-            accessibilityLabel="뷰 모드 전환"
-          >
-            {renderViewModeBtn('grid', '그리드 보기', IconGrid)}
-            {renderViewModeBtn('list', '리스트 보기', IconList)}
-            {renderViewModeBtn('preview', '미리보기', IconPreview)}
-          </View>
-        ) : (
-          // items 0 일 때도 중앙 슬롯 자리 확보 — title/search 양 끝 정렬 유지.
-          <View />
-        )}
         <Pressable
           style={styles.searchBtn}
           onPress={() => {
@@ -670,6 +651,27 @@ export default function SavedScreen() {
         >
           <IconSearch size={18} color={colors.textMuted} />
         </Pressable>
+        {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김.
+            배치 H — history 뷰에서는 grid/list/preview 무의미 → 숨김
+            (web saved/page.tsx:461 `saved.length > 0 && viewFilter !== "history"` 정합).
+            absolute fill + alignItems/justifyContent center → header 정중앙.
+            pointerEvents="box-none" 으로 wrap 빈 영역은 터치 통과 (좌·우 슬롯 누를 수 있게). */}
+        {items.length > 0 && viewFilter !== 'history' ? (
+          <View
+            style={styles.segmentedAbsolute}
+            pointerEvents="box-none"
+          >
+            <View
+              style={styles.segmented}
+              accessibilityRole="tablist"
+              accessibilityLabel="뷰 모드 전환"
+            >
+              {renderViewModeBtn('grid', '그리드 보기', IconGrid)}
+              {renderViewModeBtn('list', '리스트 보기', IconList)}
+              {renderViewModeBtn('preview', '미리보기', IconPreview)}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/* W5 Task F — ViewFilter 탭 행 (web `SavedFilters` underline 패턴 정합).
@@ -1454,11 +1456,21 @@ const styles = StyleSheet.create({
     height: 48,
     gap: spacing.sm,
   },
-  titleWrap: {
+  // 2026-05-29 — title (좌) + searchBtn (우) 자연 흐름 + space-between.
+  // segmented 는 absolute fill center 로 header 정중앙 고정.
+  titleSlot: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: spacing.sm,
     minWidth: 0,
+  },
+  segmentedAbsolute: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   // 2026-05-19 native↔PWA 정합 (항목 3) — web saved/page.tsx h1 정본:
   //   text 'Saved' (영문) / font-display(Instrument Serif) / fontSize 28 /
@@ -1474,7 +1486,6 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     fontFamily: fontsV2.display,
   },
-  counter: { color: colors.textMuted, fontSize: 13 },
   // viewMode segmented 컨테이너 + 버튼 (3-way grid/list/preview).
   segmented: {
     flexDirection: 'row',
