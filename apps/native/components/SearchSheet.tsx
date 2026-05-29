@@ -36,7 +36,6 @@ import {
   Keyboard,
   Modal,
   Dimensions,
-  useWindowDimensions,
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -249,6 +248,11 @@ export default function SearchSheet({
         duration: SHEET_ENTER_MS,
         easing: SHEET_ENTER_BEZIER,
       });
+      // 2026-05-29 v2 — TextInput 명시 focus. autoFocus 잔재 / Modal 첫 frame race
+      // 회피 (사용자 보고: Profile 탭 검색 결과 0건 후속 회귀). Modal 의 mount 와
+      // 키보드 표시 사이에 짧은 지연을 두어 안정적으로 focus.
+      const t = setTimeout(() => inputRef.current?.focus(), 80);
+      return () => clearTimeout(t);
     } else {
       translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 280 });
       // 2026-05-20 — preserveStateOnClose 면 query/data 유지 (DetailSheet → 복귀 흐름).
@@ -411,13 +415,12 @@ export default function SearchSheet({
                   placeholderTextColor={colors.textMuted}
                   style={styles.input}
                   autoCorrect={false}
-                  // 2026-05-29 — visible 가드. 3 SearchSheet 가 동시 mount (lazy:false)
-                  // 되어 있어 background 의 input 이 key 이벤트 받거나 autoFocus
-                  // 잔재로 race 가능 (Profile 검색 결과 empty 회귀 보고).
-                  // editable={visible} + autoFocus={visible} 으로 비활성 탭의 input
-                  // 비활성화.
-                  editable={visible}
-                  autoFocus={visible}
+                  // 2026-05-29 v2 — visible 가드 제거. <Modal visible=false> 는
+                  // children 자체를 null 반환 (RN 내부) → 다른 탭의 input 은 애초에
+                  // 마운트되지 않음. editable={visible} 가드는 무의미 + Profile 탭에서
+                  // 일부 환경에서 input 비활성 잔재 회귀 가능성. 명시 focus 는 visible
+                  // useEffect 에서 inputRef.current?.focus() 로 신뢰성 확보.
+                  editable
                   returnKeyType="search"
                   onSubmitEditing={() => {
                     // 명시 의도 — return 키 (search). recent 기록.
@@ -906,14 +909,12 @@ function PersonCard({
 
 // 2026-05-20 — 선택된 인물의 필모그래피 panel. PWA SearchSheet 의 inline panel 정합.
 /**
- * 2026-05-29 — 인물 필모그래피 3열 그리드 (PWA SelectedPersonPanel 정합).
- * 가로 스크롤 → 그리드 변경. WorkCard 의 mode='grid' 사용.
+ * 2026-05-29 v2 — 인물 필모그래피 3열 그리드.
  *
- * 카드 width 는 화면 폭에서 panel margin/padding/gap 빼고 정확히 1/3 로 계산.
- * RN flexbox 의 percent width 가 gap 과 충돌해 wrap 발생하던 회귀 해소.
+ * v1 회귀 (build 12): useWindowDimensions + 이론 padding 차감으로 cardWidth 계산 →
+ * SafeArea/스크롤바 등 실제 부모 폭과 미세 차이로 wrap 발생, 한 줄에 2개만 표출 +
+ * 좌측 정렬. onLayout 으로 worksGrid 의 실제 측정 폭에서 cardWidth 산출 → 픽셀 정확.
  */
-const PERSON_PANEL_MARGIN_H = 24; // marginHorizontal: spacing.lg
-const PERSON_PANEL_PADDING = 16; // padding: spacing.md
 const PERSON_GRID_GAP = 10; // spacing.sm + 2
 
 function WorksGrid({
@@ -923,17 +924,23 @@ function WorksGrid({
   items: SearchResult[];
   onSelect?: (rec: Recommendation) => void;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
-  const innerWidth =
-    screenWidth - 2 * PERSON_PANEL_MARGIN_H - 2 * PERSON_PANEL_PADDING;
-  const cardWidth = Math.floor((innerWidth - 2 * PERSON_GRID_GAP) / 3);
+  const [gridW, setGridW] = useState(0);
+  const cardWidth =
+    gridW > 0 ? Math.floor((gridW - 2 * PERSON_GRID_GAP) / 3) : 0;
   return (
-    <View style={styles.worksGrid}>
-      {items.map((w) => (
-        <View key={`pw-${w.id}-${w.mediaType}`} style={{ width: cardWidth }}>
-          <WorkCard item={w} onSelect={onSelect} mode="grid" />
-        </View>
-      ))}
+    <View
+      style={styles.worksGrid}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (Math.abs(w - gridW) > 0.5) setGridW(w);
+      }}
+    >
+      {cardWidth > 0 &&
+        items.map((w) => (
+          <View key={`pw-${w.id}-${w.mediaType}`} style={{ width: cardWidth }}>
+            <WorkCard item={w} onSelect={onSelect} mode="grid" />
+          </View>
+        ))}
     </View>
   );
 }
@@ -1299,7 +1306,7 @@ const styles = StyleSheet.create({
   // 2026-05-29 — 3열 그리드 (PWA `grid grid-cols-3 gap-2.5` 정합).
   // gap 으로 행/열 균등. RN 0.71+ flexbox gap 지원.
   // 카드 width 는 WorksGrid 가 useWindowDimensions 으로 계산해 외부 View 에 적용.
-  // workCardGrid 자체는 부모 폭(외부 View)을 100% 사용.
+  // 카드 width 는 WorksGrid 가 onLayout 으로 실제 측정 폭에서 계산.
   worksGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

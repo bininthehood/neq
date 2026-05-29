@@ -252,14 +252,17 @@ export default function DetailSheet({
   );
 
   const pan = Gesture.Pan()
-    // 2026-05-29 — 스크롤 상단일 때만 swipe-down dismiss. ScrollView 와 충돌 회피:
-    //  - activeOffsetY: 아래로 8px 이상 움직일 때만 pan 활성 (작은 노이즈 무시).
-    //  - failOffsetY: 위로 움직이면 pan fail → ScrollView 가 스크롤 처리.
-    //  - onUpdate / onEnd 안에서 scrollY > 0 이면 sheet 안 움직임 (이미 스크롤
-    //    중간이라 사용자 의도는 ScrollView 스크롤. translationY 가 큰 값으로
-    //    들어와도 sheet 이동 차단).
-    .activeOffsetY([8, 9999])
-    .failOffsetY([-1, 7])
+    // 2026-05-29 v2 — v1 회귀 fix (build 12):
+    //   v1: activeOffsetY([8, 9999]) + failOffsetY([-1, 7]) 의 임계가 충돌 —
+    //   translation 이 7px 도달 시점에 failOffsetYEnd=7 이 먼저 발동 → pan 이
+    //   activate(8px) 도달 전에 fail. 결과: 핸들 드래그 + scroll-top swipe-down
+    //   모두 불응답.
+    //   v2: activeOffsetY(8) 단일 (downward 8px+ 만 active, upward 는 pan 진입
+    //   안 함 → ScrollView 가 자연스럽게 스크롤 처리). failOffsetX 로 수평 carousel
+    //   간섭만 차단.
+    //   onUpdate / onEnd 안 scrollY > 0 가드 유지 — 스크롤 중간 swipe 차단.
+    .activeOffsetY(8)
+    .failOffsetX([-20, 20])
     .onUpdate((e) => {
       'worklet';
       if (scrollY.value > 0) return;
