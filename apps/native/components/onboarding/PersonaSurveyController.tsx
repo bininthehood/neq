@@ -388,37 +388,47 @@ export default function PersonaSurveyController({
   );
 
   // === "맞아요" 수락 → 페르소나 저장 ===
+  // 2026-05-29 — 빠른 더블탭 race 방지. createPersona await 도중 두 번째 onPress
+  // 가 들어오면 페르소나 2개 생성 → "기본"+"영화" 류 중복 노출 가능. acceptInflight
+  // 가드로 단일 호출 보장. inflightRef 는 step 요청용이라 acceptInflightRef 분리.
+  const acceptInflightRef = useRef(false);
   const handleAccept = useCallback(async () => {
     if (!context || !summary) return;
-    const personaName = initialName?.trim() || autoName(context);
-    const duration = Date.now() - startedAtRef.current;
-    // design doc step 5 — favorites pick 결과를 페르소나 favorites 에 동시 저장.
-    const newId = await createPersona(
-      personaName,
-      favorites.map((f) => f.title),
-      favorites.map((f) => ({ id: f.id, title: f.title, posterUrl: f.posterUrl })),
-      {
-        tasteSummary: summary.tasteSummary,
-        tasteSurveyAnswers: prevAnswers,
-        context,
-      },
-    );
-    track('taste_survey_completed', {
-      contentType: context.contentType,
-      companion: context.companion,
-      duration_ms: duration,
-      answers_count: prevAnswers.length,
-      favorites_count: favorites.length,
-      summary_chars: summary.tasteSummary.length,
-      persona_created: !!newId,
-    });
-    await clearProgress(context);
-    setPhase('done');
-    if (newId) {
-      await switchPersona(newId);
-      onComplete(newId);
-    } else {
-      onCancel();
+    if (acceptInflightRef.current) return;
+    acceptInflightRef.current = true;
+    try {
+      const personaName = initialName?.trim() || autoName(context);
+      const duration = Date.now() - startedAtRef.current;
+      // design doc step 5 — favorites pick 결과를 페르소나 favorites 에 동시 저장.
+      const newId = await createPersona(
+        personaName,
+        favorites.map((f) => f.title),
+        favorites.map((f) => ({ id: f.id, title: f.title, posterUrl: f.posterUrl })),
+        {
+          tasteSummary: summary.tasteSummary,
+          tasteSurveyAnswers: prevAnswers,
+          context,
+        },
+      );
+      track('taste_survey_completed', {
+        contentType: context.contentType,
+        companion: context.companion,
+        duration_ms: duration,
+        answers_count: prevAnswers.length,
+        favorites_count: favorites.length,
+        summary_chars: summary.tasteSummary.length,
+        persona_created: !!newId,
+      });
+      await clearProgress(context);
+      setPhase('done');
+      if (newId) {
+        await switchPersona(newId);
+        onComplete(newId);
+      } else {
+        onCancel();
+      }
+    } finally {
+      acceptInflightRef.current = false;
     }
   }, [context, summary, prevAnswers, favorites, initialName, onComplete, onCancel]);
 

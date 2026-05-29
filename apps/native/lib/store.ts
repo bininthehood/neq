@@ -2,7 +2,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import {
   createPersona as createPersonaCore,
-  deletePersona as deletePersonaCore,
   getActivePersona as getActivePersonaCore,
   MAX_PERSONAS,
 } from '@neq/core';
@@ -362,12 +361,16 @@ export async function switchPersona(id: string): Promise<void> {
 
 export async function deletePersona(id: string): Promise<void> {
   const current = await getPersonas();
-  const next = deletePersonaCore(current, id);
+  // 2026-05-29 — packages/core 의 deletePersonaCore 우회 (직접 filter).
+  // core 는 빈 배열일 때 {id:'default', name:'기본'} 시드 자동 생성 (web 정책).
+  // native 는 "1 생성 = 1 페르소나" (ad5960e) — core 결과를 그대로 저장하면
+  // 마지막 페르소나 삭제 후 자동으로 '기본' 시드가 남고, 이후 신규 온보딩이
+  // 추가 페르소나를 push → 사용자에게 "기본" + 사용자명 페르소나 2개 노출 회귀.
+  const next = current.filter((p) => p.id !== id);
   await setPersonas(next);
   const activeId = await getActivePersonaId();
   if (activeId === id) {
-    // 빈 배열 가능 (2026-05-28 시드 제거 이후 — 마지막 페르소나 삭제 시).
-    // 빈 문자열로 active 리셋 — 호출자가 personas=[] 케이스 처리.
+    // 빈 배열 가능 — 빈 문자열로 active 리셋. 호출자가 personas=[] 케이스 처리.
     await setActivePersonaId(next.length > 0 ? next[0].id : '');
   }
 }
