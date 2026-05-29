@@ -103,10 +103,19 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
       if (cancelled) return;
       setGenreRecs(Object.fromEntries(entries));
       setLoadingGenres(false);
+      // 2026-05-29 — mount 직후 자동 prefetch. hasMore=true 인 장르 모두
+      // page=2 즉시 fetch — 사용자가 가로 스크롤 안 해도 더 많이 노출.
+      // 일부 장르는 backend 필터 (vote_count > 100 + 평점 6.5+) 후 page=1
+      // 매칭 작품이 적은 경우 (8개 등) — prefetch 로 보완.
+      // onEndReached 가 horizontal FlatList 에서 호출 안 되는 RN 이슈 안전망.
+      for (const [genreSlug, feed] of entries) {
+        if (feed.hasMore) void loadMoreForGenre(genreSlug);
+      }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const search = useCallback(async (q: string) => {
@@ -373,7 +382,10 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
                     onEndReached={() => {
                       void loadMoreForGenre(g.id);
                     }}
-                    onEndReachedThreshold={0.5}
+                    // 2026-05-29 — RN FlatList horizontal 의 onEndReached 는 보수적으로
+                    // 호출됨 (사용자 보고: build 11 에서 끝 도달해도 추가 fetch 안 됨).
+                    // threshold 0.5 → 2.0 (visible 의 2배 남았을 때) — 더 일찍 트리거.
+                    onEndReachedThreshold={2.0}
                     ListFooterComponent={
                       feed?.loading ? (
                         <View style={styles.carouselFooter}>
