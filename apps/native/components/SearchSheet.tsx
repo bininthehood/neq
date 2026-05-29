@@ -124,6 +124,7 @@ export default function SearchSheet({
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const inputRef = useRef<TextInput>(null);
   const translateY = useSharedValue(SHEET_MAX_HEIGHT);
 
   // ─────────────────────────────────────────────────────
@@ -342,6 +343,7 @@ export default function SearchSheet({
             <View style={styles.searchRow}>
               <View style={styles.searchBox}>
                 <TextInput
+                  ref={inputRef}
                   value={query}
                   onChangeText={handleInput}
                   placeholder="작품, 감독, 배우"
@@ -355,7 +357,12 @@ export default function SearchSheet({
                 />
                 {query.length > 0 && (
                   <Pressable
-                    onPress={() => handleInput('')}
+                    onPress={() => {
+                      // clear 후 input 에 즉시 focus — 사용자가 새 검색어 입력
+                      // 흐름이 끊기지 않도록. clear → 키보드 닫힘 회귀 방지.
+                      handleInput('');
+                      inputRef.current?.focus();
+                    }}
                     hitSlop={10}
                     accessibilityLabel="검색어 지우기"
                     accessibilityRole="button"
