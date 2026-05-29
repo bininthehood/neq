@@ -16,6 +16,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  useAnimatedScrollHandler,
   withTiming,
   runOnJS,
   interpolate,
@@ -85,6 +86,14 @@ export default function DetailSheet({
 }: Props) {
   const translateY = useSharedValue(SHEET_MAX_HEIGHT);
   const scrollRef = useRef<ScrollView>(null);
+  // 2026-05-29 — 사용자 요청: detail sheet 스크롤 상단일 때만 swipe-down dismiss.
+  // 스크롤 중간일 때는 일반 스크롤 유지. scrollY 추적 + pan gesture 조건 분기.
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+    },
+  });
 
   // 관련 작품 카드 클릭 시 sheet 내부에서 rec 을 교체. F3 spec — 새 sheet 교체 단순화.
   const [relatedRec, setRelatedRec] = useState<Recommendation | null>(null);
@@ -243,12 +252,24 @@ export default function DetailSheet({
   );
 
   const pan = Gesture.Pan()
+    // 2026-05-29 — 스크롤 상단일 때만 swipe-down dismiss. ScrollView 와 충돌 회피:
+    //  - activeOffsetY: 아래로 8px 이상 움직일 때만 pan 활성 (작은 노이즈 무시).
+    //  - failOffsetY: 위로 움직이면 pan fail → ScrollView 가 스크롤 처리.
+    //  - onUpdate / onEnd 안에서 scrollY > 0 이면 sheet 안 움직임 (이미 스크롤
+    //    중간이라 사용자 의도는 ScrollView 스크롤. translationY 가 큰 값으로
+    //    들어와도 sheet 이동 차단).
+    .activeOffsetY([8, 9999])
+    .failOffsetY([-1, 7])
     .onUpdate((e) => {
+      'worklet';
+      if (scrollY.value > 0) return;
       if (e.translationY > 0) {
         translateY.value = e.translationY;
       }
     })
     .onEnd((e) => {
+      'worklet';
+      if (scrollY.value > 0) return;
       if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
         // Phase C-3: drag close 도 web exit 정량과 정합.
         translateY.value = withTiming(
@@ -364,11 +385,15 @@ export default function DetailSheet({
               </Pressable>
             </View>
 
-            <ScrollView
-              ref={scrollRef}
+            <Animated.ScrollView
+              ref={scrollRef as React.RefObject<Animated.ScrollView>}
               style={styles.body}
               contentContainerStyle={styles.bodyContent}
               showsVerticalScrollIndicator={false}
+              // 2026-05-29 — scrollY 추적 → pan gesture 가 scrollY > 0 이면
+              // sheet swipe-down 차단 (일반 스크롤 우선).
+              onScroll={scrollHandler}
+              scrollEventThrottle={16}
             >
               <Text style={styles.title} accessibilityRole="header">
                 {rec.title}
@@ -539,7 +564,7 @@ export default function DetailSheet({
                 <IconShare size={16} color={colors.textSecondary} />
                 <Text style={styles.shareText}>공유하기</Text>
               </Pressable>
-            </ScrollView>
+            </Animated.ScrollView>
           </Animated.View>
         </GestureDetector>
       </View>
