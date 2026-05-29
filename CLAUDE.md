@@ -63,7 +63,8 @@ In QA mode, flag any code that doesn't match DESIGN.md.
 | ux-review | Warm Cinema 디자인 시스템 검증 | ux-reviewer |
 | tmdb-integration | TMDB API 통합 가이드 | content-manager |
 | component-build | 프론트엔드 구현 가이드 | frontend-builder |
-| mobile-qa | 모바일 QA 검증 가이드 | qa-tester |
+| mobile-qa | 모바일 QA 검증 가이드 (빌드 전 / 코드 정합성) | qa-tester |
+| testflight-qa | TestFlight 베타 실기기 회귀 + 출시 게이트 | qa-tester |
 | neq-orchestrator | 팀 오케스트레이션 | 리더 (메인) |
 
 **실행 규칙:**
@@ -88,6 +89,12 @@ In QA mode, flag any code that doesn't match DESIGN.md.
     ├── tmdb-integration/SKILL.md
     ├── component-build/SKILL.md
     ├── mobile-qa/SKILL.md
+    ├── testflight-qa/
+    │   ├── SKILL.md
+    │   └── references/
+    │       ├── manual-test-matrix.md
+    │       ├── release-gate.md
+    │       └── crash-regression.md
     └── neq-orchestrator/SKILL.md
 ```
 
@@ -160,6 +167,7 @@ neko/
 | 2026-04-15 | 디자인 팀 추가 | 디자인 | Warm Cinema 탈피 + 고유 디자인 언어 구축 |
 | 2026-04-15 | 네이티브 전환 시작 | 전체 | PWA → Expo RN. frontend-builder, qa-tester 확장 |
 | 2026-05-12 | W3 디자인 통합 완료 | 디자인 | DESIGN.md 247→425L, motion 토큰 globals.css 활성화, Brand Identity 섹션 신규, ux-reviewer follow-up 11/14건 처리. devlog: `_workspace/devlog-2026-05-12-w3-integration.md`. W4 (이관 준비) 진입 가능 |
+| 2026-05-28 | testflight-qa 스킬 추가 | neq 하네스 | TestFlight 베타 시행 단계 진입. mobile-qa(빌드 전 코드 정합성) 와 책임 분리. IPA/EAS 매니페스트, Universal Link 실기기 검증, Reanimated 4 회귀, E2E testflight 분기, 출시 게이트 (UL 자격증명 의존 4건 + PostHog 준비도). qa-tester 에이전트 재사용 |
 
 ## TMDB Mirror 인프라
 

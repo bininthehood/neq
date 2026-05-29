@@ -29,7 +29,7 @@ Neko OTT 콘텐츠 발굴 PWA의 에이전트 팀을 조율하여 기능 구현,
 | ux-reviewer | ux-reviewer | DESIGN.md 준수 + 스와이프 UX | ux-review | opus |
 | content-manager | content-manager | TMDB API + OTT 가용성 | tmdb-integration | opus |
 | frontend-builder | frontend-builder | React 컴포넌트 + 애니메이션 | component-build | opus |
-| qa-tester | qa-tester | 통합 정합성 + 엣지 케이스 | mobile-qa | opus |
+| qa-tester | qa-tester | 통합 정합성 + 엣지 케이스 | mobile-qa, testflight-qa | opus |
 
 ## 워크플로우
 
@@ -56,6 +56,7 @@ Neko OTT 콘텐츠 발굴 PWA의 에이전트 팀을 조율하여 기능 구현,
 | TMDB 데이터 확장 | content-manager | qa-tester |
 | 전체 기능 추가 | 전원 | ux-reviewer, qa-tester |
 | QA/버그 수정 | qa-tester + 해당 영역 에이전트 | ux-reviewer |
+| TestFlight 베타 / 출시 게이트 | qa-tester (`testflight-qa` 스킬) | ux-reviewer (필요 시) |
 | 디자인 개선 | frontend-builder | ux-reviewer |
 
 ### Phase 2: 팀 구성
@@ -93,7 +94,7 @@ Neko OTT 콘텐츠 발굴 PWA의 에이전트 팀을 조율하여 기능 구현,
          name: "qa-tester",
          agent_type: "qa-tester",
          model: "opus",
-         prompt: "당신은 Neko QA 전문가입니다. .claude/agents/qa-tester.md를 읽고 역할을 숙지하세요. 스킬: .claude/skills/mobile-qa/SKILL.md. QA 리포트를 _workspace/에 저장하세요."
+         prompt: "당신은 Neko QA 전문가입니다. .claude/agents/qa-tester.md를 읽고 역할을 숙지하세요. 스킬: .claude/skills/mobile-qa/SKILL.md (빌드 전 코드 정합성), .claude/skills/testflight-qa/SKILL.md (TestFlight 실기기 베타·출시 게이트). QA 리포트를 _workspace/에 저장하세요."
        }
      ]
    )
