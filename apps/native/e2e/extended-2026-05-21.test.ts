@@ -164,6 +164,12 @@ describe('B1 — Onboarding 진입 경로', () => {
 // B2 — Saved 필터/정렬/검색
 // ──────────────────────────────────────────────────────────
 describe('B2 — Saved 필터/정렬/검색', () => {
+  // build 10 회귀 (2026-05-28) — saved=0 디바이스에서 5 FAIL. SKIP 폴백이
+  // 각 it 분기로 흩어져 있어 일부 케이스에서 mount race 동시 발생.
+  // before 에서 한 번에 점검 → savedEmpty true 면 beforeEach 가 모든 it 을
+  // PENDING 처리. 회귀 baseline 안정화 (가설 A — spec 가정 미스매치).
+  let savedEmpty = false;
+
   before(async () => {
     // spec audit (2026-05-28) — isolation.
     const { forceResetApp, pageSourceContains } = await import('./_helpers');
@@ -172,6 +178,27 @@ describe('B2 — Saved 필터/정렬/검색', () => {
       throw new Error('before: 앱이 onboarding 화면. B2 는 onboarded 상태 가정.');
     }
     await ensureBackToDiscover();
+
+    // saved 작품 수 사전 점검 — Saved 탭 진입 후 mount 안정화 대기 + 검출.
+    await tapTab('저장');
+    await browser.pause(1500);
+    const src = await browser.getPageSource();
+    const hasItems =
+      src.includes('상세보기') ||
+      src.includes('필터 열기') ||
+      src.includes('안 본 작품');
+    savedEmpty = !hasItems;
+    if (savedEmpty) {
+      console.warn(
+        '[B2 PENDING] saved 작품 0건 감지 — 모든 B2 케이스 SKIP. ' +
+        '회귀 baseline 확보를 위해 실기기에서 1~2 작품 저장 후 재실행 권고.',
+      );
+    }
+    await ensureBackToDiscover();
+  });
+
+  beforeEach(function () {
+    if (savedEmpty) this.skip();
   });
 
   after(async () => {
@@ -275,6 +302,9 @@ describe('B2 — Saved 필터/정렬/검색', () => {
 // B3 — Report + Archive (Saved 의 long-press / report 진입)
 // ──────────────────────────────────────────────────────────
 describe('B3 — Report + Archive', () => {
+  // B2 와 동일 패턴 — saved=0 디바이스 SKIP. build 10 회귀 before-all 차단 회귀 해소.
+  let savedEmpty = false;
+
   before(async () => {
     // spec audit (2026-05-28) — isolation.
     const { forceResetApp, pageSourceContains } = await import('./_helpers');
@@ -284,7 +314,22 @@ describe('B3 — Report + Archive', () => {
     }
     await ensureBackToDiscover();
     await tapTab('저장');
-    await browser.pause(1200);
+    await browser.pause(1500);
+    const src = await browser.getPageSource();
+    const hasItems =
+      src.includes('상세보기') ||
+      src.includes('시청 리포트 작성');
+    savedEmpty = !hasItems;
+    if (savedEmpty) {
+      console.warn(
+        '[B3 PENDING] saved 작품 0건 감지 — 모든 B3 케이스 SKIP. ' +
+        '회귀 baseline 확보를 위해 실기기에서 1~2 작품 저장 후 재실행 권고.',
+      );
+    }
+  });
+
+  beforeEach(function () {
+    if (savedEmpty) this.skip();
   });
 
   after(async () => {
