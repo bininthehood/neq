@@ -119,7 +119,15 @@ export async function dismissKeyboard(
  */
 export async function forceResetApp(bundleId?: string): Promise<void> {
   const cap = (browser.capabilities as Record<string, unknown>) ?? {};
-  const id = bundleId ?? (cap['appium:bundleId'] as string) ?? 'host.exp.Exponent';
+  // E2E_TARGET 기반 fallback — capability key 가 어떤 prefix 로 노출돼도 대응.
+  // testflight 분기에서 'host.exp.Exponent' fallback 시 잘못된 앱 위에서 회귀가 돌아 false-fail 다발 발생.
+  const isTestFlight = process.env.E2E_TARGET === 'testflight';
+  const defaultBundleId = isTestFlight ? 'com.neq.app' : 'host.exp.Exponent';
+  const id =
+    bundleId ??
+    (cap['appium:bundleId'] as string) ??
+    (cap.bundleId as string) ??
+    defaultBundleId;
   try {
     await browser.execute('mobile: terminateApp', { bundleId: id });
   } catch { /* 이미 종료 */ }

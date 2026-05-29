@@ -34,6 +34,8 @@ const testFlightExtras: Partial<WebdriverIO.Capabilities> = isTestFlight
       'appium:xcodeSigningId': 'Apple Development',
       'appium:showXcodeLog': true,
       'appium:webDriverAgentUrl': process.env.WDA_URL,
+      // TestFlight standalone 빌드는 Appium 이 직접 띄워야 stale-pid 회피
+      'appium:autoLaunch': true,
     }
   : {};
 
@@ -63,7 +65,8 @@ export const config: Options.Testrunner = {
   logLevel: 'info',
   bail: 0,
   waitforTimeout: 10000,
-  connectionRetryTimeout: 120000,
+  // TestFlight standalone + autoLaunch=true 첫 launch 가 120s 초과 — 300s 로 확장
+  connectionRetryTimeout: 300000,
   connectionRetryCount: 3,
 
   hostname: '127.0.0.1',
