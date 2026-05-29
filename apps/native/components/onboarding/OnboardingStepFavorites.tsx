@@ -7,9 +7,11 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { GENRE_CHIPS, type GenreChip } from './data';
+import { IconClose } from '../Icons';
 import { env } from '../../lib/env';
 import { getAccountPrefs } from '../../lib/store';
 import { addSaved, archiveItem } from '../../lib/store';
@@ -44,17 +46,27 @@ interface Props {
   onNext: (opts?: { random?: boolean }) => void;
 }
 
+interface GenreFeed {
+  items: SearchItem[];
+  page: number;
+  hasMore: boolean;
+  loading: boolean;
+}
+
 export default function OnboardingStepFavorites({ onNext }: Props) {
   const [genreSlugs, setGenreSlugs] = useState<string[]>([]);
-  const [genreRecs, setGenreRecs] = useState<Record<string, SearchItem[]>>({});
+  const [genreRecs, setGenreRecs] = useState<Record<string, GenreFeed>>({});
   const [loadingGenres, setLoadingGenres] = useState(true);
   const [selected, setSelected] = useState<SearchItem[]>([]);
+  // 무한 스크롤 race 가드 — 같은 장르에 동시 onEndReached 가 여러 번 발화하는 것 차단.
+  const loadMoreInflightRef = useRef<Set<string>>(new Set());
 
   // 검색 state
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<TextInput>(null);
 
   // mount: 직전 Genre 단계의 tasteGenres 슬러그 로드 + 장르별 추천 fetch
   useEffect(() => {
@@ -69,18 +81,22 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
         .map((slug) => GENRE_CHIPS.find((g) => g.id === slug))
         .filter((g): g is GenreChip => !!g);
 
-      const entries: [string, SearchItem[]][] = await Promise.all(
+      const entries: [string, GenreFeed][] = await Promise.all(
         selectedChips.map(async (g) => {
-          if (g.tmdbMovieId == null) return [g.id, []] as [string, SearchItem[]];
+          const empty: GenreFeed = { items: [], page: 1, hasMore: false, loading: false };
+          if (g.tmdbMovieId == null) return [g.id, empty] as [string, GenreFeed];
           try {
+            // 2026-05-29 — 무한 스크롤 활성화: page=1 명시 시 서버가 paged 객체 반환.
             const res = await fetch(
-              `${env.API_BASE_URL}/api/tmdb/by-genre?genre=${g.tmdbMovieId}`,
+              `${env.API_BASE_URL}/api/tmdb/by-genre?genre=${g.tmdbMovieId}&page=1`,
             );
-            if (!res.ok) return [g.id, []] as [string, SearchItem[]];
+            if (!res.ok) return [g.id, empty] as [string, GenreFeed];
             const data = await res.json();
-            return [g.id, Array.isArray(data) ? data : []] as [string, SearchItem[]];
+            const items = Array.isArray(data?.items) ? (data.items as SearchItem[]) : [];
+            const hasMore = !!data?.hasMore;
+            return [g.id, { items, page: 1, hasMore, loading: false }] as [string, GenreFeed];
           } catch {
-            return [g.id, []] as [string, SearchItem[]];
+            return [g.id, empty] as [string, GenreFeed];
           }
         }),
       );
@@ -119,6 +135,60 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => search(value), 300);
   };
+
+  /**
+   * 장르 carousel 끝 도달 시 다음 페이지 fetch. 동일 장르 race 가드.
+   * page 누적 + items append. hasMore=false 면 추가 fetch 안 함.
+   * 결과 중복은 id 기반으로 차단 (TMDB 응답이 페이지 간 약간 겹치는 케이스 대비).
+   */
+  const loadMoreForGenre = useCallback(
+    async (genreSlug: string) => {
+      const chip = GENRE_CHIPS.find((g) => g.id === genreSlug);
+      if (!chip || chip.tmdbMovieId == null) return;
+      // race 가드: 동일 장르 inflight 차단.
+      if (loadMoreInflightRef.current.has(genreSlug)) return;
+      const current = genreRecs[genreSlug];
+      if (!current || !current.hasMore || current.loading) return;
+      loadMoreInflightRef.current.add(genreSlug);
+      setGenreRecs((prev) => ({
+        ...prev,
+        [genreSlug]: { ...prev[genreSlug], loading: true },
+      }));
+      const nextPage = current.page + 1;
+      try {
+        const res = await fetch(
+          `${env.API_BASE_URL}/api/tmdb/by-genre?genre=${chip.tmdbMovieId}&page=${nextPage}`,
+        );
+        if (!res.ok) {
+          setGenreRecs((prev) => ({
+            ...prev,
+            [genreSlug]: { ...prev[genreSlug], loading: false, hasMore: false },
+          }));
+          return;
+        }
+        const data = await res.json();
+        const newItems: SearchItem[] = Array.isArray(data?.items) ? data.items : [];
+        const hasMore = !!data?.hasMore;
+        setGenreRecs((prev) => {
+          const existing = prev[genreSlug] ?? { items: [], page: 1, hasMore: false, loading: false };
+          const seen = new Set(existing.items.map((i) => i.id));
+          const merged = [...existing.items, ...newItems.filter((i) => !seen.has(i.id))];
+          return {
+            ...prev,
+            [genreSlug]: { items: merged, page: nextPage, hasMore, loading: false },
+          };
+        });
+      } catch {
+        setGenreRecs((prev) => ({
+          ...prev,
+          [genreSlug]: { ...prev[genreSlug], loading: false },
+        }));
+      } finally {
+        loadMoreInflightRef.current.delete(genreSlug);
+      }
+    },
+    [genreRecs],
+  );
 
   const toggleSelect = (item: SearchItem) => {
     setSelected((prev) => {
@@ -205,18 +275,35 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
         })}
       </View>
 
-      {/* 검색 input */}
+      {/* 검색 input — clear 버튼 (SearchSheet 패턴 정합) */}
       <View style={styles.searchWrap}>
-        <TextInput
-          value={query}
-          onChangeText={handleInput}
-          placeholder="작품 검색"
-          placeholderTextColor={colors.textMuted}
-          style={styles.searchInput}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-        />
+        <View style={styles.searchInputWrap}>
+          <TextInput
+            ref={searchInputRef}
+            value={query}
+            onChangeText={handleInput}
+            placeholder="작품 검색"
+            placeholderTextColor={colors.textMuted}
+            style={styles.searchInput}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {query.length > 0 && (
+            <Pressable
+              onPress={() => {
+                handleInput('');
+                searchInputRef.current?.focus();
+              }}
+              hitSlop={10}
+              accessibilityLabel="검색어 지우기"
+              accessibilityRole="button"
+              style={styles.searchClear}
+            >
+              <IconClose size={14} color={colors.textMuted} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* 스크롤 영역 */}
@@ -258,11 +345,13 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
           </View>
         )}
 
-        {/* 장르별 가로 carousel */}
+        {/* 장르별 가로 carousel — 2026-05-29 무한 스크롤. FlatList horizontal +
+            onEndReached. onEndReachedThreshold 0.5 = 절반 남았을 때 loadMore. */}
         {!showSearchResults && (
           <View style={{ gap: spacing.lg }}>
             {selectedGenres.map((g) => {
-              const items = genreRecs[g.id] ?? [];
+              const feed = genreRecs[g.id];
+              const items = feed?.items ?? [];
               if (loadingGenres && items.length === 0) {
                 return (
                   <View key={g.id} style={styles.carouselSection}>
@@ -275,12 +364,27 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
               return (
                 <View key={g.id} style={styles.carouselSection}>
                   <Text style={styles.carouselLabel}>{g.ko}</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carousel}>
-                    {items.map((item) => {
+                  <FlatList
+                    horizontal
+                    data={items}
+                    keyExtractor={(item) => String(item.id)}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.carousel}
+                    onEndReached={() => {
+                      void loadMoreForGenre(g.id);
+                    }}
+                    onEndReachedThreshold={0.5}
+                    ListFooterComponent={
+                      feed?.loading ? (
+                        <View style={styles.carouselFooter}>
+                          <ActivityIndicator size="small" color={colors.accent} />
+                        </View>
+                      ) : null
+                    }
+                    renderItem={({ item }) => {
                       const isSelected = selected.some((s) => s.id === item.id);
                       return (
                         <Pressable
-                          key={item.id}
                           onPress={() => toggleSelect(item)}
                           style={styles.carouselItem}
                           accessibilityLabel={`${item.title}${isSelected ? ' 선택됨' : ''}`}
@@ -303,8 +407,8 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
                           <Text numberOfLines={1} style={[styles.carouselTitle, isSelected && styles.carouselTitleSelected]}>{item.title}</Text>
                         </Pressable>
                       );
-                    })}
-                  </ScrollView>
+                    }}
+                  />
                 </View>
               );
             })}
@@ -370,15 +474,25 @@ const styles = StyleSheet.create({
   slotEmptyPlus: { color: colors.textMuted, fontSize: 18 },
 
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
-  searchInput: {
+  searchInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
+    paddingRight: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
     color: colors.textPrimary,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
     fontSize: fontSizePx.base,
+  },
+  searchClear: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
 
   scroll: { flex: 1 },
@@ -429,6 +543,11 @@ const styles = StyleSheet.create({
   carouselCheckText: { color: colors.bg, fontSize: 12, lineHeight: 14, fontWeight: '700' },
   carouselTitle: { color: colors.textMuted, fontSize: fontSizePx.xs, marginTop: 4 },
   carouselTitleSelected: { color: colors.textPrimary },
+  carouselFooter: {
+    width: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   footer: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, paddingTop: spacing.xs, gap: spacing.xs },
   cta: { paddingVertical: 14, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
