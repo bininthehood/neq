@@ -447,7 +447,10 @@ export default function ProfileScreen() {
         </View>
       </ScrollView>
 
-      {/* SearchSheet — Profile 페이지 자체 마운트. 헤더 search 버튼으로 진입. */}
+      {/* SearchSheet — Profile 페이지 자체 마운트. 헤더 search 버튼으로 진입.
+          2026-05-29 — Profile 은 DetailSheet 자체 마운트하지 않음 (build 10 정합).
+          새 마운트 추가 시 SearchSheet 의 fetch 와 race 회귀 (사용자 보고: Profile
+          검색 결과 0건). 검색 컨텍스트 유지 fix 는 Discover / Saved 에만 적용. */}
       <SearchSheet
         visible={searchOpen}
         onClose={() => setSearchOpen(false)}
