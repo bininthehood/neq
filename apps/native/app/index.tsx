@@ -65,6 +65,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // (feedback_swipe_ux.md 잠금: save 480ms / pass 360ms)
 const SWIPE_THRESHOLD = 70;
 const PREV_OVERLAY_TRIGGER = 0.3;
+// 03_p0-2 fix (한손 thumb flick 인식). 거리 임계는 그대로 유지 — 두 손 사용자의
+// 의도 swipe 보수성 보존. velocity 보조만 추가: 빠른 flick 이면 짧은 변위로도 trigger.
+// 좌/우/아래 모두 동일 패턴 적용 (좌·우는 velocityX, 아래는 velocityY).
+// PWA useSwipeGesture 의 velocity 보조 (안 B 권고) 정합.
+// 메모리 [Pan gesture offset 임계 충돌] 회피 — activeOffset/failOffset 도입 X.
+const VELOCITY_THRESHOLD = 800; // px/s
+const VELOCITY_TRIGGER_DISTANCE = 30; // px (임계 미달 시 최소 변위)
 // pass dismiss 의 advance(topIdx++) 콜백 타이밍. feedback_swipe_ux.md 잠금 (pass 360ms).
 const PASS_DISMISS_MS = durations.swipePassDismiss; // 360
 const SAVE_ABSORB_MS = durations.swipeSaveDismiss; // 480
@@ -810,10 +817,22 @@ export default function DiscoverScreen() {
       const absY = Math.abs(e.translationY);
       const horizontal = absX > absY;
 
+      // 03_p0-2 — velocity boost (한손 thumb flick 인식). 좌·우·아래 공통.
+      // 좌: velocityX < -800 + translationX < -30 → trigger
+      // 우: velocityX >  800 + translationX >  30 → trigger
+      // 아래: velocityY > 800 + translationY > 30 → trigger
+      // 거리 임계 (SWIPE_THRESHOLD / PREV_OVERLAY_TRIGGER) 도달 시는 종전대로.
+      const fastFlickX = Math.abs(e.velocityX) > VELOCITY_THRESHOLD;
+      const fastFlickY = Math.abs(e.velocityY) > VELOCITY_THRESHOLD;
+
       if (horizontal) {
         if (e.translationX > 0 && prevRec) {
           const progress = 1 + prevOverlayX.value / SCREEN_WIDTH;
-          if (progress > PREV_OVERLAY_TRIGGER) {
+          const velocityTrigger =
+            fastFlickX &&
+            e.velocityX > 0 &&
+            e.translationX > VELOCITY_TRIGGER_DISTANCE;
+          if (progress > PREV_OVERLAY_TRIGGER || velocityTrigger) {
             // 2026-05-20 PWA 정합 — prev overlay 도착 시 깜빡임 fix.
             // 기존: withTiming(0, 220) → 콜백에서 `prevOverlayX = -SCREEN_WIDTH` 즉시
             // 점프 + setTopIdx + setPrevActive(false). UI 메시지 순서 때문에 overlay 가
@@ -847,7 +866,12 @@ export default function DiscoverScreen() {
             );
           }
         } else {
-          if (e.translationX < -SWIPE_THRESHOLD) {
+          // 좌 (next) — 거리 임계 OR velocity 보조.
+          const leftVelocityTrigger =
+            fastFlickX &&
+            e.velocityX < 0 &&
+            e.translationX < -VELOCITY_TRIGGER_DISTANCE;
+          if (e.translationX < -SWIPE_THRESHOLD || leftVelocityTrigger) {
             runOnJS(handleSwipeLeft)();
           }
           runOnJS(setDragX)(0);
@@ -856,7 +880,12 @@ export default function DiscoverScreen() {
       } else {
         // vertical — G1-A (Handoff v2 Phase B+C): ↑ 진입 제거.
         // 아래 (save) 만 처리. 위 방향 변위는 무시 → snap-back.
-        if (e.translationY > SWIPE_THRESHOLD) {
+        // 아래 (save) — 거리 임계 OR velocity 보조.
+        const downVelocityTrigger =
+          fastFlickY &&
+          e.velocityY > 0 &&
+          e.translationY > VELOCITY_TRIGGER_DISTANCE;
+        if (e.translationY > SWIPE_THRESHOLD || downVelocityTrigger) {
           runOnJS(handleSwipeDown)();
         }
         runOnJS(setDragX)(0);
