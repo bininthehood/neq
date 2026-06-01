@@ -11,6 +11,8 @@ import {
   Share,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconClose, IconShare } from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -18,9 +20,8 @@ import Animated, {
   useAnimatedStyle,
   useAnimatedScrollHandler,
   withTiming,
+  cancelAnimation,
   runOnJS,
-  interpolate,
-  Extrapolation,
   Easing,
 } from 'react-native-reanimated';
 import type {
@@ -29,15 +30,18 @@ import type {
   RelatedWork,
   RelatedWorksResponse,
 } from '../lib/types';
-import { getOTTLink, getOTTIcon } from '@neq/core';
+import { getOTTLink, getOTTIcon, getPrimaryCountryName } from '@neq/core';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env } from '../lib/env';
+import { addSaved, isSaved } from '../lib/store';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.9;
-const CLOSE_THRESHOLD = SHEET_MAX_HEIGHT * 0.3; // 30% 드래그 시 닫기
+// PR2 (2026-06-01) — 풀스크린 Modal 전환. swipe-down dismiss 임계는 화면 높이의 30%.
+const CLOSE_THRESHOLD = SCREEN_HEIGHT * 0.25;
+// Hero 440px (C3 명세 — Share 480 + safe area top 합산 시 본문 노출 영역 확보 위해 살짝 축소).
+const HERO_HEIGHT = 440;
 
 /**
  * DetailSheet morph 모션 — Handoff v2 D3 + Phase C 정합.
@@ -55,6 +59,15 @@ const DETAIL_BEZIER = Easing.bezier(...easings.detailMorph);
 const DETAIL_ENTER_MS = durations.detailEnter; // 450
 const DETAIL_EXIT_MS = durations.detailExit;   // 350
 
+/**
+ * PR2 (2026-06-01) — mode 분기.
+ * - 'detail' (default): in-app 진입 (Discover/Saved 카드 탭). 좌상단 X + 우상단 공유.
+ *   sticky bottom CTA = ghost 공유 1개 (저장은 외부 ActionBar 가 담당).
+ * - 'share': Universal Link 진입 (`/share/[id]`). 좌상단 X 만. sticky bottom CTA =
+ *   amber "저장하기" + ghost "추천 더 보기" 2개. Cast 진입(onSearchPerson) 자동 비활성.
+ */
+type DetailMode = 'detail' | 'share';
+
 interface Props {
   rec: Recommendation | null;
   visible: boolean;
@@ -66,10 +79,16 @@ interface Props {
    * 콜백 미지정 시 Cast 셀은 비클릭 View — 회귀 0.
    */
   onSearchPerson?: (name: string) => void;
+  /**
+   * PR2 — 'detail' (default) | 'share'. Share UL 진입은 'share' 로 마운트.
+   */
+  mode?: DetailMode;
 }
 
 function metaInfo(r: Recommendation): string {
+  // PR2 — 국가 포함 (Share 패턴 흡수). getPrimaryCountryName 이 null 이면 join 에서 자동 제외.
   return [
+    getPrimaryCountryName(r.country),
     r.date ? r.date.slice(0, 4) : null,
     r.runtime ? `${r.runtime}분` : null,
     r.seasons ? `시즌 ${r.seasons}` : null,
@@ -83,8 +102,12 @@ export default function DetailSheet({
   visible,
   onClose,
   onSearchPerson,
+  mode = 'detail',
 }: Props) {
-  const translateY = useSharedValue(SHEET_MAX_HEIGHT);
+  const insets = useSafeAreaInsets();
+  // PR2 — translateY 는 swipe-down dismiss 변위. 평소 0, drag 중 양수.
+  // Modal animationType="slide" 가 진입 자체 슬라이드 처리 → 시트 진입 변위는 OS 가 담당.
+  const translateY = useSharedValue(0);
   const scrollRef = useRef<ScrollView>(null);
   // 2026-05-29 — 사용자 요청: detail sheet 스크롤 상단일 때만 swipe-down dismiss.
   // 스크롤 중간일 때는 일반 스크롤 유지. scrollY 추적 + pan gesture 조건 분기.
@@ -119,28 +142,38 @@ export default function DetailSheet({
     setSynopsisExpanded(false);
   }, [rec?.tmdbId]);
 
+  // PR2 — share mode 의 sticky CTA 저장 상태. mode='detail' 에서는 미사용.
+  const [shareSaved, setShareSaved] = useState(false);
+  useEffect(() => {
+    if (mode !== 'share' || !visible || !rec?.tmdbId) {
+      setShareSaved(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const s = await isSaved(rec.tmdbId);
+      if (!cancelled) setShareSaved(s);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, visible, rec?.tmdbId]);
+
   useEffect(() => {
     if (visible) {
-      // Phase C-3: web (DETAIL_ENTER_MS=450, cubic-bezier(0.32, 0.72, 0.24, 1)) 와 정합.
-      translateY.value = withTiming(0, {
-        duration: DETAIL_ENTER_MS,
-        easing: DETAIL_BEZIER,
-      });
+      // PR2 — 풀스크린 Modal animationType="slide" 가 진입 슬라이드 처리. translateY 는 0 고정 (swipe-down dismiss 변위만).
+      translateY.value = 0;
       // W5 Task C 7.1 — `detail_opened` 발사는 호출처가 담당.
-      // (web 정본 `apps/web/src/components/discover/DetailSheet.tsx` 와 동일하게
-      // sheet 컴포넌트 내부에서는 발사하지 않는다. source 분기를 호출처가 정확히
-      // 알기 때문 — card_tap / action_bar / saved_tap 등.)
-      // 이전 native 구현은 source='native_detail_sheet' 로 중복 발사 → 제거.
     } else {
-      // Phase C-3: web (DETAIL_EXIT_MS=350) 와 정합.
-      translateY.value = withTiming(SHEET_MAX_HEIGHT, {
-        duration: DETAIL_EXIT_MS,
-        easing: DETAIL_BEZIER,
-      });
-      // sheet 닫힘 → state reset
+      // sheet 닫힘 → state reset. translateY 다시 0으로 (다음 진입 대비).
+      translateY.value = 0;
       setRelatedRec(null);
       setRelated(null);
     }
+    // Reanimated 4 Fabric crash 메모리 정합 — unmount 시 worklet cleanup.
+    return () => {
+      cancelAnimation(translateY);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, translateY]);
 
@@ -274,18 +307,17 @@ export default function DetailSheet({
       'worklet';
       if (scrollY.value > 0) return;
       if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
-        // Phase C-3: drag close 도 web exit 정량과 정합.
+        // PR2 — 풀스크린 dismiss: 화면 끝까지 슬라이드 후 onClose 호출. Modal animationType="slide"
+        // 가 다음 닫힘 슬라이드 처리, translateY 는 다음 진입 위해 0 으로 복귀.
         translateY.value = withTiming(
-          SHEET_MAX_HEIGHT,
+          SCREEN_HEIGHT,
           { duration: DETAIL_EXIT_MS, easing: DETAIL_BEZIER },
           () => {
             runOnJS(onClose)();
           },
         );
       } else {
-        // 스냅백은 짧게 — drag 도중 손을 뗀 경우라 snappy 한 복귀가 자연스럽음.
-        // web 도 동일하게 transition transform (450ms) 로 복귀하지만, 드래그 미달 케이스라
-        // 변위가 작아 시간 차이 인지가 작음. 일관 유지 위해 enter 정량 사용.
+        // 스냅백 — 변위가 작아 시간 차이 인지가 작음. 일관 유지 위해 enter 정량 사용.
         translateY.value = withTiming(0, {
           duration: DETAIL_ENTER_MS,
           easing: DETAIL_BEZIER,
@@ -295,15 +327,6 @@ export default function DetailSheet({
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
-  }));
-
-  const dimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(
-      translateY.value,
-      [0, SHEET_MAX_HEIGHT],
-      [1, 0],
-      Extrapolation.CLAMP,
-    ),
   }));
 
   async function handleShare() {
@@ -316,6 +339,14 @@ export default function DetailSheet({
       /* user dismissed */
     }
   }
+
+  // PR2 — share mode CTA (저장하기). mode='detail' 에서는 미사용.
+  const handleShareSave = useCallback(async () => {
+    if (!rec || shareSaved) return;
+    await addSaved(rec);
+    setShareSaved(true);
+    track('share_saved', { tmdb_id: rec.tmdbId, title: rec.title });
+  }, [rec, shareSaved]);
 
   async function openProvider(providerName: string, watchLink: string | null) {
     if (!rec) return;
@@ -332,7 +363,8 @@ export default function DetailSheet({
       provider: providerName,
       url,
       providers_count: rec.providers.length,
-      source: 'native_detail_sheet',
+      // PR2 — source 는 mode 기준 분기. share UL 진입 시 native_share.
+      source: mode === 'share' ? 'native_share' : 'native_detail_sheet',
     });
 
     try {
@@ -351,108 +383,95 @@ export default function DetailSheet({
 
   if (!rec) return null;
 
+  const heroSrc = rec.backdrop || rec.posterUrl;
+  // titleEn === title 회피 (Share line 190 조건 흡수 — 영문 작품 중복 노출 방지).
+  const showTitleEn = !!rec.titleEn && rec.titleEn !== rec.title;
+  const typeBadge =
+    rec.type === 'series' ? '시리즈' : rec.type === 'variety' ? '예능' : '영화';
+  // sticky CTA 높이 추정 (mode='share' 시 2개 풀폭 row, mode='detail' 시 1개 ghost) — 본문 paddingBottom 보정.
+  const stickyCtaHeight = mode === 'share' ? 56 + insets.bottom + 24 : 52 + insets.bottom + 24;
+
   return (
     <Modal
       visible={visible}
-      animationType="none"
-      transparent
+      animationType="slide"
+      presentationStyle="fullScreen"
       onRequestClose={onClose}
       statusBarTranslucent
     >
       <View
-        style={StyleSheet.absoluteFill}
+        style={styles.root}
         accessibilityViewIsModal
         accessibilityLabel={`${rec.title} 상세 정보`}
       >
-        <Animated.View style={[styles.dim, dimStyle]}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={onClose}
-            accessibilityLabel="닫기"
-            accessibilityRole="button"
-          />
-        </Animated.View>
-
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
-            <View style={styles.handleRow}>
-              <View style={styles.handleBar} />
-              <Pressable
-                style={styles.closeBtn}
-                onPress={onClose}
-                hitSlop={8}
-                accessibilityLabel="닫기"
-                accessibilityRole="button"
-              >
-                <IconClose size={20} color={colors.textPrimary} />
-              </Pressable>
-            </View>
-
             <Animated.ScrollView
               ref={scrollRef as React.RefObject<Animated.ScrollView>}
               style={styles.body}
-              contentContainerStyle={styles.bodyContent}
+              contentContainerStyle={[
+                styles.bodyContent,
+                { paddingBottom: stickyCtaHeight },
+              ]}
               showsVerticalScrollIndicator={false}
-              // 2026-05-29 — scrollY 추적 → pan gesture 가 scrollY > 0 이면
-              // sheet swipe-down 차단 (일반 스크롤 우선).
+              // 2026-05-29 — scrollY 추적 → pan gesture 가 scrollY > 0 이면 swipe-down 차단.
               onScroll={scrollHandler}
               scrollEventThrottle={16}
             >
-              <Text style={styles.title} accessibilityRole="header">
-                {rec.title}
-              </Text>
-              <Text style={styles.subtitle}>
-                {rec.titleEn}
-                {metaInfo(rec) ? ` · ${metaInfo(rec)}` : ''}
-              </Text>
-
-              <View style={styles.ratingRow}>
-                <Text style={styles.ratingText}>★ {rec.rating.toFixed(1)}</Text>
-              </View>
-
-              {rec.backdrop && (
-                <View style={styles.backdropWrap}>
+              {/* PR2 Hero 440px — 풀폭 + 3-stop gradient + title overlay */}
+              <View style={styles.hero}>
+                {heroSrc ? (
                   <Image
-                    source={{ uri: rec.backdrop }}
+                    source={{ uri: heroSrc }}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
-                    // 2026-05-20 PWA 정합 — Next/Image placeholder=empty (no fade) 기본.
                     transition={0}
                   />
+                ) : null}
+                <LinearGradient
+                  colors={['transparent', 'rgba(18,17,14,0.4)', colors.bg]}
+                  locations={[0, 0.5, 1]}
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
+                <View style={styles.heroBody}>
+                  <View style={styles.heroBadges}>
+                    <View style={styles.ratingPill}>
+                      <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
+                    </View>
+                    <View style={styles.typePill}>
+                      <Text style={styles.typePillText}>{typeBadge}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>
+                    {rec.title}
+                  </Text>
+                  {showTitleEn ? (
+                    <Text style={styles.titleEn} numberOfLines={1}>
+                      {rec.titleEn}
+                    </Text>
+                  ) : null}
+                  {!!metaInfo(rec) && <Text style={styles.meta}>{metaInfo(rec)}</Text>}
                 </View>
-              )}
-
-              <View style={styles.reasonBox}>
-                <Text style={styles.reasonText}>{rec.reason}</Text>
               </View>
 
-              {/* 위임 O #1.1 / #1.2 — Cast 가로 스크롤 행.
-                  director/cast (이름 fallback) → directorMember/castMembers (사진) →
-                  lazyDirectorMember/lazyCastMembers (mirror cache 보완) 우선순위로 결합.
-                  onSearchPerson 가 있으면 셀이 Pressable, 없으면 비클릭 View. */}
-              <CastRow
-                director={rec.director}
-                cast={rec.cast}
-                directorMember={rec.directorMember ?? lazyDirectorMember ?? null}
-                castMembers={
-                  rec.castMembers && rec.castMembers.length > 0
-                    ? rec.castMembers
-                    : lazyCastMembers
-                }
-                onSearchPerson={onSearchPerson}
-              />
+              {/* Reason 박스 — borderLeft 2px amber, 면 금지 */}
+              {rec.reason ? (
+                <View style={styles.reasonBox}>
+                  <Text style={styles.reasonText}>{rec.reason}</Text>
+                </View>
+              ) : null}
 
+              {/* Synopsis — 첫 ChapterMark (amber 단독, anti-slop 1개 규칙) */}
               {rec.overview ? (() => {
-                // GH-3 #7 — 200자 이상이면 numberOfLines=5 로 클램프 + 토글.
-                // 2026-05-20 PWA 정합 — ChapterMark "Synopsis · 줄거리" + 본문 탭으로도
-                // 토글 (PWA DetailBody.tsx:214 "사용자 요청: 버튼뿐 아니라 synopsis 영역
-                // 자체 클릭 시 토글" 정합).
                 const isLong = rec.overview.length >= SYNOPSIS_THRESHOLD;
                 const collapsed = isLong && !synopsisExpanded;
                 const toggle = () => setSynopsisExpanded((v) => !v);
                 return (
                   <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Synopsis · 줄거리</Text>
+                    <Text style={[styles.sectionTitle, styles.sectionTitleAmber]}>
+                      Synopsis · 시놉시스
+                    </Text>
                     {isLong ? (
                       <Pressable
                         onPress={toggle}
@@ -481,8 +500,28 @@ export default function DetailSheet({
                 );
               })() : null}
 
+              {/* Cast — ChapterMark + 가로 스크롤. share mode 에서는 onSearchPerson 비활성. */}
+              {(rec.director || rec.cast.length > 0) && (
+                <>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Cast · 캐스트</Text>
+                  </View>
+                  <CastRow
+                    director={rec.director}
+                    cast={rec.cast}
+                    directorMember={rec.directorMember ?? lazyDirectorMember ?? null}
+                    castMembers={
+                      rec.castMembers && rec.castMembers.length > 0
+                        ? rec.castMembers
+                        : lazyCastMembers
+                    }
+                    onSearchPerson={mode === 'detail' ? onSearchPerson : undefined}
+                  />
+                </>
+              )}
+
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>시청 가능</Text>
+                <Text style={styles.sectionTitle}>Where to watch · 시청 가능</Text>
                 {rec.providers.length === 0 ? (
                   <Text style={styles.noProviders}>
                     현재 한국 OTT에서 제공 정보를 찾지 못했어요
@@ -507,6 +546,7 @@ export default function DetailSheet({
                             ) : null}
                           </View>
                           <Text style={styles.providerName}>{p.name}</Text>
+                          {/* PR2 C5 — "열기" amber → textSecondary (보조 액션 amber 금지) */}
                           <Text style={styles.providerOpen}>열기</Text>
                         </Pressable>
                       );
@@ -515,7 +555,7 @@ export default function DetailSheet({
                 )}
               </View>
 
-              {/* 관련 작품 — F3 spec. collection (시리즈) + director 작품 가로 카로셀 */}
+              {/* 관련 작품 — F3 spec */}
               {related === null && relatedLoading && (
                 <View style={styles.relatedSkeletonRow}>
                   {[0, 1, 2, 3].map((i) => (
@@ -557,17 +597,88 @@ export default function DetailSheet({
                   onPressItem={handleRelatedClick}
                 />
               )}
-
-              <Pressable
-                style={styles.shareBtn}
-                onPress={handleShare}
-                accessibilityRole="button"
-                accessibilityLabel={`${rec.title} 공유하기`}
-              >
-                <IconShare size={16} color={colors.textSecondary} />
-                <Text style={styles.shareText}>공유하기</Text>
-              </Pressable>
             </Animated.ScrollView>
+
+            {/* 좌상단 X 버튼 — 풀스크린 1차 dismiss. hero 위 absolute, 44×44 터치 타겟. */}
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.topNav,
+                { paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.md },
+              ]}
+            >
+              <Pressable
+                style={styles.topNavBtn}
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityLabel="닫기"
+                accessibilityRole="button"
+              >
+                <IconClose size={20} color={colors.textPrimary} />
+              </Pressable>
+              {mode === 'detail' ? (
+                <Pressable
+                  style={styles.topNavBtn}
+                  onPress={handleShare}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${rec.title} 공유하기`}
+                >
+                  <IconShare size={18} color={colors.textPrimary} />
+                </Pressable>
+              ) : null}
+            </View>
+
+            {/* Sticky bottom CTA — mode 분기 */}
+            <View
+              pointerEvents="box-none"
+              style={[
+                styles.stickyCta,
+                { paddingBottom: insets.bottom + spacing.md },
+              ]}
+            >
+              {mode === 'share' ? (
+                <View style={styles.shareCtaRow}>
+                  <Pressable
+                    style={[
+                      styles.ctaPrimary,
+                      shareSaved && styles.ctaPrimaryDisabled,
+                    ]}
+                    onPress={handleShareSave}
+                    disabled={shareSaved}
+                    accessibilityRole="button"
+                    accessibilityLabel={shareSaved ? '이미 저장됨' : '저장하기'}
+                  >
+                    <Text
+                      style={[
+                        styles.ctaPrimaryText,
+                        shareSaved && styles.ctaPrimaryDisabledText,
+                      ]}
+                    >
+                      {shareSaved ? '저장됨' : '저장하기'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.ctaGhost}
+                    onPress={onClose}
+                    accessibilityRole="button"
+                    accessibilityLabel="추천 더 보기"
+                  >
+                    <Text style={styles.ctaGhostText}>추천 더 보기</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.shareBtn}
+                  onPress={handleShare}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${rec.title} 공유하기`}
+                >
+                  <IconShare size={16} color={colors.textSecondary} />
+                  <Text style={styles.shareText}>공유하기</Text>
+                </Pressable>
+              )}
+            </View>
           </Animated.View>
         </GestureDetector>
       </View>
@@ -831,115 +942,134 @@ function RelatedRow({
 }
 
 const styles = StyleSheet.create({
-  dim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayHeavy,
+  // PR2 — 풀스크린 Modal root. 시트/dim 폐기, Modal animationType="slide" 가 진입 처리.
+  root: {
+    flex: 1,
+    backgroundColor: colors.bg,
   },
   sheet: {
+    flex: 1,
+    backgroundColor: colors.bg,
+  },
+  // 좌상단 X (+ 우상단 공유 mode='detail' 시) — hero 위 absolute, scroll 무관.
+  topNav: {
     position: 'absolute',
+    top: 0,
     left: 0,
     right: 0,
-    bottom: 0,
-    height: SHEET_MAX_HEIGHT,
-    backgroundColor: colors.bg,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-  },
-  handleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    zIndex: 10,
   },
-  // 2026-05-20 PWA 정합 — PWA DetailSheet handle bar `rounded-full` (= radius:9999).
-  // 기존 borderRadius:2 는 약간 깎인 모서리. height 4 의 완전 원형 = radius:2 도 가능하지만
-  // Tailwind rounded-full 은 height/2 가 아닌 999 (full pill).
-  handleBar: {
-    position: 'absolute',
-    top: spacing.md,
-    left: '50%',
-    marginLeft: -20,
-    width: 40,
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: colors.border,
-  },
-  closeBtn: {
+  topNavBtn: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 'auto',
-  },
-  closeIcon: {
-    color: colors.textSecondary,
-    fontSize: 16,
   },
   body: { flex: 1 },
   bodyContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    // hero 는 풀폭 — paddingHorizontal 은 hero 안에서 직접 처리.
+    paddingHorizontal: 0,
   },
+  // PR2 Hero 440px — backdrop 풀폭 + 3-stop gradient + title overlay.
+  hero: {
+    width: '100%',
+    height: HERO_HEIGHT,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  heroBody: {
+    position: 'absolute',
+    left: spacing.lg - 2,  // 22
+    right: spacing.lg - 2, // 22
+    bottom: spacing.lg,
+  },
+  heroBadges: {
+    flexDirection: 'row',
+    gap: spacing.xs + 2,
+    marginBottom: spacing.sm,
+  },
+  // C3 — rating pill hero bottom badges row inline.
+  ratingPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  ratingPillText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+    letterSpacing: 0.2,
+  },
+  typePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  typePillText: {
+    color: colors.textPrimary,
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+    letterSpacing: 0.2,
+  },
+  // C3 — title Instrument Serif 28/32 overlay
   title: {
     color: colors.textPrimary,
-    fontSize: 24,
-    // 2026-05-18 Fix B — fontsV2 적용 (Instrument Serif). web 정합.
+    fontSize: 28,
     fontFamily: fontsV2.display,
-    paddingRight: 56,
-    lineHeight: 30,
+    lineHeight: 32,
+    letterSpacing: -0.56, // -0.02em on 28
   },
-  subtitle: {
+  // C3 — titleEn Fraunces italic 15 별행
+  titleEn: {
     color: colors.textMuted,
-    fontSize: 13,
-    marginTop: 2,
+    fontSize: 15,
+    fontFamily: fontsV2.displayItalic,
+    fontStyle: 'italic',
+    letterSpacing: -0.15,
+    marginTop: 4,
   },
-  ratingRow: {
-    marginTop: spacing.sm,
+  // C3 — meta GeistMono 11 + 국가 포함
+  meta: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+    letterSpacing: 0.2,
+    marginTop: 8,
   },
-  ratingText: {
-    color: colors.accent,
-    fontSize: 14,
-    fontFamily: fonts.data,
-  },
-  backdropWrap: {
-    width: '100%',
-    height: 160,
-    marginTop: spacing.md,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    backgroundColor: colors.surface,
-  },
-  // anti-slop #6 예외 2 + 2026-05-02 amber 누적 분배 정책 — reason 박스는
-  // 면(accentDim) 금지 → 선(borderLeft 2px accent). web DESIGN.md L36 정합.
-  // V-2 (2026-05-19 정합 audit) — web DetailBody `pl-3 py-1 text-sm` 정확 정합:
-  // paddingLeft 16→12, paddingVertical 4 추가, reasonText fontSize 14→13.
+  // anti-slop #6 예외 2 — reason 박스는 면 금지, 선(borderLeft 2px accent) 만.
+  // PR2 — hero 가 풀폭이므로 marginHorizontal 22 로 직접 위치.
   reasonBox: {
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+    marginHorizontal: 22,
     paddingLeft: 12,
     paddingVertical: 4,
     borderLeftWidth: 2,
     borderLeftColor: colors.accentBorder,
   },
-  // D-2 (2026-05-19 정합 audit) — web `text-sm` line-height 1.45 (DESIGN.md L101).
-  // 13 × 1.45 ≈ 18.85 → 19. 기존 20 은 약 6% 큼.
+  // PR2 — reason text: Fraunces italic 13 (anti-slop #6 예외 2 정합), 13 × 1.45 ≈ 19.
   reasonText: {
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     fontSize: 13,
     lineHeight: 19,
+    fontFamily: fontsV2.displayItalic,
+    fontStyle: 'italic',
   },
-  // 위임 O #1.1 — Cast row 가로 스크롤 (web CastRow 시각 정합).
-  // 64×64 원형 + 이름(11px line-clamp 2) + 역할(11px muted), 셀 너비 64.
+  // 위임 O #1.1 — Cast row 가로 스크롤. PR2 hero 풀폭이라 left 22 으로 직접 indent.
   castSection: {
     marginTop: spacing.md,
-    marginRight: -spacing.lg, // 마지막 셀 우측 fade — relatedRowContent 와 동일 패턴
+    marginLeft: 22,
+    marginRight: 0,
   },
   castRowContent: {
     gap: spacing.sm + 2,
-    paddingRight: spacing.lg,
+    paddingRight: 22,
   },
   castCell: {
     width: 64,
@@ -982,16 +1112,21 @@ const styles = StyleSheet.create({
   },
   section: {
     marginTop: spacing.md + 4,
+    marginHorizontal: 22,
   },
-  // 2026-05-20 PWA 정합 — PWA ChapterMark `font-data text-xs (12px) font-medium uppercase`.
-  // 기존 native: fontSize 11, fontWeight 600 → PWA: 12, 500 정합.
+  // PR2 — ChapterMark: GeistMono 10px uppercase letterSpacing 0.12em (정본 정합).
+  // 기본 = textSecondary. Synopsis 한 곳만 amber (sectionTitleAmber merge).
   sectionTitle: {
-    color: colors.textMuted,
-    fontSize: 12,
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontFamily: fontsV2.data,
     fontWeight: '500',
-    letterSpacing: 1,
+    letterSpacing: 1.2, // ≈ 0.12em on 10
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
+  },
+  sectionTitleAmber: {
+    color: colors.accent,
   },
   overview: {
     color: colors.textSecondary,
@@ -1040,15 +1175,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
+  // PR2 C5 — "열기" amber 박탈 (DESIGN.md L38 보조 액션 amber 금지). textSecondary 로 위계만 표현.
   providerOpen: {
-    color: colors.accent,
+    color: colors.textSecondary,
     fontSize: 12,
+    fontFamily: fontsV2.data,
   },
-  // B-6 (2026-05-19 정합 audit) — web DetailSheet 공유 버튼 정합:
-  // surface-raised bg + 1px border + text-secondary (amber 박탈 — 보조 액션 amber
-  // 금지 정책 DESIGN.md L38) + radius-lg + IconShare + py-3 px-4 + text-sm 500.
+  // PR2 — sticky bottom CTA 컨테이너. mode='detail' = ghost 공유 1개, mode='share' = amber + ghost 2개.
+  stickyCta: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 22,
+    paddingTop: spacing.sm,
+    backgroundColor: colors.bg,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.borderSubtle,
+  },
+  // detail mode — ghost 공유 1개 (현행 패턴 유지).
   shareBtn: {
-    marginTop: spacing.md,
     paddingVertical: 12,
     paddingHorizontal: 16,
     flexDirection: 'row',
@@ -1065,11 +1211,53 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  // share mode — amber 저장 (full width) + ghost 추천 더 보기 (full width). 세로 stack (모바일 풀폭).
+  shareCtaRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  ctaPrimary: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    minHeight: 48,
+  },
+  ctaPrimaryDisabled: {
+    backgroundColor: colors.surface,
+  },
+  ctaPrimaryText: {
+    color: colors.textInverse,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  ctaPrimaryDisabledText: {
+    color: colors.textMuted,
+  },
+  ctaGhost: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    minHeight: 48,
+  },
+  ctaGhostText: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
   // 관련 작품 (F3) — neko-detail-sheet.jsx SimilarStrip
   relatedSkeletonRow: {
     flexDirection: 'row',
     gap: spacing.sm + 2,
     marginTop: spacing.md + 4,
+    marginHorizontal: 22,
   },
   relatedSkeletonCard: {
     width: 90,
@@ -1080,18 +1268,21 @@ const styles = StyleSheet.create({
   },
   relatedSection: {
     marginTop: spacing.md + 4,
+    marginLeft: 22,
   },
+  // PR2 — ChapterMark amber 1개 규칙 정합. 관련작 label 은 textSecondary 강등.
   relatedSectionTitle: {
-    color: colors.accent,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontFamily: fontsV2.data,
+    fontWeight: '500',
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
     marginBottom: spacing.sm,
   },
   relatedRowContent: {
     gap: spacing.sm + 2,
-    paddingRight: spacing.lg, // 마지막 카드 오른쪽 여백 — 카드 부분 노출 효과
+    paddingRight: 22, // 마지막 카드 우측 여백
   },
   relatedCard: {
     width: 90,
