@@ -14,7 +14,7 @@ import SwipeRightDemo from './tutorial/SwipeRightDemo';
 import SwipeDownDemo from './tutorial/SwipeDownDemo';
 import TapDemo from './tutorial/TapDemo';
 import { colors, spacing, radius } from '../lib/tokens';
-import { easings, durations, fonts } from '@neq/design';
+import { easings, durations, fonts, fontsV2 } from '@neq/design';
 
 /**
  * TutorialFlow v3 — Discover 첫 진입 4단계 튜토리얼 (native).
@@ -167,8 +167,9 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
       accessibilityRole="alert"
       accessibilityLabel="첫 사용 안내"
     >
-      {/* 건너뛰기 — pointerEvents 활성. safe-area top 보정. */}
-      <View style={[styles.skipWrap, { top: insets.top + spacing.sm }]}>
+      {/* 건너뛰기 — pointerEvents 활성. safe-area top 보정.
+          03_p1-1#4: insets.top + lg (24px) 로 Dynamic Island/노치 안전 마진 확보. */}
+      <View style={[styles.skipWrap, { top: insets.top + spacing.lg }]}>
         <Pressable
           onPress={handleSkip}
           hitSlop={12}
@@ -249,27 +250,35 @@ function Dot({ active, passed }: { active: boolean; passed: boolean }) {
 
 const styles = StyleSheet.create({
   dim: {
-    backgroundColor: colors.overlayHeavy,
+    // 03_p1-1#3: overlayHeavy(0.85) → overlay(0.7) 톤 다운.
+    // 카드 영역 spotlight 은 native 측 cutout 비용 큰 작업이라 1차는 dim 톤만.
+    backgroundColor: colors.overlay,
     zIndex: 50,
   },
   skipWrap: {
     position: 'absolute',
     right: spacing.sm + 4,
-    // top: insets.top + sm — inline 으로 적용
+    // top: insets.top + lg — inline 으로 적용 (노치 안전 마진)
   },
   skipBtn: {
     minWidth: 44,
     minHeight: 44,
     paddingHorizontal: spacing.sm + 4,
-    borderRadius: radius.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    // 03_p1-1#1: 약한 pill 백판 — surface 70% (dim 위 가독성 확보).
+    backgroundColor: 'rgba(26, 25, 22, 0.7)',
   },
   skipText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fonts.dataReg,
+    // 03_p1-1#1: dataReg(Geist Mono — 한글 폴백 깨짐) → fontsV2.body
+    // (= undefined → RN system font, iOS San Francisco. 한글 가독성 우수).
+    // size 12→13, color textSecondary→textPrimary 로 시인성 승격.
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontFamily: fontsV2.body,
+    fontWeight: '500',
   },
   stepNumberWrap: {
     position: 'absolute',
@@ -278,7 +287,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepNumber: {
-    color: colors.textMuted,
+    // 03_p1-1#5: textMuted → accent (amber). web tut-step-label 정합.
+    // transient overlay 카운트 제외 정책 (DESIGN L34) — amber 안전.
+    color: colors.accent,
     fontSize: 11,
     fontFamily: fonts.data,
     letterSpacing: 1.5,
