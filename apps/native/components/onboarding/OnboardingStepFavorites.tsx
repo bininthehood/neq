@@ -12,6 +12,7 @@ import {
 import { Image } from 'expo-image';
 import { GENRE_CHIPS, type GenreChip } from './data';
 import { IconClose } from '../Icons';
+import ApertureBreathLoader from '../feedback/ApertureBreathLoader';
 import { env } from '../../lib/env';
 import { getAccountPrefs } from '../../lib/store';
 import { addSaved, archiveItem } from '../../lib/store';
@@ -323,7 +324,9 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
         keyboardShouldPersistTaps="handled"
       >
         {searching && (
-          <ActivityIndicator size="small" color={colors.accent} style={{ marginVertical: spacing.sm }} />
+          <View style={{ alignItems: 'center', marginVertical: spacing.sm }}>
+            <ApertureBreathLoader size={44} />
+          </View>
         )}
 
         {showSearchResults && results.length > 0 && (

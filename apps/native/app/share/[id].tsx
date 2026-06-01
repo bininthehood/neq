@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import type { Recommendation } from '../../lib/types';
 import { env } from '../../lib/env';
 import { track } from '../../lib/analytics';
 import { colors, spacing, radius, fontSizePx } from '../../lib/tokens';
 import DetailSheet from '../../components/DetailSheet';
+import ApertureBreathLoader from '../../components/feedback/ApertureBreathLoader';
 
 /**
  * Universal Link 진입 화면 — `https://<domain>/share/<id>?type=movie|series` 매칭.
@@ -77,7 +78,7 @@ export default function ShareScreen() {
     return (
       <View style={styles.center}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ActivityIndicator size="small" color={colors.accent} />
+        <ApertureBreathLoader size={64} />
       </View>
     );
   }

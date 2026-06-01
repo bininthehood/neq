@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   Dimensions,
-  ActivityIndicator,
   Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -27,6 +26,7 @@ import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
 import SearchSheet from '../components/SearchSheet';
+import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
 import {
   fetchRecommendations,
   fetchRecommendationsStreaming,
@@ -1024,11 +1024,7 @@ export default function DiscoverScreen() {
             accessibilityLiveRegion="polite"
             accessibilityLabel="추천을 준비하고 있어요"
           >
-            <ActivityIndicator
-              color={colors.accent}
-              accessibilityLabel="추천 로딩 중"
-            />
-            <Text style={styles.loadingText}>추천을 준비하고 있어요…</Text>
+            <ApertureBreathLoader size={72} message="추천을 준비하고 있어요" />
           </View>
         )}
 

@@ -32,7 +32,6 @@ import {
   TextInput,
   FlatList,
   Pressable,
-  ActivityIndicator,
   Keyboard,
   Modal,
   Dimensions,
@@ -72,6 +71,7 @@ import {
 } from '../lib/recent-searches';
 import { colors, radius, spacing } from '../lib/tokens';
 import { IconClose } from './Icons';
+import ApertureBreathLoader from './feedback/ApertureBreathLoader';
 import { fonts, easings } from '@neq/design';
 import { Illust } from './Illust';
 
@@ -485,10 +485,7 @@ export default function SearchSheet({
                   accessibilityLiveRegion="polite"
                   accessibilityLabel="검색 중"
                 >
-                  <ActivityIndicator
-                    color={colors.accent}
-                    accessibilityLabel="검색 결과 로딩 중"
-                  />
+                  <ApertureBreathLoader size={56} />
                 </View>
               )}
 
@@ -967,7 +964,7 @@ function PersonWorksPanel({
     return (
       <View style={styles.personWorksWrap}>
         <View style={styles.personWorksLoading}>
-          <ActivityIndicator color={colors.accent} />
+          <ApertureBreathLoader size={48} />
         </View>
       </View>
     );
