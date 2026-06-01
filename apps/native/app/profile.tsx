@@ -178,14 +178,19 @@ export default function ProfileScreen() {
     });
   }, [persona.personas, tasteItems, savedRaw]);
 
+  // 03_p0-1 fix: persona 객체 통째를 의존성으로 받으면 PersonaContext value
+  // (useMemo 없음) 의 매-렌더-새-reference 가 useCallback 을 무한 invalidate →
+  // ProfileScreen 무한 re-render → SearchSheet 의 200ms debounce fetch 응답
+  // setData 가 stale closure 로 drop. persona.refresh 함수 reference 만 추출.
+  const personaRefresh = persona.refresh;
   useFocusEffect(
     useCallback(() => {
       refresh();
       // taste-survey 라우트에서 신규 페르소나 생성 후 router.replace('/profile')
       // 로 복귀할 때 PersonaContext 의 stale state 가 PersonaSection 에 표시되는
       // 회귀 (iOS QA). 명시 refresh 로 AsyncStorage 재read.
-      void persona.refresh();
-    }, [refresh, persona]),
+      void personaRefresh();
+    }, [refresh, personaRefresh]),
   );
 
   function handleReset() {
