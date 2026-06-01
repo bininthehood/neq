@@ -284,9 +284,11 @@ export default function SearchSheet({
   }, [query]);
 
   // 결과 작품 클릭 wrapper — parent onWorkSelected 호출 직전에 recent 기록.
+  // 03_p2: 선택 시 키보드 dismiss — DetailSheet 진입 직전 시야 확보.
   const handleSelectWork = useCallback(
     (rec: Recommendation) => {
       void confirmRecent();
+      Keyboard.dismiss();
       onWorkSelected?.(rec);
     },
     [confirmRecent, onWorkSelected],
@@ -305,7 +307,10 @@ export default function SearchSheet({
         return;
       }
       // 명시 선택이므로 recent 기록 — 인물 결과 클릭 시점.
+      // 03_p2: 새 인물 선택 시 키보드 dismiss — 필모그래피 영역 시야 확보.
+      // toggle 닫기 분기는 위에서 return — query 입력 컨텍스트 유지를 위해 dismiss X.
       void confirmRecent();
+      Keyboard.dismiss();
       setSelectedPersonId(person.id);
       setPersonWorks([]);
       setPersonWorksError(false);
