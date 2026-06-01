@@ -1,7 +1,7 @@
 {
-  "name": "neq, — 오늘 뭐 볼까?",
+  "name": "neq, — 당신의 취향을 발견하세요",
   "short_name": "neq,",
-  "description": "OTT 콘텐츠 발굴/큐레이션",
+  "description": "알고리즘 밖의 OTT 작품을 발견하세요",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#12110E",
