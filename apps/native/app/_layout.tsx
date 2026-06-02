@@ -36,6 +36,13 @@ import { track } from '../lib/analytics';
 import { IconDiscover, IconBookmark, IconUser } from '../components/Icons';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+// 2026-06-01 splash → Welcome (Lottie frame 0) 자연 연결.
+// 250ms fade 로 splash 콤마가 사라지는 동안 Welcome 의 Vignette + Lottie 콤마가
+// 자리에 떠 시각 점프를 가린다. BRAND-EXTRAS-SPEC.md A "정적 런치스크린의 콤마
+// 위치를 흡수 0ms 프레임과 일치 → 이음매 없는 진입" 정합.
+// fade duration > Lottie startDelayMs (Welcome 에서 180ms) 라 splash 가 거의 끝나는
+// 시점에 Lottie 호흡이 시작 → 페이드 중 콤마 두 개가 겹쳐 보이지 않는다.
+SplashScreen.setOptions({ duration: 250, fade: true });
 
 // 2026-05-19 native↔PWA 정합 audit E-1 — 탭 아이콘이 텍스트 이모지(◉♡◎)였던 것을
 // 핸드오프 정본 SVG 아이콘으로 교체. `icon` prop 은 (color, active) 를 받아 SVG 를
