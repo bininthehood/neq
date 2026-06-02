@@ -113,7 +113,8 @@
       "Bash(rm -rf ~/Library/Caches/Expo)",
       "Bash(brew cleanup *)",
       "Bash(pod cache *)",
-      "Skill(context-restore)"
+      "Skill(context-restore)",
+      "Bash(/usr/bin/grep -E --line-buffered \"passing|failing|RUNNING in iOS|FAILED in iOS|PASSED in iOS|Spec Files|tests, \")"
     ]
   },
   "enableAllProjectMcpServers": true,
