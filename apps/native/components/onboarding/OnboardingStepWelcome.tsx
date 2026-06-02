@@ -23,9 +23,16 @@ interface Props {
 //   iOS RN 의 fontStyle:'italic' + 한글 fallback 폰트 (Apple SD Gothic Neo,
 //   italic variant 없음) 조합에서 syn-italic 신호 무시되는 케이스 다수 — Fraunces
 //   Italic 등록 + skewX transform 시도 모두 사용자 검수 통과 실패.
-//   해결: ImageMagick 으로 AppleSDGothicNeo + shear 10° + #EDEDEF + transparent
-//   PNG @1x/@2x/@3x 사전 생성 → assets/welcome-heading*.png. RN Image 가 디바이스
-//   scale 에 맞는 해상도 자동 선택. 폰트 fallback 무관 픽셀 보장.
+// 2026-06-02 4-2차 — heading 자산 정본 시각 정합 (디자인 팀 산출물 교체):
+//   이전 자산 (AppleSDGothicNeo + shear 10°, 271×26) 의 폰트 family / 사이즈 /
+//   letter-forms 가 정본 spec 과 어긋남:
+//     - 폰트: sans-serif Gothic → serif (정본 fontsV2.displayItalic =
+//       InstrumentSerif_400Regular_Italic). Latin 정본은 Instrument Serif Italic,
+//       한글은 동등 Korean serif italic 매칭.
+//     - letter-spacing -0.02em, color #EDEDEF, transparent bg.
+//   교체 자산 (assets/welcome-heading{,@2x,@3x}.png): @1x 146×15 / @2x 292×30
+//   / @3x 438×45, 단일 라인 serif italic, PNG-32 alpha 보존.
+//   RN Image 가 디바이스 scale 자동 선택.
 
 export default function OnboardingStepWelcome({ onNext }: Props) {
   // useWindowDimensions — 회전/멀티태스킹 대응. 모듈 레벨 Dimensions.get 대신 hook 사용.
@@ -114,9 +121,10 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
           />
         </View>
 
-        {/* 2026-06-02 4-1차 — 워드마크 직하단 PNG 자산.
-            assets/welcome-heading.png (@2x/@3x 세트) — AppleSDGothicNeo + shear 10°
-            + #EDEDEF transparent. RN Image 가 디바이스 scale 자동 선택.
+        {/* 2026-06-02 4-2차 — 워드마크 직하단 PNG 자산 (디자인 팀 정본 산출물).
+            assets/welcome-heading.png (@2x/@3x 세트) — Instrument Serif Italic 인상
+            (한글은 동등 Korean serif italic) + #EDEDEF transparent, 단일 라인.
+            RN Image 가 디바이스 scale 자동 선택.
             contentOpacity 그룹에 묶여 흡수 완료(~1.3s) + 400ms fade-in. */}
         <Animated.Image
           source={require('../../assets/welcome-heading.png')}
@@ -155,11 +163,11 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   // heading — PNG 이미지 자산 박스 (welcome-heading.png).
-  // @1x 271×26 / @2x 541×51 / @3x 819×75. logical size = 271×26.
+  // @1x 146×15 / @2x 292×30 / @3x 438×45. logical size = 146×15 (단일 라인).
   // resizeMode 'contain' + width/height 명시로 자동 scale-down 시 비율 보존.
   heading: {
-    width: 271,
-    height: 26,
+    width: 146,
+    height: 15,
   },
   // splash 자산 푸터 — 화면 하단 (CTA 위) Geist Mono uppercase + letter-spacing.
   footer: {
