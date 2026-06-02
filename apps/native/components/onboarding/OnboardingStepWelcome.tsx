@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
+import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, Image } from 'react-native';
 import Svg, { Defs, RadialGradient as SvgRadialGradient, Stop, Rect } from 'react-native-svg';
 import { colors, spacing, fontsV2 } from '../../lib/tokens';
 import { WORDMARK_ASPECT_RATIO } from './data';
@@ -9,13 +9,23 @@ interface Props {
   onNext: () => void;
 }
 
-// 2026-06-01 4차 라운드 (working tree, 미커밋 — 후속 세션 인계)
-// - NeqAbsorptionIntro: 정본 Lottie JSON 채택
-// - Vignette 배경 svg + 정중앙 + 푸터 "CURATED · NEQ," + 메인 카피 제거 + CTA
-// - 2026-06-01 Vignette amber glow 추가 — splash 스펙 (BRAND-EXTRAS-SPEC.md A)
-//   "radial-gradient(...) + amber glow" 의 amber 레이어 누락분 보강.
-// - 미해결: (1) splash native 자산 미적용 — prebuild --clean 필요
-//          (2) 메인 카피 image 자산 처리 — splash crop 또는 디자이너 의뢰 잔여
+// 2026-06-01 4차 라운드 (b1b0d5a) — Lottie 정본 + Vignette amber glow + splash 자연 연결
+// 2026-06-02 4-1차 — 4차 라운드 미해결 2건 close:
+//   (1) splash 자산은 b1b0d5a 시점에 이미 콤마 단독 PNG (1024×1024, #12110E bg) 로 교체
+//       완료. 시뮬레이터에 보이던 이전 자산은 native ios/ storyboard 재생성 미실행
+//       (`prebuild --clean`) 때문. 자산 교체 불필요, native 동기화만 필요.
+//   (2) 메인 카피 — 워드마크 직하단에 PNG 이미지 자산 '당신의 취향을 발견하세요'.
+//       BRAND-EXTRAS-SPEC.md B (OG) 의 메인 카피 정합. Warm Vignette + Lottie +
+//       footer "CURATED · NEQ," + CTA 는 b1b0d5a 그대로 유지 (롤백 금지).
+//       fade-in 은 footer/CTA 와 같은 contentOpacity 에 묶여 Lottie 흡수 완료 후
+//       한 묶음 등장.
+//   왜 이미지: 한글 italic Serif 폰트가 시스템/Google Fonts 양쪽 가용성 매우 낮고,
+//   iOS RN 의 fontStyle:'italic' + 한글 fallback 폰트 (Apple SD Gothic Neo,
+//   italic variant 없음) 조합에서 syn-italic 신호 무시되는 케이스 다수 — Fraunces
+//   Italic 등록 + skewX transform 시도 모두 사용자 검수 통과 실패.
+//   해결: ImageMagick 으로 AppleSDGothicNeo + shear 10° + #EDEDEF + transparent
+//   PNG @1x/@2x/@3x 사전 생성 → assets/welcome-heading*.png. RN Image 가 디바이스
+//   scale 에 맞는 해상도 자동 선택. 폰트 fallback 무관 픽셀 보장.
 
 export default function OnboardingStepWelcome({ onNext }: Props) {
   // useWindowDimensions — 회전/멀티태스킹 대응. 모듈 레벨 Dimensions.get 대신 hook 사용.
@@ -103,6 +113,17 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
             onComplete={handleIntroComplete}
           />
         </View>
+
+        {/* 2026-06-02 4-1차 — 워드마크 직하단 PNG 자산.
+            assets/welcome-heading.png (@2x/@3x 세트) — AppleSDGothicNeo + shear 10°
+            + #EDEDEF transparent. RN Image 가 디바이스 scale 자동 선택.
+            contentOpacity 그룹에 묶여 흡수 완료(~1.3s) + 400ms fade-in. */}
+        <Animated.Image
+          source={require('../../assets/welcome-heading.png')}
+          style={[styles.heading, { opacity: contentOpacity }]}
+          resizeMode="contain"
+          accessibilityLabel="당신의 취향을 발견하세요"
+        />
       </View>
 
       {/* splash 자산 푸터 정합 — Geist Mono uppercase + letter-spacing. */}
@@ -121,7 +142,7 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { flex: 1 },
-  // body — 화면 정중앙 정렬. 워드마크 + heading + subtitle 한 묶음 수직 center.
+  // body — 화면 정중앙 정렬. 워드마크 + heading 한 묶음 수직 center.
   body: {
     flex: 1,
     alignItems: 'center',
@@ -129,9 +150,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   // splash 정합 워드마크 박스 — width/height 인라인 (SCREEN_W * 0.6 / AR).
-  // marginBottom — splash 자산의 워드마크-카피 간격 정합 (작게).
+  // marginBottom — 워드마크 ↔ heading 간격. 디자인 정본 14px 정합.
   logoBox: {
     marginBottom: 14,
+  },
+  // heading — PNG 이미지 자산 박스 (welcome-heading.png).
+  // @1x 271×26 / @2x 541×51 / @3x 819×75. logical size = 271×26.
+  // resizeMode 'contain' + width/height 명시로 자동 scale-down 시 비율 보존.
+  heading: {
+    width: 271,
+    height: 26,
   },
   // splash 자산 푸터 — 화면 하단 (CTA 위) Geist Mono uppercase + letter-spacing.
   footer: {

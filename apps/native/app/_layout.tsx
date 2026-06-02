@@ -9,6 +9,7 @@ import { hasOnboarded } from '../lib/store';
 import {
   useFonts,
   Fraunces_400Regular,
+  Fraunces_400Regular_Italic,
   Fraunces_700Bold,
 } from '@expo-google-fonts/fraunces';
 import {
@@ -105,6 +106,12 @@ export default function RootLayout() {
   useFonts({
     // 기존 Fraunces/Outfit — SwipeCard 의 영화/시리즈 + 별점 라벨 (fonts.data) 유지용
     Fraunces_400Regular,
+    // 2026-06-02 — Fraunces_400Regular_Italic 등록.
+    // OnboardingStepWelcome 의 메인 카피 '당신의 취향을 발견하세요' 가 디자인 정본
+    // (neko-onboarding.jsx StepWelcome heading: `fontFamily: 'Fraunces, serif',
+    // fontStyle: 'italic'`) 정합을 위해 추가. 한글은 iOS 시스템 fallback (Apple
+    // SD Gothic Neo) + fontStyle:'italic' 자동 syn-italic skew.
+    Fraunces_400Regular_Italic,
     Fraunces_700Bold,
     Outfit_400Regular,
     Outfit_600SemiBold,
