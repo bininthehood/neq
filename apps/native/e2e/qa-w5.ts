@@ -8,13 +8,17 @@
  */
 import { remote } from 'webdriverio';
 
+// wdio.conf 3-way 분기와 정합. E2E_TARGET 미지정 시 simulator-devclient (com.neq.app).
+const target = process.env.E2E_TARGET ?? 'simulator-devclient';
+const bundleId = target === 'expo-go' ? 'host.exp.Exponent' : 'com.neq.app';
+
 const CAPS = {
   platformName: 'iOS',
   'appium:automationName': 'XCUITest',
   'appium:platformVersion': '26.4',
   'appium:deviceName': 'iPhone 17 Pro',
   'appium:udid': '4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29',
-  'appium:bundleId': 'host.exp.Exponent',
+  'appium:bundleId': bundleId,
   'appium:autoLaunch': false,
   'appium:noReset': true,
   'appium:newCommandTimeout': 240,

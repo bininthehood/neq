@@ -394,13 +394,27 @@ describe('P0 — 최근 변경 회귀 (ce94e02 + 0499bb3 revert)', () => {
     console.log(`SearchSheet 정리 완료: ${sheetGone}`);
     expect(sheetGone).toBe(true);
 
-    // 다시 열어서 enter 정상 확인
-    await tapByLabel('검색 열기', { timeout: 3000 });
-    await browser.pause(700);
-    const source2 = await browser.getPageSource();
-    const sheetBack = source2.includes('작품, 감독, 배우');
-    expect(sheetBack).toBe(true);
+    // 다시 열어서 enter 정상 확인 — mount race 대응 (P0 fix1 line 178~195 와 동일 패턴).
+    // 단발 tap + 700ms 대기는 시뮬 dev client 환경에서 첫 tap onPress 누락 발생 시 false-FAIL.
+    let sheetBack = false;
+    for (let attempt = 0; attempt < 3 && !sheetBack; attempt++) {
+      const opened = await tapByLabel('검색 열기', { timeout: 3000 });
+      if (!opened) {
+        console.warn(`tap attempt ${attempt + 1}: 검색 열기 element 못 찾음`);
+        continue;
+      }
+      for (let i = 0; i < 4; i++) {
+        await browser.pause(400);
+        const src = await browser.getPageSource();
+        if (src.includes('작품, 감독, 배우')) {
+          sheetBack = true;
+          console.log(`SearchSheet 재오픈 mount 성공 (attempt ${attempt + 1}, ${(i + 1) * 400}ms 폴링)`);
+          break;
+        }
+      }
+    }
     await capture('p0-revert-02-search-reopen');
+    expect(sheetBack).toBe(true);
 
     // 마무리 — 다음 case 영향 없게 닫기. backdrop 첫 매칭 대신 취소 버튼(last) 사용.
     await closeSearchSheetIfOpen();

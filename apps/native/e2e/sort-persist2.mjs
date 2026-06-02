@@ -1,14 +1,20 @@
 /**
  * 정렬 persist 복원 — 재실측 (Expo Go relaunch 보정).
  * relaunch 후 Expo Go 홈의 "Recently opened" neq 프로젝트를 탭해 재진입.
+ *
+ * 주의: 후속 reenterNeq 흐름이 Expo Go 홈 가정. dev client 트랙에서는
+ * relaunch 만으로 dev client 자체가 재실행되니 reenterNeq 단계 우회 필요.
  */
 import { remote } from 'webdriverio';
 import { writeFile } from 'node:fs/promises';
+// wdio.conf 3-way 분기와 정합. E2E_TARGET 미지정 시 simulator-devclient (com.neq.app).
+const target = process.env.E2E_TARGET ?? 'simulator-devclient';
+const bundleId = target === 'expo-go' ? 'host.exp.Exponent' : 'com.neq.app';
 const CAPS = {
   platformName: 'iOS', 'appium:automationName': 'XCUITest',
   'appium:platformVersion': '26.4', 'appium:deviceName': 'iPhone 17 Pro',
   'appium:udid': '4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29',
-  'appium:bundleId': 'host.exp.Exponent', 'appium:autoLaunch': false,
+  'appium:bundleId': bundleId, 'appium:autoLaunch': false,
   'appium:noReset': true, 'appium:newCommandTimeout': 300, 'appium:wdaLocalPort': 8100,
 };
 async function cap(b, n) { await writeFile(`/tmp/neko-qa/sp2-${n}.png`, await b.takeScreenshot(), 'base64'); console.log('  cap:', n); }
@@ -97,9 +103,9 @@ try {
 
   // ── 2) terminate + relaunch ──
   rec('persist', 'terminate → relaunch → Expo Go 재진입');
-  await b.execute('mobile: terminateApp', { bundleId: 'host.exp.Exponent' });
+  await b.execute('mobile: terminateApp', { bundleId });
   await b.pause(1500);
-  await b.execute('mobile: launchApp', { bundleId: 'host.exp.Exponent' });
+  await b.execute('mobile: launchApp', { bundleId });
   await b.pause(2500);
   await cap(b, '03-expo-home');
   await reenterNeq(b);
