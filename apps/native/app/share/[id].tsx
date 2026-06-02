@@ -57,7 +57,7 @@ export default function ShareScreen() {
         if (cancelled) return;
         setRec(data);
         setLoading(false);
-        track('share_viewed', { tmdb_id: data.tmdbId, title: data.title });
+        track('share_viewed', { tmdb_id: data.tmdbId, title: data.title, source: 'native_share' });
       } catch {
         if (!cancelled) {
           setError('네트워크 오류가 발생했어요');

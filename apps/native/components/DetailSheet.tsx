@@ -40,8 +40,9 @@ import { addSaved, isSaved } from '../lib/store';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 // PR2 (2026-06-01) — 풀스크린 Modal 전환. swipe-down dismiss 임계는 화면 높이의 30%.
 const CLOSE_THRESHOLD = SCREEN_HEIGHT * 0.25;
-// Hero 440px (C3 명세 — Share 480 + safe area top 합산 시 본문 노출 영역 확보 위해 살짝 축소).
-const HERO_HEIGHT = 440;
+// Hero 440px 캡 + 화면 52% 동적 캡 (C3 명세). iPhone SE (667px) 에서 75% 점유 회피 →
+// 440 vs 667*0.52=347 중 작은 값. 큰 화면은 440 고정, 소형은 화면 52%.
+const HERO_HEIGHT = Math.min(440, Math.round(SCREEN_HEIGHT * 0.52));
 
 /**
  * DetailSheet morph 모션 — Handoff v2 D3 + Phase C 정합.
@@ -345,7 +346,7 @@ export default function DetailSheet({
     if (!rec || shareSaved) return;
     await addSaved(rec);
     setShareSaved(true);
-    track('share_saved', { tmdb_id: rec.tmdbId, title: rec.title });
+    track('share_saved', { tmdb_id: rec.tmdbId, title: rec.title, source: 'native_share' });
   }, [rec, shareSaved]);
 
   async function openProvider(providerName: string, watchLink: string | null) {
