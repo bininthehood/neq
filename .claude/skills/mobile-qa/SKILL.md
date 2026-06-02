@@ -1,6 +1,6 @@
 ---
 name: mobile-qa
-description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simulator 우선 + Android Emulator 보조. 시뮬 부팅 → Expo Go 부착 → Appium 자동 회귀 (5 spec / 31 케이스) → 수동 탐색 → 리포트. 'QA', '시뮬레이터 QA', '에뮬레이터 QA', 'Native QA', '회귀 돌려줘', 'E2E 실행', '시뮬 띄워줘' 요청 시 사용. PWA QA 는 본 스킬 대상 아님 (ux-review / qa 사용). 실기기/TestFlight 는 testflight-qa 사용."
+description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simulator 우선 + Android Emulator 보조. 시뮬 부팅 → dev client (com.neq.app) 부착 → Appium 자동 회귀 (5 spec / 31 케이스) → 수동 탐색 → 리포트. 'QA', '시뮬레이터 QA', '에뮬레이터 QA', 'Native QA', '회귀 돌려줘', 'E2E 실행', '시뮬 띄워줘' 요청 시 사용. PWA QA 는 본 스킬 대상 아님 (ux-review / qa 사용). 실기기/TestFlight 는 testflight-qa 사용."
 ---
 
 # Mobile QA — neq Native Simulator 검증
@@ -11,7 +11,7 @@ description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simul
 
 | 영역 | 스킬 | 비고 |
 |------|------|------|
-| **Native 시뮬레이터 / 에뮬레이터** | **`mobile-qa`** | 본 스킬 — Expo Go dev / Simulator |
+| **Native 시뮬레이터 / 에뮬레이터** | **`mobile-qa`** | 본 스킬 — dev client (`com.neq.app`) on Simulator |
 | TestFlight 실기기 회귀 + 출시 게이트 | `testflight-qa` | EAS Build 이후 단계 |
 | PWA (`apps/web`) 기능 / 빌드 / 시각 검증 | `ux-review`, `qa` | 본 스킬 대상 아님 |
 | SwiftUI 네이티브 (gstack 계열) | `ios-qa` | neq 와 무관 |
@@ -45,6 +45,7 @@ description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simul
    - `xcrun simctl list devices booted` — 시뮬레이터 부팅 가능 여부
    - `lsof -ti:4723` — Appium 포트 점유 확인
    - `apps/native/wdio.conf.ts` 의 `udid='4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29'` (iPhone 17 Pro / iOS 26.4) 가 로컬에 존재하는지: `xcrun simctl list devices | grep <udid>`
+   - **dev client 빌드 존재 여부**: `xcrun simctl get_app_container booted com.neq.app 2>/dev/null` — 비어있으면 Phase 2 에서 `npx expo run:ios` 1회 빌드 필요
 3. 환경 분기:
    - 자동 회귀만: Phase 2 → 3 → 6
    - 수동 탐색만: Phase 2 → 4 → 6
@@ -56,27 +57,33 @@ description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simul
 
 | 항목 | 출처 | 검증 |
 |------|------|------|
-| bundleId (Expo Go) | `wdio.conf.ts` bundleId | `host.exp.Exponent` 고정 |
+| bundleId (default — simulator-devclient) | `wdio.conf.ts` bundleId | `com.neq.app` |
+| bundleId (legacy — expo-go) | `wdio.conf.ts` bundleId (E2E_TARGET=expo-go) | `host.exp.Exponent` |
 | bundleId (standalone) | `app.json` ios.bundleIdentifier | `com.neq.app` |
 | version | `app.json` expo.version | 의도한 marketing version |
 | associatedDomains | `app.json` ios | `applinks:neq.me` — 실기기 전용 (시뮬 SKIP) |
 
+**중요 (2026-06-02~):** `b1b0d5a` (Welcome 4차 라운드) 가 `lottie-react-native` 네이티브 모듈을 추가하면서 Expo Go 로는 Welcome 화면이 깨집니다. **default 트랙은 `simulator-devclient` (`com.neq.app` 시뮬 빌드)** 입니다. `expo-go` 분기는 Lottie 가 없는 sanity 회귀용 legacy 옵션으로만 보존.
+
 자세한 매니페스트 (buildNumber / EAS submit / Android 키스토어) 검증은 `testflight-qa` 의 Phase 1 에 위임. 본 스킬은 시뮬 회귀 해석에 필요한 4개만.
 
-### Phase 2 — 시뮬레이터 부팅 + Expo Go 부착
+### Phase 2 — 시뮬레이터 부팅 + dev client 부착
+
+기본 트랙 = **simulator-devclient** (`com.neq.app` 시뮬 빌드 + Metro dev server).
 
 ```bash
 # 1) iOS Simulator 부팅 (이미 부팅돼 있으면 SKIP)
 xcrun simctl boot 4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29
 open -a Simulator
 
-# 2) Expo Go 가 시뮬에 설치돼 있는지 확인
-xcrun simctl get_app_container booted host.exp.Exponent 2>/dev/null \
-  || echo "[BLOCKED] Expo Go 미설치 — Simulator 에서 App Store > Expo Go 설치"
+# 2) com.neq.app dev client 가 시뮬에 설치돼 있는지 확인
+xcrun simctl get_app_container booted com.neq.app 2>/dev/null \
+  || (cd apps/native && npx expo run:ios)
+# = 미설치 시 dev client 1회 빌드. 첫 빌드 60~180s. 한번 설치 후에는 Metro 부착만 필요.
 
-# 3) Expo dev server 부팅 (백그라운드)
-cd apps/native && npm run ios &
-# = expo start --ios — Expo Go 자동 launch + dev bundle attach
+# 3) Metro (Expo dev server) 부팅 — dev client 분기 (백그라운드)
+cd apps/native && npx expo start --dev-client &
+# = npm run ios 가 expo run:ios (재빌드 강제) 라서, 재빌드 불필요 시 start --dev-client 권장.
 
 # 4) Appium 서버 부팅 (별도 터미널 / 백그라운드)
 appium --relaxed-security --port 4723 &
@@ -84,7 +91,22 @@ appium --relaxed-security --port 4723 &
 
 dev server 첫 번들이 30s+ 걸리므로 자동 회귀 진입 전 `Bundling complete` 로그 확인.
 
-### Phase 3 — 자동 회귀 (E2E expo-go 분기)
+#### Phase 2 — expo-go 분기 (legacy, 옵션)
+
+Lottie 등 네이티브 모듈에 의존하지 않는 sanity 회귀가 필요한 경우만:
+
+```bash
+# Expo Go 가 시뮬에 설치돼 있는지 확인
+xcrun simctl get_app_container booted host.exp.Exponent 2>/dev/null \
+  || echo "[BLOCKED] Expo Go 미설치 — Simulator 에서 App Store > Expo Go 설치"
+
+# Expo dev server (Expo Go 분기)
+cd apps/native && npx expo start --go &
+```
+
+현재 main 브랜치에서는 Welcome 화면이 Lottie 의존이라 expo-go 트랙에서는 step 0 진입 자체가 BLOCKED 예상.
+
+### Phase 3 — 자동 회귀 (E2E simulator-devclient 분기)
 
 `wdio.conf.ts` 의 `specs: ['./e2e/**/*.test.ts']` 글롭이 5 spec 을 자동 픽업합니다:
 
@@ -98,11 +120,18 @@ dev server 첫 번들이 30s+ 걸리므로 자동 회귀 진입 전 `Bundling co
 | `swipe-card.test.ts` | 스와이프 사이클 + Reanimated |
 
 ```bash
+# Default — simulator-devclient (com.neq.app 시뮬 빌드)
 cd apps/native && npm run test:e2e:ios
-# E2E_TARGET=expo-go (default) — 시뮬레이터 udid + host.exp.Exponent
+# = E2E_TARGET=simulator-devclient (default)
+
+# Legacy — Expo Go 분기 (Lottie 도입 후 BLOCKED 예상)
+cd apps/native && npm run test:e2e:ios:expo-go
+
+# 실기기 — testflight 분기 (testflight-qa 스킬 영역)
+cd apps/native && IOS_DEVICE_UDID=<udid> npm run test:e2e:ios:testflight
 ```
 
-베이스라인: **시뮬레이터 dev 30/30** (`project_native_e2e_status` 참조 — 출시 게이트 baseline). 시뮬 dev 에서만 재현되는 **A2 React mount race** 는 [[feedback_native_a11y_e2e_patterns]] §1 의 retry-with-poll 헬퍼로 우회 — flaky 항목 발견 시 헬퍼 적용 여부부터 확인.
+베이스라인: **시뮬레이터 dev 30/30** (`project_native_e2e_status` 참조 — 출시 게이트 baseline). simulator-devclient 전환 (2026-06-02) 이후 첫 회귀에서 베이스라인 재측정 필요할 수 있음 — Lottie 도입으로 Welcome 화면 timing 변화 영향. 시뮬 dev 에서만 재현되는 **A2 React mount race** 는 [[feedback_native_a11y_e2e_patterns]] §1 의 retry-with-poll 헬퍼로 우회 — flaky 항목 발견 시 헬퍼 적용 여부부터 확인.
 
 FAIL 항목은 `spec 명 + describe + line + 재현 로그 경로 (e2e/_logs/)` 로 리포트.
 
@@ -193,7 +222,8 @@ Appium Android 분기 자동 회귀는 `wdio.conf.ts` 미정 (UiAutomator2 capab
 ## 에러 핸들링
 
 - Simulator 미부팅 / udid mismatch → `[BLOCKED] Simulator <udid>` + `xcrun simctl list devices` 결과 첨부
-- Expo Go 미설치 → `[BLOCKED] Expo Go install` + App Store 안내
+- dev client (`com.neq.app`) 미설치 → Phase 2 의 `npx expo run:ios` 1회 빌드 (60~180s). 빌드 실패 시 `xcodebuild` 로그 첨부 BLOCKED
+- Expo Go 미설치 (expo-go 트랙만) → `[BLOCKED] Expo Go install` + App Store 안내
 - Appium 포트 충돌 (4723) → 점유 PID 확인 + `kill` 권고 (사용자 확인 후)
 - Expo dev server bundle 실패 → metro 로그 + `apps/native/_workspace/` 의 최근 에러 확인
 - WDA 빌드 실패 → 시뮬 첫 회 한정 정상 (1~2분). 2회 이상 실패 시 BLOCKED + xcodebuild log

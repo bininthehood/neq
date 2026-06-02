@@ -11,7 +11,9 @@
     "capture": "ts-node --transpile-only e2e/capture-now.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e:ios": "wdio run wdio.conf.ts"
+    "test:e2e:ios": "wdio run wdio.conf.ts",
+    "test:e2e:ios:expo-go": "E2E_TARGET=expo-go wdio run wdio.conf.ts",
+    "test:e2e:ios:testflight": "E2E_TARGET=testflight wdio run wdio.conf.ts"
   },
   "dependencies": {
     "@expo-google-fonts/fraunces": "^0.4.1",

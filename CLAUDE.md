@@ -172,6 +172,7 @@ neko/
 | 2026-05-28 | testflight-qa 스킬 추가 | neq 하네스 | TestFlight 베타 시행 단계 진입. mobile-qa(빌드 전 코드 정합성) 와 책임 분리. IPA/EAS 매니페스트, Universal Link 실기기 검증, Reanimated 4 회귀, E2E testflight 분기, 출시 게이트 (UL 자격증명 의존 4건 + PostHog 준비도). qa-tester 에이전트 재사용 |
 | 2026-05-29 | mobile-qa 스킬 재정의 | neq 하네스 | PWA 빌드 정합성 중심 → Native (Expo RN) Simulator/Emulator QA 로 전환. iOS Sim 정본 + Android Emu 보조, Phase 0~6 (환경점검 / 매니페스트 / 시뮬부팅 / 자동회귀 E2E expo-go / 수동탐색 / Android 스폿 / 리포트). PWA QA 요청은 `ux-review` / `qa` 로 라우팅, 실기기는 `testflight-qa` 위임 — 시뮬 단계 책임 명확화 |
 | 2026-06-01 | weekly-status 스킬 추가 | neq 하네스 | 주간 진행 점검 + 잔여 트랙 + 출시 게이트 read-only 산출 스킬. W1~W12 로드맵 + 메모리 7건 + 최신 _workspace devlog + 최근 2주 git log + app.json buildNumber 종합 → 현재 주차 / 6 트랙별 상태 / 잔여 / 다음 주차 진입 게이트 / 출시 D-Day 표 출력. `neq-orchestrator` (실행) 와 책임 분리 — 본 스킬은 read-only, 권고만 산출. W6 (TestFlight 베타) ~ W8 (iOS 출시) 구간 진입으로 주간 status 점검 빈도 증가 대응 |
+| 2026-06-02 | mobile-qa default → simulator-devclient | neq 하네스 | `b1b0d5a` (Welcome 4차 Lottie 도입) 이후 Expo Go 로 Welcome 화면 깨짐 → `wdio.conf.ts` 에 3-way 분기 (`simulator-devclient` (default) / `expo-go` (legacy) / `testflight`). `com.neq.app` 시뮬 dev client 가 새 회귀 트랙. `package.json` 에 `test:e2e:ios:expo-go` / `test:e2e:ios:testflight` 편의 scripts 추가. `mobile-qa` SKILL.md Phase 0~3 갱신 (dev client 존재 여부 점검 / `npx expo run:ios` 1회 빌드 / `expo start --dev-client` 부착 / E2E_TARGET default 변경). qa-tester 에이전트 본체는 변경 없음 |
 
 ## TMDB Mirror 인프라
 
