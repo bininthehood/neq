@@ -560,7 +560,9 @@ export default function PersonaSurveyController({
   // === Render ===
   return (
     <div
-      className="h-dvh flex flex-col max-w-[480px] mx-auto w-full"
+      className={`flex flex-col max-w-[480px] mx-auto w-full ${
+        embedded ? "flex-1 min-h-0" : "h-dvh"
+      }`}
       style={{ background: "var(--bg)" }}
     >
       {!embedded && (
