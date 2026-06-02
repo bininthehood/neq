@@ -119,10 +119,10 @@ export async function dismissKeyboard(
  */
 export async function forceResetApp(bundleId?: string): Promise<void> {
   const cap = (browser.capabilities as Record<string, unknown>) ?? {};
-  // E2E_TARGET 기반 fallback — capability key 가 어떤 prefix 로 노출돼도 대응.
-  // testflight 분기에서 'host.exp.Exponent' fallback 시 잘못된 앱 위에서 회귀가 돌아 false-fail 다발 발생.
-  const isTestFlight = process.env.E2E_TARGET === 'testflight';
-  const defaultBundleId = isTestFlight ? 'com.neq.app' : 'host.exp.Exponent';
+  // E2E_TARGET 기반 fallback — wdio.conf 의 3-way 분기와 정합.
+  // 2026-06-02: default 가 expo-go → simulator-devclient (com.neq.app). expo-go 만 host.exp.Exponent.
+  const target = process.env.E2E_TARGET ?? 'simulator-devclient';
+  const defaultBundleId = target === 'expo-go' ? 'host.exp.Exponent' : 'com.neq.app';
   const id =
     bundleId ??
     (cap['appium:bundleId'] as string) ??
@@ -147,4 +147,162 @@ export async function forceResetApp(bundleId?: string): Promise<void> {
  */
 export async function waitForOnboardingReset(timeoutMs = 5000): Promise<boolean> {
   return waitForLabel('시작하기', timeoutMs);
+}
+
+/**
+ * 첫 tap race 회복 — A2 mount race 대응 (memory feedback_native_a11y_e2e_patterns).
+ * tap 후 expectedAfter 가 page source 에 등장할 때까지 retries 회 재시도.
+ */
+export async function tapWithRetry(
+  label: string,
+  expectedAfter: string,
+  opts: { retries?: number; waitMs?: number } = {},
+): Promise<boolean> {
+  const retries = opts.retries ?? 3;
+  const wait = opts.waitMs ?? 800;
+  for (let i = 0; i < retries; i++) {
+    const ok = await tapByLabel(label, { timeout: 3000 });
+    if (!ok) continue;
+    await browser.pause(wait);
+    if (await pageSourceContains(expectedAfter)) return true;
+  }
+  return false;
+}
+
+/**
+ * 6/2 simulator-devclient 전환 후, forceResetApp 직후 dev client AsyncStorage 가
+ * 비어 있어 Welcome 화면이 보임. regression / filters / persona-taste-survey /
+ * extended 4 spec 은 onboarded 상태 가정 → 자동 통과로 진입.
+ *
+ * 흐름은 hybrid-onboarding-2026-05-27.test.ts (H1) 의 happy path 와 동일:
+ *   welcome → hello (이름 skip 가능) → genre → persona context → persona skip
+ *   → ott (나중에 설정) → notify (받지 않기) → discover
+ *
+ * 반환:
+ *   true  — Discover 도달 (또는 진입 시점에 이미 onboarded)
+ *   false — 도중 실패. 호출 spec 의 before hook 에서 throw 권장.
+ */
+export async function ensureOnboardedOrSkip(): Promise<boolean> {
+  // 이미 Discover (또는 다른 onboarded 화면) 면 no-op.
+  if (!(await pageSourceContains('시작하기'))) return true;
+
+  // (1) Welcome → hello
+  if (!(await tapWithRetry('시작하기', '님'))) {
+    console.warn('ensureOnboarded: welcome → hello 전이 실패');
+    return false;
+  }
+
+  // (2) Hello — 이름 입력 후 키보드 return/done 키 직접 tap.
+  // 화면 "다음" 버튼이 키보드에 가려져 직접 tap 불가. OnboardingStepHello 는
+  // returnKeyType="done" + onSubmitEditing → submit() — 키보드 return key 가 "다음" 동등.
+  // mobile:hideKeyboard {keys:['done']} 는 일부 환경에서 noop 이라 키 element 직접 tap 로 처리.
+  // 한국어 IME 활성 시 키 라벨은 한글 ("확인" / "완료" / "개행"), 영문은 "Return" / "Done".
+  await browser.pause(500);
+  const inputs = await $$('//XCUIElementTypeTextField');
+  if (inputs.length > 0) {
+    await inputs[0].setValue('E2E');
+    await browser.pause(300);
+  }
+  // 키보드 return key tap (predicate 다중 라벨) → mobile:keys '\n' → 화면 버튼 순 fallback.
+  const submitOk =
+    (await tapByPredicate(
+      `name == "Return" OR name == "Done" OR name == "다음" OR name == "완료" OR name == "확인" OR name == "개행"`,
+      { timeout: 2000 },
+    )) ||
+    (await (async () => {
+      try {
+        await browser.execute('mobile: keys', { keys: [{ key: '\n' }] });
+        return true;
+      } catch {
+        return false;
+      }
+    })()) ||
+    (await tapByLabel('다음', { timeout: 1500 })) ||
+    (await tapByLabel('이름 없이 시작', { timeout: 1500 }));
+  if (!submitOk) {
+    console.warn('ensureOnboarded: Hello 단계 submit 실패 — 키보드 return key 미발견');
+    return false;
+  }
+  await browser.pause(800);
+
+  // (3) Genre — 3 chips + 다음
+  await browser.pause(800);
+  for (const chip of ['드라마', '스릴러', '로맨스']) {
+    await tapByLabel(chip);
+    await browser.pause(250);
+  }
+  if (!(await tapByLabel('다음'))) {
+    if (!(await tapByLabel('장르 정하지 않고 시작'))) {
+      console.warn('ensureOnboarded: genre 진행 실패');
+      return false;
+    }
+  }
+
+  // (4) Persona context (subStep 1) — 영화 + 혼자 + 다음
+  if (!(await waitForLabel('영화', 12000))) {
+    console.warn('ensureOnboarded: persona context "영화" 미노출');
+    return false;
+  }
+  await tapByLabel('영화');
+  await tapByLabel('혼자');
+  await browser.pause(300);
+  await tapByLabel('다음');
+
+  // resume modal 잔재 정리
+  await browser.pause(800);
+  if (await pageSourceContains('이어서 하시겠어요')) {
+    await tapByLabel('처음부터');
+    await browser.pause(500);
+  }
+
+  // (5) Persona step ≥ 2 → 우상단 X "페르소나 만들기 건너뛰기" + Alert "건너뛰기"
+  if (!(await waitForLabel('페르소나 만들기 건너뛰기', 8000))) {
+    console.warn('ensureOnboarded: persona skip X 미노출');
+    return false;
+  }
+  await tapByLabel('페르소나 만들기 건너뛰기');
+  await browser.pause(1000);
+  const alertOk =
+    (await tapByPredicate(`label == "건너뛰기"`, { timeout: 5000 })) ||
+    (await tapByLabel('건너뛰기'));
+  if (!alertOk) {
+    console.warn('ensureOnboarded: Alert "건너뛰기" tap 실패');
+    return false;
+  }
+  await browser.pause(1500);
+
+  // (6) OTT — 나중에 설정 우선, fallback Netflix + 다음
+  const ottReached =
+    (await waitForLabel('Netflix', 8000)) ||
+    (await waitForLabel('TVING', 5000)) ||
+    (await waitForLabel('나중에 설정', 5000));
+  if (!ottReached) {
+    console.warn('ensureOnboarded: OTT 단계 미도달');
+    return false;
+  }
+  if (!(await tapByLabel('나중에 설정'))) {
+    await tapByLabel('Netflix');
+    await browser.pause(300);
+    await tapByLabel('다음');
+  }
+
+  // (7) Notify — CTA 라벨 "시작하기" (OnboardingStepNotify.tsx:103, 마지막 step 이라
+  // "다음" 대신 "시작하기" 사용). Welcome 의 "시작하기" 와 라벨 동일하나 Stack unmount
+  // 로 실제 매칭은 Notify 화면 button 1개. 구 디자인 fallback ("알림 받지 않기" / "다음") 도 유지.
+  await browser.pause(1500);
+  if (
+    !(await tapByLabel('시작하기', { timeout: 3000 })) &&
+    !(await tapByLabel('알림 받지 않기', { timeout: 1500 })) &&
+    !(await tapByLabel('다음', { timeout: 1500 }))
+  ) {
+    console.warn('ensureOnboarded: notify 단계 진행 실패');
+    return false;
+  }
+
+  // (8) Discover 도달 확인
+  await browser.pause(3000);
+  return (
+    (await pageSourceContains('발견')) ||
+    (await pageSourceContains('discover'))
+  );
 }

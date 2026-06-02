@@ -113,12 +113,11 @@ describe('B4 — 필터칩 회귀', () => {
   before(async () => {
     // spec audit (2026-05-28) — 이전 spec 의 onboarding 상태 leak 방지.
     // forceResetApp + onboarded state 확인 후 "발견" 탭 진입.
-    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    const { forceResetApp, ensureOnboardedOrSkip } = await import('./_helpers');
     await forceResetApp();
-    if (await pageSourceContains('시작하기')) {
+    if (!(await ensureOnboardedOrSkip())) {
       throw new Error(
-        'before: 앱이 onboarding (welcome) 화면. filters spec 은 onboarded 상태 가정. ' +
-        '수동 onboarding 완료 후 재실행 필요.',
+        'before: onboarding 자동 진행 실패. _helpers.ts ensureOnboardedOrSkip 의 단계별 라벨 확인 필요.',
       );
     }
     await tapTab('발견');

@@ -142,12 +142,11 @@ async function swipe(direction: 'left' | 'right' | 'up' | 'down', strength = 0.6
 describe('P0 — 최근 변경 회귀 (ce94e02 + 0499bb3 revert)', () => {
   before(async () => {
     // spec audit (2026-05-28) — 이전 spec leak 방지 + 추천 로드 대기.
-    const { forceResetApp, pageSourceContains } = await import('./_helpers');
+    const { forceResetApp, ensureOnboardedOrSkip } = await import('./_helpers');
     await forceResetApp();
-    if (await pageSourceContains('시작하기')) {
+    if (!(await ensureOnboardedOrSkip())) {
       throw new Error(
-        'before: 앱이 onboarding 화면. regression 은 onboarded 상태 가정 (discover mount). ' +
-        '수동 onboarding 완료 후 재실행 필요.',
+        'before: onboarding 자동 진행 실패. _helpers.ts ensureOnboardedOrSkip 의 단계별 라벨 확인 필요.',
       );
     }
     // 첫 진입: 카드/추천 로드 대기. 추천 준비 spinner 가 지나갈 시간.
