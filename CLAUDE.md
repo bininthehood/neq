@@ -63,8 +63,9 @@ In QA mode, flag any code that doesn't match DESIGN.md.
 | ux-review | Warm Cinema 디자인 시스템 검증 | ux-reviewer |
 | tmdb-integration | TMDB API 통합 가이드 | content-manager |
 | component-build | 프론트엔드 구현 가이드 | frontend-builder |
-| mobile-qa | 모바일 QA 검증 가이드 (빌드 전 / 코드 정합성) | qa-tester |
+| mobile-qa | Native (Expo RN) Simulator/Emulator QA — iOS Sim 우선 + Android Emu 보조 | qa-tester |
 | testflight-qa | TestFlight 베타 실기기 회귀 + 출시 게이트 | qa-tester |
+| weekly-status | 주간 진행 점검 + 잔여 트랙 + 출시 게이트 read-only 산출 | 리더 (메인) |
 | neq-orchestrator | 팀 오케스트레이션 | 리더 (메인) |
 
 **실행 규칙:**
@@ -95,6 +96,7 @@ In QA mode, flag any code that doesn't match DESIGN.md.
     │       ├── manual-test-matrix.md
     │       ├── release-gate.md
     │       └── crash-regression.md
+    ├── weekly-status/SKILL.md
     └── neq-orchestrator/SKILL.md
 ```
 
@@ -168,6 +170,8 @@ neko/
 | 2026-04-15 | 네이티브 전환 시작 | 전체 | PWA → Expo RN. frontend-builder, qa-tester 확장 |
 | 2026-05-12 | W3 디자인 통합 완료 | 디자인 | DESIGN.md 247→425L, motion 토큰 globals.css 활성화, Brand Identity 섹션 신규, ux-reviewer follow-up 11/14건 처리. devlog: `_workspace/devlog-2026-05-12-w3-integration.md`. W4 (이관 준비) 진입 가능 |
 | 2026-05-28 | testflight-qa 스킬 추가 | neq 하네스 | TestFlight 베타 시행 단계 진입. mobile-qa(빌드 전 코드 정합성) 와 책임 분리. IPA/EAS 매니페스트, Universal Link 실기기 검증, Reanimated 4 회귀, E2E testflight 분기, 출시 게이트 (UL 자격증명 의존 4건 + PostHog 준비도). qa-tester 에이전트 재사용 |
+| 2026-05-29 | mobile-qa 스킬 재정의 | neq 하네스 | PWA 빌드 정합성 중심 → Native (Expo RN) Simulator/Emulator QA 로 전환. iOS Sim 정본 + Android Emu 보조, Phase 0~6 (환경점검 / 매니페스트 / 시뮬부팅 / 자동회귀 E2E expo-go / 수동탐색 / Android 스폿 / 리포트). PWA QA 요청은 `ux-review` / `qa` 로 라우팅, 실기기는 `testflight-qa` 위임 — 시뮬 단계 책임 명확화 |
+| 2026-06-01 | weekly-status 스킬 추가 | neq 하네스 | 주간 진행 점검 + 잔여 트랙 + 출시 게이트 read-only 산출 스킬. W1~W12 로드맵 + 메모리 7건 + 최신 _workspace devlog + 최근 2주 git log + app.json buildNumber 종합 → 현재 주차 / 6 트랙별 상태 / 잔여 / 다음 주차 진입 게이트 / 출시 D-Day 표 출력. `neq-orchestrator` (실행) 와 책임 분리 — 본 스킬은 read-only, 권고만 산출. W6 (TestFlight 베타) ~ W8 (iOS 출시) 구간 진입으로 주간 status 점검 빈도 증가 대응 |
 
 ## TMDB Mirror 인프라
 

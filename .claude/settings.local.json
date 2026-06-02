@@ -112,7 +112,8 @@
       "Bash(rm -rf ~/.expo)",
       "Bash(rm -rf ~/Library/Caches/Expo)",
       "Bash(brew cleanup *)",
-      "Bash(pod cache *)"
+      "Bash(pod cache *)",
+      "Skill(context-restore)"
     ]
   },
   "enableAllProjectMcpServers": true,
