@@ -6,6 +6,7 @@ import {
   Pressable,
   Dimensions,
   Share,
+  type LayoutRectangle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -190,14 +191,27 @@ export default function DiscoverScreen() {
   // 카운터는 각 액션 핸들러에서 emit (handleSwipeLeft / onPrevCard / triggerSaveAbsorption / handleCardTap).
   const [tutorialEligible, setTutorialEligible] = useState(false);
   const [tutorialActive, setTutorialActive] = useState(false);
+  // 튜토리얼 현재 step — TutorialFlow 의 onStepChange 로 emit. step 별 action whitelist 가드.
+  // null = 비활성. swipe_left/right/down 단계 중 탭은 silent ignore (DetailSheet open 차단).
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep | null>(null);
   const [leftSwipeCount, setLeftSwipeCount] = useState(0);
   const [rightSwipeCount, setRightSwipeCount] = useState(0);
   const [saveActionCount, setSaveActionCount] = useState(0);
   const [detailOpenCount, setDetailOpenCount] = useState(0);
+  // TutorialFlow 풀사이즈 데모 카드 좌표 정합용 — stackWrap (실제 SwipeCard 부모) 의
+  // onLayout 측정값. hardcoded HEADER/FILTER/ACTION 차감 대신 동적 측정.
+  // 산업표준 패턴 (ref + onLayout) — FilterChips 등 sibling 추가/제거에 자동 정합.
+  const [stackRect, setStackRect] = useState<LayoutRectangle | null>(null);
 
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
   // 배치 G — 첫 카드 힌트 worklet 측 1회 게이트 (0=미발사, 1=발사됨).
   const firstCardHintGate = useSharedValue(0);
+  // TutorialFlow step whitelist worklet 가드용 — pan.onEnd 안에서 React state
+  // 직접 참조 불가 (worklet 컨텍스트). state(`tutorialStep`) 와 useEffect 동기화.
+  // 인코딩: 0=null(비활성), 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
+  // pan.onEnd 가 step 별 허용/차단 결정에 참조. onUpdate 는 변경 없음 (drag 시각 따라옴
+  // 유지) — onEnd 시점에서만 dismiss/prev 진행을 가드하여 사용자 자연 인지 보존.
+  const tutorialStepSV = useSharedValue(0);
   // 사이클 2: pass dismiss worklet 곡선용 sharedValue.
   // 0 = idle, 음수값 = 좌측 dismiss 진행. SwipeCard 가 dragX 대신 이 값을 사용.
   const dismissX = useSharedValue(0);
@@ -218,6 +232,22 @@ export default function DiscoverScreen() {
       }
     };
   }, []);
+
+  // tutorialStep state → tutorialStepSV sharedValue 동기화 (worklet 가드용).
+  // 인코딩: null=0, swipe_left=1, swipe_right=2, swipe_down=3, tap=4.
+  useEffect(() => {
+    if (tutorialStep === null) {
+      tutorialStepSV.value = 0;
+    } else if (tutorialStep === 'swipe_left') {
+      tutorialStepSV.value = 1;
+    } else if (tutorialStep === 'swipe_right') {
+      tutorialStepSV.value = 2;
+    } else if (tutorialStep === 'swipe_down') {
+      tutorialStepSV.value = 3;
+    } else if (tutorialStep === 'tap') {
+      tutorialStepSV.value = 4;
+    }
+  }, [tutorialStep, tutorialStepSV]);
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -435,6 +465,7 @@ export default function DiscoverScreen() {
       void markTutorialV3Seen();
       setTutorialActive(false);
       setTutorialEligible(false);
+      setTutorialStep(null);
     },
     [],
   );
@@ -718,6 +749,12 @@ export default function DiscoverScreen() {
   // 8px / 300ms 미만 = 탭 → DetailSheet. ↑ 스와이프 진입은 제거됨.
   // 탭 source 는 PostHog 매핑 일관 — "card_tap".
   function handleCardTap() {
+    // TutorialFlow swipe 단계 (swipe_left/right/down) 중 탭은 silent ignore.
+    // DetailSheet open 차단 + detailOpenCount 증가 차단 (step 'tap' 진행 트리거 방지).
+    // 'tap' 단계에서만 탭 허용. 비활성 (tutorialStep===null) 이면 정상 동작.
+    if (tutorialActive && tutorialStep !== null && tutorialStep !== 'tap') {
+      return;
+    }
     if (currentRec) {
       track('detail_opened', {
         tmdb_id: currentRec.tmdbId,
@@ -780,6 +817,27 @@ export default function DiscoverScreen() {
       // Stage 4 D1: dominant axis 락 (|dx|>|dy| 면 horizontal, 아니면 vertical)
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
+
+      // TutorialFlow step whitelist — drag 자체 차단 (옵션 A 완전 잠금).
+      // 인코딩: 0=비활성, 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
+      // 가이드된 방향 외 swipe 는 dragX/Y/prevOverlayX 변화 차단 → 카드 안 따라옴.
+      const tStep = tutorialStepSV.value;
+      if (tStep !== 0) {
+        // tap (4) 단계: 모든 swipe 차단.
+        if (tStep === 4) return;
+        if (absX > absY) {
+          // horizontal: 우 swipe(prev) → 2, 좌 swipe(next) → 1.
+          if (e.translationX > 0 && prevRec) {
+            if (tStep !== 2) return;
+          } else {
+            if (tStep !== 1) return;
+          }
+        } else {
+          // vertical (down): 3.
+          if (tStep !== 3) return;
+        }
+      }
+
       if (absX > absY) {
         // horizontal
         if (e.translationX > 0 && prevRec) {
@@ -824,6 +882,63 @@ export default function DiscoverScreen() {
       // 거리 임계 (SWIPE_THRESHOLD / PREV_OVERLAY_TRIGGER) 도달 시는 종전대로.
       const fastFlickX = Math.abs(e.velocityX) > VELOCITY_THRESHOLD;
       const fastFlickY = Math.abs(e.velocityY) > VELOCITY_THRESHOLD;
+
+      // TutorialFlow step whitelist 가드.
+      // 인코딩: 0=비활성, 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
+      // 가이드된 방향 외 swipe 는 silent ignore — dismiss/prev 진행을 차단하고
+      // dragX/dragY 리셋 (snap-back 시각 유지). onUpdate 의 drag 추적 자체는 정상 동작.
+      const tStep = tutorialStepSV.value;
+      if (tStep !== 0) {
+        // 'tap' 단계 (4): 모든 swipe 차단. 탭은 별도 Gesture.Tap 으로 통과.
+        if (tStep === 4) {
+          // prev overlay 진행 중이면 snap-back (revert) — 시각 복귀.
+          if (e.translationX > 0 && prevRec) {
+            prevOverlayX.value = withTiming(
+              -SCREEN_WIDTH,
+              { duration: 300, easing: Easing.bezier(...easings.enter) },
+              () => {
+                runOnJS(setPrevActive)(false);
+              },
+            );
+          }
+          runOnJS(setDragX)(0);
+          runOnJS(setDragY)(0);
+          return;
+        }
+        if (horizontal) {
+          // 우 swipe (prev overlay) — swipe_right (2) 만 허용.
+          if (e.translationX > 0 && prevRec) {
+            if (tStep !== 2) {
+              // revert (snap-back). drag tracking 은 onUpdate 가 이미 추적했으므로
+              // overlay 만 원위치로 시각 복귀.
+              prevOverlayX.value = withTiming(
+                -SCREEN_WIDTH,
+                { duration: 300, easing: Easing.bezier(...easings.enter) },
+                () => {
+                  runOnJS(setPrevActive)(false);
+                },
+              );
+              runOnJS(setDragX)(0);
+              runOnJS(setDragY)(0);
+              return;
+            }
+          } else {
+            // 좌 swipe (next/dismiss) — swipe_left (1) 만 허용.
+            if (tStep !== 1) {
+              runOnJS(setDragX)(0);
+              runOnJS(setDragY)(0);
+              return;
+            }
+          }
+        } else {
+          // 아래 swipe (save) — swipe_down (3) 만 허용.
+          if (tStep !== 3) {
+            runOnJS(setDragX)(0);
+            runOnJS(setDragY)(0);
+            return;
+          }
+        }
+      }
 
       if (horizontal) {
         if (e.translationX > 0 && prevRec) {
@@ -1017,7 +1132,10 @@ export default function DiscoverScreen() {
         onOTTChange={(otts) => applyFilterChange({ otts })}
       />
 
-      <View style={styles.stackWrap}>
+      <View
+        style={styles.stackWrap}
+        onLayout={(e) => setStackRect(e.nativeEvent.layout)}
+      >
         {state === 'loading' && (
           <View
             style={styles.centered}
@@ -1210,15 +1328,18 @@ export default function DiscoverScreen() {
       {/* W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
           마운트 조건: tutorialActive (state=ready + recs[0] 로드 후 1회) + recs[0] 존재.
           dim overlay 는 pointerEvents="box-none" — 사용자가 실제 카드를 만져야 진행. */}
-      {tutorialActive && recs[0] && (
+      {tutorialActive && recs[0] && stackRect && (
         <TutorialFlow
           recForDemo={recs[0]}
+          stackRect={stackRect}
+          isDragging={isDragging}
           userActionSignals={{
             leftSwipeCount,
             rightSwipeCount,
             saveActionCount,
             detailOpenCount,
           }}
+          onStepChange={setTutorialStep}
           onClose={handleTutorialClose}
         />
       )}

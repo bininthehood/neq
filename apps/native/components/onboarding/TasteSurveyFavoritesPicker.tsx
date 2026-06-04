@@ -146,37 +146,42 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
           {RECOMMENDED_SELECT}개 이상 권장 · 최대 {MAX_SELECT}개
         </Text>
 
-        {selected.length > 0 ? (
-          <ScrollView
-            horizontal
-            style={styles.selectedRow}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: spacing.sm }}
-          >
-            {selected.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => toggleSelect(item)}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.title} 선택 해제`}
-              >
-                {item.posterUrl ? (
-                  <Image
-                    source={{ uri: item.posterUrl }}
-                    style={styles.selectedPoster}
-                  />
-                ) : (
-                  <View style={[styles.selectedPoster, styles.posterPlaceholder]}>
-                    <Text style={styles.posterFallbackText}>{item.title.slice(0, 2)}</Text>
-                  </View>
-                )}
-                <View style={styles.removeBadge}>
-                  <Text style={styles.removeBadgeText}>✕</Text>
+        {/* 2026-06-04 follow-up — 선택 작품 리스트 영역 고정 height + x 버튼 잘림 fix.
+            기존: `selected.length > 0` 조건부 렌더 → 첫 선택 시 영역 등장 → 아래 콘텐츠 push.
+            변경: 항상 렌더 + 고정 height (selectedRow). selected.length === 0 일 때 빈 영역 유지
+            (투명 spacer — 안내 텍스트는 헤더 subtitle 이 이미 담당).
+            x 버튼 잘림 fix: ScrollView 의 contentContainerStyle 에 paddingTop:6 추가 — removeBadge
+            의 top: -4 (외부 4px 오프셋) 을 안쪽으로 흡수. paddingHorizontal:6 도 함께 추가하여
+            좌/우 첫·마지막 카드의 removeBadge (right: -4) 도 잘리지 않음. */}
+        <ScrollView
+          horizontal
+          style={styles.selectedRow}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.selectedRowContent}
+        >
+          {selected.map((item) => (
+            <Pressable
+              key={item.id}
+              onPress={() => toggleSelect(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.title} 선택 해제`}
+            >
+              {item.posterUrl ? (
+                <Image
+                  source={{ uri: item.posterUrl }}
+                  style={styles.selectedPoster}
+                />
+              ) : (
+                <View style={[styles.selectedPoster, styles.posterPlaceholder]}>
+                  <Text style={styles.posterFallbackText}>{item.title.slice(0, 2)}</Text>
                 </View>
-              </Pressable>
-            ))}
-          </ScrollView>
-        ) : null}
+              )}
+              <View style={styles.removeBadge}>
+                <Text style={styles.removeBadgeText}>✕</Text>
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         <TextInput
           value={query}
@@ -369,9 +374,20 @@ const styles = StyleSheet.create({
     fontSize: fontSizePx.sm,
     lineHeight: 20,
   },
+  // 2026-06-04 follow-up — 선택 작품 리스트 영역 고정 height (paddingTop 6 + poster 64 + paddingBottom 4 = 74).
+  // selected.length 변동에도 height 보존 → 첫 선택 시 아래 콘텐츠 push 없음.
+  // height 산정: selectedPoster height (64) + paddingTop 6 (x 버튼 -4 흡수) + paddingBottom 4.
   selectedRow: {
     flexGrow: 0,
     marginTop: spacing.md,
+    height: 74,
+  },
+  // x 버튼 (removeBadge: top -4, right -4) 의 외부 오프셋을 ScrollView 내부에서 흡수.
+  // paddingTop:6, paddingHorizontal:6 로 잘림 영역 가림 회피. gap: spacing.sm 정합 유지.
+  selectedRowContent: {
+    gap: spacing.sm,
+    paddingTop: 6,
+    paddingHorizontal: 6,
   },
   selectedPoster: {
     width: 44,

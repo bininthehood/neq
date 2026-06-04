@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, type LayoutRectangle } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -59,7 +59,13 @@ export interface TutorialUserSignals {
 
 interface Props {
   recForDemo: Recommendation;
+  /** 실제 SwipeCard 부모 (stackWrap) 의 측정 좌표. 데모 카드가 이 영역 안에서 SwipeCard 와 정합. */
+  stackRect: LayoutRectangle;
+  /** 사용자가 실제 카드를 drag 중인지. dim overlay 를 drag 중 투명화하여 swipe 인지 강화. */
+  isDragging?: boolean;
   userActionSignals: TutorialUserSignals;
+  /** 현재 step 변경 시 부모에 emit — 부모가 step 별 action whitelist 가드에 사용. */
+  onStepChange?: (step: TutorialStep) => void;
   onClose: (
     reason: 'completed' | 'skipped',
     payload: { stepsCompleted: number; atStep: TutorialStep },
@@ -75,7 +81,7 @@ const DOT_EASING = Easing.bezier(...easings.detailMorph);
 const ENTER_DURATION = 400;
 const ENTER_EASING = Easing.bezier(...easings.spring);
 
-export default function TutorialFlow({ recForDemo, userActionSignals, onClose }: Props) {
+export default function TutorialFlow({ recForDemo, stackRect, isDragging, userActionSignals, onStepChange, onClose }: Props) {
   const insets = useSafeAreaInsets();
   const [stepIdx, setStepIdx] = useState(0);
   const currentStep = STEPS[stepIdx];
@@ -84,10 +90,11 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
   // userActionSignals 자체는 매 렌더마다 갱신되므로 ref 로 캡처.
   const baselineRef = useRef<TutorialUserSignals>(userActionSignals);
 
-  // 단계 진입 시 baseline 갱신 + `tutorial_step_shown` 계측.
+  // 단계 진입 시 baseline 갱신 + `tutorial_step_shown` 계측 + 부모에 step emit.
   useEffect(() => {
     baselineRef.current = { ...userActionSignals };
     track('tutorial_step_shown', { step: currentStep });
+    onStepChange?.(currentStep);
     // userActionSignals 는 의존성 제외 — 단계 진입 시점에만 baseline 캡처.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stepIdx]);
@@ -145,6 +152,17 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
     transform: [{ translateY: entranceTy.value }],
   }));
 
+  // dim 투명도 — drag 중 0 (투명) / idle 0.7 (default overlay). swipe 진행 인지 강화.
+  // withTiming 으로 자연스러운 fade.
+  const dimOpacity = useSharedValue(1);
+  useEffect(() => {
+    dimOpacity.value = withTiming(isDragging ? 0 : 1, {
+      duration: 200,
+      easing: DOT_EASING,
+    });
+  }, [isDragging, dimOpacity]);
+  const dimStyle = useAnimatedStyle(() => ({ opacity: dimOpacity.value }));
+
   const handleSkip = () => {
     track('tutorial_skipped', { at_step: currentStep });
     onClose('skipped', { stepsCompleted: stepIdx, atStep: currentStep });
@@ -159,14 +177,19 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
   void durations;
 
   return (
-    <View
-      style={[StyleSheet.absoluteFill, styles.dim]}
+    <Animated.View
+      // root 자체에 opacity 적용 — drag 중 튜토리얼 UI 전체 (dim + 카드 + 화살표 + 카피 +
+      // 스킵 + 도트) 한꺼번에 fade. 사용자가 실제 카드 swipe 진행을 가려짐 없이 인지.
+      style={[StyleSheet.absoluteFill, styles.dimRoot, dimStyle]}
       // box-none: dim 자체는 통과 — 사용자가 dim 아래의 실제 카드를 만질 수 있어야 함.
       // skip 버튼만 자체 Pressable 로 흡수.
       pointerEvents="box-none"
       accessibilityRole="alert"
       accessibilityLabel="첫 사용 안내"
     >
+      {/* dim 배경 — overlay 0.7 톤. root 의 opacity 가 drag 중 fade 담당. */}
+      <View style={[StyleSheet.absoluteFill, styles.dim]} pointerEvents="none" />
+
       {/* 건너뛰기 — pointerEvents 활성. safe-area top 보정.
           03_p1-1#4: insets.top + lg (24px) 로 Dynamic Island/노치 안전 마진 확보. */}
       <View style={[styles.skipWrap, { top: insets.top + spacing.lg }]}>
@@ -189,13 +212,15 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
         <Text style={styles.stepNumber}>{stepNumberLabel}</Text>
       </View>
 
-      {/* 본체 — fade+slide entrance. pointerEvents="none" 으로 실제 카드 진입 차단 X. */}
+      {/* 본체 — fade+slide entrance. pointerEvents="none" 으로 실제 카드 진입 차단 X.
+          entrance View 도 absoluteFill — 자식 Demo 의 absolute 좌표 (카드 top:0/bottom:8/left:12/right:12)
+          가 화면 좌표계 기준으로 정상 잡히도록. 미지정 시 height 0 squash 로 포스터 미표시. */}
       <View style={styles.bodyWrap} pointerEvents="none">
-        <Animated.View key={currentStep} style={entranceStyle}>
-          {currentStep === 'swipe_left' && <SwipeLeftDemo recForDemo={recForDemo} />}
-          {currentStep === 'swipe_right' && <SwipeRightDemo recForDemo={recForDemo} />}
-          {currentStep === 'swipe_down' && <SwipeDownDemo recForDemo={recForDemo} />}
-          {currentStep === 'tap' && <TapDemo recForDemo={recForDemo} />}
+        <Animated.View key={currentStep} style={[StyleSheet.absoluteFill, entranceStyle]}>
+          {currentStep === 'swipe_left' && <SwipeLeftDemo recForDemo={recForDemo} stackRect={stackRect} />}
+          {currentStep === 'swipe_right' && <SwipeRightDemo recForDemo={recForDemo} stackRect={stackRect} />}
+          {currentStep === 'swipe_down' && <SwipeDownDemo recForDemo={recForDemo} stackRect={stackRect} />}
+          {currentStep === 'tap' && <TapDemo recForDemo={recForDemo} stackRect={stackRect} />}
         </Animated.View>
       </View>
 
@@ -211,7 +236,7 @@ export default function TutorialFlow({ recForDemo, userActionSignals, onClose }:
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -249,11 +274,14 @@ function Dot({ active, passed }: { active: boolean; passed: boolean }) {
 }
 
 const styles = StyleSheet.create({
-  dim: {
-    // 03_p1-1#3: overlayHeavy(0.85) → overlay(0.7) 톤 다운.
-    // 카드 영역 spotlight 은 native 측 cutout 비용 큰 작업이라 1차는 dim 톤만.
-    backgroundColor: colors.overlay,
+  // root — zIndex 보유. 자식 dim 배경 + UI 요소가 이 안에 배치.
+  dimRoot: {
     zIndex: 50,
+  },
+  // dim 배경 — 별도 Animated.View 로 분리하여 drag 중 opacity 0 토글.
+  // 03_p1-1#3: overlayHeavy(0.85) → overlay(0.7) 톤 다운.
+  dim: {
+    backgroundColor: colors.overlay,
   },
   skipWrap: {
     position: 'absolute',
@@ -295,9 +323,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   bodyWrap: {
+    // 2026-06-04 통합: 풀사이즈 데모 카드 대응. Demo 컴포넌트가 자체 absoluteFill 로
+    // 카드/화살표/카피 영역을 절대 위치 배치. center 정렬은 각 Demo 의 자식 요소
+    // (안내 카피, 화살표) 가 개별로 처리. 부모는 단순 fill 컨테이너만 제공.
     ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   dotsWrap: {
     position: 'absolute',

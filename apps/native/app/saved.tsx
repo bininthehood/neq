@@ -221,13 +221,12 @@ export default function SavedScreen() {
     void loadSavedSort().then(setSortBy);
   }, []);
 
-  // W5 Task F — archived 0 되면 'archived' 탭 자체가 hide 되므로,
-  // 사용자가 archived 탭에 있다가 마지막 아카이브를 해제하면 'all' 로 fallback.
-  useEffect(() => {
-    if (viewFilter === 'archived' && archivedIds.size === 0) {
-      setViewFilter('all');
-    }
-  }, [viewFilter, archivedIds]);
+  // 2026-06-04 follow-up — fallback useEffect 제거.
+  // 기존: archived 0 되면 'archived' 탭 hide → 'all' 로 자동 fallback (W5 Task F).
+  // 현재: archived 탭이 항상 노출 (위 viewFilters useMemo L591 의 archivedCount 가드 제거).
+  // → 사용자가 archived 탭에 있는 동안 마지막 unarchive 가 일어나면 강제 'all' 전환이
+  //   "탭은 노출하지만 클릭하면 자동 이탈" 인 충돌 동작이 됨. fallback 제거 →
+  //   빈 상태 UI ("보관한 작품이 없어요") 가 일관되게 보임.
 
   // ottFilter 활성 시 OTT 그룹핑 자동 해제 (web saved/page.tsx:171-175 정합).
   useEffect(() => {
@@ -588,10 +587,12 @@ export default function SavedScreen() {
       { key: 'unwatched', label: '안 본 작품', count: unwatchedCount },
       { key: 'watched', label: '시청 완료', count: watchedCount },
     ];
-    // 아카이브 0개일 때는 탭 숨김 (web 정본 동일 — saved/page.tsx:437).
-    if (archivedCount > 0) {
-      base.push({ key: 'archived', label: '아카이브', count: archivedCount });
-    }
+    // 2026-06-04 follow-up — archivedCount 0 이어도 탭 노출.
+    // 변경 전: archivedCount > 0 일 때만 push (web 정본 동일).
+    // 변경 후: 사용자 인지 가능성 우선, 빈 상태에도 노출. archived 탭 클릭 시 빈 상태 UI
+    // ("보관한 작품이 없어요" + "시청한 작품을 보관 아이콘으로 정리할 수 있어요", L856-878)
+    // 가 자연스럽게 보이며 기능 발견성 확보.
+    base.push({ key: 'archived', label: '아카이브', count: archivedCount });
     // 배치 H — '히스토리' 탭은 항상 노출 (web saved/page.tsx:438 정본 동일).
     base.push({ key: 'history', label: '히스토리', count: history.length });
     return base;
