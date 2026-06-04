@@ -21,7 +21,7 @@ function getClientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   const ip = getClientIp(req);
-  const { allowed, remaining } = checkRateLimit(ip);
+  const { allowed, remaining } = await checkRateLimit(ip);
 
   if (!allowed) {
     return NextResponse.json(

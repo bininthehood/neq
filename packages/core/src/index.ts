@@ -7,3 +7,4 @@ export * from './search';
 export * from './persona';
 export * from './static-survey';
 export * from './taste-survey-client';
+export * from './fallback-favorites';

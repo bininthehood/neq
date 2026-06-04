@@ -7,6 +7,24 @@ import { VARIETY_GENRE_IDS } from "../discover-types";
 
 const openai = new OpenAI();
 
+/**
+ * LLM 산 reason 안전망. 시스템 프롬프트가 20~30자 강제하지만 LLM 변동성으로
+ * 위반 케이스 발생 가능 — 코드 단에서 명백한 위반만 컷한다.
+ *
+ * - trim 후 8자 미만: 폐기 (`null`). "재밌어요" 수준 정보 부족 reason 차단.
+ * - 30자 초과: 30자에서 slice (정보 보존). 어색한 cut 위험은 작지만 폐기보다
+ *   사용자 노출이 자연스러움.
+ * - 그 외: trim 한 원문.
+ *
+ * 시스템 프롬프트의 19/31 컷과 정확히 일치하지 않는 이유: 폐기율을 보수적으로
+ * 잡아 picks 수 급감 위험을 회피. 추후 PostHog 로 위반율 측정 후 엄격화 가능.
+ */
+function normalizeReason(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.length < 8) return null;
+  return trimmed.length > 30 ? trimmed.slice(0, 30) : trimmed;
+}
+
 // LLM 큐레이션의 고정 prefix. 사용자별 동적 데이터(modeGuide, 취향, 후보)는 user 메시지로 이동시켜
 // OpenAI prompt caching prefix를 안정화한다. 1024+ 토큰 동일 prefix 시 자동 cache hit (gpt-4o-mini).
 // 1차 push(380 토큰 추정)는 임계 미달로 caching 미발현. 본 확장으로 1024+ 통과 + 모델 출력 가이드 강화.
@@ -33,6 +51,15 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 "가족과 보면 더 좋아요. 따뜻한 결말이 인상적" (23자)
 "비주얼 압도적이에요. OTT 큰 화면으로 봐주세요" (24자)
 "아침에 가볍게 보기 딱이에요. 12분 회차" (20자)
+"빠른 호흡의 액션이 일품이에요. 1시간 순삭" (22자)
+"잔잔한 감성 멜로 좋아하면 취향 저격이에요" (22자)
+"캐릭터 케미가 미쳤어요. 시즌2 빨리 보고싶음" (24자)
+"클래식인데 지금 봐도 안 낡았어요. 거장의 손길" (24자)
+"OST가 작품을 끌어올려요. 사운드트랙도 챙겨봐요" (25자)
+"전개 빨라서 지루할 틈 없어요. 출퇴근 추천" (22자)
+"작가 글빨이 살아있어요. 대사 한 줄 한 줄 명문" (24자)
+"애니인데 어른이 더 빠져드는 작품이에요" (20자)
+"다큐 같은 리얼리티가 강점이에요. 몰입감 최고" (24자)
 
 [나쁜 예 (절대 이러면 안 됨)]
 "심리적 깊이가 매력" (10자) ← 너무 짧음
@@ -42,6 +69,11 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 "재미있어요. 추천합니다" (구체성 0) ← 어떤 면이 재밌는지 써야 함
 "한국 작품이에요" (작품 특성 0) ← 작품 자체 매력을 써야 함
 "감동적이고 재밌고 매력적이에요" (형용사 나열) ← 한 가지 매력에 집중
+"여러분 모두에게 추천드립니다" (격식체 + 두루뭉술) ← 톤·구체성 양쪽 위반
+"명작 중에 명작이에요" (수상한 단언만) ← 어떤 면이 명작인지 명시 필요
+"이 감독의 최고작이라고 봐요" (감독 추측 위험) ← listing 미확인 사실 추측 금지
+"마니아층에게 강추하는 작품" (대상 추상화) ← 어떤 결을 좋아하는 사람인지 명시 필요
+"엄청난 흥행작이라는 평가가 있어요" (외부 평가 인용) ← listing 외 사실 인용 금지
 
 [작품 다양성 원칙]
 - 한국 작품과 외국 작품을 균형 있게: 한국 사용자 기준 한국 35~50%, 외국 50~65%
@@ -50,6 +82,16 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - 발표 연도 다양화: 신작(최근 3년)과 클래식(10년+) 조화. 같은 연도 연속 4개 금지
 - 무거운 작품(범죄/심리/전쟁)과 가벼운 작품(코미디/로맨스) 6:4 ~ 4:6 비율
 - 메인스트림과 숨은 보석을 함께 배치 (popularity 상위 50%와 하위 50% 후보 모두 활용)
+
+[장르별 reason 톤 가이드]
+- 스릴러/범죄: "긴장감" "심리전" "추적" "복선" — 결말 스포 금지, 분위기·기법 중심
+- 멜로/로맨스: "케미" "감정선" "잔잔함" "여운" — 클로즈 다양화 ("취향저격" / "감정 출렁여요" 등)
+- SF/판타지: "세계관" "비주얼" "설정의 디테일" — 줄거리 요약 X, 톤 위주
+- 다큐: "리얼리티" "취재의 깊이" "관점" — 사실 보고 톤보다 발견의 흥미 강조
+- 액션: "호흡" "안무" "스케일" — 시각 요소 + 장면 호흡 결합
+- 코미디: "웃음 코드" "캐릭터 케미" "타이밍" — 어떤 결의 웃음인지 (블랙·시트콤·슬랩스틱) 명시
+- 애니: "작화" "캐릭터" "감정" — 어린이용으로 한정 짓는 표현 회피
+- 예능: "출연진" "포맷" "반복 시청 가치" — 회당 호흡과 분량 정보 유용
 
 [모드별 reason 프레임 차별화]
 - 탐색 모드: 새로움 강조 ("이런 작품 처음일 거예요" "예상 밖의 결" "장르 교차 작품")
@@ -61,12 +103,16 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - 한국 토종 OTT 가용성(wavve/Tving/Watcha)과 글로벌 OTT(Netflix/Disney+/AppleTV+/Prime)를 균형 있게 추천
 - 일부 OTT(쿠팡플레이 등)는 데이터 소스에서 누락될 수 있음. providers가 비어 있어도 후보 자체가 매력적이면 선정 가능
 - 한국어 자막·더빙이 보장되는 작품 우선 (글로벌 OTT는 대부분 보장)
+- 한국 시청자 정서: 신파·과한 클리셰는 호불호 갈림 — reason 에 "잔잔한" "담백한" "현실적인" 같은 톤 차별점 강조 시 효과적
+- 한국 드라마는 대체로 16부 안팎, 영화는 100~140분 — 분량 정보 (회차/러닝타임) 명시는 사용자 결정에 도움
+- 일본 애니/대만 청춘물/태국 BL 등 아시아 작품은 자막 가용성과 "한국에서 보기 어려운 결" 이라는 발견 가치 강조 가능
 
 [취향 신호 우선순위]
 - 사용자 메시지에 "이 페르소나의 좋아한 작품"이 있으면 가장 강한 신호로 취급. 이 작품들의 결(분위기·주제·감독·캐릭터 깊이)을 우선 매칭하세요.
 - "사용자 선호 장르 (계정 공통)" 정보가 있을 때, 해당 장르를 우선시하되 다양성 원칙(최소 4개 장르 등장)도 함께 지켜주세요. 한 장르에 몰빵 금지.
 - 선호 장르 정보가 없을 때는 페르소나 favorites만 기반으로 결을 잡고, 장르 다양성은 폭넓게 가져가세요.
 - 페르소나 favorites와 계정 선호 장르가 충돌하면(예: favorites는 다큐인데 tasteGenres에 액션) 페르소나 favorites를 우선 신호로 두고, 선호 장르는 보조로 고려하세요.
+- "loved" / "good" 피드백이 있으면 그 결을 강하게 반영, "meh" / "dropped" 결은 회피 신호로 다루세요. 단순히 같은 장르를 피하는 게 아니라 "어떤 톤" 이 안 맞았는지 추정해 그 톤을 회피.
 
 [구독 OTT 가중치 가이드 (약한 신호)]
 - 사용자 메시지에 "구독 OTT (참고용 가중치)"가 있을 때, 해당 OTT에서 볼 수 있는 작품을 약간 우선시하세요.
@@ -77,6 +123,8 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - 후보 listing 에 (장르, 연도, 평점, overview) 가 명시됨. reason 은 이 정보와 일치해야 함
 - 제목·발음에서 장르 추측 금지. listing 에 "다큐"라면 다큐로 다루기, "SF"라면 SF로 다루기
 - listing 에 명시 안 된 사실 (수상·평가·주연·국가 등) 추측해서 reason에 넣지 말 것
+- 비슷한 제목의 다른 작품과 혼동 주의 — listing 의 (연도, 감독, overview) 로 정체성 확정 후 reason 작성
+- "최고" "역대급" 같은 절대 평가는 listing 의 평점이 8.5+ 일 때만 신중히 사용. 그 외에는 "결이 좋아요" 류의 상대 평가
 
 [JSON 출력 주의사항]
 - selected 배열 외 다른 키 추가 금지
@@ -85,6 +133,7 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - reason은 큰따옴표(") 안. 안에 큰따옴표 사용 시 백슬래시 이스케이프
 - JSON 외 추가 텍스트(설명/주석/마크다운) 절대 출력 금지
 - 이모지·특수문자 reason에 사용 금지 (한글·영문·숫자·기본 문장부호만)
+- selected 배열 안 같은 id 중복 금지 — 한 작품은 한 번만 선정
 
 [출력 형식 (JSON)]
 {"selected": [{"id": 숫자, "reason": "문구"}, ...]}`;
@@ -373,15 +422,21 @@ export async function curateWithLLM(
       (Object.values(parsed).find((v) => Array.isArray(v)) as unknown[] | undefined) ??
       [];
 
-    const picks = rawSelected
-      .filter(
-        (s): s is { id: number; reason: string } =>
-          typeof s === "object" &&
-          s !== null &&
-          typeof (s as Record<string, unknown>).id === "number" &&
-          typeof (s as Record<string, unknown>).reason === "string"
-      )
-      .map((s) => ({ id: s.id, reason: s.reason.slice(0, 60) }));
+    const picks: CuratedPick[] = [];
+    for (const s of rawSelected) {
+      if (
+        typeof s !== "object" ||
+        s === null ||
+        typeof (s as Record<string, unknown>).id !== "number" ||
+        typeof (s as Record<string, unknown>).reason !== "string"
+      ) {
+        continue;
+      }
+      const item = s as { id: number; reason: string };
+      const normalized = normalizeReason(item.reason);
+      if (normalized === null) continue;
+      picks.push({ id: item.id, reason: normalized });
+    }
     return { picks, usage };
   } catch (err) {
     console.error("LLM curation failed:", err);
@@ -428,7 +483,10 @@ export async function curateWithLLMStreaming(
     for (let i = lastEmittedIdx; i < end; i++) {
       const item = sel[i] as Record<string, unknown> | undefined;
       if (item && typeof item.id === "number" && typeof item.reason === "string") {
-        onPick({ id: item.id, reason: item.reason.slice(0, 60) });
+        const normalized = normalizeReason(item.reason);
+        if (normalized !== null) {
+          onPick({ id: item.id, reason: normalized });
+        }
       }
     }
     lastEmittedIdx = end;
