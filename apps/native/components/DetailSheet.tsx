@@ -222,8 +222,13 @@ export default function DetailSheet({
   }, [visible, rec?.tmdbId, rec?.type, rec?.castMembers, rec?.directorMember, rec?.director, rec?.cast]);
 
   // 관련 작품 fetch — 화면 rec 변경 시 마다.
+  // 2026-06-04 (P0 fix) — mode='share' 분기는 fetch 자체 skip.
+  // 사유: share 진입은 UL 단일 작품 표면. RelatedRow 탭 → setRelatedRec 으로 작품 교체 →
+  // 앱 background → 같은 UL 재진입 시 원본 SHARE_TMDB_ID 무시 + 마지막 탭한 작품 노출 회귀.
+  // sections 자체를 share mode 에서 숨기므로 (render 분기 참조) fetch 도 함께 차단 — 불필요한
+  // 네트워크 호출 + relatedRec state 누설 방지.
   useEffect(() => {
-    if (!visible || !rec?.tmdbId) {
+    if (!visible || !rec?.tmdbId || mode === 'share') {
       setRelated(null);
       return;
     }
@@ -250,7 +255,7 @@ export default function DetailSheet({
     return () => {
       cancelled = true;
     };
-  }, [visible, rec?.tmdbId, rec?.type]);
+  }, [visible, rec?.tmdbId, rec?.type, mode]);
 
   const handleRelatedClick = useCallback(
     async (
@@ -595,47 +600,55 @@ export default function DetailSheet({
                 )}
               </View>
 
-              {/* 관련 작품 — F3 spec */}
-              {related === null && relatedLoading && (
-                <View style={styles.relatedSkeletonRow}>
-                  {[0, 1, 2, 3].map((i) => (
-                    <View key={i} style={styles.relatedSkeletonCard} />
-                  ))}
-                </View>
-              )}
+              {/* 관련 작품 — F3 spec.
+                  2026-06-04 (P0 fix) — mode='share' 분기에서는 전체 숨김.
+                  사유: shared 화면(UL 진입)에서 RelatedRow 탭 시 setRelatedRec 으로 작품 교체 →
+                  background → 같은 UL 재진입 시 원본 SHARE_TMDB_ID 무시 + 마지막 탭한 작품 노출 회귀.
+                  버그 source 차단 — share 진입은 단일 작품 표면만 노출. fetch 도 effect 에서 skip. */}
+              {mode !== 'share' && (
+                <>
+                  {related === null && relatedLoading && (
+                    <View style={styles.relatedSkeletonRow}>
+                      {[0, 1, 2, 3].map((i) => (
+                        <View key={i} style={styles.relatedSkeletonCard} />
+                      ))}
+                    </View>
+                  )}
 
-              {related?.collection && related.collection.works.length > 0 && (
-                <RelatedRow
-                  label={related.collection.name}
-                  works={related.collection.works}
-                  source="collection"
-                  disabled={hydratingRelated}
-                  onPressItem={handleRelatedClick}
-                />
-              )}
+                  {related?.collection && related.collection.works.length > 0 && (
+                    <RelatedRow
+                      label={related.collection.name}
+                      works={related.collection.works}
+                      source="collection"
+                      disabled={hydratingRelated}
+                      onPressItem={handleRelatedClick}
+                    />
+                  )}
 
-              {related?.recommendations && related.recommendations.length > 0 && (
-                <RelatedRow
-                  label="비슷한 작품"
-                  works={related.recommendations}
-                  source="recommendations"
-                  disabled={hydratingRelated}
-                  onPressItem={handleRelatedClick}
-                />
-              )}
+                  {related?.recommendations && related.recommendations.length > 0 && (
+                    <RelatedRow
+                      label="비슷한 작품"
+                      works={related.recommendations}
+                      source="recommendations"
+                      disabled={hydratingRelated}
+                      onPressItem={handleRelatedClick}
+                    />
+                  )}
 
-              {related?.directorWorks && related.directorWorks.length > 0 && (
-                <RelatedRow
-                  label={
-                    related.directorName
-                      ? `${related.directorName} 감독의 다른 작품`
-                      : '감독의 다른 작품'
-                  }
-                  works={related.directorWorks}
-                  source="director"
-                  disabled={hydratingRelated}
-                  onPressItem={handleRelatedClick}
-                />
+                  {related?.directorWorks && related.directorWorks.length > 0 && (
+                    <RelatedRow
+                      label={
+                        related.directorName
+                          ? `${related.directorName} 감독의 다른 작품`
+                          : '감독의 다른 작품'
+                      }
+                      works={related.directorWorks}
+                      source="director"
+                      disabled={hydratingRelated}
+                      onPressItem={handleRelatedClick}
+                    />
+                  )}
+                </>
               )}
             </Animated.ScrollView>
 
