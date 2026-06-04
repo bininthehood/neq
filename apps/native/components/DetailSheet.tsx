@@ -392,20 +392,26 @@ export default function DetailSheet({
   // sticky CTA 높이 추정 (mode='share' 시 2개 풀폭 row, mode='detail' 시 1개 ghost) — 본문 paddingBottom 보정.
   const stickyCtaHeight = mode === 'share' ? 56 + insets.bottom + 24 : 52 + insets.bottom + 24;
 
-  return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
-      statusBarTranslucent
+  // 2026-06-04 (P0-#1 fix) — mode='share' 는 Modal 을 우회하고 풀스크린 View 로 직접 렌더.
+  //
+  // 배경: share/[id] (apps/native/app/share/[id].tsx) 는 이미 expo-router 의 풀스크린
+  // 라우트 (`<Tabs.Screen name="share/[id]" options={{ href: null }} />`). 그 위에 추가로
+  // Modal 을 올리면 → 사용자가 닫기/추천 더 보기 탭 시 `router.replace('/')` 만 호출되고
+  // Modal 자체는 별도 OS-level view 라서 닫히지 않음 → "닫기 동작 안 함" 회귀.
+  //
+  // share mode 는 라우트 자체가 진입 단위이므로 Modal 불필요. visible prop 도 share 경로에선
+  // 항상 true (`<DetailSheet rec={rec} visible onClose={...} mode="share" />`) — 가시성 게이트
+  // 는 라우트 mount 가 담당.
+  //
+  // detail mode (in-app 진입) 는 Modal 유지 — Discover/Saved 카드 탭 후 시트가 떠야 하므로
+  // overlay 패턴 필요.
+  const ContainerView = (
+    <View
+      style={styles.root}
+      accessibilityViewIsModal
+      accessibilityLabel={`${rec.title} 상세 정보`}
     >
-      <View
-        style={styles.root}
-        accessibilityViewIsModal
-        accessibilityLabel={`${rec.title} 상세 정보`}
-      >
-        <GestureDetector gesture={pan}>
+      <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
             <Animated.ScrollView
               ref={scrollRef as React.RefObject<Animated.ScrollView>}
@@ -527,6 +533,39 @@ export default function DetailSheet({
                   <Text style={styles.noProviders}>
                     현재 한국 OTT에서 제공 정보를 찾지 못했어요
                   </Text>
+                ) : mode === 'share' ? (
+                  // 2026-06-04 (P1-#3 fix) — share mode = 칩(pill) 형태.
+                  // web (apps/web/src/app/share/[id]/ShareClient.tsx line 129) 정합:
+                  // flex-wrap gap-2 + 각 OTT 가 inline pill (icon + 이름, paddingHorizontal 12 + paddingVertical 10,
+                  // surfaceRaised 면, radius.md). 모바일 터치 타겟 minHeight 44 보장.
+                  <View style={styles.providerChips}>
+                    {rec.providers.map((p) => {
+                      const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
+                      return (
+                        <Pressable
+                          key={p.name}
+                          style={({ pressed }) => [
+                            styles.providerChip,
+                            pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] },
+                          ]}
+                          onPress={() => openProvider(p.name, rec.watchLink)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${p.name}에서 보기`}
+                        >
+                          <View style={styles.providerChipIcon}>
+                            {iconUrl ? (
+                              <Image
+                                source={{ uri: iconUrl }}
+                                style={StyleSheet.absoluteFill}
+                                contentFit="contain"
+                              />
+                            ) : null}
+                          </View>
+                          <Text style={styles.providerChipName}>{p.name}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
                 ) : (
                   <View style={styles.providerList}>
                     {rec.providers.map((p) => {
@@ -683,6 +722,25 @@ export default function DetailSheet({
           </Animated.View>
         </GestureDetector>
       </View>
+  );
+
+  // 2026-06-04 (P0-#1 fix) — mode 분기 렌더.
+  // share: 풀스크린 라우트 자체가 진입 단위 — Modal 우회. router.replace('/') 가 즉시 발효.
+  // detail: 기존 Modal overlay 유지 — in-app 카드 탭 진입 시 시트 슬라이드 패턴 필요.
+  if (mode === 'share') {
+    if (!visible) return null;
+    return ContainerView;
+  }
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      {ContainerView}
     </Modal>
   );
 }
@@ -1181,6 +1239,38 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontFamily: fontsV2.data,
+  },
+  // 2026-06-04 (P1-#3) — share mode OTT 칩(pill).
+  // web ShareClient line 129 정합: flex flex-wrap gap-2 + 각 OTT inline pill.
+  providerChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  providerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2, // 8
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 44, // 모바일 터치 타겟
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  providerChipIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  providerChipName: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
   },
   // PR2 — sticky bottom CTA 컨테이너. mode='detail' = ghost 공유 1개, mode='share' = amber + ghost 2개.
   stickyCta: {

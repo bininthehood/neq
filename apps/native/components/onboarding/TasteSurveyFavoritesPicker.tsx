@@ -52,25 +52,35 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
   const [selected, setSelected] = useState<FavoritePickItem[]>([]);
   const [suggestions, setSuggestions] = useState<FavoritePickItem[]>(MINI_FALLBACK);
   const [searching, setSearching] = useState(false);
+  // 2026-06-04 (P0-#2 fix) — "다른 작품 보기" 갱신 로딩 상태. web TasteSurveyFavoritesPicker
+  // (`apps/web/src/components/onboarding/TasteSurveyFavoritesPicker.tsx` line 52) 정합.
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchTrending = useCallback(async () => {
+    setLoadingSuggestions(true);
+    try {
+      const res = await fetch(`${env.API_BASE_URL}/api/trending`);
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setSuggestions(data);
+      }
+    } catch {
+      // fallback 유지
+    }
+    setLoadingSuggestions(false);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch(`${env.API_BASE_URL}/api/trending`);
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          setSuggestions(data);
-        }
-      } catch {
-        // fallback 유지
-      }
+      if (cancelled) return;
+      await fetchTrending();
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchTrending]);
 
   const runSearch = useCallback(async (q: string) => {
     if (q.length < 1) {
@@ -183,9 +193,18 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.sectionLabel}>이런 작품은 어때요?</Text>
+            {/* 2026-06-04 (P0-#2 + P1-#4 fix) — 무한 스크롤 + isLarge 가시성 패턴.
+                - slice(0, 8) 제한 제거 → trending API 가 반환하는 모든 작품 노출.
+                  ScrollView 안에서 사용자가 자연스럽게 스크롤 → 무한 그리드 인지.
+                - i % 3 === 0 → 가로 풀폭 (col-span-2) + aspectRatio 4/3 — web 정본
+                  (`apps/web/src/components/onboarding/TasteSurveyFavoritesPicker.tsx`
+                  line 164) 정합. 작은 2/3 세로 카드와 큰 4/3 가로 카드 교차로
+                  가시성/리듬 ↑.
+                - 화면 끝의 "다른 작품 보기" → fetchTrending 재호출 (web 정합). */}
             <View style={styles.grid}>
-              {suggestions.slice(0, 8).map((item) => {
+              {suggestions.map((item, i) => {
                 const isSelected = selected.some((s) => s.id === item.id);
+                const isLarge = i % 3 === 0;
                 return (
                   <Pressable
                     key={item.id}
@@ -193,7 +212,7 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
                     accessibilityRole="button"
                     accessibilityLabel={`${item.title} ${isSelected ? '선택 해제' : '선택'}`}
                     style={[
-                      styles.gridCell,
+                      isLarge ? styles.gridCellLarge : styles.gridCell,
                       isSelected && styles.gridCellSelected,
                     ]}
                   >
@@ -216,6 +235,21 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
                 );
               })}
             </View>
+            <Pressable
+              onPress={fetchTrending}
+              disabled={loadingSuggestions}
+              accessibilityRole="button"
+              accessibilityLabel="다른 작품 보기"
+              style={({ pressed }) => [
+                styles.moreBtn,
+                pressed && { opacity: 0.7 },
+                loadingSuggestions && { opacity: 0.3 },
+              ]}
+            >
+              <Text style={styles.moreBtnText}>
+                {loadingSuggestions ? '로딩...' : '다른 작품 보기'}
+              </Text>
+            </Pressable>
           </ScrollView>
         ) : null}
         {showResults ? (
@@ -393,9 +427,18 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
+  // 2026-06-04 (P1-#4) — 기본 2열 세로 카드 (2/3 aspect, 작품 포스터 정합).
   gridCell: {
-    width: '48%',
+    width: '48.5%',
     aspectRatio: 2 / 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  // 2026-06-04 (P1-#4) — i % 3 === 0 카드: 가로 풀폭 (col-span-2) + aspectRatio 4/3.
+  // web TasteSurveyFavoritesPicker.tsx line 164 의 `isLarge` 패턴 정합.
+  gridCellLarge: {
+    width: '100%',
+    aspectRatio: 4 / 3,
     borderRadius: 6,
     overflow: 'hidden',
   },
@@ -437,6 +480,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 13,
     fontWeight: '700',
+  },
+  // 2026-06-04 (P0-#2) — "다른 작품 보기" 버튼. web 정본 line 194 정합 (text-xs text-muted, py-2 minHeight 44).
+  moreBtn: {
+    width: '100%',
+    minHeight: 44,
+    paddingVertical: 12,
+    marginTop: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreBtnText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
   },
   resultRow: {
     flexDirection: 'row',
