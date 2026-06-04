@@ -56,8 +56,13 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
   // (`apps/web/src/components/onboarding/TasteSurveyFavoritesPicker.tsx` line 52) 정합.
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 2026-06-04 follow-up (Fix 1) — body 의 suggestions ScrollView ref. "다른 작품 보기" 탭으로
+  // fetchTrending 완료 후 사용자가 새 카드들로 갱신된 사실을 즉각 인지하도록 최상단으로 animated
+  // scroll. RN ScrollView 는 새 데이터 mount 후 layout 이 잡힌 다음에 scrollTo 가 정상 동작
+  // 하므로 requestAnimationFrame 으로 한 프레임 양보 (state set → render → layout 완료 후 발화).
+  const scrollRef = useRef<ScrollView>(null);
 
-  const fetchTrending = useCallback(async () => {
+  const fetchTrending = useCallback(async (scrollAfter = false) => {
     setLoadingSuggestions(true);
     try {
       const res = await fetch(`${env.API_BASE_URL}/api/trending`);
@@ -69,6 +74,13 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
       // fallback 유지
     }
     setLoadingSuggestions(false);
+    if (scrollAfter) {
+      // 새 suggestions render → layout 완료를 기다린 후 한 프레임 양보. RN 의 ScrollView 는
+      // 갱신된 contentSize 가 측정되어야 scrollTo 가 의도한 위치로 이동.
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -187,24 +199,23 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
         ) : null}
         {showSuggestions ? (
           <ScrollView
+            ref={scrollRef}
             style={styles.bodyScroll}
             contentContainerStyle={styles.bodyScrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.sectionLabel}>이런 작품은 어때요?</Text>
-            {/* 2026-06-04 (P0-#2 + P1-#4 fix) — 무한 스크롤 + isLarge 가시성 패턴.
-                - slice(0, 8) 제한 제거 → trending API 가 반환하는 모든 작품 노출.
-                  ScrollView 안에서 사용자가 자연스럽게 스크롤 → 무한 그리드 인지.
-                - i % 3 === 0 → 가로 풀폭 (col-span-2) + aspectRatio 4/3 — web 정본
-                  (`apps/web/src/components/onboarding/TasteSurveyFavoritesPicker.tsx`
-                  line 164) 정합. 작은 2/3 세로 카드와 큰 4/3 가로 카드 교차로
-                  가시성/리듬 ↑.
-                - 화면 끝의 "다른 작품 보기" → fetchTrending 재호출 (web 정합). */}
+            {/* 2026-06-04 follow-up (Fix 2) — 균일 3열 그리드.
+                기존: i % 3 === 0 → 가로 풀폭 4/3 + 나머지 2열 2/3 교차 (web 정본 패턴) → native
+                기준 한 화면에 너무 크게 노출되어 동시 비교 어려움 사용자 피드백.
+                변경: 모든 카드 균일 3열 (포스터 2/3 aspect). iPhone 17 Pro 402pt 기준 카드 폭
+                ~109pt — Letterboxd / TMDB / JustWatch / Trakt 모바일 표준 sweet spot.
+                  - slice(0, 8) 제한은 그대로 제거 상태 — 무한 스크롤 유지.
+                  - "다른 작품 보기" → fetchTrending(scrollAfter=true) 재호출. */}
             <View style={styles.grid}>
-              {suggestions.map((item, i) => {
+              {suggestions.map((item) => {
                 const isSelected = selected.some((s) => s.id === item.id);
-                const isLarge = i % 3 === 0;
                 return (
                   <Pressable
                     key={item.id}
@@ -212,7 +223,7 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
                     accessibilityRole="button"
                     accessibilityLabel={`${item.title} ${isSelected ? '선택 해제' : '선택'}`}
                     style={[
-                      isLarge ? styles.gridCellLarge : styles.gridCell,
+                      styles.gridCell,
                       isSelected && styles.gridCellSelected,
                     ]}
                   >
@@ -222,7 +233,11 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
                       <View style={[styles.gridPoster, styles.posterPlaceholder]} />
                     )}
                     <View style={styles.gridLabelOverlay}>
-                      <Text style={styles.gridLabel} numberOfLines={1}>
+                      <Text
+                        style={styles.gridLabel}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
                         {item.title}
                       </Text>
                     </View>
@@ -236,7 +251,7 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
               })}
             </View>
             <Pressable
-              onPress={fetchTrending}
+              onPress={() => fetchTrending(true)}
               disabled={loadingSuggestions}
               accessibilityRole="button"
               accessibilityLabel="다른 작품 보기"
@@ -427,18 +442,13 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  // 2026-06-04 (P1-#4) — 기본 2열 세로 카드 (2/3 aspect, 작품 포스터 정합).
+  // 2026-06-04 follow-up (Fix 2) — 균일 3열 세로 카드 (포스터 2/3 aspect).
+  // 3열 (gap: 8) → 카드 폭 = (100% - 16) / 3 ≈ 31.5%. flexWrap 으로 한 행에 3개.
+  // 모바일 영화 그리드 업계 표준 (Letterboxd / TMDB / JustWatch / Trakt) — 포스터 ~110pt
+  // sweet spot. 한 화면에 9~12개 동시 인지 가능, 비교 용이.
   gridCell: {
-    width: '48.5%',
+    width: '31.5%',
     aspectRatio: 2 / 3,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  // 2026-06-04 (P1-#4) — i % 3 === 0 카드: 가로 풀폭 (col-span-2) + aspectRatio 4/3.
-  // web TasteSurveyFavoritesPicker.tsx line 164 의 `isLarge` 패턴 정합.
-  gridCellLarge: {
-    width: '100%',
-    aspectRatio: 4 / 3,
     borderRadius: 6,
     overflow: 'hidden',
   },
