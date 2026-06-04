@@ -538,11 +538,14 @@ export default function DetailSheet({
                   <Text style={styles.noProviders}>
                     현재 한국 OTT에서 제공 정보를 찾지 못했어요
                   </Text>
-                ) : mode === 'share' ? (
-                  // 2026-06-04 (P1-#3 fix) — share mode = 칩(pill) 형태.
-                  // web (apps/web/src/app/share/[id]/ShareClient.tsx line 129) 정합:
+                ) : (
+                  // 2026-06-04 — detail/share mode 통합 칩(pill) 형태.
+                  // 이전: share = 칩, detail = 큰 list (px 16 / py 12 / 32×32 icon + 화살표).
+                  // 사용자 의도 = native 내부 시각 일관성. mode 분기 제거.
+                  // web (apps/web/src/app/share/[id]/ShareClient.tsx line 129) 정합 유지:
                   // flex-wrap gap-2 + 각 OTT 가 inline pill (icon + 이름, paddingHorizontal 12 + paddingVertical 10,
                   // surfaceRaised 면, radius.md). 모바일 터치 타겟 minHeight 44 보장.
+                  // 정합 격차: PWA detail (DetailBody.tsx line 312~) 은 여전히 큰 list — 별도 트랙.
                   <View style={styles.providerChips}>
                     {rec.providers.map((p) => {
                       const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
@@ -567,32 +570,6 @@ export default function DetailSheet({
                             ) : null}
                           </View>
                           <Text style={styles.providerChipName}>{p.name}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ) : (
-                  <View style={styles.providerList}>
-                    {rec.providers.map((p) => {
-                      const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
-                      return (
-                        <Pressable
-                          key={p.name}
-                          style={styles.providerRow}
-                          onPress={() => openProvider(p.name, rec.watchLink)}
-                        >
-                          <View style={styles.providerIcon}>
-                            {iconUrl ? (
-                              <Image
-                                source={{ uri: iconUrl }}
-                                style={StyleSheet.absoluteFill}
-                                contentFit="contain"
-                              />
-                            ) : null}
-                          </View>
-                          <Text style={styles.providerName}>{p.name}</Text>
-                          {/* PR2 C5 — "열기" amber → textSecondary (보조 액션 amber 금지) */}
-                          <Text style={styles.providerOpen}>열기</Text>
                         </Pressable>
                       );
                     })}
@@ -1221,40 +1198,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingVertical: spacing.sm,
   },
-  providerList: {
-    gap: spacing.sm,
-  },
-  providerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 4,
-    backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.md,
-  },
-  providerIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 4,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-    flexShrink: 0,
-  },
-  providerName: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  // PR2 C5 — "열기" amber 박탈 (DESIGN.md L38 보조 액션 amber 금지). textSecondary 로 위계만 표현.
-  providerOpen: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fontsV2.data,
-  },
-  // 2026-06-04 (P1-#3) — share mode OTT 칩(pill).
-  // web ShareClient line 129 정합: flex flex-wrap gap-2 + 각 OTT inline pill.
+  // 2026-06-04 — detail/share 통합 OTT 칩(pill). 이전 큰 list 스타일
+  // (providerList/providerRow/providerIcon/providerName/providerOpen) 은 mode 분기 제거 (옵션 A)
+  // 와 함께 dead code 제거. web ShareClient line 129 정합 + native 내부 detail/share 일관.
   providerChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
