@@ -419,7 +419,14 @@ export default function ProfileScreen() {
         {/* 설정 */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>설정</Text>
-          <Pressable style={styles.resetBtn} onPress={handleReset}>
+          <Pressable
+            style={styles.resetBtn}
+            onPress={handleReset}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel="모든 데이터 초기화"
+            accessibilityHint="저장한 작품, 시청 기록, 취향이 모두 사라져요"
+          >
             <IconClose size={18} color={colors.danger ?? '#d54e4e'} />
             <View style={styles.resetBody}>
               <Text style={styles.resetTitle}>모든 데이터 초기화</Text>
