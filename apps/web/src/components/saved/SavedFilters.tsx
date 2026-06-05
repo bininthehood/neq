@@ -2,10 +2,13 @@
 
 /**
  * Saved 헤더 바로 아래 필터 영역 — 통합 컴포넌트.
- * Row 1: VIEW_FILTERS chip 행 (전체/안 본 작품/시청 완료/아카이브/히스토리) + 우측 "필터 ▾" 트리거
+ * Row 1: VIEW_FILTERS chip 행 (전체/안 본 작품/시청 완료/아카이브) + 우측 "필터 ▾" 트리거
  * Row 2: 활성 필터 chip 행 (ottFilter / groupByOTT 표시 — 클릭 시 제거)
  *
  * 필터 sheet 자체는 SavedFilterSheet.tsx (이번 분할 무관, page.tsx 에서 직접 mount).
+ *
+ * 2026-06-06 (P2 history 제거) — '히스토리' ViewFilter 항목 삭제.
+ * 데이터 레이어 `getRecHistory`/`addRecHistory` 는 다양성 의존성으로 보존.
  */
 
 import Image from "next/image";
@@ -13,7 +16,7 @@ import { IconClose } from "@/components/Icons";
 import { getOTTIcon } from "@/lib/ott-links";
 import type { SavedSort } from "./SavedSortControl";
 
-export type ViewFilter = "all" | "unwatched" | "watched" | "archived" | "history";
+export type ViewFilter = "all" | "unwatched" | "watched" | "archived";
 
 export type ViewFilterDef = { key: ViewFilter; label: string; count: number };
 

@@ -4,7 +4,7 @@
  * Saved 목록 렌더 — grid / list 모드 통합.
  * - PosterCard (grid) / ListCard (list) 자식.
  * - groupByOTT / ottGroups 분기, 빈 상태 메시지, 작품 없음 분기 모두 통합.
- * - history / preview 모드는 page.tsx (Saved page) 가 직접 렌더.
+ * - preview 모드는 page.tsx (Saved page) 가 직접 렌더.
  *
  * 위임 L #6 — List 모드 카드. PosterCard 와 데이터·핸들러 시그니처 동일 → 페이지가 mode 스위치만.
  */

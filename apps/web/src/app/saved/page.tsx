@@ -11,13 +11,9 @@ import {
   getArchivedIds,
   archiveItem,
   unarchiveItem,
-  getRecHistory,
   addSaved,
 } from "@/lib/store";
-import type { RecHistoryEntry } from "@/lib/store";
 import type { SavedItem, WatchReaction, Recommendation } from "@/lib/types";
-import Image from "next/image";
-import PosterFallback from "@/components/PosterFallback";
 import {
   IconCheck,
   IconHeart,
@@ -70,7 +66,9 @@ export default function SavedPage() {
   const [groupByOTT, setGroupByOTT] = useState(false);
   const [ottFilter, setOttFilter] = useState<string | null>(null);
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
-  const [history, setHistory] = useState<RecHistoryEntry[]>([]);
+  // 2026-06-06 (P2 history 제거) — history state 삭제. 데이터 레이어
+  // `getRecHistory`/`addRecHistory` 는 `useRecommendations.ts` 가 calls,
+  // PWA 정합 + 향후 다양성 확장 의존성으로 그대로 보존.
   // 뷰 모드 (grid|list|preview). 첫 mount 시 localStorage 에서 복원.
   const [viewMode, setViewMode] = useState<SavedViewMode>("grid");
   // preview 모드 hero 작품 id. 카드 탭으로 변경. 첫 진입 시 첫 작품 자동 선택 (effect 처리).
@@ -93,12 +91,11 @@ export default function SavedPage() {
 
     setStats(getWatchStats());
     setArchivedIds(new Set(getArchivedIds()));
-    setHistory(getRecHistory());
   };
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect --
-       SSR-safe mount-only localStorage 읽기 (saved/sort/view 복원 + getWatchStats/getArchivedIds/getRecHistory).
+       SSR-safe mount-only localStorage 읽기 (saved/sort/view 복원 + getWatchStats/getArchivedIds).
        서버에서는 localStorage 접근 불가 → 정통 mount-effect 패턴.
        useSyncExternalStore 마이그레이션은 R19 sprint 에서 처리. */
     refreshData();
@@ -225,86 +222,12 @@ export default function SavedPage() {
     return Object.entries(groups).sort((a, b) => b[1].length - a[1].length);
   }, [sortedSaved, groupByOTT, availableOTTs, ottFilter]);
 
-  // 히스토리 날짜별 그룹핑
-  const historyGroups = useMemo(() => {
-    if (viewFilter !== "history") return [];
-    /* eslint-disable react-hooks/purity --
-       오늘/어제 라벨 매 렌더 재계산. R19 purity 룰은 deterministic 보장
-       불가 (Date) 를 경고하지만, UI 라벨 용도로 stale 허용 — 장시간 세션
-       후 라벨이 한 칸 밀려도 기능 영향 없음. */
-    const today = new Date().toISOString().slice(0, 10);
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-    /* eslint-enable react-hooks/purity */
-    const groups: { label: string; items: RecHistoryEntry[] }[] = [
-      { label: "오늘", items: [] },
-      { label: "어제", items: [] },
-      { label: "이전", items: [] },
-    ];
-    for (const entry of history) {
-      if (entry.date === today) groups[0].items.push(entry);
-      else if (entry.date === yesterday) groups[1].items.push(entry);
-      else groups[2].items.push(entry);
-    }
-    return groups.filter((g) => g.items.length > 0);
-  }, [history, viewFilter]);
+  // 2026-06-06 (P2 history 제거) — historyGroups / hydrateEntry / handleResave /
+  // handleHistoryClick 삭제. 데이터 레이어 (`getRecHistory`/`addRecHistory`,
+  // `/api/tmdb/hydrate`) 는 보존 — hydrate 엔드포인트는 다른 5곳에서 사용 중.
 
   // saved에 있는 tmdbId Set
   const savedIdSet = useMemo(() => new Set(saved.map((s) => s.recommendation.tmdbId)), [saved]);
-
-  /** history 항목 → TMDB 상세 조회로 full Recommendation 복원 */
-  const hydrateEntry = async (entry: RecHistoryEntry): Promise<Recommendation | null> => {
-    try {
-      const params = new URLSearchParams({ id: String(entry.tmdbId) });
-      if (entry.type) params.set("type", entry.type);
-      const res = await fetch(`/api/tmdb/hydrate?${params.toString()}`);
-      if (!res.ok) return null;
-      return (await res.json()) as Recommendation;
-    } catch {
-      return null;
-    }
-  };
-
-  const handleResave = async (entry: RecHistoryEntry) => {
-    const full = await hydrateEntry(entry);
-    if (full) {
-      addSaved(full);
-    } else {
-      // hydrate 실패 시 최소 정보로 폴백 (평점/OTT 등 없음)
-      addSaved({
-        title: entry.title,
-        tmdbId: entry.tmdbId,
-        posterUrl: entry.posterUrl,
-        reason: "",
-        rating: 0,
-        providers: [],
-        type: entry.type ?? "movie",
-        titleEn: "",
-        overview: "",
-        backdrop: null,
-        date: entry.date,
-        runtime: null,
-        seasons: null,
-        country: [],
-        director: null,
-        cast: [],
-        watchLink: null,
-      });
-    }
-    refreshData();
-  };
-
-  /** 히스토리 항목 클릭 시: saved면 그 기반으로, 아니면 hydrate 후 임시 SavedItem으로 detail 열기 */
-  const handleHistoryClick = async (entry: RecHistoryEntry) => {
-    const existing = saved.find((s) => s.recommendation.tmdbId === entry.tmdbId);
-    if (existing) {
-      openDetailFor(existing);
-      return;
-    }
-    const full = await hydrateEntry(entry);
-    if (!full) return;
-    // eslint-disable-next-line react-hooks/purity -- async event handler 안 Date.now() — R19 purity 룰 false positive (render context 아님)
-    openDetailFor({ recommendation: full, savedAt: Date.now() });
-  };
 
   const handleRemove = (tmdbId: number) => {
     // 삭제 전에 rec + 시청 리포트 보존 — toast undo 시 복원.
@@ -380,8 +303,7 @@ export default function SavedPage() {
   /**
    * 사용자 직접 테스트 #7 — Saved 페이지 DetailSheet 안에서 직접 save toggle.
    * Saved 컨텍스트라 보통 isSaved=true 상태로 진입 → "저장됨" 클릭 시 책장에서 빼냄.
-   * 다만 history 항목 hydrate 후 임시 SavedItem 으로 진입한 경우 (savedIdSet 외부) 도 있어서
-   * 양방향 토글 모두 지원.
+   * 양방향 토글 지원 (DetailSheet 가 search 결과 등 미저장 항목도 받을 수 있어).
    */
   const handleDetailSaveToggle = useCallback(
     (rec: Recommendation) => {
@@ -444,12 +366,12 @@ export default function SavedPage() {
   const watchedCount = activeItems.filter((s) => reports[s.recommendation.tmdbId]).length;
   const unwatchedCount = activeItems.length - watchedCount;
 
+  // 2026-06-06 (P2 history 제거) — '히스토리' VIEW_FILTER 항목 삭제.
   const VIEW_FILTERS: ViewFilterDef[] = [
     { key: "all", label: "전체", count: activeItems.length },
     { key: "unwatched", label: "안 본 작품", count: unwatchedCount },
     { key: "watched", label: "시청 완료", count: watchedCount },
     ...(archivedCount > 0 ? [{ key: "archived" as ViewFilter, label: "아카이브", count: archivedCount }] : []),
-    { key: "history" as ViewFilter, label: "히스토리", count: history.length },
   ];
 
   return (
@@ -472,7 +394,7 @@ export default function SavedPage() {
         </h1>
         {/* Grid/List/Preview 토글 — 3-way segmented. saved 있을 때만.
             button w-11 h-11 (44, a11y 표준) + segmented padding 1 + border 1 = 48 = h-12 fit. */}
-        {saved.length > 0 && viewFilter !== "history" && (
+        {saved.length > 0 && (
           <div
             role="group"
             aria-label="뷰 모드 전환"
@@ -542,16 +464,12 @@ export default function SavedPage() {
 
       {/* 헤더 바로 아래 필터 영역 — VIEW_FILTERS chip 행 + 활성 필터 chip 행 + "필터 ▾" 트리거.
           (분할 후) SavedFilters 컴포넌트로 위임. */}
-      {(saved.length > 0 || history.length > 0) && (
+      {saved.length > 0 && (
         <SavedFilters
           viewFilters={VIEW_FILTERS}
           viewFilter={viewFilter}
           onViewFilterChange={setViewFilter}
-          showSheetTrigger={
-            saved.length > 0
-            && viewFilter !== "history"
-            && availableOTTs.length > 1
-          }
+          showSheetTrigger={saved.length > 0 && availableOTTs.length > 1}
           filterSheetOpen={filterSheetOpen}
           onOpenFilterSheet={() => setFilterSheetOpen(true)}
           ottFilter={ottFilter}
@@ -559,7 +477,7 @@ export default function SavedPage() {
           sortBy={sortBy}
           onClearOttFilter={() => setOttFilter(null)}
           onClearGroupByOTT={() => setGroupByOTT(false)}
-          showActiveChips={(ottFilter !== null || groupByOTT) && viewFilter !== "history"}
+          showActiveChips={ottFilter !== null || groupByOTT}
         />
       )}
 
@@ -606,84 +524,9 @@ export default function SavedPage() {
 
       {/* Poster grid — 스크롤 영역 */}
       <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-      {viewFilter === "history" ? (
-        /* 히스토리 뷰 */
-        <div className="pb-4">
-          {history.length === 0 ? (
-            // D5 / Round 3 v2 — 책장 메타포 일관 ("쌓다" 유지, 톤만 정리)
-            <div className="flex-1 flex flex-col justify-center px-8 py-12 text-muted">
-              <p className="font-display text-lg font-semibold text-foreground">아직 추천 기록이 없어요</p>
-              <p className="text-sm mt-1.5">Discover에서 카드를 넘겨 보세요</p>
-            </div>
-          ) : (
-            historyGroups.map((group) => (
-              <div key={group.label} className="mb-5">
-                <div className="px-5 mb-2">
-                  <span className="text-xs font-medium text-muted">{group.label}</span>
-                </div>
-                <div className="flex gap-3 px-5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
-                  {group.items.map((entry) => {
-                    const isSaved = savedIdSet.has(entry.tmdbId);
-                    // savedItem 플래그는 handleHistoryClick 내부에서 재조회
-                    return (
-                      <div
-                        key={entry.tmdbId}
-                        className="flex-shrink-0 w-16 cursor-pointer rounded-md focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--bg)] focus:outline-none"
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`${entry.title}${isSaved ? " (저장됨)" : ""} 상세보기`}
-                        onClick={() => handleHistoryClick(entry)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            handleHistoryClick(entry);
-                          }
-                        }}
-                      >
-                        <div className="relative w-16 h-24 overflow-hidden rounded-md">
-                          {entry.posterUrl ? (
-                            <Image
-                              src={entry.posterUrl}
-                              alt={entry.title}
-                              fill
-                              className="object-cover"
-                              sizes="64px"
-                            />
-                          ) : (
-                            <PosterFallback title={entry.title} size="xs" />
-                          )}
-                          {isSaved && (
-                            <div className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full" style={{ background: "var(--accent-dim)" }}>
-                              <IconHeart size={8} />
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-xs mt-1 truncate">{entry.title}</p>
-                        {!isSaved && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleResave(entry); }}
-                            onKeyDown={(e) => { e.stopPropagation(); }}
-                            aria-label={`${entry.title} 저장`}
-                            className="mt-1 w-full py-1 text-xs font-medium active:scale-95 transition-transform rounded-sm focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none"
-                            style={{
-                              background: "var(--surface)",
-                              color: "var(--text-secondary)",
-                              border: "1px solid var(--border)",
-                            }}
-                          >
-                            저장
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      ) : saved.length === 0 ? (
+      {/* 2026-06-06 (P2 history 제거) — viewFilter === "history" 분기 블록 삭제.
+          데이터 레이어 `getRecHistory`/`addRecHistory` 와 `/api/tmdb/hydrate` 는 보존. */}
+      {saved.length === 0 ? (
         // D5 / Round 3 v2 — S-01 "책장이 비어 있어요", S-03 "담아 보세요"
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconHeart size={32} />
