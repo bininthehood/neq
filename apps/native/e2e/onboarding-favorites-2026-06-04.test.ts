@@ -22,7 +22,7 @@
  * 실행 전제:
  *   - simulator-devclient (`com.neq.app` dev client) — wdio.conf.ts default
  *   - 사용자가 onboarding 완료 상태 (forceResetApp 후 ensureOnboardedOrSkip 통과)
- *   - 네트워크 가능 — /api/trending, /api/onboarding/taste-survey/* 응답 < 15s
+ *   - 네트워크 가능 — /api/trending 응답 < 15s (페르소나 설문은 정적 풀로 LLM 호출 0)
  *   - 첫 페르소나 1개 이상 존재
  */
 

@@ -1,17 +1,17 @@
 /**
- * Neko native E2E — Persona v2 (LLM 동적 취향 설문) full flow
+ * Neko native E2E — Persona v2 (정적 풀 취향 설문, 2026-06-06 승격) full flow
  *
  * 검증 범위 (PR 3 / G4a):
- *   P0  영화/혼자 컨텍스트 → step 1 (LLM) → step 2 (LLM) → summary → "맞아요" → persona 생성
- *   P1  "다시 받기" 클릭 → step 2 부터 재진입
+ *   P0  영화/혼자 → step 1·2·3 (static) → favorites skip → summary → "맞아요" → persona 생성
+ *   P1  "다시 받기" 클릭 → step 2 부터 재진입 (step 3 까지 진행)
  *   P2  닫기 (✕) → onCancel + taste_survey_abandoned 분석 이벤트
  *
  * 실행 전제:
  *  - Expo Go / dev client 가 시뮬레이터에 로드됨
  *  - EXPO_PUBLIC_PERSONA_SURVEY_V2_ENABLED=true (profile 의 "+ 새 취향 추가" 가 controller 진입)
- *  - 네트워크 가능 — /api/onboarding/taste-survey/* endpoint 응답 시간 < 10s
  *  - Appium / Metro 가동
  *  - 첫 페르소나 1개 이상 (default) 존재
+ *  - 네트워크 / LLM endpoint 의존 없음 (정적 풀 전환으로 호출 0)
  *
  * 알려진 트랩 (memory feedback_native_a11y_e2e_patterns.md):
  *  - 첫 탭 race: ~Label 검색 시 mount 전. tapByLabel 헬퍼가 waitForExist 처리
@@ -93,7 +93,7 @@ async function pageSourceContains(needle: string): Promise<boolean> {
 
 /**
  * step_question phase 의 옵션 element 가 mount 될 때까지 대기.
- * SurveyHeader 의 "2/4", "3/4" progress 는 step_loading 도 매칭 → 사용 X.
+ * 정적 풀 정상 경로 (2026-06-06) 에선 mount 가 즉시지만 안전 마진 timeout 유지.
  * value="radio button" 정규식은 native Pressable accessibilityRole="radio" 의
  * XCUITest 매핑. 4개 옵션 모두 매칭되므로 첫 매칭 확인.
  */
@@ -154,8 +154,8 @@ describe('Persona v2 — taste survey full flow', () => {
       await browser.pause(500);
     }
 
-    // 3. step 1 LLM 응답 대기 → 옵션 element mount 까지 polling.
-    const firstOption1 = await waitForOptions(25000);
+    // 3. step 1 옵션 mount 대기 + 첫 옵션 tap → 다음
+    const firstOption1 = await waitForOptions(15000);
     await capture('persona-v2-02-step1');
     if (!firstOption1) {
       throw new Error('step 1 옵션 mount 대기 timeout');
@@ -165,8 +165,8 @@ describe('Persona v2 — taste survey full flow', () => {
     if (!(await tapByLabel('다음')))
       throw new Error('step 1 "다음" tap 실패');
 
-    // 4. step 2 LLM 응답 대기 + 첫 옵션 탭
-    const firstOption2 = await waitForOptions(25000);
+    // 4. step 2 옵션 mount + 첫 옵션 tap → 다음
+    const firstOption2 = await waitForOptions(15000);
     await capture('persona-v2-03-step2');
     if (!firstOption2) {
       throw new Error('step 2 옵션 mount 대기 timeout');
@@ -176,6 +176,17 @@ describe('Persona v2 — taste survey full flow', () => {
     if (!(await tapByLabel('다음')))
       throw new Error('step 2 "다음" tap 실패');
 
+    // 4b. step 3 옵션 mount + 첫 옵션 tap → 다음 (정적 풀 shouldContinue=true 라 항상 진입)
+    const firstOption3 = await waitForOptions(15000);
+    await capture('persona-v2-03c-step3');
+    if (!firstOption3) {
+      throw new Error('step 3 옵션 mount 대기 timeout');
+    }
+    if (!(await tapByLabel(firstOption3)))
+      throw new Error(`step 3 옵션 "${firstOption3}" tap 실패`);
+    if (!(await tapByLabel('다음')))
+      throw new Error('step 3 "다음" tap 실패');
+
     // 5a. favorites_pick step — 본 케이스는 skip path (건너뛰기) 로 빠른 통과.
     if (!(await waitForLabel('건너뛰기', 15000))) {
       throw new Error('favorites_pick "건너뛰기" 미노출');
@@ -184,8 +195,8 @@ describe('Persona v2 — taste survey full flow', () => {
     if (!(await tapByLabel('건너뛰기')))
       throw new Error('"건너뛰기" tap 실패');
 
-    // 5b. summary preview 도달 — "맞아요" 등장 대기 (LLM summary 최대 12s)
-    if (!(await waitForLabel('맞아요', 20000))) {
+    // 5b. summary preview 도달 — "맞아요" 등장 대기 (정적 합성이라 즉시, 안전 마진 timeout)
+    if (!(await waitForLabel('맞아요', 10000))) {
       throw new Error('summary preview "맞아요" 미노출');
     }
     await browser.pause(400);
@@ -246,31 +257,37 @@ describe('Persona v2 — taste survey full flow', () => {
     }
 
     // step 1 옵션 + 다음
-    const o1 = await waitForOptions(25000);
+    const o1 = await waitForOptions(15000);
     if (!o1) throw new Error('P1 step 1 옵션 mount 대기 timeout');
     if (!(await tapByLabel(o1))) throw new Error(`P1 step 1 옵션 tap 실패`);
     if (!(await tapByLabel('다음'))) throw new Error('P1 step 1 "다음" tap 실패');
 
     // step 2 옵션 + 다음
-    const o2 = await waitForOptions(25000);
+    const o2 = await waitForOptions(15000);
     if (!o2) throw new Error('P1 step 2 옵션 mount 대기 timeout');
     if (!(await tapByLabel(o2))) throw new Error(`P1 step 2 옵션 tap 실패`);
     if (!(await tapByLabel('다음'))) throw new Error('P1 step 2 "다음" tap 실패');
+
+    // step 3 옵션 + 다음 (정적 풀 shouldContinue=true 라 항상 진입)
+    const o3 = await waitForOptions(15000);
+    if (!o3) throw new Error('P1 step 3 옵션 mount 대기 timeout');
+    if (!(await tapByLabel(o3))) throw new Error(`P1 step 3 옵션 tap 실패`);
+    if (!(await tapByLabel('다음'))) throw new Error('P1 step 3 "다음" tap 실패');
 
     // favorites_pick — skip
     if (!(await waitForLabel('건너뛰기', 15000)))
       throw new Error('P1 favorites_pick "건너뛰기" 미노출');
     if (!(await tapByLabel('건너뛰기'))) throw new Error('P1 "건너뛰기" tap 실패');
 
-    // summary 도달 → "다시 받기" tap
-    if (!(await waitForLabel('다시 받기', 20000)))
+    // summary 도달 → "다시 받기" tap (정적 합성, 안전 마진 timeout)
+    if (!(await waitForLabel('다시 받기', 10000)))
       throw new Error('P1 summary "다시 받기" 미노출');
     await capture('persona-v2-06-summary-retry');
     if (!(await tapByLabel('다시 받기')))
       throw new Error('"다시 받기" tap 실패');
 
-    // step 2 재진입 — 옵션 mount 까지 대기
-    const o2b = await waitForOptions(25000);
+    // step 2 재진입 — handleRetry 가 beginStep(2, slice(0,1)). 옵션 mount 대기.
+    const o2b = await waitForOptions(15000);
     if (!o2b) throw new Error('"다시 받기" 후 step 2 옵션 mount 안 됨');
     await capture('persona-v2-07-resurvey-step2');
 

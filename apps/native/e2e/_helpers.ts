@@ -255,23 +255,66 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
     await browser.pause(500);
   }
 
-  // (5) Persona step ≥ 2 → 우상단 X "페르소나 만들기 건너뛰기" + Alert "건너뛰기"
-  if (!(await waitForLabel('페르소나 만들기 건너뛰기', 8000))) {
-    console.warn('ensureOnboarded: persona skip X 미노출');
+  // (5) Persona step 1 → 정적 풀 첫 옵션 + "다음" (정상 경로 승격, 2026-06-06).
+  // MOVIE_ALONE[0] option a "빠르게 몰입" — context (영화/혼자) 기준.
+  // 이전 페르소나 건너뛰기 UI 는 트랙 A 에서 제거, LLM 호출은 트랙 B 에서 페기.
+  // TasteSurveyStep 은 옵션 선택 후 별도 "다음" 버튼 tap 으로 onAnswer 발화.
+  if (!(await waitForLabel('빠르게 몰입', 8000))) {
+    console.warn('ensureOnboarded: persona step 1 옵션 "빠르게 몰입" 미노출');
     return false;
   }
-  await tapByLabel('페르소나 만들기 건너뛰기');
-  await browser.pause(1000);
-  const alertOk =
-    (await tapByPredicate(`label == "건너뛰기"`, { timeout: 5000 })) ||
-    (await tapByLabel('건너뛰기'));
-  if (!alertOk) {
-    console.warn('ensureOnboarded: Alert "건너뛰기" tap 실패');
+  await tapByLabel('빠르게 몰입');
+  await browser.pause(400);
+  if (!(await tapByLabel('다음'))) {
+    console.warn('ensureOnboarded: persona step 1 "다음" tap 실패');
     return false;
   }
+  await browser.pause(600);
+
+  // (6) Persona step 2 → MOVIE_ALONE[1] option a "명쾌한 마무리" + "다음"
+  if (!(await waitForLabel('명쾌한 마무리', 6000))) {
+    console.warn('ensureOnboarded: persona step 2 옵션 "명쾌한 마무리" 미노출');
+    return false;
+  }
+  await tapByLabel('명쾌한 마무리');
+  await browser.pause(400);
+  if (!(await tapByLabel('다음'))) {
+    console.warn('ensureOnboarded: persona step 2 "다음" tap 실패');
+    return false;
+  }
+  await browser.pause(600);
+
+  // (7) Persona step 3 → MOVIE_ALONE[2] option a "무거운 주제" + "다음"
+  // 정적 풀 step 2 shouldContinue=true 로 모든 사용자 3-step path 진입.
+  if (!(await waitForLabel('무거운 주제', 6000))) {
+    console.warn('ensureOnboarded: persona step 3 옵션 "무거운 주제" 미노출');
+    return false;
+  }
+  await tapByLabel('무거운 주제');
+  await browser.pause(400);
+  if (!(await tapByLabel('다음'))) {
+    console.warn('ensureOnboarded: persona step 3 "다음" tap 실패');
+    return false;
+  }
+  await browser.pause(600);
+
+  // (8) Favorites picker → 0개 선택 후 "건너뛰기" (페르소나 건너뛰기와 무관 — favorites 의 0 picks 진행)
+  if (!(await waitForLabel('건너뛰기', 6000))) {
+    console.warn('ensureOnboarded: favorites picker "건너뛰기" 미노출');
+    return false;
+  }
+  await tapByLabel('건너뛰기');
+  await browser.pause(800);
+
+  // (9) Summary preview "맞아요" → 페르소나 저장 → OTT 진입
+  if (!(await waitForLabel('맞아요', 6000))) {
+    console.warn('ensureOnboarded: summary "맞아요" 미노출');
+    return false;
+  }
+  await tapByLabel('맞아요');
   await browser.pause(1500);
 
-  // (6) OTT — 나중에 설정 우선, fallback Netflix + 다음
+  // (10) OTT — 나중에 설정 우선, fallback Netflix + 다음
   const ottReached =
     (await waitForLabel('Netflix', 8000)) ||
     (await waitForLabel('TVING', 5000)) ||
@@ -286,7 +329,7 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
     await tapByLabel('다음');
   }
 
-  // (7) Notify — CTA 라벨 "시작하기" (OnboardingStepNotify.tsx:103, 마지막 step 이라
+  // (11) Notify — CTA 라벨 "시작하기" (OnboardingStepNotify.tsx:103, 마지막 step 이라
   // "다음" 대신 "시작하기" 사용). Welcome 의 "시작하기" 와 라벨 동일하나 Stack unmount
   // 로 실제 매칭은 Notify 화면 button 1개. 구 디자인 fallback ("알림 받지 않기" / "다음") 도 유지.
   await browser.pause(1500);
@@ -299,7 +342,7 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
     return false;
   }
 
-  // (8) Discover 도달 확인
+  // (12) Discover 도달 확인
   await browser.pause(3000);
   return (
     (await pageSourceContains('발견')) ||
