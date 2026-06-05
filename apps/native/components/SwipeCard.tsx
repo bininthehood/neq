@@ -33,9 +33,20 @@ interface Props {
   rec: Recommendation;
   isTop: boolean;
   depth: number;
-  dragX: number;
+  /**
+   * 2026-06-06 (P1 애니메이션 Fix B) — drag 추적 SharedValue 화.
+   * 진단: `_workspace/02_p1_animation.md` §3 (root cause 2).
+   *
+   * 기존: number prop (React state). pan.onUpdate 가 매 frame `runOnJS(setDragX)` →
+   *   React reconcile → SwipeCard re-render → 새 props → worklet 재계산. 60Hz
+   *   loop 가 JS thread bottleneck 에 종속 → 빠른 swipe 시 카드가 손가락보다
+   *   늦게 따라옴.
+   * 변경: SharedValue<number>. worklet 안에서 `dragX.value` 직접 읽기 → UI thread
+   *   만으로 매 frame 처리. JS thread 왕복 0 회 → 손가락 추적 안정.
+   */
+  dragX: SharedValue<number>;
   /** Stage 4 D1: 위/아래 스와이프 변위. 양수=아래(save), 음수=위(detail) */
-  dragY?: number;
+  dragY?: SharedValue<number>;
   /**
    * @deprecated 2026-05-19 — 항목 4 정합 이후 미사용. PWA SwipeCard 정합으로
    * 드래그 중에도 정보 영역을 유지하므로 SwipeCard 내부에서 더 이상 참조하지 않는다.
@@ -148,7 +159,7 @@ export default function SwipeCard({
   isTop,
   depth,
   dragX,
-  dragY = 0,
+  dragY,
   // isDragging — 항목 4 정합 이후 미참조 (Props 에서 @deprecated). destructure 생략.
   immersive = false,
   absorbing = false,
@@ -221,10 +232,13 @@ export default function SwipeCard({
     // 2026-05-20 — isDismissing 게이트 추가. 이 카드가 dismiss 진행 중일 때만
     // dismissX 를 transform 으로 적용. 그 외엔 dragX 만 사용 → 옛 top → 새 top
     // 전이 시 한 프레임 점프 차단.
+    // 2026-06-06 (P1 애니메이션 Fix B) — dragX/dragY 는 SharedValue. worklet 안에서
+    // 직접 `.value` 읽기로 JS thread 왕복 제거. 비탑 카드는 isTop=false 라
+    // 아래 분기에서 tx=0 이 되므로 dragX 값을 읽어도 영향 없음.
     const dismissRaw =
       isDismissing && dismissX !== undefined ? safe(dismissX.value) : 0;
-    const dragXSafe = safe(dragX);
-    const dragYSafe = safe(dragY);
+    const dragXSafe = safe(dragX.value);
+    const dragYSafe = dragY !== undefined ? safe(dragY.value) : 0;
     const dismissActive = dismissRaw !== 0;
     const effectiveDragX = dismissActive ? dismissRaw : dragXSafe;
 

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
+  useAnimatedReaction,
   runOnJS,
   withTiming,
   Easing,
@@ -165,9 +166,20 @@ export default function DiscoverScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [topIdx, setTopIdx] = useState(0);
-  const [dragX, setDragX] = useState(0);
+  // 2026-06-06 (P1 애니메이션 Fix B) — drag 추적 SharedValue 화.
+  // 진단: `_workspace/02_p1_animation.md` §3 (root cause 2).
+  //
+  // 기존: useState. pan.onUpdate 가 매 frame `runOnJS(setDragX)` → React reconcile
+  //   → SwipeCard re-render → worklet 재계산. 60Hz × 5~7 runOnJS/frame.
+  // 변경: useSharedValue. worklet 안에서 `dragX.value = ...` 직접 update,
+  //   SwipeCard 의 worklet 가 `dragX.value` 직접 read → UI thread 만으로 매 frame
+  //   처리. runOnJS 호출은 commit 시점 (gesture end → action) 만 남는다.
+  const dragX = useSharedValue(0);
   // Stage 4 D1: 위/아래 스와이프 변위
-  const [dragY, setDragY] = useState(0);
+  const dragY = useSharedValue(0);
+  // 비탑 카드(depth ≥ 1)에 전달할 zero SharedValue — worklet 에서 dragX/Y 를 읽지만
+  // isTop=false 분기에서 tx/ty 계산에 안 쓰이므로 안전. SharedValue prop 타입 정합용.
+  const zeroDragSV = useSharedValue(0);
   const [isDragging, setIsDragging] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   // Stage 4 D1: save 흡수 모션 + flash
@@ -243,6 +255,19 @@ export default function DiscoverScreen() {
     };
   }, []);
 
+  // 2026-06-06 (P1 애니메이션 Fix B) — savePulling boolean throttle.
+  // ActionBar 의 savePulling prop 은 `dragY > 30 && isDragging` 인데 dragY 가
+  // SharedValue 화되며 React state 가 아니게 됨. UI 측에서 30 임계를 넘나드는
+  // 순간에만 React state 를 토글하여 ActionBar re-render 빈도 = 0~2회/제스처.
+  // runOnJS 호출 빈도 = 매 frame → 임계 traverse 시점만 으로 ~30배 감소.
+  const [savePulling, setSavePulling] = useState(false);
+  useAnimatedReaction(
+    () => dragY.value > 30,
+    (over, prev) => {
+      if (over !== prev) runOnJS(setSavePulling)(over);
+    },
+  );
+
   // tutorialStep state → tutorialStepSV sharedValue 동기화 (worklet 가드용).
   // 인코딩: null=0, swipe_left=1, swipe_right=2, swipe_down=3, tap=4.
   useEffect(() => {
@@ -305,8 +330,8 @@ export default function DiscoverScreen() {
       setTopIdx(0);
       setPrevActive(false);
       setDismissingTmdbId(null);
-      setDragX(0);
-      setDragY(0);
+      dragX.value = 0;
+      dragY.value = 0;
       dismissX.value = 0;
       prevOverlayX.value = -SCREEN_WIDTH;
       invalidatePrefetchCache();
@@ -657,10 +682,10 @@ export default function DiscoverScreen() {
     cancelAnimation(prevOverlayX);
     // 사이클 2 통일 매핑: pass = light
     hapticLight();
-    const lastDragX = dragX; // 사용자가 손가락 뗀 마지막 위치 — dismissX 시작점.
+    const lastDragX = dragX.value; // 사용자가 손가락 뗀 마지막 위치 — dismissX 시작점.
     setIsDragging(false);
-    setDragX(0);
-    setDragY(0);
+    dragX.value = 0;
+    dragY.value = 0;
     // 연속 스와이프 안전: 직전 pass 의 advance 타이머가 아직 살아 있으면 즉시 소진.
     // (대기 중이던 advance 를 누락 없이 먼저 처리 → 카드/인덱스 어긋남 방지)
     let activeIdx = topIdx;
@@ -791,8 +816,8 @@ export default function DiscoverScreen() {
       setSaveAbsorbing(false);
       setSaveTargetPoint(null);
       setTopIdx((i) => Math.min(i + 1, recs.length));
-      setDragX(0);
-      setDragY(0);
+      dragX.value = 0;
+      dragY.value = 0;
     }, SAVE_ABSORB_MS);
   }
 
@@ -912,17 +937,20 @@ export default function DiscoverScreen() {
         }
       }
 
+      // 2026-06-06 (P1 애니메이션 Fix B) — dragX/dragY 를 worklet 안에서 직접
+      // SharedValue 로 업데이트. 매 frame `runOnJS(setDragX)` JS thread 왕복 제거.
+      // setPrevActive 만 React state 라 runOnJS 잔존 (state transition 1~2회/제스처).
       if (absX > absY) {
         // horizontal
         if (e.translationX > 0 && prevRec) {
           runOnJS(setPrevActive)(true);
           prevOverlayX.value = -SCREEN_WIDTH + e.translationX;
-          runOnJS(setDragX)(0);
-          runOnJS(setDragY)(0);
+          dragX.value = 0;
+          dragY.value = 0;
         } else {
           runOnJS(setPrevActive)(false);
-          runOnJS(setDragX)(e.translationX);
-          runOnJS(setDragY)(0);
+          dragX.value = e.translationX;
+          dragY.value = 0;
           // 배치 G — 첫 카드(prevRec 없음 = topIdx 0) 우 드래그 30px+ → 힌트.
           // web `useSwipeGesture.ts:133` 의 `dx > 30` 임계 정합. firstCardHintGate
           // shared value 로 worklet 측 1회 게이트 — runOnJS 다발 호출 방지.
@@ -939,8 +967,8 @@ export default function DiscoverScreen() {
       } else {
         // vertical — G1-A: ↑ 추적 제거. 아래 방향 (save) 만 dragY 로 추적.
         runOnJS(setPrevActive)(false);
-        runOnJS(setDragX)(0);
-        runOnJS(setDragY)(e.translationY > 0 ? Math.min(140, e.translationY) : 0);
+        dragX.value = 0;
+        dragY.value = e.translationY > 0 ? Math.min(140, e.translationY) : 0;
       }
     })
     .onEnd((e) => {
@@ -975,8 +1003,8 @@ export default function DiscoverScreen() {
               },
             );
           }
-          runOnJS(setDragX)(0);
-          runOnJS(setDragY)(0);
+          dragX.value = 0;
+          dragY.value = 0;
           return;
         }
         if (horizontal) {
@@ -992,23 +1020,23 @@ export default function DiscoverScreen() {
                   runOnJS(setPrevActive)(false);
                 },
               );
-              runOnJS(setDragX)(0);
-              runOnJS(setDragY)(0);
+              dragX.value = 0;
+              dragY.value = 0;
               return;
             }
           } else {
             // 좌 swipe (next/dismiss) — swipe_left (1) 만 허용.
             if (tStep !== 1) {
-              runOnJS(setDragX)(0);
-              runOnJS(setDragY)(0);
+              dragX.value = 0;
+              dragY.value = 0;
               return;
             }
           }
         } else {
           // 아래 swipe (save) — swipe_down (3) 만 허용.
           if (tStep !== 3) {
-            runOnJS(setDragX)(0);
-            runOnJS(setDragY)(0);
+            dragX.value = 0;
+            dragY.value = 0;
             return;
           }
         }
@@ -1063,8 +1091,8 @@ export default function DiscoverScreen() {
           if (e.translationX < -SWIPE_THRESHOLD || leftVelocityTrigger) {
             runOnJS(handleSwipeLeft)();
           }
-          runOnJS(setDragX)(0);
-          runOnJS(setDragY)(0);
+          dragX.value = 0;
+          dragY.value = 0;
         }
       } else {
         // vertical — G1-A (Handoff v2 Phase B+C): ↑ 진입 제거.
@@ -1077,8 +1105,8 @@ export default function DiscoverScreen() {
         if (e.translationY > SWIPE_THRESHOLD || downVelocityTrigger) {
           runOnJS(handleSwipeDown)();
         }
-        runOnJS(setDragX)(0);
-        runOnJS(setDragY)(0);
+        dragX.value = 0;
+        dragY.value = 0;
       }
     });
 
@@ -1268,8 +1296,8 @@ export default function DiscoverScreen() {
                       rec={rec}
                       isTop={isTop}
                       depth={depth}
-                      dragX={isTop ? dragX : 0}
-                      dragY={isTop ? dragY : 0}
+                      dragX={isTop ? dragX : zeroDragSV}
+                      dragY={isTop ? dragY : zeroDragSV}
                       isDragging={isDragging}
                       immersive={isTop && immersive}
                       absorbing={isTop && saveAbsorbing}
@@ -1325,7 +1353,7 @@ export default function DiscoverScreen() {
             isSaved={isLiked}
             canRewind={topIdx > 0}
             saveFlash={saveFlash}
-            savePulling={dragY > 30 && isDragging}
+            savePulling={savePulling && isDragging}
             onRewind={() => setTopIdx(0)}
             onShare={handleShare}
             onOpenDetail={() => {
