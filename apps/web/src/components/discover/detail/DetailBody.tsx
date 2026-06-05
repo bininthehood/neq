@@ -306,12 +306,18 @@ export function DetailBody({
       )}
       <section className="mt-5" aria-labelledby="d3-watch-heading">
         <ChapterMark id="d3-watch-heading" tone="muted">Where to watch · 시청 가능</ChapterMark>
+        {/* 2026-06-06 C-1 — detail OTT pill 통일 (native DetailSheet.tsx:549~575 + share
+            ShareClient.tsx:129~155 정합). 이전: 큰 list (flex-col / 32px icon / › arrow).
+            사용자 의도 = 양 플랫폼 share/detail 일관 pill — native 통합 정본을 PWA detail
+            도 따라감. icon 32→20, padding gap-3 px-4 py-3 → gap-2 px-3 py-2.5,
+            min-h-[44px] 모바일 터치 타겟 보장, › arrow + flex-1 + icon placeholder 제거. */}
         {rec.providers.length === 0 ? (
           <p className="text-sm text-muted py-2">현재 한국 OTT에서 제공 정보를 찾지 못했어요</p>
         ) : (
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-2">
             {rec.providers.map((p) => {
               const u = getOTTLink(p.name, rec.title);
+              const icon = getOTTIcon(p.name) ?? p.logoUrl;
               return (
                 <a
                   key={p.name}
@@ -326,23 +332,19 @@ export function DetailBody({
                       title: rec.title,
                     })
                   }
-                  className="flex items-center gap-3 px-4 py-3 text-sm font-medium active:scale-[0.98] transition-transform bg-surface-raised rounded-md"
+                  className="flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg active:scale-95 transition-transform min-h-[44px] bg-surface-raised"
                 >
-                  {(getOTTIcon(p.name) ?? p.logoUrl) ? (
+                  {icon && (
                     <NextImage
-                      src={(getOTTIcon(p.name) ?? p.logoUrl)!}
+                      src={icon}
                       alt={p.name}
-                      width={32}
-                      height={32}
-                      className="object-contain flex-shrink-0 rounded-sm bg-surface"
+                      width={20}
+                      height={20}
+                      className="object-contain flex-shrink-0 rounded-sm"
                       unoptimized
                     />
-                  ) : (
-                    <div className="w-8 h-8 flex-shrink-0 rounded-sm bg-surface" />
                   )}
-                  <span className="flex-1">{p.name}</span>
-                  {/* "열기" amber 텍스트 → text-muted 화살표. amber 보조 액션 금지 정책. */}
-                  <span className="text-xs text-muted" aria-hidden>›</span>
+                  <span>{p.name}</span>
                 </a>
               );
             })}
