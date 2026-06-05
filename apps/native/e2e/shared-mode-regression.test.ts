@@ -81,7 +81,10 @@ async function isOnDiscover(): Promise<boolean> {
 }
 
 describe('Neko — shared mode regression (2026-06-04)', () => {
-  let shareEntryOk = true;
+  // testflight 환경에서는 `xcrun simctl openurl` 이 실기기에 라우팅되지 않으므로
+  // S1~S3 자동 회귀 SKIP. 실 UL 수동 검증 (메모/메시지앱 https://neq.me/share/<id>
+  // 길게 누르기) 은 `testflight-qa` 의 Phase C 영역.
+  let shareEntryOk = process.env.E2E_TARGET !== 'testflight';
 
   before(async () => {
     await forceResetApp();
@@ -100,6 +103,16 @@ describe('Neko — shared mode regression (2026-06-04)', () => {
   });
 
   it('S1 — UL 진입 후 좌상단 X "닫기" 탭 시 Discover 복귀', async () => {
+    if (!shareEntryOk) {
+      // testflight 환경: deeplink 시뮬 (xcrun simctl openurl) 이 실기기에 라우팅되지 않음.
+      // 실 UL 검증은 testflight-qa Phase C 의 수동 영역 (메모/메시지앱 길게 누르기).
+      console.warn(
+        'S1: testflight 환경 — neq:// deeplink 시뮬은 실기기에 라우팅 불가. SKIP. ' +
+          '실 UL 검증은 https://neq.me/share/<id> 메모/메시지앱 길게 누르기 (수동).',
+      );
+      return;
+    }
+
     await openShareDeepLink(SHARE_TMDB_ID, SHARE_TYPE);
     await capture('shared-S1-01-after-deeplink');
 
@@ -108,8 +121,8 @@ describe('Neko — shared mode regression (2026-06-04)', () => {
       shareEntryOk = false;
       throw new Error(
         'S1: share 화면 mount 실패 — deeplink (neq://share/...) 가 시뮬에 라우팅되지 않음. ' +
-          'expo-router 의 scheme 분기 또는 자격증명 부재로 인한 cold start fallback 의심. ' +
-          'testflight-qa (실기기) 로 위임 권고.',
+          'expo-router 의 scheme 분기 또는 시뮬 자격증명 부재로 인한 cold start fallback 의심. ' +
+          'simulator-devclient 트랙 한정 — testflight 분기는 본 spec 시작부에서 자동 SKIP.',
       );
     }
 

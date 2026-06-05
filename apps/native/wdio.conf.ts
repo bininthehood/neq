@@ -59,6 +59,12 @@ const testFlightExtras: Partial<WebdriverIO.Capabilities> = isTestFlight
       'appium:webDriverAgentUrl': process.env.WDA_URL,
       // TestFlight standalone 빌드는 Appium 이 직접 띄워야 stale-pid 회피
       'appium:autoLaunch': true,
+      // iOS 17+ build hang 우회: 기존 설치된 WDA Runner 재사용 (Appium 가 xcodebuild
+      // build-for-testing 을 새로 돌리면 38분+ hang. 본 capability 3종이 build 단계 skip)
+      'appium:usePrebuiltWDA': true,
+      'appium:useNewWDA': false,
+      'appium:skipServerInstallation': true,
+      'appium:updatedWDABundleId': 'com.facebook.WebDriverAgentRunner.xctrunner',
     }
   : {};
 
