@@ -25,6 +25,7 @@ import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar, { ACTION_BAR_HEIGHT } from '../components/ActionBar';
+import { IconArchive } from '../components/Icons';
 import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
@@ -1319,18 +1320,27 @@ export default function DiscoverScreen() {
         )}
 
         {exhausted && (
-          <View style={styles.centered}>
-            <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-            <Text style={styles.emptyHint}>{emptyHint}</Text>
-            <View style={styles.emptyActions}>
-              {hasFilter && (
-                <Pressable style={styles.resetBtnSecondary} onPress={clearFilters}>
-                  <Text style={styles.resetTextSecondary}>필터 초기화</Text>
+          // 2026-06-06 (P1 종료 화면 DESIGN.md 정합) — DESIGN.md §Empty State (230~241):
+          //   아이콘 48px text-muted / 아이콘→제목 gap space-md / 제목 text-base 500 /
+          //   설명 text-sm 400 text-muted / CTA Ghost variant / max-width 260px.
+          // 진단: `_workspace/02_p1_end_screen.md` §4.2, §5.3 (디자인 follow-up).
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyBlock}>
+              <IconArchive size={48} color={colors.textMuted} />
+              <View style={styles.emptyTextGroup}>
+                <Text style={styles.emptyTitle}>{emptyTitle}</Text>
+                <Text style={styles.emptyHint}>{emptyHint}</Text>
+              </View>
+              <View style={styles.emptyActions}>
+                {hasFilter && (
+                  <Pressable style={styles.ghostBtn} onPress={clearFilters}>
+                    <Text style={styles.ghostBtnText}>필터 초기화</Text>
+                  </Pressable>
+                )}
+                <Pressable style={styles.ghostBtn} onPress={handleRefresh}>
+                  <Text style={styles.ghostBtnText}>다시 시도</Text>
                 </Pressable>
-              )}
-              <Pressable style={styles.resetBtn} onPress={handleRefresh}>
-                <Text style={styles.resetText}>다시 시도</Text>
-              </Pressable>
+              </View>
             </View>
           </View>
         )}
@@ -1486,32 +1496,60 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
   },
+  // 2026-06-06 (P1 종료 화면 DESIGN.md 정합) — DESIGN.md §Empty State (230~241):
+  //   center 정렬 / 아이콘 48px text-muted / 아이콘→제목 gap space-md(16) /
+  //   제목 text-base(15) 500 text-primary / 설명 text-sm(13) 400 text-muted /
+  //   CTA 설명 아래 space-lg(24) / Ghost variant / max-width 260px.
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  emptyBlock: {
+    alignItems: 'center',
+    maxWidth: 260,
+  },
+  emptyTextGroup: {
+    alignItems: 'center',
+    marginTop: spacing.md, // 아이콘→제목 gap = space-md(16)
+  },
   emptyTitle: {
     color: colors.textPrimary,
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: 15,        // text-base
+    fontWeight: '500',
+    textAlign: 'center',
   },
   emptyHint: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 13,        // text-sm
+    fontWeight: '400',
     textAlign: 'center',
     marginTop: 4,
-    marginBottom: spacing.md,
     lineHeight: 19,
   },
   emptyActions: {
     flexDirection: 'row',
     gap: spacing.sm,
+    marginTop: spacing.lg, // 설명→CTA gap = space-lg(24)
   },
-  resetBtnSecondary: {
-    backgroundColor: colors.surface,
+  // Ghost variant — 배경 투명, 보더 only (DESIGN.md §Buttons Ghost 정합).
+  ghostBtn: {
+    backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     borderRadius: 999,
   },
-  resetTextSecondary: { color: colors.textSecondary, fontWeight: '600' },
+  ghostBtnText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // 2026-06-06 — error 분기 ('요청이 실패했어요') 전용 CTA. EmptyState 와 분리.
+  // error 톤은 accent (amber) 강조로 유지 — DESIGN.md §Error State 의 "동일 구조,
+  // 아이콘만 danger" 패턴이지만 본 화면은 아이콘 없이 텍스트만 → CTA 만 accent.
   resetBtn: {
     backgroundColor: colors.accentDim,
     borderWidth: 1,
