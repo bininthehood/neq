@@ -19,6 +19,7 @@ import { USER_DATA_SCHEMA_VERSION } from "./types";
 
 export type { FavoriteMeta } from "./types";
 import { getDeviceId } from "./device-id";
+import { clearAllProgress as clearAllSurveyProgress } from "../components/onboarding/_lib/survey-storage";
 
 function safeParse<T>(key: string, fallback: T): T {
   try {
@@ -552,5 +553,9 @@ export function clearAllUserData() {
     .filter((k) => k.startsWith(RECS_FILTERED_PREFIX))
     .forEach((k) => localStorage.removeItem(k));
   sessionStorage.removeItem("neq_top_idx");
+  // 설문 진행 상태 (neq_taste_survey_progress:*, sessionStorage prefix 묶음).
+  // 누락 시 reset 직후 동일 컨텍스트 재선택에서 stale prevAnswers 가
+  // resume_modal 을 잘못 트리거함 (탭을 닫지 않은 상태 한정 — sessionStorage TTL).
+  clearAllSurveyProgress();
   _migrated = false;
 }

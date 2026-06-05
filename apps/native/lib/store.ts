@@ -5,6 +5,7 @@ import {
   getActivePersona as getActivePersonaCore,
   MAX_PERSONAS,
 } from '@neq/core';
+import { clearAllProgress as clearAllSurveyProgress } from './survey-storage';
 import type {
   AccountPrefs,
   FavoriteMeta,
@@ -570,5 +571,9 @@ export async function clearAllUserData(): Promise<void> {
     PERSONAS_KEY,
     ACTIVE_PERSONA_KEY,
   ]);
+  // 설문 진행 상태 (neq_taste_survey_progress:*) — 별도 prefix 키 묶음이라
+  // multiRemove 목록과 분리. 누락 시 reset 후 동일 컨텍스트 재선택에서
+  // stale prevAnswers 가 resume_modal 을 잘못 트리거함.
+  await clearAllSurveyProgress();
   // device_id는 유지 (익명 식별자 안정성)
 }

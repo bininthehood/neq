@@ -546,6 +546,36 @@ describe("clearAllUserData", () => {
     expect(localStorage.getItem("neq_saved")).toBeNull();
     expect(localStorage.getItem("neq_migration_version")).toBeNull();
   });
+
+  it("설문 진행 상태도 함께 정리한다 (resume_modal 오트리거 차단)", async () => {
+    const store = await loadStore();
+    store.migrateToPersonaV2();
+    sessionStorage.setItem(
+      "neq_taste_survey_progress:movie-alone",
+      JSON.stringify({
+        context: { contentType: "movie", companion: "alone" },
+        prevAnswers: [{ question: "q", selectedOption: "a" }],
+        step: 1,
+      }),
+    );
+    sessionStorage.setItem(
+      "neq_taste_survey_progress:series-together",
+      JSON.stringify({
+        context: { contentType: "series", companion: "together" },
+        prevAnswers: [],
+        step: 1,
+      }),
+    );
+
+    store.clearAllUserData();
+
+    expect(
+      sessionStorage.getItem("neq_taste_survey_progress:movie-alone"),
+    ).toBeNull();
+    expect(
+      sessionStorage.getItem("neq_taste_survey_progress:series-together"),
+    ).toBeNull();
+  });
 });
 
 // ─── 추가: getWatchStats ───
