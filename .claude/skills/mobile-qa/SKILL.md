@@ -1,6 +1,6 @@
 ---
 name: mobile-qa
-description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simulator 우선 + Android Emulator 보조. 시뮬 부팅 → dev client (com.neq.app) 부착 → Appium 자동 회귀 (5 spec / 31 케이스) → 수동 탐색 → 리포트. 'QA', '시뮬레이터 QA', '에뮬레이터 QA', 'Native QA', '회귀 돌려줘', 'E2E 실행', '시뮬 띄워줘' 요청 시 사용. PWA QA 는 본 스킬 대상 아님 (ux-review / qa 사용). 실기기/TestFlight 는 testflight-qa 사용."
+description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simulator 우선 + Android Emulator 보조. 시뮬 부팅 → dev client (com.neq.app) 부착 → Appium 자동 회귀 (9 spec / 46 케이스) → 수동 탐색 → 리포트. 'QA', '시뮬레이터 QA', '에뮬레이터 QA', 'Native QA', '회귀 돌려줘', 'E2E 실행', '시뮬 띄워줘' 요청 시 사용. PWA QA 는 본 스킬 대상 아님 (ux-review / qa 사용). 실기기/TestFlight 는 testflight-qa 사용."
 ---
 
 # Mobile QA — neq Native Simulator 검증
@@ -21,7 +21,7 @@ description: "neq native (Expo RN) 시뮬레이터/에뮬레이터 QA. iOS Simul
 ## 언제 사용하나요?
 
 - 새 native 기능/버그 fix 를 시뮬레이터에서 빠르게 확인하고 싶을 때
-- `apps/native/e2e/` 회귀 spec 5종을 한꺼번에 돌릴 때
+- `apps/native/e2e/` 회귀 spec 9종을 한꺼번에 돌릴 때
 - TestFlight 빌드 올리기 전 sanity check
 - PWA ↔ Native 정합성 회귀 추적 (예: `project_native_parity_gaps`)
 - A2 React mount race 등 시뮬레이터-only 회귀 패턴 재현
@@ -108,16 +108,19 @@ cd apps/native && npx expo start --go &
 
 ### Phase 3 — 자동 회귀 (E2E simulator-devclient 분기)
 
-`wdio.conf.ts` 의 `specs: ['./e2e/**/*.test.ts']` 글롭이 5 spec 을 자동 픽업합니다:
+`wdio.conf.ts` 의 `specs: ['./e2e/**/*.test.ts']` 글롭이 9 spec / 46 케이스를 자동 픽업합니다:
 
-| spec | 커버 |
-|------|------|
-| `regression-2026-05-21.test.ts` | 12 cases — 핵심 플로우 회귀 |
-| `extended-2026-05-21.test.ts` | Saved B2/B3, SearchSheet |
-| `filters-2026-05-21.test.ts` | 필터 칩 조합 |
-| `persona-taste-survey.test.ts` | Persona v2 동적 설문 |
-| `hybrid-onboarding-2026-05-27.test.ts` | 통합 온보딩 (V2) |
-| `swipe-card.test.ts` | 스와이프 사이클 + Reanimated |
+| spec | 케이스 | 커버 |
+|------|--------|------|
+| `regression-2026-05-21.test.ts` | 12 | 핵심 플로우 회귀 (P0×4 / P1×5 / P2×3) |
+| `extended-2026-05-21.test.ts` | 9 | Saved B2/B3, SearchSheet |
+| `filters-2026-05-21.test.ts` | 6 | 필터 칩 조합 (5칩 dropdown) |
+| `onboarding-favorites-2026-06-04.test.ts` | 4 | 온보딩 step 7 favorites |
+| `shared-mode-regression.test.ts` | 4 | 공유 모드 + deeplink (S1 testflight 분기 SKIP) |
+| `refresh-race-2026-06-06.test.ts` | 4 | 새로고침 직후 빠른 좌 스와이프 race 차단 (R1~R4, commit `22f52e7` 회귀) |
+| `swipe-card.test.ts` | 3 | 스와이프 사이클 + Reanimated |
+| `persona-taste-survey.test.ts` | 3 | Persona v2 동적 설문 |
+| `hybrid-onboarding-2026-05-27.test.ts` | 1 | 통합 온보딩 (V2) |
 
 ```bash
 # Default — simulator-devclient (com.neq.app 시뮬 빌드)
@@ -131,7 +134,7 @@ cd apps/native && npm run test:e2e:ios:expo-go
 cd apps/native && IOS_DEVICE_UDID=<udid> npm run test:e2e:ios:testflight
 ```
 
-베이스라인: **시뮬레이터 dev 30/30** (`project_native_e2e_status` 참조 — 출시 게이트 baseline). simulator-devclient 전환 (2026-06-02) 이후 첫 회귀에서 베이스라인 재측정 필요할 수 있음 — Lottie 도입으로 Welcome 화면 timing 변화 영향. 시뮬 dev 에서만 재현되는 **A2 React mount race** 는 [[feedback_native_a11y_e2e_patterns]] §1 의 retry-with-poll 헬퍼로 우회 — flaky 항목 발견 시 헬퍼 적용 여부부터 확인.
+베이스라인: **`project_native_e2e_status` 참조** (출시 게이트 baseline). 6/6 commit `212fec7` 로 `refresh-race-2026-06-06.test.ts` 신규 합류 (R1~R4 = +4 케이스 → 42 → 46). 시뮬 dev 에서만 재현되는 **A2 React mount race** 는 [[feedback_native_a11y_e2e_patterns]] §1 의 retry-with-poll 헬퍼로 우회 — flaky 항목 발견 시 헬퍼 적용 여부부터 확인.
 
 FAIL 항목은 `spec 명 + describe + line + 재현 로그 경로 (e2e/_logs/)` 로 리포트.
 
