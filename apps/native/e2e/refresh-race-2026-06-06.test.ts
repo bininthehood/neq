@@ -50,49 +50,20 @@ import {
   tapByPredicate,
 } from './_helpers';
 
-// rec.title 은 SwipeCard.tsx:364 의 <Text style={styles.title}>{rec.title}</Text>
-// 로 page source 에 그대로 노출됨. 한 page source 에서 title-like Text 노출 element
-// 들의 value 를 모아 set 으로 비교.
-//
-// XCUIElementTypeStaticText 의 value 또는 name attribute 에 title 이 들어감.
-// 정확한 element 매칭 대신 page source 내 unique text token 추출 — race 가 발생
-// 했을 때 옛 세트 카드 title 이 새 세트와 섞이는지 set intersection 으로 판단.
+// 2026-06-06 B-3 — testID 정확 매칭 전환 (commit B-3).
+// 이전: page source 의 모든 StaticText value/name 을 noise filter 로 추출 (휴리스틱).
+//       UI 라벨 추가 시마다 필터 갱신 필요 + 카드 title 자체가 한국 UI 라벨과 충돌
+//       가능성. fix 전후 비교 시 noise 가 결과에 섞임.
+// 신규: SwipeCard 에 testID `swipe-card-title-{tmdbId}` (commit B-3) 도입. RN testID
+//       는 iOS Appium 에서 XCUIElement.name 으로 노출. 정규식 prefix 매칭으로 tmdbId
+//       만 추출 → 시그니처 = 카드 ID set. 휴리스틱 완전 제거. UI 변경 영향 없음.
 async function snapshotCardSignatures(): Promise<Set<string>> {
   const src = await browser.getPageSource();
-  // XCUIElementTypeStaticText 의 value/name 에서 title 후보 추출.
-  // 휴리스틱: SwipeCard 의 title (line 364) + subTitle (year · titleEn, line 361-362).
-  // 둘 다 page source 에 노출되므로 둘 다 시그니처로 사용.
-  // 정규식: value="..." 또는 name="..." 매칭, 단 너무 짧거나 일반적인 UI 라벨 제외.
   const sigs = new Set<string>();
-  const valueRe = /(?:value|name)="([^"]{3,80})"/g;
+  const testIdRe = /name="swipe-card-title-(\d+)"/g;
   let m: RegExpExecArray | null;
-  while ((m = valueRe.exec(src)) !== null) {
-    const v = m[1];
-    // UI noise 필터 — 탭바/버튼/공통 텍스트 제외.
-    if (
-      v === '발견' ||
-      v === '저장' ||
-      v === '프로필' ||
-      v === '검색' ||
-      v === '검색 열기' ||
-      v === '검색 닫기' ||
-      v === '새 추천' ||
-      v === '상세보기' ||
-      v === '공유' ||
-      v === '처음으로' ||
-      v === '저장 해제' ||
-      v === '저장' ||
-      v === '다시 시도' ||
-      v === '필터 초기화' ||
-      v === '추천을 준비하고 있어요' ||
-      v.startsWith('http') ||
-      v.startsWith('com.') ||
-      /^\d+$/.test(v) ||
-      v.length < 3
-    ) {
-      continue;
-    }
-    sigs.add(v);
+  while ((m = testIdRe.exec(src)) !== null) {
+    sigs.add(m[1]); // tmdbId 만 시그니처로 보관
   }
   return sigs;
 }
@@ -217,12 +188,12 @@ describe('R — 새로고침 직후 빠른 좌 스와이프 race 차단 (commit 
     );
 
     // 검증: 교집합이 0 또는 매우 작아야 함 (fix 정상).
-    //   - 0개 == 가장 깨끗한 fix 동작.
-    //   - 1~2개 == 시그니처 추출 휴리스틱이 공통 UI element 를 잡았을 가능성.
-    //     (예: 양쪽 stack 모두 보이는 cat chip 텍스트 "영화" 등 — 필터 누락).
-    //   - 3개 이상 == 옛 세트 카드 title 다수가 새 stack 에 잔재 → race 의심.
+    //   - 0개 == 두 세트가 완전 disjoint (가장 깨끗한 fix 동작).
+    //   - 1~2개 == excludeIds 일시 누락 또는 LLM 응답 우연 중복 — 정상 범위.
+    //   - 3개 이상 == 옛 세트 카드 다수가 새 stack 에 잔재 → race 의심.
     //
     // 보수적 임계: 2 이하 PASS. 3 이상이면 FAIL + 다음 디버깅 트리거.
+    // (B-3 testID 정확 매칭으로 휴리스틱 noise 제거 — 임계는 race 자체 보수성 유지.)
     // 단, 세트 A 시그니처가 너무 적게 잡혔으면 (≤2) 비교 무의미 → SKIP.
     if (sigsA.size <= 2) {
       console.warn(

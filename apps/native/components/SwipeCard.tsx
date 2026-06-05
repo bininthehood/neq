@@ -289,7 +289,14 @@ export default function SwipeCard({
   });
 
   return (
-    <Animated.View style={[styles.card, cardStyle]}>
+    <Animated.View
+      style={[styles.card, cardStyle]}
+      // 2026-06-06 (B-3 E2E 결정성) — refresh-race-2026-06-06.test.ts 가 page source
+      // 의 title StaticText 휴리스틱으로 카드 시그니처를 비교했었음. testID 도입 후
+      // refresh-race spec 의 snapshotCardSignatures 가 swipe-card-{tmdbId} 정확 매칭
+      // 으로 전환. 다른 spec 의 인터랙션엔 영향 없음 (label 기반 tap 유지).
+      testID={`swipe-card-${rec.tmdbId}`}
+    >
       <CardInner rec={rec} immersive={immersive} depth={depth} />
     </Animated.View>
   );
@@ -375,7 +382,10 @@ export function CardInner({
             <Text style={styles.subTitle} numberOfLines={1}>
               {year ? `${year} · ${titleEn}` : titleEn}
             </Text>
-            <Text style={styles.title}>{rec.title}</Text>
+            {/* 2026-06-06 B-3 — refresh-race spec testID 정확 매칭 (root 와 동일 tmdbId). */}
+            <Text style={styles.title} testID={`swipe-card-title-${rec.tmdbId}`}>
+              {rec.title}
+            </Text>
             <Text style={styles.reason} numberOfLines={3}>
               {rec.reason}
             </Text>
