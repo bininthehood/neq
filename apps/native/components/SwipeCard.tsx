@@ -162,11 +162,25 @@ export default function SwipeCard({
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
   useEffect(() => {
-    // depth 전환 — PWA `transform 0.3s ease-out` 정합. 단방향 감속으로 빠른 시작 → 자연 안착.
-    animatedDepth.value = withTiming(depth, {
-      duration: DEPTH_MS,
-      easing: DEPTH_BEZIER,
-    });
+    // 2026-06-06 (P1 애니메이션 Fix A) — 새 top 카드 (depth=0) 진입은 즉시 적용.
+    // 진단: `_workspace/02_p1_animation.md` §2 (root cause 1).
+    //
+    // 기존 결함: pass dismiss 직후 새 top 카드의 depth prop 1→0 전환에 withTiming
+    //   300ms 가 매번 처음부터 다시 보간 → scale 0.96→1, yOffset 12→0 이 ease-out
+    //   초반 (변화량 작은 구간) 으로 인지되며 "한 박자 뒤에 앞으로 나오는 딜레이"
+    //   체감. PWA 는 동일 곡선이지만 CSS transition 이 GPU 합성으로 즉시 → 인지 0.
+    //
+    // 수정: depth===0 진입 (= 새 top) 은 보간 없이 즉시. 다른 depth (뒤로 빠지는
+    //   카드) 는 기존 ease-out 300ms 그대로 → stack 의 "뒤로 빠지는 카드" 시각만
+    //   부드럽고 새 top 은 즉시 도착 → PWA 와 인지 동등.
+    if (depth === 0) {
+      animatedDepth.value = 0;
+    } else {
+      animatedDepth.value = withTiming(depth, {
+        duration: DEPTH_MS,
+        easing: DEPTH_BEZIER,
+      });
+    }
   }, [depth, animatedDepth]);
 
   useEffect(() => {

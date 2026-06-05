@@ -648,6 +648,13 @@ export default function DiscoverScreen() {
   }
   function dismissThenNext() {
     if (!recs[topIdx]) return;
+    // 2026-06-06 (P1 애니메이션 Fix C) — 빠른 연속 스와이프 시 직전 보간 1 frame 잔존 차단.
+    // 진단: `_workspace/02_p1_animation.md` §4.4 (cancelAnimation 호출 0건).
+    // withTiming 은 같은 SharedValue 재할당 시 자동 cancel 되지만 effect 의존성
+    // race (`§4.2`) 가 있으면 한 frame 늦을 수 있음. 명시 cancel 로 frame 보장.
+    // Reanimated 4 정식 패턴 — 무한 worklet cleanup 패턴과 충돌 없음.
+    cancelAnimation(dismissX);
+    cancelAnimation(prevOverlayX);
     // 사이클 2 통일 매핑: pass = light
     hapticLight();
     const lastDragX = dragX; // 사용자가 손가락 뗀 마지막 위치 — dismissX 시작점.
