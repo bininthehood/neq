@@ -15,6 +15,7 @@ import Animated, {
   runOnJS,
   withTiming,
   Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import { router, useFocusEffect } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -33,6 +34,7 @@ import {
   fetchRecommendationsStreaming,
   prefetchRecommendations,
   consumePrefetchedRecommendations,
+  invalidatePrefetchCache,
 } from '../lib/api';
 import {
   addRecHistory,
@@ -223,13 +225,20 @@ export default function DiscoverScreen() {
   // M-2: pass advance(topIdx++) 타이머 핸들. 시각 슬라이드(300ms)와 분리된
   // 360ms 콜백을 들고 있다가, 연속 스와이프 시 이전 타이머를 취소해 어긋남을 막는다.
   const passAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 언마운트 시 대기 중이던 advance 타이머 정리 (setState-after-unmount 방지).
+  // 2026-06-06 (P0 stack 겹침) — 직전 in-flight stream abort 용 controller.
+  // load() 진입 시 이전 controller.abort() + 새 controller 발급 → 옛 stream 의
+  // onCard 가 새 stack 에 끼어드는 race 차단. PWA `useRecommendations.ts:221, 461-462`
+  // 정합. 자세한 메커니즘: `_workspace/02_p0_stack_overlap.md` §2.
+  const loadAbortRef = useRef<AbortController | null>(null);
+  // 언마운트 시 대기 중이던 advance 타이머 + in-flight stream 정리.
   useEffect(() => {
     return () => {
       if (passAdvanceTimer.current) {
         clearTimeout(passAdvanceTimer.current);
         passAdvanceTimer.current = null;
       }
+      loadAbortRef.current?.abort();
+      loadAbortRef.current = null;
     };
   }, []);
 
@@ -281,6 +290,26 @@ export default function DiscoverScreen() {
       filter: RecommendFilter = {},
       opts?: { excludeIds?: number[] },
     ) => {
+      // 2026-06-06 (P0 stack 겹침) — 새 stream 시작 전 atomic reset.
+      // (1) 직전 in-flight stream abort → 옛 onCard 가 새 stack 에 끼어드는 race 차단.
+      // (2) recs / topIdx / drag SharedValue 모두 reset → 옛 카드 잔재 0.
+      // (3) prefetch cache invalidate → 옛 filter 의 prefetch 결과가 새 stack 뒤에
+      //     재유입되는 보조 경로 차단 (`_workspace/02_p0_stack_overlap.md` §3).
+      // PWA `useRecommendations.ts:454-462` 정합 패턴.
+      loadAbortRef.current?.abort();
+      const controller = new AbortController();
+      loadAbortRef.current = controller;
+
+      setRecs([]);
+      setTopIdx(0);
+      setPrevActive(false);
+      setDismissingTmdbId(null);
+      setDragX(0);
+      setDragY(0);
+      dismissX.value = 0;
+      prevOverlayX.value = -SCREEN_WIDTH;
+      invalidatePrefetchCache();
+
       setState('loading');
       setErrorMsg(null);
       try {
@@ -315,6 +344,10 @@ export default function DiscoverScreen() {
           },
           {
             onCard: (rec) => {
+              // 2026-06-06 (P0 stack 겹침) — 직전 stream 의 onCard 가 abort 후에도
+              // 한두 frame 늦게 도착할 수 있어 ref 일치 가드. controller 가
+              // 본 호출의 ref 와 같지 않으면 옛 호출 → 새 stack 에 안 끼임.
+              if (loadAbortRef.current !== controller) return;
               collected.push(rec);
               if (!firstSeen) {
                 firstSeen = true;
@@ -329,7 +362,11 @@ export default function DiscoverScreen() {
               streamError = err;
             },
           },
+          controller.signal,
         );
+
+        // abort 후 도착한 응답은 silent return — 옛 호출이 새 호출 state 를 덮어쓰면 안 됨.
+        if (controller.signal.aborted) return;
 
         if (!firstSeen) {
           // streaming 동안 카드 0건 — error 또는 빈 응답. error 우선, 아니면 non-streaming 폴백.
@@ -340,7 +377,8 @@ export default function DiscoverScreen() {
             savedCount: saved.length,
             excludeIds,
             ...v2.body,
-          });
+          }, controller.signal);
+          if (controller.signal.aborted) return;
           setRecs(data);
           setTopIdx(0);
           setState('ready');
@@ -368,10 +406,17 @@ export default function DiscoverScreen() {
           );
         }
       } catch (e) {
+        // abort 시 silent — 직전 호출이 새 호출로 교체되었을 뿐, 에러 UI 노출 X.
+        if (controller.signal.aborted) return;
+        if (e instanceof Error && (e.name === 'AbortError' || /aborted/i.test(e.message))) {
+          return;
+        }
         setErrorMsg(e instanceof Error ? e.message : '알 수 없는 오류');
         setState('error');
       }
     },
+    // dismissX / prevOverlayX 는 SharedValue ref 이므로 stable. 의존성 0 유지.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

@@ -542,6 +542,20 @@ export function __test_resetPrefetchCache(): void {
 }
 
 /**
+ * Discover load() 진입 시 호출 — 직전 stream race + prefetch 재유입 차단용.
+ *
+ * 새로고침 / 필터 변경 / 페르소나 전환 시 옛 stream 의 onCard 가 새 stack 에
+ * 끼어들거나, 옛 filter 의 prefetch 결과가 cache 에 남아 새 stack 뒤에 합류하는
+ * 경로를 모두 차단한다.
+ *
+ * 자세한 배경: `_workspace/02_p0_stack_overlap.md` §3 (prefetchCache 재유입).
+ */
+export function invalidatePrefetchCache(): void {
+  prefetchCache.clear();
+  inflightPrefetch.clear();
+}
+
+/**
  * 테스트 전용 — 캐시 크기 조회. 일반 코드는 사용 X.
  * @internal
  */
