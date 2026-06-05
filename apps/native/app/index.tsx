@@ -1097,28 +1097,38 @@ export default function DiscoverScreen() {
     filterRating !== 'all' ||
     filterOTTs.size > 0;
 
+  // 2026-06-06 (P1 종료 화면 Fix A) — 카피 톤 조정.
+  // 진단: `_workspace/02_p1_end_screen.md` §4.2.
+  //
+  // 기존 결함: "추천이 없어요" / "찾지 못했어요" 톤이 모집단 절대 0 처럼 들림.
+  //   실제는 한 배치 (~10건) 소진. exhausted 락 부재로 false-positive 종료 빈번.
+  // 조정: DESIGN.md §Empty State Quiet Ink 톤 정합 — 담백·차분.
+  //   "오늘은 여기까지" / "내일 다시 와요" 로 "한 배치 끝" 시그널을 부드럽게.
+  //
+  // 본 트랙은 카피만 교체 (Fix A). exhausted 락 (Fix B) / loading_more skeleton
+  // (Fix C) 은 PostHog 측정 후 별도 트랙. CTA 동작 변경 0.
   const { emptyTitle, emptyHint } = (() => {
     if (!hasFilter) {
       return {
-        emptyTitle: '모두 봤어요',
-        emptyHint: '새 추천을 불러오면 다른 작품이 나타나요',
+        emptyTitle: '오늘은 여기까지',
+        emptyHint: '내일 다시 와요. 새로 살펴볼게요',
       };
     }
     if (filterOrigin === 'kr') {
       return {
-        emptyTitle: '국내 작품을 찾지 못했어요',
-        emptyHint: '필터를 완화하면 해외 작품도 함께 보여드릴게요',
+        emptyTitle: '국내 작품은 여기까지',
+        emptyHint: '필터를 풀면 해외 작품도 함께 보여드릴게요',
       };
     }
     if (filterOTTs.size > 0) {
       return {
-        emptyTitle: '선택한 OTT에서 찾지 못했어요',
-        emptyHint: 'OTT 필터를 풀고 다시 시도해보세요',
+        emptyTitle: '선택한 OTT는 여기까지',
+        emptyHint: 'OTT 필터를 풀면 더 많은 작품이 보여요',
       };
     }
     return {
-      emptyTitle: '이 조건에선 추천이 없어요',
-      emptyHint: '필터를 초기화하거나 다시 시도해보세요',
+      emptyTitle: '이 조건엔 더 없어요',
+      emptyHint: '필터를 조금 풀어보면 다른 작품이 보여요',
     };
   })();
 
