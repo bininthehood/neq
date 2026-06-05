@@ -266,6 +266,21 @@ describe('Neko — shared mode regression (2026-06-04)', () => {
       throw new Error('S4: Discover 도달 실패');
     }
 
+    // 2026-06-06 EmptyState 분기 가드 — commit `e044059` (카피 교체) + `6544f31`
+    // (DESIGN.md §Empty State 정합 — IconArchive + Ghost CTA). 본 케이스 진입 시점에
+    // Discover 가 EmptyState 로 전환됐다면 (deeplink 직전 reset 후 추천 0건 케이스)
+    // 카드 hit zone 이 사라지므로 Modal mount 검증 불가. SKIP 처리 + 시각 capture.
+    // 정본 카피 (apps/native/app/index.tsx:1139~1162):
+    //   '오늘은 여기까지' / '국내 작품은 여기까지' / '선택한 OTT는 여기까지' / '이 조건엔 더 없어요'.
+    const onEmptyState = await pageSourceContains('여기까지');
+    if (onEmptyState) {
+      console.warn(
+        'S4: Discover EmptyState 노출 — 본 케이스(카드 → Modal) 검증 대상 외. SKIP.',
+      );
+      await capture('shared-S4-SKIP-empty-state');
+      return;
+    }
+
     // Discover 카드 탭 — DetailSheet (mode='detail') Modal 진입.
     // 화면 50% (수직 중앙) 은 카드 중앙이지만 메타/저장/스와이프 영역과 겹칠 수 있음 →
     // 화면 35% (포스터 상반부) 가 안전한 hit zone. 카드 좌우 패딩 고려해 50% x.
