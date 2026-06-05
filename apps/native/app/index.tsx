@@ -25,7 +25,7 @@ import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar, { ACTION_BAR_HEIGHT } from '../components/ActionBar';
-import { IconArchive } from '../components/Icons';
+import { IconArchive, IconRefresh } from '../components/Icons';
 import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
@@ -1260,15 +1260,28 @@ export default function DiscoverScreen() {
         )}
 
         {state === 'error' && (
-          <View style={styles.centered}>
-            <Text style={styles.errorTitle}>요청이 실패했어요</Text>
-            <Text style={styles.errorDetail}>{errorMsg}</Text>
-            <Pressable
-              style={styles.resetBtn}
-              onPress={() => load(undefined, { excludeIds: recs.map((r) => r.tmdbId) })}
-            >
-              <Text style={styles.resetText}>다시 시도</Text>
-            </Pressable>
+          // 2026-06-06 (B-1 §Error State 정합) — DESIGN.md line 244:
+          //   "Empty 와 동일 구조, 아이콘 색상만 --danger".
+          //   EmptyState (1322~1346) 와 동일 마크업 + IconRefresh(48px) color=danger.
+          //   톤: Quiet Ink — 'X 실패' 강조 대신 조용한 안내. errorMsg 가 비면 fallback.
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyBlock}>
+              <IconRefresh size={48} color={colors.danger} />
+              <View style={styles.emptyTextGroup}>
+                <Text style={styles.emptyTitle}>잠시 멈췄어요</Text>
+                <Text style={styles.emptyHint}>
+                  {errorMsg || '잠시 후 다시 시도해주세요'}
+                </Text>
+              </View>
+              <View style={styles.emptyActions}>
+                <Pressable
+                  style={styles.ghostBtn}
+                  onPress={() => load(undefined, { excludeIds: recs.map((r) => r.tmdbId) })}
+                >
+                  <Text style={styles.ghostBtnText}>다시 시도</Text>
+                </Pressable>
+              </View>
+            </View>
           </View>
         )}
 
@@ -1489,13 +1502,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   loadingText: { color: colors.textMuted, fontSize: 14, marginTop: spacing.sm },
-  errorTitle: { color: colors.danger, fontSize: 16, fontWeight: '700' },
-  errorDetail: {
-    color: colors.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
   // 2026-06-06 (P1 종료 화면 DESIGN.md 정합) — DESIGN.md §Empty State (230~241):
   //   center 정렬 / 아이콘 48px text-muted / 아이콘→제목 gap space-md(16) /
   //   제목 text-base(15) 500 text-primary / 설명 text-sm(13) 400 text-muted /
@@ -1547,16 +1553,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  // 2026-06-06 — error 분기 ('요청이 실패했어요') 전용 CTA. EmptyState 와 분리.
-  // error 톤은 accent (amber) 강조로 유지 — DESIGN.md §Error State 의 "동일 구조,
-  // 아이콘만 danger" 패턴이지만 본 화면은 아이콘 없이 텍스트만 → CTA 만 accent.
-  resetBtn: {
-    backgroundColor: colors.accentDim,
-    borderWidth: 1,
-    borderColor: colors.accentBorder,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 999,
-  },
-  resetText: { color: colors.accent, fontWeight: '600' },
 });
