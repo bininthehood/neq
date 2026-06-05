@@ -39,6 +39,7 @@ import {
 import {
   addRecHistory,
   getAccountPrefs,
+  getRecHistory,
   getSaved,
   hasOnboarded,
   hasSeenTutorialV3,
@@ -315,9 +316,22 @@ export default function DiscoverScreen() {
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
-        // 2026-05-28 — 새로고침/필터변경/재시도 시 현재 stack 의 tmdbId 를
-        // excludeIds 로 전달해 LLM 후보 dedup. prefetch (line 347) 와 정합.
-        const excludeIds = opts?.excludeIds;
+        // 2026-06-06 (P1 다양성) — excludeIds 확장.
+        // 기존: 호출자가 넘긴 현재 stack tmdbId (보통 10~50개) 만 dedup.
+        // 변경: 호출자 excludeIds + recHistory 100건 (FIFO) + saved 전체 합집합.
+        // 효과: 앱 재시작 직후 신규 stack 에도 이전 노출 작품 자동 제외 →
+        //       overlap 85~92% → 15~30% 예상 (`_workspace/02_p1_diversity.md` §4.1).
+        // PWA 의 `getSeenTitles + savedTitles` 200건 전송과 동등 효과.
+        // route.ts:74 가 300개 캡 처리 — 합쳐도 안전.
+        const history = await getRecHistory();
+        const baseExcludeIds = opts?.excludeIds ?? [];
+        const excludeIds = Array.from(
+          new Set<number>([
+            ...baseExcludeIds,
+            ...history.map((h) => h.tmdbId),
+            ...saved.map((s) => s.recommendation.tmdbId),
+          ]),
+        );
         // P0-2 Cold Start V2 입력 — flag ON + 값 있을 때만 body 에 포함.
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
@@ -433,8 +447,16 @@ export default function DiscoverScreen() {
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
-        // 현재 보여준 작품 ID 는 exclude 에 추가해 중복 회피
-        const excludeIds = recs.map((r) => r.tmdbId);
+        // 2026-06-06 (P1 다양성) — excludeIds 확장 (load() 와 동일 합집합).
+        // 현재 stack + recHistory 100 + saved 합쳐 prefetch 결과의 다양성도 보강.
+        const history = await getRecHistory();
+        const excludeIds = Array.from(
+          new Set<number>([
+            ...recs.map((r) => r.tmdbId),
+            ...history.map((h) => h.tmdbId),
+            ...saved.map((s) => s.recommendation.tmdbId),
+          ]),
+        );
         // P0-2 V2 입력 — 동일 flag/prefs 기준으로 prefetch 도 일관 유지.
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
