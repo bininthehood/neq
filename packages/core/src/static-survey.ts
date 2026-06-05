@@ -1,13 +1,13 @@
 /**
- * Static survey set — LLM 호출 실패 시 fallback (design doc Premise #6).
+ * Static survey set — onboarding 페르소나 설문 정상 경로 (2026-06-06 승격).
  *
  * 6 컨텍스트 (영화·시리즈·예능 × 혼자·같이) × 3 step × 4 옵션 = 완전 셋.
  * Quiet Ink tone — 절제된 한국어, 단순 옵션, hint 는 한 문장 이내.
  * DESIGN.md anti-slop 가드: 균일 카드 그리드 X (UI 가 세로 리스트로 렌더링), 옵션
  * label 은 일상적 어휘로 (마케팅 카피 금지).
  *
- * 본 셋은 LLM dynamic 의 분기를 sacrifice 하는 대신 deterministic 동작 보장.
- * 사용자 답에 무관하게 step 1→2→3 미리 정의된 질문 순서 진행.
+ * deterministic 동작 보장: 사용자 답에 무관하게 step 1→2→3 정의된 순서 진행.
+ * step 2 의 shouldContinue=true 로 모든 사용자가 step 3 진입 (3-step path).
  */
 import type { PersonaContext, TasteSurveyAnswer } from './types';
 
@@ -50,8 +50,8 @@ export interface SurveyStepOutput {
   axisCategory: SurveyAxisCategory;
   /**
    * step 2 응답에 한해 의미. true=step 3 추가, false=summarize 진입.
-   * outside voice MED #5 — 서버 endpoint 가 sharpness 판정 결과 동봉.
-   * static fallback 에선 step 2 응답은 항상 false (step 3 미진행 = 짧은 path).
+   * 정상 경로 (정적 풀, 2026-06-06): step 2 = true (3-step path 강제),
+   * step 3 = false (summarize 진입). step 1 은 의미 없음.
    */
   shouldContinue: boolean;
 }
@@ -111,7 +111,7 @@ const MOVIE_ALONE: SurveyStepOutput[] = [
       { id: 'c', label: '반전이 있는 마무리', hint: '예상을 뒤집는' },
       { id: 'd', label: '무관', hint: '결말은 중요하지 않아요' },
     ],
-    shouldContinue: false,
+    shouldContinue: true,
   },
   {
     question: '어떤 주제를 견딜 수 있어요?',
@@ -153,7 +153,7 @@ const MOVIE_TOGETHER: SurveyStepOutput[] = [
       { id: 'c', label: '길어도 괜찮음', hint: '대작·전작 OK' },
       { id: 'd', label: '무관' },
     ],
-    shouldContinue: false,
+    shouldContinue: true,
   },
   {
     question: '어떤 분위기가 어울려요?',
@@ -195,7 +195,7 @@ const SERIES_ALONE: SurveyStepOutput[] = [
       { id: 'c', label: '장편 대서사', hint: '5 시즌 이상도 OK' },
       { id: 'd', label: '무관' },
     ],
-    shouldContinue: false,
+    shouldContinue: true,
   },
   {
     question: '캐릭터가 어떻길 바라요?',
@@ -237,7 +237,7 @@ const SERIES_TOGETHER: SurveyStepOutput[] = [
       { id: 'c', label: '구분 안 해요' },
       { id: 'd', label: '잘 모르겠어요' },
     ],
-    shouldContinue: false,
+    shouldContinue: true,
   },
   {
     question: '같이 볼 때 어떤 장르가 안전해요?',
@@ -279,7 +279,7 @@ const VARIETY_ALONE: SurveyStepOutput[] = [
       { id: 'c', label: '서바이벌·게임', hint: '경쟁·미션' },
       { id: 'd', label: '무관' },
     ],
-    shouldContinue: false,
+    shouldContinue: true,
   },
   {
     question: '출연자는 누가 좋아요?',
@@ -321,7 +321,7 @@ const VARIETY_TOGETHER: SurveyStepOutput[] = [
       { id: 'c', label: '늦은 밤', hint: '잠들기 전' },
       { id: 'd', label: '무관' },
     ],
-    shouldContinue: false,
+    shouldContinue: true,
   },
   {
     question: '한 회 길이는 어느 정도가 좋아요?',

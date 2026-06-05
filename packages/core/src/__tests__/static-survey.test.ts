@@ -25,7 +25,8 @@ describe('getStaticSurveyStep', () => {
         expect(out?.question.length).toBeLessThanOrEqual(30);
         expect(out?.options).toHaveLength(4);
         expect(out?.axisHint).toBeTruthy();
-        expect(out?.shouldContinue).toBe(false);
+        // step 2 만 shouldContinue=true (3-step path 강제), 그 외 false.
+        expect(out?.shouldContinue).toBe(step === 2);
       }
     },
   );

@@ -1,19 +1,20 @@
 "use client";
 
 /**
- * Persona v2 - LLM 동적 취향 설문 state machine (design doc 125·248 행).
+ * Persona v2 — 정적 풀 기반 취향 설문 state machine (2026-06-06 정상 경로 승격).
  *
  * 단계 흐름:
- *   context_select → step_loading(1) → step(1) → step_loading(2) → step(2)
- *     → [step_loading(3) → step(3) if shouldContinue]
- *     → summary_loading → summary_preview → done (persona 생성 + onComplete)
+ *   context_select → step(1) → step(2) → step(3) → favorites_pick → summary_preview → done
  *
  * 추가 분기:
  *   - 진입 시 sessionStorage 진행 상황 발견 → resume_modal
- *   - LLM 호출 실패 (1 retry 후) → packages/core static fallback 자동 진입
- *   - 401 (token 만료/invalid) → invalid_token_modal
- *   - 429 (rate limit) → rate_limit_modal
- *   - 사용자 닫기 → analytics taste_survey_abandoned + saveProgress
+ *   - 사용자 닫기 → analytics taste_survey_abandoned
+ *
+ * 2026-06-06 정상 경로 승격:
+ *   - LLM 호출 (fetchSurveyStep / fetchSurveySummary) 전부 제거
+ *   - step_loading / summary_loading phase 제거 (즉시 다음 step)
+ *   - error_modal phase 페기 (LLM 에러 흐름 자체 사라짐)
+ *   - 모든 사용자 3-step path (정적 풀 step 2 shouldContinue=true 일관 설정)
  *
  * PR 2-b 범위: 영화/혼자 컨텍스트 E2E. favorites 는 v2 controller 미수집
  * (design doc 131 "기존 작품 픽 UX 그대로 v1 변경 0") → summarize 호출 시
@@ -25,18 +26,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  fetchSurveyStep,
-  fetchSurveySummary,
-  getStaticSurveyStep,
   buildFallbackSummary,
-  SurveyClientError,
+  getStaticSurveyStep,
   type PersonaContext,
   type SurveyOption,
   type SurveyStepOutput,
   type SurveySummaryOutput,
   type TasteSurveyAnswer,
 } from "@neq/core";
-import { getDeviceId } from "@/lib/device-id";
 import { createPersona, switchPersona } from "@/lib/store";
 import { track } from "@/lib/analytics";
 import {
@@ -46,7 +43,6 @@ import {
 } from "./_lib/survey-storage";
 import PersonaContextSelector from "./PersonaContextSelector";
 import TasteSurveyStep from "./TasteSurveyStep";
-import TasteSummaryLoading from "./TasteSummaryLoading";
 import TasteSummaryPreview from "./TasteSummaryPreview";
 import TasteSurveyFavoritesPicker, {
   type FavoritePickItem,
@@ -55,18 +51,10 @@ import TasteSurveyFavoritesPicker, {
 type Phase =
   | "context_select"
   | "resume_modal"
-  | "step_loading"
   | "step_question"
   | "favorites_pick"
-  | "summary_loading"
   | "summary_preview"
-  | "error_modal"
   | "done";
-
-interface ErrorState {
-  kind: "rate_limit" | "token_invalid" | "generic";
-  message: string;
-}
 
 interface Props {
   /** 페르소나 이름 기본값 (NewPersonaSheet 흐름에서 받은 값) 또는 undefined → 자동 명명. */
@@ -87,10 +75,10 @@ interface Props {
    *
    * subStep 매핑:
    *  - context_select → 1
-   *  - step_loading/question (step 1) → 2
-   *  - step_loading/question (step 2 or 3) → 3
+   *  - step_question (step 1) → 2
+   *  - step_question (step 2 or 3) → 3
    *  - favorites_pick → 4
-   *  - summary_loading/preview → 5
+   *  - summary_preview → 5
    */
   embedded?: {
     onSubStepChange: (subStep: number) => void;
@@ -107,23 +95,18 @@ export default function PersonaSurveyController({
   const [phase, setPhase] = useState<Phase>("context_select");
   const [context, setContext] = useState<PersonaContext | null>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  /** 동적 totalSteps — 서버 shouldContinue 결과에 따라 2 또는 3. 초기 2 가정. */
-  const [totalSteps, setTotalSteps] = useState<2 | 3>(2);
+  // 정적 풀 step 2 shouldContinue=true 로 기본 3-step path.
+  const [totalSteps, setTotalSteps] = useState<2 | 3>(3);
   const [prevAnswers, setPrevAnswers] = useState<TasteSurveyAnswer[]>([]);
   const [currentOutput, setCurrentOutput] = useState<SurveyStepOutput | null>(
     null,
   );
   const [summary, setSummary] = useState<SurveySummaryOutput | null>(null);
   const [favorites, setFavorites] = useState<FavoritePickItem[]>([]);
-  const [error, setError] = useState<ErrorState | null>(null);
-  /** 서버가 발급한 신규 token (TTL 30분). step 호출 간 유지. */
-  const tokenRef = useRef<string | undefined>(undefined);
   /** 진입 시각 — taste_survey_completed.duration_ms 계산용. */
   const startedAtRef = useRef<number>(Date.now());
-  /** 동일 step 중복 요청 차단 ref. */
+  /** 동일 step 중복 요청 차단 ref (빠른 더블탭 가드). */
   const inflightRef = useRef(false);
-  /** 한 페르소나 생성에서 fallback 발생 여부 (preview 직전 한 번만 트래킹). */
-  const fallbackSeenRef = useRef(false);
 
   // === 컨텍스트 선택 후 진행 상황 복구 체크 ===
   const handleContextNext = useCallback((picked: PersonaContext) => {
@@ -141,118 +124,43 @@ export default function PersonaSurveyController({
       is_resurvey: !!resurveyPersonaId,
     });
     beginStep(picked, 1, []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- beginStep 은 forward useCallback (line 147), deps 에 추가 시 정의 순서 circular.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- beginStep 은 forward useCallback, deps 추가 시 정의 순서 circular.
   }, [resurveyPersonaId]);
 
-  // === LLM step 호출 + 자동 fallback ===
+  // === 정적 풀에서 step 질문 로드 ===
   const beginStep = useCallback(
-    async (
+    (
       ctx: PersonaContext,
       stepNum: 1 | 2 | 3,
       answers: TasteSurveyAnswer[],
     ) => {
       if (inflightRef.current) return;
       inflightRef.current = true;
-      setStep(stepNum);
-      setPrevAnswers(answers);
-      setCurrentOutput(null);
-      setPhase("step_loading");
-
-      // sessionStorage 진행 상황 저장 (mid-survey 복구용)
-      saveProgress({
-        context: ctx,
-        prevAnswers: answers,
-        step: stepNum,
-        token: tokenRef.current,
-        personaId: resurveyPersonaId,
-      });
-
       try {
-        const res = await fetchSurveyStep(
-          {
-            context: ctx,
-            prevAnswers: answers,
-            step: stepNum,
-            deviceId: getDeviceId(),
-          },
-          { token: tokenRef.current },
-        );
-        if (res.newToken) tokenRef.current = res.newToken;
-        const fallbackFlag = (res as SurveyStepOutput & { _fallback?: boolean })
-          ._fallback === true;
-        if (fallbackFlag && !fallbackSeenRef.current) {
-          fallbackSeenRef.current = true;
-          track("taste_survey_fallback_triggered", {
-            stage: "step",
-            step: stepNum,
-            contentType: ctx.contentType,
-            companion: ctx.companion,
-            source: "server",
-          });
-        }
+        const output = getStaticSurveyStep(ctx, stepNum);
+        if (!output) return;
+
+        setStep(stepNum);
+        setPrevAnswers(answers);
+        setCurrentOutput(output);
         if (stepNum === 2) {
-          setTotalSteps(res.shouldContinue ? 3 : 2);
+          setTotalSteps(output.shouldContinue ? 3 : 2);
         }
-        setCurrentOutput(res);
         setPhase("step_question");
-      } catch (err) {
-        const handled = handleStepError(err);
-        if (handled) {
-          inflightRef.current = false;
-          return;
-        }
-        // 클라이언트 측 최종 fallback — packages/core static-survey
-        const fallback = getStaticSurveyStep(ctx, stepNum);
-        if (fallback) {
-          if (!fallbackSeenRef.current) {
-            fallbackSeenRef.current = true;
-            track("taste_survey_fallback_triggered", {
-              stage: "step",
-              step: stepNum,
-              contentType: ctx.contentType,
-              companion: ctx.companion,
-              source: "client",
-            });
-          }
-          if (stepNum === 2) setTotalSteps(2);
-          setCurrentOutput(fallback);
-          setPhase("step_question");
-        } else {
-          setError({
-            kind: "generic",
-            message: "잠시 후 다시 시도해주세요",
-          });
-          setPhase("error_modal");
-        }
+
+        // sessionStorage 진행 상황 저장 (mid-survey 복구용)
+        saveProgress({
+          context: ctx,
+          prevAnswers: answers,
+          step: stepNum,
+          personaId: resurveyPersonaId,
+        });
       } finally {
         inflightRef.current = false;
       }
     },
     [resurveyPersonaId],
   );
-
-  /** 401/403/429 등 사용자 행동이 필요한 에러는 modal 로. true = handled. */
-  function handleStepError(err: unknown): boolean {
-    if (!(err instanceof SurveyClientError)) return false;
-    if (err.code === "rate_limit") {
-      setError({
-        kind: "rate_limit",
-        message: "잠시 후 다시 시도해주세요",
-      });
-      setPhase("error_modal");
-      return true;
-    }
-    if (err.code === "invalid_token") {
-      tokenRef.current = undefined;
-      setError({
-        kind: "token_invalid",
-        message: "세션이 만료됐어요. 처음부터 다시 시작합니다.",
-      });
-      setPhase("error_modal");
-      return true;
-    }
-    return false; // session_expired / origin_blocked 등은 fallback 진입
-  }
 
   // === step 답 제출 ===
   const handleAnswer = useCallback(
@@ -261,7 +169,8 @@ export default function PersonaSurveyController({
       const answer: TasteSurveyAnswer = {
         question: currentOutput.question,
         selectedOption: option.label,
-        // 06 진단 B안 (2026-05-28) — 다음 step 호출 시 서버가 사용 금지 카테고리 추출.
+        // 06 진단 B안 (2026-05-28) — 정상 경로 승격 후에도 PostHog 비교 baseline
+        // 보존 위해 axisCategory 그대로 동봉.
         axisCategory: currentOutput.axisCategory,
       };
       const nextAnswers = [...prevAnswers, answer];
@@ -316,84 +225,35 @@ export default function PersonaSurveyController({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- beginSummary 는 forward useCallback, deps 추가 시 정의 순서 circular.
   }, [context, prevAnswers]);
 
-  // === 통합 요약 호출 ===
+  // === 통합 요약 (정적, buildFallbackSummary) ===
   const beginSummary = useCallback(
-    async (
+    (
       ctx: PersonaContext,
       answers: TasteSurveyAnswer[],
       picked: FavoritePickItem[] = favorites,
     ) => {
-      if (inflightRef.current) return;
-      inflightRef.current = true;
-      setPrevAnswers(answers);
-      setPhase("summary_loading");
-      saveProgress({
-        context: ctx,
-        prevAnswers: answers,
-        step: (step === 3 ? 3 : 2) as 1 | 2 | 3,
-        token: tokenRef.current,
-        personaId: resurveyPersonaId,
-      });
-
       const favoritesPayload = picked.map((p) => ({
         title: p.title,
         tmdbId: p.id,
       }));
-
-      try {
-        const res = await fetchSurveySummary(
-          {
-            context: ctx,
-            prevAnswers: answers,
-            favorites: favoritesPayload,
-            deviceId: getDeviceId(),
-          },
-          { token: tokenRef.current },
-        );
-        track("taste_summary_generated", {
-          contentType: ctx.contentType,
-          companion: ctx.companion,
-          summary_chars: res.tasteSummary.length,
-          axes_count: res.axes.length,
-          used_fallback: false,
-        });
-        setSummary(res);
-        setPhase("summary_preview");
-      } catch (err) {
-        const handled = handleStepError(err);
-        if (handled) {
-          inflightRef.current = false;
-          return;
-        }
-        // 통합 요약도 최종 fallback — 룰 기반 자연어 합성
-        const fallback = buildFallbackSummary({
-          context: ctx,
-          prevAnswers: answers,
-          favorites: favoritesPayload,
-        });
-        if (!fallbackSeenRef.current) {
-          fallbackSeenRef.current = true;
-          track("taste_survey_fallback_triggered", {
-            stage: "summary",
-            contentType: ctx.contentType,
-            companion: ctx.companion,
-            source: "client",
-          });
-        }
-        track("taste_summary_generated", {
-          contentType: ctx.contentType,
-          companion: ctx.companion,
-          summary_chars: fallback.tasteSummary.length,
-          axes_count: fallback.axes.length,
-          used_fallback: true,
-        });
-        setSummary(fallback);
-        setPhase("summary_preview");
-      } finally {
-        inflightRef.current = false;
-      }
+      const result = buildFallbackSummary({
+        context: ctx,
+        prevAnswers: answers,
+        favorites: favoritesPayload,
+      });
+      track("taste_summary_generated", {
+        contentType: ctx.contentType,
+        companion: ctx.companion,
+        summary_chars: result.tasteSummary.length,
+        axes_count: result.axes.length,
+        // 정상 경로 (정적 풀 승격, 2026-06-06) — fallback 아님. baseline 비교용 유지.
+        used_fallback: false,
+      });
+      setPrevAnswers(answers);
+      setSummary(result);
+      setPhase("summary_preview");
     },
-    [resurveyPersonaId, step, favorites],
+    [favorites],
   );
 
   // === "맞아요" 수락 → 페르소나 저장 ===
@@ -444,7 +304,6 @@ export default function PersonaSurveyController({
     });
     // 첫 답만 유지 (step 1 답) → step 2 다시 호출
     const keep = prevAnswers.slice(0, 1);
-    fallbackSeenRef.current = false;
     setSummary(null);
     beginStep(context, 2, keep);
   }, [context, prevAnswers, beginStep]);
@@ -458,7 +317,6 @@ export default function PersonaSurveyController({
       handleResumeRestart();
       return;
     }
-    tokenRef.current = existing.token;
     startedAtRef.current = Date.now();
     track("taste_survey_started", {
       contentType: context.contentType,
@@ -473,8 +331,6 @@ export default function PersonaSurveyController({
   const handleResumeRestart = useCallback(() => {
     if (!context) return;
     clearProgress(context);
-    tokenRef.current = undefined;
-    fallbackSeenRef.current = false;
     startedAtRef.current = Date.now();
     track("taste_survey_started", {
       contentType: context.contentType,
@@ -498,64 +354,22 @@ export default function PersonaSurveyController({
     onCancel();
   }, [context, phase, step, onCancel]);
 
-  // === 에러 모달 dismiss 후 분기 ===
-  const handleErrorDismiss = useCallback(() => {
-    if (!error) {
-      setPhase(context ? "context_select" : "context_select");
-      return;
-    }
-    if (error.kind === "token_invalid") {
-      // 처음부터 다시 시작
-      tokenRef.current = undefined;
-      if (context) clearProgress(context);
-      setContext(null);
-      setPrevAnswers([]);
-      setStep(1);
-      setError(null);
-      setPhase("context_select");
-      return;
-    }
-    // rate_limit / generic → controller 닫기
-    setError(null);
-    handleCancel();
-  }, [error, context, handleCancel]);
-
-  // === 진입 시 device_id 인증 보장 ===
-  useEffect(() => {
-    // 사이드 이펙트 0 — device_id 만 확보 (없으면 device-id.ts 가 자동 발급)
-    if (typeof window !== "undefined") getDeviceId();
-  }, []);
-
   // embedded 모드: phase 변화 시 부모 (onboarding) 에 subStep 알림.
   // modal/done phase 에서는 onSubStepChange 호출 skip — 헤더가 모달 뒤에서
   // 1 로 fall-through 해 progress 역행하는 회귀 차단.
   useEffect(() => {
     if (!embedded) return;
-    if (phase === "error_modal" || phase === "resume_modal" || phase === "done") return;
+    if (phase === "resume_modal" || phase === "done") return;
     let subStep = 1;
-    if (phase === "step_loading" || phase === "step_question") {
+    if (phase === "step_question") {
       subStep = step === 1 ? 2 : 3;
     } else if (phase === "favorites_pick") {
       subStep = 4;
-    } else if (phase === "summary_loading" || phase === "summary_preview") {
+    } else if (phase === "summary_preview") {
       subStep = 5;
     }
     embedded.onSubStepChange(subStep);
   }, [embedded, phase, step]);
-
-  // === embedded 모드 에러 모달 retry / skip ===
-  // 기본 동작 (profile 진입) 은 닫기 → handleCancel. embedded 모드에서는 사용자가
-  // 빠져나갈 수 없는 trap 차단을 위해 retry 우선, skip 보조 분기.
-  const handleErrorRetry = useCallback(() => {
-    if (!context) {
-      setError(null);
-      setPhase("context_select");
-      return;
-    }
-    if (error?.kind === "token_invalid") tokenRef.current = undefined;
-    setError(null);
-    beginStep(context, step, prevAnswers);
-  }, [context, error, step, prevAnswers, beginStep]);
 
   // === Render ===
   return (
@@ -578,8 +392,6 @@ export default function PersonaSurveyController({
         <PersonaContextSelector onNext={handleContextNext} />
       )}
 
-      {phase === "step_loading" && <TasteSummaryLoading message="질문을 만드는 중" />}
-
       {phase === "step_question" && currentOutput && (
         <TasteSurveyStep
           step={step}
@@ -595,8 +407,6 @@ export default function PersonaSurveyController({
           onSkip={handleFavoritesSkip}
         />
       )}
-
-      {phase === "summary_loading" && <TasteSummaryLoading />}
 
       {phase === "summary_preview" && summary && (
         <TasteSummaryPreview
@@ -614,23 +424,6 @@ export default function PersonaSurveyController({
           secondaryLabel="처음부터"
           onPrimary={handleResumeContinue}
           onSecondary={handleResumeRestart}
-        />
-      )}
-
-      {phase === "error_modal" && error && (
-        <ConfirmModal
-          title={
-            error.kind === "rate_limit"
-              ? "잠시 후 다시 시도해주세요"
-              : error.kind === "token_invalid"
-                ? "세션이 만료됐어요"
-                : "오류가 발생했어요"
-          }
-          description={error.message}
-          primaryLabel={embedded ? "다시 시도" : "닫기"}
-          secondaryLabel={embedded ? "건너뛰기" : undefined}
-          onPrimary={embedded ? handleErrorRetry : handleErrorDismiss}
-          onSecondary={embedded ? handleErrorDismiss : undefined}
         />
       )}
     </div>
@@ -664,10 +457,9 @@ function SurveyHeader({
   // 자체 progress (profile 진입 케이스만 사용 — onboarding 은 외부 StepHeader).
   const stages = 1 + totalSteps + 1 + 1;
   let current = 1;
-  if (phase === "step_loading" || phase === "step_question") current = 1 + step;
+  if (phase === "step_question") current = 1 + step;
   else if (phase === "favorites_pick") current = 1 + totalSteps + 1;
-  else if (phase === "summary_loading" || phase === "summary_preview")
-    current = stages;
+  else if (phase === "summary_preview") current = stages;
 
   return (
     <div className="shrink-0 px-6 pt-5 pb-3">
