@@ -43,6 +43,7 @@ vi.mock("openai", () => {
 import {
   rankCandidatesLLM,
   rankCandidatesScore,
+  providerIdsToNames,
   DIVERSITY_AXES,
   type RankerInput,
 } from "../ranking";
@@ -317,5 +318,12 @@ describe("rankCandidatesLLM", () => {
     });
     // 빈 후보 → LLM 호출 skip
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("providerIdsToNames (B-3)", () => {
+  it("#9 매핑 id → 한글 라벨, 알 수 없는 id 는 silent skip", () => {
+    const out = providerIdsToNames([8, 337, 99999]);
+    expect(out).toEqual(["넷플릭스", "디즈니플러스"]);
   });
 });

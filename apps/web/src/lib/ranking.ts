@@ -127,6 +127,22 @@ function formatSubscribedOtt(ids: number[]): string {
   return names.join(", ");
 }
 
+/**
+ * Phase B-3 (2026-06-06) — provider id 배열을 한글 OTT name 배열로 변환.
+ * `candidate-generation.ts` 의 `PersonaProfile.subscribedOtt` (string[]) 빌드용.
+ * 매핑 없는 id 는 silent skip.
+ *
+ * 본 모듈을 single source of truth 로 둠 — recommend.ts 가 import.
+ */
+export function providerIdsToNames(ids: number[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    const name = PROVIDER_ID_TO_KR_NAME[id];
+    if (name) out.push(name);
+  }
+  return out;
+}
+
 /** `prompt.ts:289` buildFeedbackPrompt 동일 로직 복사. */
 function buildFeedbackPrompt(feedback?: WatchFeedback): string {
   if (!feedback) return "";
