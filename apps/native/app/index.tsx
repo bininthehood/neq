@@ -437,6 +437,17 @@ export default function DiscoverScreen() {
           setRecs(data);
           setTopIdx(0);
           setState('ready');
+          // 2026-06-06 (P0 incident Fix B-1) — 폴백도 빈 응답이면 진짜 풀 고갈 확정.
+          // lock set → EmptyState (filter X 분기 = "추천 기록 초기화" CTA 노출).
+          if (data.length === 0) {
+            exhaustedRef.current = true;
+            setExhausted(true);
+            track('recommendation_load_more', {
+              exhausted: true,
+              history_count: historyActive.length,
+              saved_count: saved.length,
+            });
+          }
           // 배치 H — 추천 기록 누적 (web `useRecommendations.ts:413` 정합).
           // non-streaming 폴백 분기 — 배치 전체를 기록.
           void addRecHistory(
@@ -1215,10 +1226,14 @@ export default function DiscoverScreen() {
   // 2026-06-06 (P0 incident Fix B-1) — exhausted lock 정합 derive.
   // 기존: state==='ready' && cardsToShow.length===0 → 카드 다 swipe 한 직후 즉시
   //       EmptyState (prefetch 진행 중에도 노출 = false-positive).
-  // 변경: state===ready + cardsToShow=0 + **진짜 pool 고갈 lock** 활성 시에만.
+  // 변경: state===ready + cardsToShow=0 + (진짜 pool 고갈 lock 활성 OR recs 자체 0).
   // PWA `useRecommendations.ts:140, 537~568` 정합.
+  // recs.length===0 분기: load() 빈 응답 시 prefetch 못 trigger (useEffect 의
+  // recs.length===0 가드) → exhaustedDisplay 가 fallback 으로 EmptyState 노출.
   const exhaustedDisplay =
-    state === 'ready' && cardsToShow.length === 0 && exhausted;
+    state === 'ready' &&
+    cardsToShow.length === 0 &&
+    (exhausted || recs.length === 0);
 
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
     recs.some((r) => r.providers.some((p) => p.name === ott)),
