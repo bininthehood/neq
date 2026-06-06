@@ -42,6 +42,7 @@ vi.mock("openai", () => {
 
 import {
   rankCandidatesLLM,
+  rankCandidatesLLMStreaming,
   rankCandidatesScore,
   providerIdsToNames,
   providerIdsToTmdbNames,
@@ -49,6 +50,7 @@ import {
   type RankerInput,
 } from "../ranking";
 import type { TmdbCandidate } from "../candidate-generation";
+import type { CurationMeta } from "../recommend/types";
 
 // 후보 fixture
 function mkCandidate(
@@ -319,6 +321,125 @@ describe("rankCandidatesLLM", () => {
     });
     // 빈 후보 → LLM 호출 skip
     expect(mockCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("rankCandidatesLLMStreaming (Phase D-2)", () => {
+  /**
+   * 스트림 mock — OpenAI chat.completions.create({stream: true}) 가 반환하는
+   * async iterable 을 흉내내는 helper. chunks 배열 끝에 usage chunk 를 append.
+   */
+  function mkStreamMock(chunks: Array<{ delta?: string; usage?: unknown }>) {
+    return {
+      [Symbol.asyncIterator]: async function* () {
+        for (const ch of chunks) {
+          yield {
+            choices: [{ delta: { content: ch.delta ?? "" } }],
+            usage: ch.usage,
+          };
+        }
+      },
+    };
+  }
+
+  it("#S1 empty pool → null 반환, onPick / onMeta 미호출", async () => {
+    const onPick = vi.fn();
+    const onMeta = vi.fn();
+    const out = await rankCandidatesLLMStreaming(
+      mkInput([]),
+      onPick,
+      onMeta,
+    );
+    expect(out).toBeNull();
+    expect(onPick).not.toHaveBeenCalled();
+    expect(onMeta).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("#S2 stream chunks → onMeta 1회 + onPick 시퀀스 + usage 반환", async () => {
+    const cands = [mkCandidate(100), mkCandidate(101), mkCandidate(102)];
+    // selected[] 점진 빌드 — partial JSON 파싱이 length-1 까지 emit.
+    const fullJson = JSON.stringify({
+      selected: [
+        { id: 100, reason: "긴장감이 끝까지 놓이지 않는 명작이에요" },
+        { id: 101, reason: "캐릭터 케미가 미쳤어요. 다음 시즌 빨리 보고싶어요" },
+        { id: 102, reason: "잔잔하지만 여운이 길게 남는 작품이에요" },
+      ],
+    });
+    // 3-chunk 분할 — 마지막 chunk 에 usage 포함.
+    const mid = Math.floor(fullJson.length / 2);
+    const chunks = [
+      { delta: fullJson.slice(0, mid) },
+      { delta: fullJson.slice(mid) },
+      {
+        usage: {
+          prompt_tokens: 120,
+          completion_tokens: 60,
+          prompt_tokens_details: { cached_tokens: 80 },
+        },
+      },
+    ];
+    mockCreate.mockResolvedValueOnce(mkStreamMock(chunks));
+
+    const picks: Array<{ id: number; reason: string }> = [];
+    const metas: CurationMeta[] = [];
+    const usage = await rankCandidatesLLMStreaming(
+      mkInput(cands, { excludeCount: 5 }),
+      (p) => picks.push(p),
+      (m) => metas.push(m),
+    );
+
+    // onMeta 정확히 1회
+    expect(metas).toHaveLength(1);
+    expect(DIVERSITY_AXES).toContain(metas[0].diversity_axis as never);
+    expect(metas[0].temperature).toBe(0.8); // excludeCount=5 → 0.8
+    expect(metas[0].seed).toBeGreaterThan(0);
+
+    // picks 모두 후보 풀 ID 에 속함
+    const candidateIds = new Set(cands.map((c) => c.tmdbId));
+    for (const p of picks) {
+      expect(candidateIds.has(p.id)).toBe(true);
+      expect(p.reason.length).toBeGreaterThanOrEqual(15);
+      expect(p.reason.length).toBeLessThanOrEqual(30);
+    }
+    // 최종 JSON.parse 단계까지 거쳐 selected 3개 전부 emit.
+    expect(picks).toHaveLength(3);
+    expect(picks.map((p) => p.id)).toEqual([100, 101, 102]);
+
+    // usage 정상
+    expect(usage).not.toBeNull();
+    expect(usage?.prompt_tokens).toBe(120);
+    expect(usage?.cached_tokens).toBe(80);
+  });
+
+  it("#S3 후보 풀에 없는 ID + normalizeReason 미통과 → silent skip", async () => {
+    const cands = [mkCandidate(100), mkCandidate(101)];
+    const fullJson = JSON.stringify({
+      selected: [
+        { id: 100, reason: "긴장감이 끝까지 놓이지 않는 명작이에요" }, // OK
+        { id: 999, reason: "긴장감이 끝까지 놓이지 않는 명작이에요" }, // 후보 풀 외 → skip
+        { id: 101, reason: "짧음" }, // 15자 미만 → normalize 실패 → skip
+      ],
+    });
+    mockCreate.mockResolvedValueOnce(
+      mkStreamMock([
+        { delta: fullJson },
+        {
+          usage: {
+            prompt_tokens: 100,
+            completion_tokens: 40,
+            prompt_tokens_details: { cached_tokens: 0 },
+          },
+        },
+      ]),
+    );
+
+    const picks: Array<{ id: number; reason: string }> = [];
+    await rankCandidatesLLMStreaming(mkInput(cands), (p) => picks.push(p));
+
+    // 100 만 통과
+    expect(picks).toHaveLength(1);
+    expect(picks[0].id).toBe(100);
   });
 });
 
