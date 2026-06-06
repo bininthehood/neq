@@ -40,6 +40,32 @@ function normalizeReason(raw: string): string | null {
   return slice;
 }
 
+/**
+ * Phase A-1 (2026-06-06) — temperature 동적화.
+ *
+ * baseline: 0.8 고정. 같은 페르소나 + 같은 excludeIds 호출 시 LLM 이 결정성
+ * cluster 안에서 거의 같은 batch 반환 (메모리 `project_recommendation_engine_baseline`
+ * 결정성 5요소 #1~#5).
+ *
+ * 정책: excludeIds 누적 (= 사용자가 이미 본/노출된 작품 수) 비례 상향. 누적
+ * 많을수록 candidate pool 부족 → 더 창의적인 (= 평소 cluster 밖) 선택 강제.
+ *
+ * cutoff (20/50/100):
+ *  - <20:  cold start ~ 초기 swipe (mode = 탐색~혼합 경계)
+ *  - <50:  중간 누적 (mode = 혼합~개인화 경계)
+ *  - <100: 깊은 누적 (mode = 개인화 + cluster 고갈 초기)
+ *  - 100+: 매우 깊은 누적 (cluster 고갈 완연 — 최대 다양성)
+ *
+ * 향후 PostHog `srv_temperature` 와 swipe-through rate / save rate 상관 측정
+ * 후 cutoff/value 재조정 가능 (Phase D A/B framework).
+ */
+export function dynamicTemperature(excludeCount: number): number {
+  if (excludeCount < 20) return 0.8;
+  if (excludeCount < 50) return 0.95;
+  if (excludeCount < 100) return 1.1;
+  return 1.2;
+}
+
 // LLM 큐레이션의 고정 prefix. 사용자별 동적 데이터(modeGuide, 취향, 후보)는 user 메시지로 이동시켜
 // OpenAI prompt caching prefix를 안정화한다. 1024+ 토큰 동일 prefix 시 자동 cache hit (gpt-4o-mini).
 // 1차 push(380 토큰 추정)는 임계 미달로 caching 미발현. 본 확장으로 1024+ 통과 + 모델 출력 가이드 강화.
@@ -398,6 +424,11 @@ export async function curateWithLLM(
   tasteGenres: string[] = [],
   subscribedOtt: number[] = [],
   tasteSummary?: string,
+  /**
+   * Phase A-1 (2026-06-06) — temperature 동적화. excludeIds.length 전달.
+   * 미전달 시 0 → baseline 0.8 (기존 동작과 동일, REGRESSION 보호).
+   */
+  excludeCount: number = 0,
 ): Promise<{ picks: CuratedPick[]; usage: TokenUsage | null }> {
   if (candidates.length === 0) return { picks: [], usage: null };
 
@@ -420,7 +451,7 @@ export async function curateWithLLM(
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.8,
+      temperature: dynamicTemperature(excludeCount),
     });
 
     const usage: TokenUsage = {
@@ -477,6 +508,10 @@ export async function curateWithLLMStreaming(
   tasteGenres: string[] = [],
   subscribedOtt: number[] = [],
   tasteSummary?: string,
+  /**
+   * Phase A-1 (2026-06-06) — temperature 동적화. curateWithLLM 와 동일 정책.
+   */
+  excludeCount: number = 0,
 ): Promise<TokenUsage | null> {
   if (candidates.length === 0) return null;
 
@@ -517,7 +552,7 @@ export async function curateWithLLMStreaming(
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: 0.8,
+      temperature: dynamicTemperature(excludeCount),
       stream: true,
       stream_options: { include_usage: true },
     });

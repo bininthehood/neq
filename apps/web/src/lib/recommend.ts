@@ -364,6 +364,11 @@ export async function getRecommendations(
     tasteGenres,
     subscribedOtt,
     tasteSummary,
+    // Phase A-1 (2026-06-06) — excludeIds 누적 → 동적 temperature.
+    // matchedIdsSet 은 favorites tmdbId + excludeIds 합집합 (위 라인 225). 사용자
+    // 누적 노출량을 가장 정확히 반영. matched.length 만큼 baseline 노출이 빠지지만
+    // cutoff 가 20/50/100 으로 거친 단계라 영향 미미.
+    matchedIdsSet.size,
   );
   mark("llm", tLlm);
 
@@ -527,6 +532,8 @@ export async function getRecommendationsStreaming(
     tasteGenres,
     subscribedOtt,
     tasteSummary,
+    // Phase A-1 (2026-06-06) — non-streaming 와 동일 정책. matchedIdsSet 전달.
+    matchedIdsSet.size,
   );
   mark("llm", tLlm);
 
