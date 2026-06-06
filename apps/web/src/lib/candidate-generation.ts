@@ -270,6 +270,79 @@ function rowToCandidate(
   };
 }
 
+// ---------- Phase B-3.2: stratifiedSample ----------
+//
+// 동기: B-3.1 측정에서 같은 페르소나 5 batch Jaccard 0.401 floor.
+// 원인: generateCandidates 가 항상 totalScore desc 상위 N → LLM phase1 도 같은 풀
+// 에서 같은 picks → 셋 자체가 결정적. Phase 2 셔플은 잔여 30 슬롯만 영향.
+//
+// 본 함수는 풀 자체를 stochastic 화 — 상위 topK 는 deterministic 유지 (persona
+// 강한 신호 보존), 나머지는 totalScore 가중 random sample. TikTok/IG L3 표준 패턴.
+//
+// 결과: 같은 페르소나 호출 시 풀이 매번 다른 tail 을 가짐 → LLM picks 도 자연스럽게
+// 분산 → Jaccard 가 풀 변동률만큼 추가로 감소.
+
+/**
+ * Phase B-3.2 (2026-06-06) — top-K deterministic + 가중 random tail.
+ *
+ * @param candidates totalScore desc 정렬된 입력 (호출자 책임)
+ * @param poolSize   반환 크기 상한 (candidates.length 보다 작으면 sampling 발생)
+ * @param topK       deterministic 보존 개수 (상위). default 100.
+ *
+ * @returns 길이 = min(poolSize, candidates.length). totalScore desc 정렬.
+ *
+ * 알고리즘:
+ *   1. 상위 topK 는 항상 포함
+ *   2. 나머지에서 (poolSize - topK) 개를 totalScore 가중 random sample (중복 X)
+ *   3. 합산 후 totalScore desc 재정렬
+ *
+ * Edge cases:
+ *   - candidates.length <= poolSize → 전체 반환 (sampling skip)
+ *   - topK >= poolSize → 상위 poolSize 그대로 반환
+ *   - totalScore 0 만 있는 tail → 균등 random 으로 degrade (math safe)
+ */
+export function stratifiedSample<T extends { totalScore: number }>(
+  candidates: T[],
+  poolSize: number,
+  topK: number,
+): T[] {
+  if (candidates.length <= poolSize) return candidates.slice();
+  if (topK >= poolSize) return candidates.slice(0, poolSize);
+
+  const top = candidates.slice(0, topK);
+  const rest = candidates.slice(topK);
+  const sampleSize = Math.min(poolSize - topK, rest.length);
+  if (sampleSize <= 0) return top.slice(0, poolSize);
+
+  // 가중 sample without replacement. pool 수백 단위라 O(n × sampleSize) OK.
+  const pool = rest.slice();
+  // totalScore 음수/0 방어 — 최소 weight 1 부여 (균등 fallback)
+  const weights = pool.map((c) => Math.max(c.totalScore, 1e-6));
+  let totalWeight = weights.reduce((s, w) => s + w, 0);
+
+  const sampled: T[] = [];
+  for (let i = 0; i < sampleSize; i++) {
+    const r = Math.random() * totalWeight;
+    let cum = 0;
+    let pickIdx = pool.length - 1; // 부동소수 오차 fallback
+    for (let j = 0; j < pool.length; j++) {
+      cum += weights[j];
+      if (r < cum) {
+        pickIdx = j;
+        break;
+      }
+    }
+    sampled.push(pool[pickIdx]);
+    totalWeight -= weights[pickIdx];
+    pool.splice(pickIdx, 1);
+    weights.splice(pickIdx, 1);
+  }
+
+  const merged = [...top, ...sampled];
+  merged.sort((a, b) => b.totalScore - a.totalScore);
+  return merged;
+}
+
 // ---------- 메인: generateCandidates ----------
 
 /**
@@ -290,6 +363,10 @@ function rowToCandidate(
  * @param excludeIds  차단할 TMDB id (이미 본 / saved / 누적 노출)
  * @param poolSize    반환 후보 수 (기본 1000). PoolSize 1000 → DB row ~수만 scan
  *                    + JSONB 매칭 → ~수백 ms 예상 (Supabase / pg index 의존).
+ * @param topK        Phase B-3.2 stratifiedSample 의 deterministic 상위 보존 수
+ *                    (default 100). 상위 topK 는 항상 totalScore desc 유지,
+ *                    나머지는 가중 random sample → 같은 페르소나 호출 간 풀 변동
+ *                    → batch Jaccard 추가 감소. topK >= poolSize 면 sampling 없음.
  *
  * @returns TmdbCandidate[] — totalScore desc 정렬. 0건 가능.
  */
@@ -298,6 +375,7 @@ export async function generateCandidates(
   filter: RecommendFilter,
   excludeIds: number[],
   poolSize: number = 1000,
+  topK: number = 100,
 ): Promise<TmdbCandidate[]> {
   const admin = supabaseAdmin(); // env 누락 시 throw → caller 가 fallback
 
@@ -436,5 +514,6 @@ export async function generateCandidates(
   }
 
   candidates.sort((a, b) => b.totalScore - a.totalScore);
-  return candidates.slice(0, poolSize);
+  // Phase B-3.2 — top-K deterministic + 가중 random tail (위 stratifiedSample 주석 참조).
+  return stratifiedSample(candidates, poolSize, topK);
 }

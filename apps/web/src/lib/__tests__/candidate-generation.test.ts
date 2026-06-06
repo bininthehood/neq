@@ -93,7 +93,11 @@ vi.mock("../supabase-admin", () => ({
   }),
 }));
 
-import { generateCandidates, tasteGenresToIds } from "../candidate-generation";
+import {
+  generateCandidates,
+  stratifiedSample,
+  tasteGenresToIds,
+} from "../candidate-generation";
 
 beforeEach(() => {
   mockMovieRows = [];
@@ -326,5 +330,73 @@ describe("generateCandidates", () => {
     mockTvRows = [];
     const result = await generateCandidates({}, {}, []);
     expect(result).toEqual([]);
+  });
+});
+
+// ---------- Phase B-3.2 — stratifiedSample ----------
+describe("stratifiedSample (Phase B-3.2)", () => {
+  /** 결정적 입력 (totalScore desc 정렬). */
+  function makeCandidates(n: number): Array<{ id: number; totalScore: number }> {
+    return Array.from({ length: n }, (_, i) => ({
+      id: i,
+      totalScore: n - i, // desc: n, n-1, ..., 1
+    }));
+  }
+
+  it("#11 deterministic top-K 보존 + tail 호출별 변동 (다양성 핵심)", () => {
+    const input = makeCandidates(100);
+    const poolSize = 50;
+    const topK = 10;
+
+    // 5회 호출 → 상위 10 은 모두 동일, tail 40 은 호출 간 set Jaccard < 0.7 기대
+    const runs: Array<{ id: number }[]> = [];
+    for (let i = 0; i < 5; i++) {
+      runs.push(stratifiedSample(input, poolSize, topK));
+    }
+
+    // 모든 run 의 상위 topK 가 동일 (id 0..9)
+    for (const run of runs) {
+      expect(run.length).toBe(poolSize);
+      const topIds = run.slice(0, topK).map((c) => c.id);
+      // 정렬된 결과의 상위 K 는 totalScore desc 최상위 → id 0..topK-1
+      expect(topIds).toEqual(Array.from({ length: topK }, (_, j) => j));
+    }
+
+    // tail 영역 (id >= topK) 의 호출 간 set 차이 — 적어도 한 쌍은 Jaccard < 1.0
+    function tailIds(run: { id: number }[]): Set<number> {
+      return new Set(run.filter((c) => c.id >= topK).map((c) => c.id));
+    }
+    const tails = runs.map(tailIds);
+    let foundDiff = false;
+    for (let a = 0; a < tails.length; a++) {
+      for (let b = a + 1; b < tails.length; b++) {
+        const inter = new Set([...tails[a]].filter((x) => tails[b].has(x)));
+        const uni = new Set([...tails[a], ...tails[b]]);
+        const jaccard = inter.size / uni.size;
+        if (jaccard < 1.0) foundDiff = true;
+        // 풀 90 중 40 sample → 평균 Jaccard ≈ (40/90 의 2배 중복 비율) ≈ 0.29
+        // 임계는 다소 느슨하게 0.7 — flaky 방지
+        expect(jaccard).toBeLessThan(0.95);
+      }
+    }
+    expect(foundDiff).toBe(true);
+  });
+
+  it("#12 topK >= poolSize → sampling 없이 상위 그대로", () => {
+    const input = makeCandidates(50);
+    const out = stratifiedSample(input, 10, 20);
+    expect(out.length).toBe(10);
+    // sampling 발생 X — 상위 10 (id 0..9) 그대로
+    expect(out.map((c) => c.id)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it("#13 candidates.length <= poolSize → 전체 반환 (overflow 없음)", () => {
+    const input = makeCandidates(20);
+    const out = stratifiedSample(input, 50, 10);
+    expect(out.length).toBe(20);
+    // totalScore desc 유지
+    for (let i = 0; i < out.length - 1; i++) {
+      expect(out[i].totalScore).toBeGreaterThanOrEqual(out[i + 1].totalScore);
+    }
   });
 });
