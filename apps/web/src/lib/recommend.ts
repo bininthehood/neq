@@ -29,6 +29,7 @@ import {
 } from "./candidate-generation";
 import {
   rankCandidatesLLM,
+  rankCandidatesLLMStreaming,
   rankCandidatesScore,
   providerIdsToTmdbNames,
 } from "./ranking";
@@ -613,14 +614,27 @@ function tmdbCandidateToEnriched(c: TmdbCandidate): EnrichedCandidate {
 // Phase C (2026-06-06) — interleaveByGenre / primaryGenre 제거.
 // applyDiversityReorder (lib/diversity.ts) 가 superset 으로 교체.
 
-// ---------- Streaming 변형 (옵션 1, Day 19 PoC, streaming-poc-design.md) ----------
+// ---------- Streaming 변형 (옵션 1, Day 19 PoC → Phase D-2 2-stage 통합 2026-06-07) ----------
 
 /**
- * getRecommendations의 streaming 변형. LLM 단계만 element 단위 emit.
- * Phase 2 템플릿 카드는 LLM 끝난 후 한 번에 emit.
+ * getRecommendations 의 streaming 변형. 2-stage 통합 후 (Phase D-2):
  *
- * 1차 PoC 단순화: 보충 enrich/filter 로직 (기존 getRecommendations의 보충 경로) 미구현.
- * 필요 시 후속 PR로 복원. applyDiversityReorder 는 stream 순서 유지로 미적용.
+ *   ┌─ favorites === 0 → coldStartReason (변경 0)
+ *   └─ favorites > 0 (정상 경로):
+ *       1. match  — matchFavoritesToTMDB
+ *       2. PersonaProfile build  (non-streaming 과 동일)
+ *       3. generateCandidates (B-1, poolSize 500, topK 30)
+ *          throws / 0 → fallback ladder 진입 (기존 gather/enrich/filter/curateWithLLMStreaming)
+ *       4. Phase 1: rankCandidatesLLMStreaming (B-2 streaming 변형)
+ *          stream chunk → onPick → 후보 lookup → 즉시 callbacks.onCard
+ *          (phase 1 picks 는 buffer 금지 — streaming UX 핵심)
+ *       5. LLM picks 0 안전망 → rankCandidatesScore (안전망)
+ *       6. Phase 2: 잔여 후보 30개 score-fill (top 20 유지 + 나머지 셔플) →
+ *          applyDiversityReorder 는 **phase 2 만** 적용 → 순차 emit
+ *          (phase 1 stream 순서 보존 — 이미 emit 된 카드 재정렬 불가)
+ *
+ * Phase D 측정 결과 (2026-06-06): prod 사용자 83% 가 streaming 분기 호출 → 본
+ * 통합 후 2-stage 효과 (Jaccard 하락 / 다양성 증가) 가 prod 사용자 전체에 적용.
  */
 export async function getRecommendationsStreaming(
   favorites: string[],
@@ -643,7 +657,7 @@ export async function getRecommendationsStreaming(
     timings[key] = (timings[key] ?? 0) + Math.round(performance.now() - t0);
   };
 
-  // Cold start
+  // Cold start (변경 0)
   if (favorites.length === 0) {
     const t = performance.now();
     const recs = await getColdStartRecommendations(filter, exclude);
@@ -667,64 +681,208 @@ export async function getRecommendationsStreaming(
   ]);
   const excludeTitlesSet = new Set(exclude ?? []);
 
-  const tGather = performance.now();
-  const candidates = await gatherCandidates(matched, matchedIdsSet, excludeTitlesSet);
-  mark("gather", tGather);
-  if (candidates.length === 0) {
+  // PersonaProfile 빌드 — non-streaming 경로 §262~280 와 동일.
+  const favoriteGenreIdFreq = new Map<number, number>();
+  for (const fav of matched) {
+    for (const gid of fav.genreIds) {
+      favoriteGenreIdFreq.set(gid, (favoriteGenreIdFreq.get(gid) ?? 0) + 1);
+    }
+  }
+  const profile: PersonaProfile = {
+    favoriteGenreIds: Array.from(favoriteGenreIdFreq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id),
+    favoriteTmdbIds: matched.map((m) => m.id),
+    tasteGenres,
+    subscribedOtt: providerIdsToTmdbNames(subscribedOtt),
+    favoriteDecades: [],
+  };
+
+  // Stage 1: candidate pool retrieval (B-1, B-3.2 stochasticity)
+  let tmdbCandidates: TmdbCandidate[] = [];
+  let usedFallback = false;
+  const tCands = performance.now();
+  try {
+    tmdbCandidates = await generateCandidates(
+      profile,
+      filter,
+      Array.from(matchedIdsSet),
+      500, // poolSize — non-streaming 과 동일 (B-3.1)
+      // topK default 30 (B-3.2)
+    );
+  } catch (err) {
+    console.error(
+      "[B-3 streaming] generateCandidates failed, falling back:",
+      err,
+    );
+    usedFallback = true;
+  }
+  mark("candidates", tCands);
+
+  // ── Fallback ladder: 0 후보 OR throws → 기존 gather/enrich/filter/curateWithLLMStreaming ──
+  if (usedFallback || tmdbCandidates.length === 0) {
+    const tFallback = performance.now();
+
+    const tGather = performance.now();
+    const candidates = await gatherCandidates(
+      matched,
+      matchedIdsSet,
+      excludeTitlesSet,
+    );
+    mark("gather", tGather);
+    if (candidates.length === 0) {
+      mark("fallback", tFallback);
+      callbacks.onTimings(timings);
+      return;
+    }
+
+    const tEnrich = performance.now();
+    const enriched = await enrichWithMode(candidates, useMirror);
+    mark("enrich", tEnrich);
+
+    const tFilter = performance.now();
+    const filtered = applyFilters(enriched, filter);
+    mark("filter", tFilter);
+
+    if (filtered.length === 0) {
+      mark("fallback", tFallback);
+      callbacks.onTimings(timings);
+      return;
+    }
+
+    const tLlm = performance.now();
+    const usedIds = new Set<number>();
+    const usedTitles = new Set<string>();
+    let phase1Count = 0;
+
+    const usage = await curateWithLLMStreaming(
+      filtered,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      (pick) => {
+        if (phase1Count >= 20) return;
+        const c = filtered.find((f) => f.id === pick.id);
+        if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) return;
+        usedIds.add(c.id);
+        usedTitles.add(c.item.title);
+        phase1Count += 1;
+        callbacks.onCard(buildRecommendationObject(c, pick.reason));
+      },
+      tasteGenres,
+      subscribedOtt,
+      tasteSummary,
+      matchedIdsSet.size,
+      (meta) => callbacks.onMeta?.(meta),
+    );
+    mark("llm", tLlm);
+
+    if (usage) callbacks.onUsage(usage);
+
+    for (const c of filtered) {
+      if (usedIds.size >= 50) break;
+      if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
+      usedIds.add(c.id);
+      usedTitles.add(c.item.title);
+      callbacks.onCard(buildRecommendationObject(c, templateReason(c)));
+    }
+
+    mark("fallback", tFallback);
     callbacks.onTimings(timings);
     return;
   }
 
-  const tEnrich = performance.now();
-  const enriched = await enrichWithMode(candidates, useMirror);
-  mark("enrich", tEnrich);
-
-  const tFilter = performance.now();
-  const filtered = applyFilters(enriched, filter);
-  mark("filter", tFilter);
-
-  if (filtered.length === 0) {
-    callbacks.onTimings(timings);
-    return;
-  }
-
-  const tLlm = performance.now();
+  // ── 정상 경로 (2-stage streaming) ──
+  const candidateById = new Map(
+    tmdbCandidates.map((c) => [c.tmdbId, c]),
+  );
   const usedIds = new Set<number>();
   const usedTitles = new Set<string>();
   let phase1Count = 0;
 
-  const usage = await curateWithLLMStreaming(
-    filtered, favorites, feedback, savedCount, onboardingCount,
+  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지)
+  const tRank = performance.now();
+  const usage = await rankCandidatesLLMStreaming(
+    {
+      candidates: tmdbCandidates,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOttIds: subscribedOtt,
+      tasteSummary,
+      excludeCount: matchedIdsSet.size,
+      count: 20,
+    },
     (pick) => {
       if (phase1Count >= 20) return;
-      const c = filtered.find((f) => f.id === pick.id);
-      if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) return;
-      usedIds.add(c.id);
-      usedTitles.add(c.item.title);
+      const tc = candidateById.get(pick.id);
+      if (!tc) return;
+      if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) return;
+      const enriched = tmdbCandidateToEnriched(tc);
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
       phase1Count += 1;
-      callbacks.onCard(buildRecommendationObject(c, pick.reason));
+      callbacks.onCard(buildRecommendationObject(enriched, pick.reason));
     },
-    tasteGenres,
-    subscribedOtt,
-    tasteSummary,
-    // Phase A-1 (2026-06-06) — non-streaming 와 동일 정책. matchedIdsSet 전달.
-    matchedIdsSet.size,
-    // Phase A-3/A-4 (2026-06-06) — meta 흐름. callbacks.onMeta 가 정의되면
-    // 즉시 emit (LLM stream 시작 전).
     (meta) => callbacks.onMeta?.(meta),
   );
-  mark("llm", tLlm);
+  mark("rank", tRank);
 
   if (usage) callbacks.onUsage(usage);
 
-  // Phase 2: 템플릿 reason 30개 (LLM 끝난 후 한 번에 emit)
-  for (const c of filtered) {
-    if (usedIds.size >= 50) break;
-    if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
-    usedIds.add(c.id);
-    usedTitles.add(c.item.title);
-    callbacks.onCard(buildRecommendationObject(c, templateReason(c)));
+  // LLM picks 0 안전망 — rankCandidatesScore 로 phase 1 자리 채움.
+  // (외부 호출 실패 / JSON 파싱 실패 / normalize 0 통과 등)
+  if (phase1Count === 0) {
+    const ranked = rankCandidatesScore({
+      candidates: tmdbCandidates,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOttIds: subscribedOtt,
+      tasteSummary,
+      excludeCount: matchedIdsSet.size,
+      count: 20,
+    });
+    for (const { id, reason } of ranked.picks) {
+      if (phase1Count >= 20) break;
+      const tc = candidateById.get(id);
+      if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+      const enriched = tmdbCandidateToEnriched(tc);
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
+      phase1Count += 1;
+      callbacks.onCard(buildRecommendationObject(enriched, reason));
+    }
   }
+
+  // Phase 2: score-fill 30 + diversity reorder.
+  //   - top 20 유지 + 나머지 셔플 (B-3.1 패턴)
+  //   - **phase 2 만** applyDiversityReorder 적용. phase 1 의 stream 순서는
+  //     이미 사용자에게 emit 되어 재정렬 불가 (50개 합쳐 reorder 하면 phase 1
+  //     카드 위치가 변동 → UX 손상). 본 정책은 협상 불가.
+  const phase2Pool = tmdbCandidates.filter(
+    (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
+  );
+  const phase2Top = phase2Pool.slice(0, 20);
+  const phase2Rest = phase2Pool.slice(20).sort(() => Math.random() - 0.5);
+  const phase2Slots = Math.max(0, 50 - phase1Count);
+  const phase2Recs: Recommendation[] = [];
+  for (const tc of [...phase2Top, ...phase2Rest]) {
+    if (phase2Recs.length >= phase2Slots) break;
+    const enriched = tmdbCandidateToEnriched(tc);
+    phase2Recs.push(
+      buildRecommendationObject(enriched, templateReason(enriched)),
+    );
+  }
+
+  const reordered = applyDiversityReorder(phase2Recs);
+  for (const rec of reordered) callbacks.onCard(rec);
 
   callbacks.onTimings(timings);
 }
