@@ -30,7 +30,7 @@ import {
 import {
   rankCandidatesLLM,
   rankCandidatesScore,
-  providerIdsToNames,
+  providerIdsToTmdbNames,
 } from "./ranking";
 import type { TMDBSimilarItem } from "./tmdb";
 
@@ -269,7 +269,9 @@ export async function getRecommendations(
       .map(([id]) => id),
     favoriteTmdbIds: matched.map((m) => m.id),
     tasteGenres,
-    subscribedOtt: providerIdsToNames(subscribedOtt),
+    // B-3.1: DB providers JSONB.name 이 영문 (Netflix/TVING/wavve) 이라
+    // 한글 (providerIdsToNames) 로는 매칭 0건 → 영문 변환 사용
+    subscribedOtt: providerIdsToTmdbNames(subscribedOtt),
     // match.ts 가 release_year 미반환 — favoriteDecades 는 Phase B 후속 트랙.
     favoriteDecades: [],
   };
@@ -283,7 +285,7 @@ export async function getRecommendations(
       profile,
       filter,
       Array.from(matchedIdsSet),
-      500, // poolSize — B-4 측정 후 1000 검토 (메모리: latency tradeoff)
+      500, // poolSize — B-3.1: 인덱스 정착 후 200 → 500 복귀. 다양성 확보 (Phase 2 셔플과 결합)
     );
   } catch (err) {
     console.error("[B-3] generateCandidates failed, falling back:", err);
@@ -520,10 +522,17 @@ export async function getRecommendations(
     usedTitles.add(tc.title);
   }
 
-  // Phase 2: 나머지 후보에서 30개 (totalScore desc 순서 유지, templateReason)
-  for (const tc of tmdbCandidates) {
+  // Phase 2: 나머지 후보에서 30개 (templateReason)
+  //   B-3.1 (2026-06-06): 기존 totalScore desc 순서 유지 → 매 batch 동일한 top 30
+  //   반환 → Jaccard floor ~60% 강제. match.ts:gatherCandidates 패턴 차용 —
+  //   top 20 (개인화 강한 신호) 는 desc 유지, 나머지는 호출별 셔플로 다양성 확보.
+  const phase2Pool = tmdbCandidates.filter(
+    (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
+  );
+  const phase2Top = phase2Pool.slice(0, 20);
+  const phase2Rest = phase2Pool.slice(20).sort(() => Math.random() - 0.5);
+  for (const tc of [...phase2Top, ...phase2Rest]) {
     if (results.length >= 50) break;
-    if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
     const enriched = tmdbCandidateToEnriched(tc);
     results.push(buildRecommendationObject(enriched, templateReason(enriched)));
     usedIds.add(tc.tmdbId);

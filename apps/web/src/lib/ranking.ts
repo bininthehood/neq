@@ -129,10 +129,11 @@ function formatSubscribedOtt(ids: number[]): string {
 
 /**
  * Phase B-3 (2026-06-06) — provider id 배열을 한글 OTT name 배열로 변환.
- * `candidate-generation.ts` 의 `PersonaProfile.subscribedOtt` (string[]) 빌드용.
- * 매핑 없는 id 는 silent skip.
+ * LLM prompt (한글 UI 친화) 등에서 사용.
  *
- * 본 모듈을 single source of truth 로 둠 — recommend.ts 가 import.
+ * **주의:** `candidate-generation.ts` 의 SQL/DB 매칭 (tmdb_metadata.providers JSONB
+ * 의 name) 은 TMDB 원본인 **영문** 표기 ("Netflix", "TVING", "wavve", ...) 라
+ * 한글 이름으로는 매칭이 0건. SQL 매칭에는 `providerIdsToTmdbNames` 를 사용하라.
  */
 export function providerIdsToNames(ids: number[]): string[] {
   const out: string[] = [];
@@ -142,6 +143,42 @@ export function providerIdsToNames(ids: number[]): string[] {
   }
   return out;
 }
+
+/**
+ * Phase B-3.1 (2026-06-06) — provider id 배열을 **TMDB 원본 영문** name 배열로 변환.
+ * `candidate-generation.ts` 의 `PersonaProfile.subscribedOtt` (string[]) 빌드용 —
+ * DB providers JSONB 의 name 필드와 그대로 매칭된다.
+ *
+ * 표기 출처: 1차 측정 (2026-06-06) 시 `tmdb_metadata.providers` sample
+ *   ("Netflix", "TVING", "wavve", "Watcha", "Apple TV"). JustWatch 매핑 기준.
+ *
+ * 매핑 없는 id 는 silent skip.
+ */
+export function providerIdsToTmdbNames(ids: number[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    const name = PROVIDER_ID_TO_TMDB_NAME[id];
+    if (name) out.push(name);
+  }
+  return out;
+}
+
+/**
+ * Phase B-3.1 (2026-06-06) — TMDB watch providers API 원본 영문 표기.
+ * tmdb_metadata.providers JSONB.name 과 일치한다. case sensitive.
+ */
+const PROVIDER_ID_TO_TMDB_NAME: Record<number, string> = {
+  8: "Netflix",
+  337: "Disney Plus",
+  356: "wavve",
+  1881: "TVING",
+  97: "Watcha",
+  2: "Apple TV",
+  350: "Apple TV Plus",
+  119: "Amazon Prime Video",
+  1796: "Coupang Play",
+  3: "Google Play Movies",
+};
 
 /** `prompt.ts:289` buildFeedbackPrompt 동일 로직 복사. */
 function buildFeedbackPrompt(feedback?: WatchFeedback): string {

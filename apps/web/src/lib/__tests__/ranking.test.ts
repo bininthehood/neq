@@ -44,6 +44,7 @@ import {
   rankCandidatesLLM,
   rankCandidatesScore,
   providerIdsToNames,
+  providerIdsToTmdbNames,
   DIVERSITY_AXES,
   type RankerInput,
 } from "../ranking";
@@ -325,5 +326,18 @@ describe("providerIdsToNames (B-3)", () => {
   it("#9 매핑 id → 한글 라벨, 알 수 없는 id 는 silent skip", () => {
     const out = providerIdsToNames([8, 337, 99999]);
     expect(out).toEqual(["넷플릭스", "디즈니플러스"]);
+  });
+});
+
+describe("providerIdsToTmdbNames (B-3.1)", () => {
+  it("#10 매핑 id → TMDB 영문 라벨 (DB providers JSONB 매칭용)", () => {
+    const out = providerIdsToTmdbNames([8, 337, 356, 1881, 97, 99999]);
+    expect(out).toEqual([
+      "Netflix",
+      "Disney Plus",
+      "wavve",
+      "TVING",
+      "Watcha",
+    ]);
   });
 });
