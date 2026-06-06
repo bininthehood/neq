@@ -18,6 +18,21 @@ import type {
   StreamingCallbacks,
   TokenUsage,
 } from "./recommend/types";
+// Phase B-3 (2026-06-06) — 2-stage 통합 (Tier 3 §1 Phase B).
+//   B-1: candidate pool retrieval (TMDB mirror SQL)
+//   B-2: ranking (LLM + score fallback)
+// 본 파일은 wiring 만 — 두 모듈 출력을 enrich-호환 객체로 변환해 buildRecommendationObject 에 흘림.
+import {
+  generateCandidates,
+  type PersonaProfile,
+  type TmdbCandidate,
+} from "./candidate-generation";
+import {
+  rankCandidatesLLM,
+  rankCandidatesScore,
+  providerIdsToNames,
+} from "./ranking";
+import type { TMDBSimilarItem } from "./tmdb";
 
 // 외부 호환을 위해 타입 re-export (route.ts 등 호출처가 직접 참조 가능).
 export type { RecommendResult, StreamingCallbacks, TokenUsage };
@@ -228,183 +243,358 @@ export async function getRecommendations(
   ]);
   const excludeTitlesSet = new Set(exclude ?? []);
 
-  // Step 2-3
-  const tGather = performance.now();
-  const candidates = await gatherCandidates(matched, matchedIdsSet, excludeTitlesSet);
-  mark("gather", tGather);
-  if (candidates.length === 0) return { recommendations: [], timings };
+  // ─────────────────────────────────────────────────────────────────────
+  // Phase B-3 (2026-06-06): 2-stage 통합.
+  //   Stage 1 (B-1): generateCandidates — TMDB mirror SQL 로 KR universe 후보 풀 retrieve
+  //   Stage 2 (B-2): rankCandidatesLLM / rankCandidatesScore — picks 선정
+  //
+  // fallback ladder:
+  //   throws / 0 후보 → 기존 gather/enrich/filter/curateWithLLM 경로 (inline 보존)
+  //   LLM picks=0       → score fallback (안전망)
+  //
+  // streaming 변형 (`getRecommendationsStreaming`) 는 본 PR 변경 0.
+  // ─────────────────────────────────────────────────────────────────────
 
-  // Step 4
-  const tEnrich = performance.now();
-  const enriched = await enrichWithMode(candidates, useMirror);
-  mark("enrich", tEnrich);
+  // PersonaProfile 빌드 — favorites 의 장르 빈도 + tasteGenres + 구독 OTT
+  const favoriteGenreIdFreq = new Map<number, number>();
+  for (const fav of matched) {
+    for (const gid of fav.genreIds) {
+      favoriteGenreIdFreq.set(gid, (favoriteGenreIdFreq.get(gid) ?? 0) + 1);
+    }
+  }
+  const profile: PersonaProfile = {
+    favoriteGenreIds: Array.from(favoriteGenreIdFreq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => id),
+    favoriteTmdbIds: matched.map((m) => m.id),
+    tasteGenres,
+    subscribedOtt: providerIdsToNames(subscribedOtt),
+    // match.ts 가 release_year 미반환 — favoriteDecades 는 Phase B 후속 트랙.
+    favoriteDecades: [],
+  };
 
-  // Step 5
-  const tFilter = performance.now();
-  let filtered = applyFilters(enriched, filter).slice(0, 50);
-  mark("filter", tFilter);
+  // Stage 1: candidate pool retrieval
+  let tmdbCandidates: TmdbCandidate[] = [];
+  let usedFallback = false;
+  const tCands = performance.now();
+  try {
+    tmdbCandidates = await generateCandidates(
+      profile,
+      filter,
+      Array.from(matchedIdsSet),
+      500, // poolSize — B-4 측정 후 1000 검토 (메모리: latency tradeoff)
+    );
+  } catch (err) {
+    console.error("[B-3] generateCandidates failed, falling back:", err);
+    usedFallback = true;
+  }
+  mark("candidates", tCands);
 
-  // Step 5.5: 크로스타입 보충 — 필터 적용 후 결과가 부족하면 discover로 보충
-  // (예: 영화만 취향에 넣고 시리즈 필터 → TMDB /recommendations는 영화만 반환 → 시리즈 부족)
-  if (filtered.length < 15 && (filter.type === "movie" || filter.type === "series" || filter.type === "variety")) {
-    // variety: Reality/Talk 장르로 discover, 일반: matched 작품의 장르 빈도순
-    const discoverType: "movie" | "series" = filter.type === "variety" ? "series" : filter.type;
-    let topGenres: number[];
+  // ── Fallback ladder: 0 후보 OR throws → 기존 gather/enrich/filter/curateWithLLM ──
+  if (usedFallback || tmdbCandidates.length === 0) {
+    const tFallback = performance.now();
 
-    if (filter.type === "variety") {
-      topGenres = VARIETY_GENRE_IDS;
-    } else {
+    // Step 2-3: gather
+    const tGather = performance.now();
+    const candidates = await gatherCandidates(matched, matchedIdsSet, excludeTitlesSet);
+    mark("gather", tGather);
+    if (candidates.length === 0) {
+      mark("fallback", tFallback);
+      return { recommendations: [], timings };
+    }
+
+    // Step 4: enrich
+    const tEnrich = performance.now();
+    const enriched = await enrichWithMode(candidates, useMirror);
+    mark("enrich", tEnrich);
+
+    // Step 5: filter
+    const tFilter = performance.now();
+    let filtered = applyFilters(enriched, filter).slice(0, 50);
+    mark("filter", tFilter);
+
+    // Step 5.5: 크로스타입 보충 — 필터 적용 후 결과가 부족하면 discover로 보충
+    if (filtered.length < 15 && (filter.type === "movie" || filter.type === "series" || filter.type === "variety")) {
+      const discoverType: "movie" | "series" = filter.type === "variety" ? "series" : filter.type;
+      let topGenres: number[];
+
+      if (filter.type === "variety") {
+        topGenres = VARIETY_GENRE_IDS;
+      } else {
+        const genreFreq = new Map<number, number>();
+        for (const fav of matched) {
+          for (const gid of fav.genreIds) {
+            genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
+          }
+        }
+        topGenres = Array.from(genreFreq.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([id]) => id);
+      }
+
+      if (topGenres.length > 0) {
+        const randomPage = Math.ceil(Math.random() * 3);
+        const discoverResults = await discoverByGenres(topGenres, discoverType, randomPage);
+        const existingIds = new Set(candidates.map((c) => c.id));
+        const supplementCandidates: Candidate[] = discoverResults
+          .filter(
+            (item) =>
+              !existingIds.has(item.id) &&
+              !matchedIdsSet.has(item.id) &&
+              !excludeTitlesSet.has(item.title)
+          )
+          .slice(0, 20)
+          .map((item) => ({
+            id: item.id,
+            type: discoverType,
+            item,
+            frequency: 1,
+            score: item.vote_average || 1,
+          }));
+
+        if (supplementCandidates.length > 0) {
+          const tSupE = performance.now();
+          const supplementEnriched = await enrichWithMode(supplementCandidates, useMirror);
+          mark("enrich", tSupE);
+          const tSupF = performance.now();
+          const supplementFiltered = applyFilters(supplementEnriched, filter);
+          mark("filter", tSupF);
+          filtered = [...filtered, ...supplementFiltered].slice(0, 50);
+        }
+      }
+    }
+
+    // Step 5.6: 년도 보충
+    if (filtered.length < 15 && filter.year) {
+      const dateRange: { gte?: string; lte?: string } = {};
+      if (filter.year === "recent") dateRange.gte = "2020-01-01";
+      if (filter.year === "2010s") { dateRange.gte = "2010-01-01"; dateRange.lte = "2019-12-31"; }
+      if (filter.year === "classic") dateRange.lte = "2009-12-31";
+
       const genreFreq = new Map<number, number>();
       for (const fav of matched) {
         for (const gid of fav.genreIds) {
           genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
         }
       }
-      topGenres = Array.from(genreFreq.entries())
+      const topGenres = Array.from(genreFreq.entries())
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5)
         .map(([id]) => id);
-    }
 
-    if (topGenres.length > 0) {
-      const randomPage = Math.ceil(Math.random() * 3);
-      const discoverResults = await discoverByGenres(topGenres, discoverType, randomPage);
-      const existingIds = new Set(candidates.map((c) => c.id));
-      const supplementCandidates: Candidate[] = discoverResults
-        .filter(
-          (item) =>
+      if (topGenres.length > 0) {
+        const yearPage = Math.ceil(Math.random() * 3);
+        const movieResults = await discoverByGenres(topGenres, "movie", yearPage, dateRange);
+        const tvResults = await discoverByGenres(topGenres, "series", yearPage, dateRange);
+        const yearResults = [...movieResults, ...tvResults];
+
+        const existingIds = new Set(filtered.map((c) => c.id));
+        const yearCandidates: Candidate[] = yearResults
+          .filter((item) =>
             !existingIds.has(item.id) &&
             !matchedIdsSet.has(item.id) &&
             !excludeTitlesSet.has(item.title)
-        )
-        .slice(0, 20)
-        .map((item) => ({
-          id: item.id,
-          type: discoverType,
-          item,
-          frequency: 1,
-          score: item.vote_average || 1,
-        }));
+          )
+          .slice(0, 20)
+          .map((item) => ({
+            id: item.id,
+            type: (item.media_type === "tv" ? "series" : "movie") as "movie" | "series",
+            item,
+            frequency: 1,
+            score: item.vote_average || 1,
+          }));
 
-      if (supplementCandidates.length > 0) {
-        const tSupE = performance.now();
-        const supplementEnriched = await enrichWithMode(supplementCandidates, useMirror);
-        mark("enrich", tSupE);
-        const tSupF = performance.now();
-        const supplementFiltered = applyFilters(supplementEnriched, filter);
-        mark("filter", tSupF);
-        filtered = [...filtered, ...supplementFiltered].slice(0, 50);
+        if (yearCandidates.length > 0) {
+          const tYearE = performance.now();
+          const yearEnriched = await enrichWithMode(yearCandidates, useMirror);
+          mark("enrich", tYearE);
+          const tYearF = performance.now();
+          const yearFiltered = applyFilters(yearEnriched, filter);
+          mark("filter", tYearF);
+          filtered = [...filtered, ...yearFiltered].slice(0, 50);
+        }
       }
     }
+
+    if (filtered.length === 0) {
+      mark("fallback", tFallback);
+      return { recommendations: [], timings };
+    }
+
+    // Step 6: curateWithLLM (기존 경로)
+    const tLlm = performance.now();
+    const curated = await curateWithLLM(
+      filtered,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOtt,
+      tasteSummary,
+      matchedIdsSet.size,
+    );
+    mark("llm", tLlm);
+
+    // Step 7: 조립
+    const results: Recommendation[] = [];
+    const usedIds = new Set<number>();
+    const usedTitles = new Set<string>();
+
+    for (const { id, reason } of curated.picks) {
+      if (results.length >= 20) break;
+      const c = filtered.find((f) => f.id === id);
+      if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
+      results.push(buildRecommendationObject(c, reason));
+      usedIds.add(c.id);
+      usedTitles.add(c.item.title);
+    }
+
+    for (const c of filtered) {
+      if (results.length >= 50) break;
+      if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
+      results.push(buildRecommendationObject(c, templateReason(c)));
+      usedIds.add(c.id);
+      usedTitles.add(c.item.title);
+    }
+
+    mark("fallback", tFallback);
+
+    return {
+      recommendations: interleaveByGenre(results),
+      timings,
+      ...(curated.usage ? { usage: curated.usage } : {}),
+      meta: curated.meta,
+    };
   }
 
-  // Step 5.6: 년도 보충 — 년도 필터 시 결과가 부족하면 discover로 보충
-  if (filtered.length < 15 && filter.year) {
-    const dateRange: { gte?: string; lte?: string } = {};
-    if (filter.year === "recent") dateRange.gte = "2020-01-01";
-    if (filter.year === "2010s") { dateRange.gte = "2010-01-01"; dateRange.lte = "2019-12-31"; }
-    if (filter.year === "classic") dateRange.lte = "2009-12-31";
-
-    // 취향 장르로 해당 년도 작품 검색
-    const genreFreq = new Map<number, number>();
-    for (const fav of matched) {
-      for (const gid of fav.genreIds) {
-        genreFreq.set(gid, (genreFreq.get(gid) ?? 0) + 1);
-      }
-    }
-    const topGenres = Array.from(genreFreq.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([id]) => id);
-
-    if (topGenres.length > 0) {
-      const yearPage = Math.ceil(Math.random() * 3);
-      const movieResults = await discoverByGenres(topGenres, "movie", yearPage, dateRange);
-      const tvResults = await discoverByGenres(topGenres, "series", yearPage, dateRange);
-      const yearResults = [...movieResults, ...tvResults];
-
-      const existingIds = new Set(filtered.map((c) => c.id));
-      const yearCandidates: Candidate[] = yearResults
-        .filter((item) =>
-          !existingIds.has(item.id) &&
-          !matchedIdsSet.has(item.id) &&
-          !excludeTitlesSet.has(item.title)
-        )
-        .slice(0, 20)
-        .map((item) => ({
-          id: item.id,
-          type: (item.media_type === "tv" ? "series" : "movie") as "movie" | "series",
-          item,
-          frequency: 1,
-          score: item.vote_average || 1,
-        }));
-
-      if (yearCandidates.length > 0) {
-        const tYearE = performance.now();
-        const yearEnriched = await enrichWithMode(yearCandidates, useMirror);
-        mark("enrich", tYearE);
-        const tYearF = performance.now();
-        const yearFiltered = applyFilters(yearEnriched, filter);
-        mark("filter", tYearF);
-        filtered = [...filtered, ...yearFiltered].slice(0, 50);
-      }
-    }
-  }
-
-  if (filtered.length === 0) return { recommendations: [], timings };
-
-  // Step 6
-  const tLlm = performance.now();
-  const curated = await curateWithLLM(
-    filtered,
+  // ── 정상 경로 (2-stage) — Stage 2: rank ──
+  const tRank = performance.now();
+  let ranked = await rankCandidatesLLM({
+    candidates: tmdbCandidates,
     favorites,
     feedback,
     savedCount,
     onboardingCount,
     tasteGenres,
-    subscribedOtt,
+    subscribedOttIds: subscribedOtt,
     tasteSummary,
-    // Phase A-1 (2026-06-06) — excludeIds 누적 → 동적 temperature.
-    // matchedIdsSet 은 favorites tmdbId + excludeIds 합집합 (위 라인 225). 사용자
-    // 누적 노출량을 가장 정확히 반영. matched.length 만큼 baseline 노출이 빠지지만
-    // cutoff 가 20/50/100 으로 거친 단계라 영향 미미.
-    matchedIdsSet.size,
-  );
-  mark("llm", tLlm);
+    excludeCount: matchedIdsSet.size,
+    count: 20,
+  });
+  mark("rank", tRank);
 
-  // Step 7: 조립 — LLM 선택 20개 + 나머지 30개 (템플릿 reason)
+  // LLM picks=0 → score fallback (안전망 — 외부 호출 실패 / JSON 파싱 실패 / 0 normalize 등)
+  if (ranked.picks.length === 0) {
+    ranked = rankCandidatesScore({
+      candidates: tmdbCandidates,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOttIds: subscribedOtt,
+      tasteSummary,
+      excludeCount: matchedIdsSet.size,
+      count: 20,
+    });
+  }
+
+  // 조립 — picks 의 id 로 tmdbCandidates lookup → EnrichedCandidate 변환 → buildRecommendationObject
   const results: Recommendation[] = [];
   const usedIds = new Set<number>();
   const usedTitles = new Set<string>();
 
-  // Phase 1: LLM이 선택한 20개 (개인화 reason)
-  for (const { id, reason } of curated.picks) {
+  const candidateById = new Map(tmdbCandidates.map((c) => [c.tmdbId, c]));
+
+  // Phase 1: LLM picks 20개 (개인화 reason)
+  for (const { id, reason } of ranked.picks) {
     if (results.length >= 20) break;
-    const c = filtered.find((f) => f.id === id);
-    if (!c || usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
-    results.push(buildRecommendationObject(c, reason));
-    usedIds.add(c.id);
-    usedTitles.add(c.item.title);
+    const tc = candidateById.get(id);
+    if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+    const enriched = tmdbCandidateToEnriched(tc);
+    results.push(buildRecommendationObject(enriched, reason));
+    usedIds.add(tc.tmdbId);
+    usedTitles.add(tc.title);
   }
 
-  // Phase 2: 나머지 후보에서 30개 추가 (템플릿 reason)
-  for (const c of filtered) {
+  // Phase 2: 나머지 후보에서 30개 (totalScore desc 순서 유지, templateReason)
+  for (const tc of tmdbCandidates) {
     if (results.length >= 50) break;
-    if (usedIds.has(c.id) || usedTitles.has(c.item.title)) continue;
-    results.push(buildRecommendationObject(c, templateReason(c)));
-    usedIds.add(c.id);
-    usedTitles.add(c.item.title);
+    if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+    const enriched = tmdbCandidateToEnriched(tc);
+    results.push(buildRecommendationObject(enriched, templateReason(enriched)));
+    usedIds.add(tc.tmdbId);
+    usedTitles.add(tc.title);
   }
 
-  // Step 8: 장르 인터리빙 — 같은 주요 장르가 3연속 나오지 않도록 재배치
   return {
     recommendations: interleaveByGenre(results),
     timings,
-    ...(curated.usage ? { usage: curated.usage } : {}),
-    // Phase A-3/A-4 (2026-06-06) — LLM 호출 메타데이터. 클라이언트 PostHog
-    // metaToProps 가 `srv_diversity_axis` / `srv_temperature` / `srv_seed` 로
-    // 매핑.
-    meta: curated.meta,
+    ...(ranked.usage ? { usage: ranked.usage } : {}),
+    // Phase A-3/A-4 (2026-06-06) — LLM 호출 메타데이터. score fallback 경로에서는
+    // diversity_axis="score-fallback", temperature=0, seed=0 으로 흐름. PostHog
+    // 에서 LLM 미사용 케이스 구분 가능.
+    meta: ranked.meta,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Phase B-3 (2026-06-06) — TmdbCandidate → EnrichedCandidate 변환.
+//
+// buildRecommendationObject (prompt.ts:719) 가 실제로 읽는 필드만 채움:
+//   - candidate.item.{title, original_title|original_name, poster_path,
+//                     vote_average, release_date|first_air_date, overview,
+//                     genre_ids, media_type}
+//   - candidate.type / candidate.id
+//   - candidate.providers / candidate.watchLink
+//   - candidate.credits.{director, cast, directorMember, castMembers}
+//   - candidate.details.{runtime, seasons, country, backdrop}
+//
+// mirror 한계: directorMember / castMembers (id+profile photo) 미보유 — DetailSheet
+// 의 lazy hydrate 가 채움. 그 동안은 (null / []) 로 둠 — enrich.ts:rowToEnrichedFields
+// 와 동일 패턴.
+// ─────────────────────────────────────────────────────────────────────
+function tmdbCandidateToEnriched(c: TmdbCandidate): EnrichedCandidate {
+  const item: TMDBSimilarItem = {
+    id: c.tmdbId,
+    title: c.title,
+    original_title: c.titleEn ?? undefined,
+    original_name: c.titleEn ?? undefined,
+    media_type: c.type === "series" ? "tv" : "movie",
+    poster_path: c.posterPath,
+    vote_average: c.rating ?? 0,
+    overview: c.overview ?? "",
+    release_date: c.type === "movie" ? (c.releaseDate ?? undefined) : undefined,
+    first_air_date: c.type === "series" ? (c.releaseDate ?? undefined) : undefined,
+    genre_ids: c.genreIds,
+    popularity: c.popularity,
+  };
+
+  return {
+    id: c.tmdbId,
+    type: c.type,
+    item,
+    frequency: 1,
+    score: c.totalScore,
+    providers: c.providers.map((p) => ({ name: p.name, logoUrl: p.logoUrl })),
+    watchLink: c.watchLink,
+    credits: {
+      director: c.director,
+      cast: c.castNames,
+      directorMember: null,
+      castMembers: [],
+    },
+    details: {
+      runtime: c.runtime,
+      seasons: c.seasons,
+      country: c.country.length > 0 ? c.country : c.originCountry,
+      backdrop: c.backdropPath
+        ? `https://image.tmdb.org/t/p/w780${c.backdropPath}`
+        : null,
+    },
   };
 }
 
