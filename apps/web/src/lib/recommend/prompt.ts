@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { parse as parsePartialJSON } from "partial-json";
 import { posterUrl } from "../tmdb";
 import type { Recommendation, WatchFeedback } from "../types";
-import type { CuratedPick, EnrichedCandidate, TokenUsage } from "./types";
+import type { CuratedPick, CurationMeta, EnrichedCandidate, TokenUsage } from "./types";
 import { VARIETY_GENRE_IDS } from "../discover-types";
 
 const openai = new OpenAI();
@@ -80,6 +80,57 @@ export function dynamicTemperature(excludeCount: number): number {
  */
 export function generateSeed(): number {
   return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+}
+
+/**
+ * Phase A-3 (2026-06-06) — prompt diversity injection.
+ *
+ * 다양성 축 5종 — 호출당 1축을 random pick. user prompt 의 [다양성 강조]
+ * 블록으로 주입해 LLM 이 같은 cluster 안에서도 다른 결의 작품을 우선
+ * 선택하도록 유도.
+ *
+ * 의도적으로 system prompt 가 아닌 user prompt 에 주입 — system prompt
+ * prefix (1024+ 토큰) 의 caching 무효화 회피. user prompt 는 사용자별
+ * 동적 데이터로 이미 변동성이 있어 caching 영향 0.
+ *
+ * 축 선택: random uniform (Math.random). PostHog `srv_diversity_axis` 로
+ * 흐름 — Phase D 측정 시 축 별 swipe-through rate / save rate 비교 가능.
+ *
+ * 향후 prevAnswers / 페르소나 axes 기반 deterministic rotation 으로
+ * 진화 가능 (Phase C diversity 알고리즘).
+ */
+export const DIVERSITY_AXES = [
+  "tone",      // 분위기 — 어둡고 무거운 ↔ 밝고 가벼운
+  "pace",      // 호흡 — 느리고 잔잔한 ↔ 빠르고 격렬한
+  "era",       // 시대 — 클래식 (10년+) ↔ 신작 (3년 이내)
+  "scale",     // 규모 — 인물 중심 소품 ↔ 대규모 스케일
+  "origin",    // 국가 — 한국 작품 ↔ 비주류 국가 작품 (일본/대만/태국/유럽 등)
+] as const;
+
+export type DiversityAxis = (typeof DIVERSITY_AXES)[number];
+
+export function pickDiversityAxis(): DiversityAxis {
+  const idx = Math.floor(Math.random() * DIVERSITY_AXES.length);
+  return DIVERSITY_AXES[idx];
+}
+
+/**
+ * 축별 user prompt 강조 문구. system prompt 의 다양성 원칙은 그대로 유지하고,
+ * 본 블록은 "이번 호출에서 추가로 강조할 한 축" 으로 작동.
+ */
+function buildDiversityHint(axis: DiversityAxis): string {
+  switch (axis) {
+    case "tone":
+      return "이번 추천은 분위기 다양성을 특히 강조하세요. 같은 톤(어둡고 무거운 작품만, 또는 밝고 가벼운 작품만) 편중을 피하고, 무거운 작품과 가벼운 작품을 의도적으로 섞으세요.";
+    case "pace":
+      return "이번 추천은 호흡 다양성을 특히 강조하세요. 느리고 잔잔한 작품과 빠르고 격렬한 작품이 한 batch 에 모두 포함되도록 의식적으로 분배하세요.";
+    case "era":
+      return "이번 추천은 시대 다양성을 특히 강조하세요. 최근 3년 신작에만 머물지 말고, 10년+ 된 클래식과 2010년대 작품도 적극 포함하세요.";
+    case "scale":
+      return "이번 추천은 규모 다양성을 특히 강조하세요. 인물 중심 소품과 대규모 스케일 작품을 함께 배치해 사용자에게 두 결을 동시에 노출하세요.";
+    case "origin":
+      return "이번 추천은 국가 다양성을 특히 강조하세요. 한국·미국 편중에서 의도적으로 벗어나, 일본·대만·태국·유럽 등 비주류 국가의 우수 작품을 적극 포함하세요.";
+  }
 }
 
 // LLM 큐레이션의 고정 prefix. 사용자별 동적 데이터(modeGuide, 취향, 후보)는 user 메시지로 이동시켜
@@ -383,6 +434,11 @@ export function buildCurationUserPrompt(
    * IRON RULE REGRESSION). 정의되면 [페르소나 취향] 블록으로 추가.
    */
   tasteSummary?: string,
+  /**
+   * Phase A-3 (2026-06-06) — 다양성 축 강조 hint. undefined 면 블록 생략
+   * (REGRESSION 보호). 정의되면 [다양성 강조] 블록으로 추가.
+   */
+  diversityAxis?: DiversityAxis,
 ): string {
   const candidateList = buildCandidateList(candidates);
   const feedbackText = buildFeedbackPrompt(feedback);
@@ -419,11 +475,18 @@ export function buildCurationUserPrompt(
       ? `\n\n[페르소나 취향]\n${truncateTasteSummary(tasteSummary.trim())}`
       : '';
 
+  // Phase A-3 (2026-06-06) — 다양성 축 강조 블록. axis undefined 면 생략
+  // (REGRESSION 보호 — 기존 호출자 결과 동일).
+  const diversityBlock =
+    diversityAxis !== undefined
+      ? `\n\n[다양성 강조 (이번 호출)]\n${buildDiversityHint(diversityAxis)}`
+      : '';
+
   return `${modeGuide}
 
 [사용자 취향 기반]
 ${favoritesLabel}: ${favorites.join(", ")}${v2Block}
-${feedbackText}${tasteSummaryBlock}
+${feedbackText}${tasteSummaryBlock}${diversityBlock}
 
 [후보 ${candidates.length}개]
 ${candidateList}`;
@@ -445,8 +508,27 @@ export async function curateWithLLM(
    * 미전달 시 0 → baseline 0.8 (기존 동작과 동일, REGRESSION 보호).
    */
   excludeCount: number = 0,
-): Promise<{ picks: CuratedPick[]; usage: TokenUsage | null }> {
-  if (candidates.length === 0) return { picks: [], usage: null };
+): Promise<{ picks: CuratedPick[]; usage: TokenUsage | null; meta: CurationMeta }> {
+  // Phase A-3/A-4 (2026-06-06) — 호출별 다양성 축 + 실제 temperature/seed
+  // 한 곳에서 결정. candidates 0 시에도 호출자 PostHog 측정이 노이즈 없이
+  // 흐르도록 meta 항상 반환 (axis=none, temperature/seed=0).
+  const axis = pickDiversityAxis();
+  const temperature = dynamicTemperature(excludeCount);
+  const seed = generateSeed();
+  const meta: CurationMeta = {
+    diversity_axis: axis,
+    temperature,
+    seed,
+  };
+
+  if (candidates.length === 0) {
+    return {
+      picks: [],
+      usage: null,
+      // 후보 0 → 실제로 LLM 호출 안 함. meta 는 사용되지 않은 값으로 표시.
+      meta: { diversity_axis: "none", temperature: 0, seed: 0 },
+    };
+  }
 
   const userPrompt = buildCurationUserPrompt(
     candidates,
@@ -457,6 +539,7 @@ export async function curateWithLLM(
     tasteGenres,
     subscribedOtt,
     tasteSummary,
+    axis,
   );
 
   try {
@@ -467,11 +550,10 @@ export async function curateWithLLM(
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: dynamicTemperature(excludeCount),
+      temperature,
       // Phase A-2 (2026-06-06) — seed randomization. OpenAI best-effort
-      // 결정성 의도적 파괴 → cluster 변동 강제. 측정용 값은 A-4 meta 객체로
-      // 반환.
-      seed: generateSeed(),
+      // 결정성 의도적 파괴 → cluster 변동 강제. 측정용 값은 meta 로 반환.
+      seed,
     });
 
     const usage: TokenUsage = {
@@ -481,7 +563,7 @@ export async function curateWithLLM(
     };
 
     const content = response.choices[0].message.content;
-    if (!content) return { picks: [], usage };
+    if (!content) return { picks: [], usage, meta };
 
     const parsed = JSON.parse(content) as Record<string, unknown>;
     const rawSelected =
@@ -505,10 +587,10 @@ export async function curateWithLLM(
       if (normalized === null) continue;
       picks.push({ id: item.id, reason: normalized });
     }
-    return { picks, usage };
+    return { picks, usage, meta };
   } catch (err) {
     console.error("LLM curation failed:", err);
-    return { picks: [], usage: null };
+    return { picks: [], usage: null, meta };
   }
 }
 
@@ -532,8 +614,19 @@ export async function curateWithLLMStreaming(
    * Phase A-1 (2026-06-06) — temperature 동적화. curateWithLLM 와 동일 정책.
    */
   excludeCount: number = 0,
+  /**
+   * Phase A-3/A-4 (2026-06-06) — meta 흐름 콜백. 미전달 시 측정 skip
+   * (REGRESSION 보호).
+   */
+  onMeta?: (meta: CurationMeta) => void,
 ): Promise<TokenUsage | null> {
   if (candidates.length === 0) return null;
+
+  // Phase A-3/A-4 — 호출별 다양성 축 + 실제 temperature/seed.
+  const axis = pickDiversityAxis();
+  const temperature = dynamicTemperature(excludeCount);
+  const seed = generateSeed();
+  onMeta?.({ diversity_axis: axis, temperature, seed });
 
   // candidateList / modeGuide / userPrompt 구성: curateWithLLM과 동일 구조
   const userPrompt = buildCurationUserPrompt(
@@ -545,6 +638,7 @@ export async function curateWithLLMStreaming(
     tasteGenres,
     subscribedOtt,
     tasteSummary,
+    axis,
   );
 
   let usage: TokenUsage | null = null;
@@ -572,9 +666,9 @@ export async function curateWithLLMStreaming(
         { role: "user", content: userPrompt },
       ],
       response_format: { type: "json_object" },
-      temperature: dynamicTemperature(excludeCount),
+      temperature,
       // Phase A-2 (2026-06-06) — non-streaming 와 동일 정책.
-      seed: generateSeed(),
+      seed,
       stream: true,
       stream_options: { include_usage: true },
     });

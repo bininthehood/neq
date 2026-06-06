@@ -401,6 +401,10 @@ export async function getRecommendations(
     recommendations: interleaveByGenre(results),
     timings,
     ...(curated.usage ? { usage: curated.usage } : {}),
+    // Phase A-3/A-4 (2026-06-06) — LLM 호출 메타데이터. 클라이언트 PostHog
+    // metaToProps 가 `srv_diversity_axis` / `srv_temperature` / `srv_seed` 로
+    // 매핑.
+    meta: curated.meta,
   };
 }
 
@@ -534,6 +538,9 @@ export async function getRecommendationsStreaming(
     tasteSummary,
     // Phase A-1 (2026-06-06) — non-streaming 와 동일 정책. matchedIdsSet 전달.
     matchedIdsSet.size,
+    // Phase A-3/A-4 (2026-06-06) — meta 흐름. callbacks.onMeta 가 정의되면
+    // 즉시 emit (LLM stream 시작 전).
+    (meta) => callbacks.onMeta?.(meta),
   );
   mark("llm", tLlm);
 
