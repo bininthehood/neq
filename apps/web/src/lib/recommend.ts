@@ -33,6 +33,9 @@ import {
   providerIdsToTmdbNames,
 } from "./ranking";
 import type { TMDBSimilarItem } from "./tmdb";
+// Phase C (2026-06-06) — diversity reorder (장르/연도/OTT cap).
+// 기존 interleaveByGenre (type 연속만 차단) 의 superset → 교체.
+import { applyDiversityReorder } from "./diversity";
 
 // 외부 호환을 위해 타입 re-export (route.ts 등 호출처가 직접 참조 가능).
 export type { RecommendResult, StreamingCallbacks, TokenUsage };
@@ -465,7 +468,7 @@ export async function getRecommendations(
     mark("fallback", tFallback);
 
     return {
-      recommendations: interleaveByGenre(results),
+      recommendations: applyDiversityReorder(results),
       timings,
       ...(curated.usage ? { usage: curated.usage } : {}),
       meta: curated.meta,
@@ -540,7 +543,7 @@ export async function getRecommendations(
   }
 
   return {
-    recommendations: interleaveByGenre(results),
+    recommendations: applyDiversityReorder(results),
     timings,
     ...(ranked.usage ? { usage: ranked.usage } : {}),
     // Phase A-3/A-4 (2026-06-06) — LLM 호출 메타데이터. score fallback 경로에서는
@@ -607,39 +610,8 @@ function tmdbCandidateToEnriched(c: TmdbCandidate): EnrichedCandidate {
   };
 }
 
-/** 주요 장르 ID 추출 (첫 번째 장르 사용) */
-function primaryGenre(rec: Recommendation): string {
-  return rec.type; // movie vs series는 기본 구분
-}
-
-/** 같은 타입(movie/series)이 3연속 나오지 않도록 재배치 */
-function interleaveByGenre(recs: Recommendation[]): Recommendation[] {
-  if (recs.length <= 3) return recs;
-
-  const result: Recommendation[] = [];
-  const remaining = [...recs];
-
-  // 첫 항목 추가
-  result.push(remaining.shift()!);
-
-  while (remaining.length > 0) {
-    const lastTwo = result.slice(-2).map(primaryGenre);
-    const allSame = lastTwo.length === 2 && lastTwo[0] === lastTwo[1];
-
-    if (allSame) {
-      // 다른 타입의 작품을 찾아서 끼워넣기
-      const diffIdx = remaining.findIndex((r) => primaryGenre(r) !== lastTwo[0]);
-      if (diffIdx >= 0) {
-        result.push(remaining.splice(diffIdx, 1)[0]);
-        continue;
-      }
-    }
-
-    result.push(remaining.shift()!);
-  }
-
-  return result;
-}
+// Phase C (2026-06-06) — interleaveByGenre / primaryGenre 제거.
+// applyDiversityReorder (lib/diversity.ts) 가 superset 으로 교체.
 
 // ---------- Streaming 변형 (옵션 1, Day 19 PoC, streaming-poc-design.md) ----------
 
@@ -648,7 +620,7 @@ function interleaveByGenre(recs: Recommendation[]): Recommendation[] {
  * Phase 2 템플릿 카드는 LLM 끝난 후 한 번에 emit.
  *
  * 1차 PoC 단순화: 보충 enrich/filter 로직 (기존 getRecommendations의 보충 경로) 미구현.
- * 필요 시 후속 PR로 복원. interleaveByGenre는 stream 순서 유지로 미적용.
+ * 필요 시 후속 PR로 복원. applyDiversityReorder 는 stream 순서 유지로 미적용.
  */
 export async function getRecommendationsStreaming(
   favorites: string[],
