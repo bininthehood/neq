@@ -66,6 +66,22 @@ export function dynamicTemperature(excludeCount: number): number {
   return 1.2;
 }
 
+/**
+ * Phase A-2 (2026-06-06) — seed randomization.
+ *
+ * baseline: seed 미설정 → OpenAI 가 best-effort 결정성 시도 (실측: 같은 페르소나
+ * + 같은 excludeIds 호출 시 매번 거의 같은 batch). 결정성 5요소 #1 의
+ * downstream 효과.
+ *
+ * 정책: 매 호출 다른 seed. JS Date.now() × Math.random() XOR → uint32 범위.
+ * OpenAI 의 seed best-effort 결정성을 의도적으로 깨서 cluster 변동 강제.
+ *
+ * 32-bit uint 범위 (>= 0, < 2^32) 보장 — OpenAI API spec.
+ */
+export function generateSeed(): number {
+  return (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+}
+
 // LLM 큐레이션의 고정 prefix. 사용자별 동적 데이터(modeGuide, 취향, 후보)는 user 메시지로 이동시켜
 // OpenAI prompt caching prefix를 안정화한다. 1024+ 토큰 동일 prefix 시 자동 cache hit (gpt-4o-mini).
 // 1차 push(380 토큰 추정)는 임계 미달로 caching 미발현. 본 확장으로 1024+ 통과 + 모델 출력 가이드 강화.
@@ -452,6 +468,10 @@ export async function curateWithLLM(
       ],
       response_format: { type: "json_object" },
       temperature: dynamicTemperature(excludeCount),
+      // Phase A-2 (2026-06-06) — seed randomization. OpenAI best-effort
+      // 결정성 의도적 파괴 → cluster 변동 강제. 측정용 값은 A-4 meta 객체로
+      // 반환.
+      seed: generateSeed(),
     });
 
     const usage: TokenUsage = {
@@ -553,6 +573,8 @@ export async function curateWithLLMStreaming(
       ],
       response_format: { type: "json_object" },
       temperature: dynamicTemperature(excludeCount),
+      // Phase A-2 (2026-06-06) — non-streaming 와 동일 정책.
+      seed: generateSeed(),
       stream: true,
       stream_options: { include_usage: true },
     });
