@@ -1365,7 +1365,21 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {state === 'ready' && !exhaustedDisplay && (
+        {state === 'ready' && cardsToShow.length === 0 && (
+          // 2026-06-06 (Tier 3 단기 incident 해소) — 빈 응답 시점 fallback loader.
+          // recs.length===0 또는 topIdx 가 끝 도달 → cardsToShow=0. EmptyState UI 페기
+          // 했으므로 stack 영역도 안 보이는 빈 화면 회귀 방지. progressive fallback +
+          // 자동 hard refresh 가 비동기로 동작하는 동안 loader 노출.
+          <View
+            style={styles.centered}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="추천을 더 가져오는 중"
+          >
+            <ApertureBreathLoader size={72} message="추천을 더 가져오는 중" />
+          </View>
+        )}
+
+        {state === 'ready' && cardsToShow.length > 0 && (
           <GestureDetector gesture={Gesture.Exclusive(tap, pan)}>
             <Animated.View style={styles.stack}>
               {/* 2026-05-20 prev overlay 통합 — PrevCardOverlay 별도 컴포넌트 폐기.
@@ -1412,40 +1426,10 @@ export default function DiscoverScreen() {
           </GestureDetector>
         )}
 
-        {exhaustedDisplay && (
-          // 2026-06-06 (P1 종료 화면 DESIGN.md 정합) — DESIGN.md §Empty State (230~241):
-          //   아이콘 48px text-muted / 아이콘→제목 gap space-md / 제목 text-base 500 /
-          //   설명 text-sm 400 text-muted / CTA Ghost variant / max-width 260px.
-          // 진단: `_workspace/02_p1_end_screen.md` §4.2, §5.3 (디자인 follow-up).
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyBlock}>
-              <IconArchive size={48} color={colors.textMuted} />
-              <View style={styles.emptyTextGroup}>
-                <Text style={styles.emptyTitle}>{emptyTitle}</Text>
-                <Text style={styles.emptyHint}>{emptyHint}</Text>
-              </View>
-              <View style={styles.emptyActions}>
-                {hasFilter && (
-                  <Pressable style={styles.ghostBtn} onPress={clearFilters}>
-                    <Text style={styles.ghostBtnText}>필터 초기화</Text>
-                  </Pressable>
-                )}
-                <Pressable style={styles.ghostBtn} onPress={handleRefresh}>
-                  <Text style={styles.ghostBtnText}>다시 시도</Text>
-                </Pressable>
-                {/* 2026-06-06 (P0 incident Fix B-3) — hard refresh CTA.
-                    필터 X + cooldown 7일 후에도 unique=0 인 극단 케이스 (KR 17K
-                    universe 100% 본 사용자) 에서만 도달. TikTok 'Refresh For You'
-                    2023 정합 — 사용자 명시적 history reset. */}
-                {!hasFilter && (
-                  <Pressable style={styles.ghostBtn} onPress={handleHardRefresh}>
-                    <Text style={styles.ghostBtnText}>추천 기록 초기화</Text>
-                  </Pressable>
-                )}
-              </View>
-            </View>
-          </View>
-        )}
+        {/* 2026-06-06 (Tier 3 단기 incident 해소) — EmptyState UI 페기.
+            무한 스크롤 의도 (사용자 명시 "EmptyState 화면 자체가 없어야"). 빈 응답
+            시점은 위 fallback loader 가 처리. Tier 3 Phase A~D 완료 후 본 영역
+            재설계 가능 (`_workspace/07_refactor-master-plan-2026-06-06.md`). */}
       </View>
 
       {/* 2026-05-19 native↔PWA 정합 (항목 1, 증상 B) — ActionBar 자리 항상 확보.
