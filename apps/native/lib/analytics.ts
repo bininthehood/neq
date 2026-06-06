@@ -22,6 +22,7 @@ import {
   parseServerTiming,
   timingsToProps,
   usageToProps,
+  metaToProps,
   type EventProps,
 } from './analytics-utils';
 
@@ -31,6 +32,7 @@ export {
   parseServerTiming,
   timingsToProps,
   usageToProps,
+  metaToProps,
 } from './analytics-utils';
 export type { EventProps } from './analytics-utils';
 
