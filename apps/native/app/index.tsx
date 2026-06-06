@@ -496,116 +496,88 @@ export default function DiscoverScreen() {
    */
   const triggerPrefetch = useCallback(
     async (filter: RecommendFilter) => {
-      // 2026-06-06 (P0 incident Fix B-1) — lock 활성 시 prefetch skip.
-      // 진짜 candidate pool 고갈 확정 상태 — refresh / filter 변경 / persona 전환만
-      // 재시도 가능. PWA `useRecommendations.ts:471` 정합.
-      if (exhaustedRef.current) return;
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
-        // 2026-06-06 (P1 다양성 / P0 incident Fix B-4) — excludeIds + 7일 cooldown.
-        // 현재 stack + recHistory 활성 (7일 이내) + saved 합쳐 prefetch 결과 다양성 보강.
-        // 7일 지난 작품은 다시 추천 후보로 복귀 → candidate pool 영구 신선
-        // (`_workspace/06_research-infinite-scroll-2026-06-06.md` §4.4).
-        const historyActive = await getActiveExcludeIds({ cooldownDays: 7 });
-        const excludeIds = Array.from(
-          new Set<number>([
-            ...recs.map((r) => r.tmdbId),
-            ...historyActive,
-            ...saved.map((s) => s.recommendation.tmdbId),
-          ]),
-        );
-        // P0-2 V2 입력 — 동일 flag/prefs 기준으로 prefetch 도 일관 유지.
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
-          // 2026-05-22 — flag 분기 제거 (default ON). ONBOARDING_V2 와 동일 패턴.
           tasteGenresEnabled: true,
           ottWeakSignalEnabled: true,
           tasteGenres: prefs.tasteGenres,
           subscribedOtt: prefs.subscribedOtt,
         });
 
-        // === Batch 1 ===
-        await prefetchRecommendations({
-          filter,
-          favorites,
-          savedCount: saved.length,
-          excludeIds,
-          ...v2.body,
-        });
-        const cached1 = consumePrefetchedRecommendations(
-          filter,
-          favorites,
-          saved.length,
-        );
-        let appended1: typeof cached1 = [];
-        if (cached1 && cached1.length > 0) {
-          setRecs((prev) => {
-            const existing = new Set(prev.map((r) => r.tmdbId));
-            const unique = cached1.filter((r) => !existing.has(r.tmdbId));
-            if (unique.length === 0) {
-              // 2026-06-06 (P0 incident Fix B-1) — 진짜 candidate pool 고갈 detect.
-              // PWA `useRecommendations.ts:564~568` 정합. EmptyState 노출 조건.
-              exhaustedRef.current = true;
-              setExhausted(true);
-              track('recommendation_load_more', {
-                exhausted: true,
-                history_count: historyActive.length,
-                saved_count: saved.length,
-              });
-              return prev;
-            }
-            appended1 = unique;
-            return [...prev, ...unique];
-          });
-        } else {
-          // cached 자체가 없거나 비어있음 — 풀 고갈로 간주
-          exhaustedRef.current = true;
-          setExhausted(true);
-          track('recommendation_load_more', {
-            exhausted: true,
-            history_count: historyActive.length,
-            saved_count: saved.length,
-          });
-          return;
-        }
+        // 2026-06-06 (Tier 3 단기 incident 해소) — Progressive fallback.
+        // 사용자 명시 "무한 스크롤" 의도 → cooldown 7→3→1→0 일 순으로 재시도.
+        // 모든 tier 에서 unique=0 면 server LLM 다양성 자체 문제 → 자동 hard refresh
+        // (clearRecHistory + load).
+        // exhausted lock 페기 — EmptyState UI 자체 페기와 정합.
+        // Tier 3 Phase A (server LLM 다양성) 완료 후 본 fallback 단순화 가능.
+        const cooldownTiers: number[] = [7, 3, 1, 0];
+        let appendedAny = false;
 
-        // === Batch 2 (Fix B-2 — Instagram L3 표준 N+3~N+7 정합) ===
-        // 첫 batch 후에도 buffer 가 얕으면 연쇄 fetch. 사용자 swipe 가 끊김 없이
-        // 이어지도록 buffer depth N+7 까지 채움.
-        const projectedDepth = recs.length + appended1.length - topIdx;
-        if (projectedDepth < 7 && !exhaustedRef.current) {
-          const appendedIds = appended1.map((c) => c.tmdbId);
-          const excludeIds2 = Array.from(
-            new Set<number>([...excludeIds, ...appendedIds]),
+        for (const cooldownDays of cooldownTiers) {
+          const historyActive =
+            cooldownDays > 0
+              ? await getActiveExcludeIds({ cooldownDays })
+              : [];
+          const excludeIds = Array.from(
+            new Set<number>([
+              ...recs.map((r) => r.tmdbId),
+              ...historyActive,
+              ...saved.map((s) => s.recommendation.tmdbId),
+            ]),
           );
+
           await prefetchRecommendations({
             filter,
             favorites,
             savedCount: saved.length,
-            excludeIds: excludeIds2,
+            excludeIds,
             ...v2.body,
           });
-          const cached2 = consumePrefetchedRecommendations(
+          const cached = consumePrefetchedRecommendations(
             filter,
             favorites,
             saved.length,
           );
-          if (cached2 && cached2.length > 0) {
-            setRecs((prev) => {
-              const existing = new Set(prev.map((r) => r.tmdbId));
-              const unique = cached2.filter((r) => !existing.has(r.tmdbId));
-              if (unique.length === 0) return prev;
-              return [...prev, ...unique];
-            });
-          }
-          // batch 2 는 silent — unique=0 도 exhausted lock set 안 함 (batch 1 이 정답)
+          if (!cached || cached.length === 0) continue;
+
+          const existingIds = new Set(recs.map((r) => r.tmdbId));
+          const unique = cached.filter((r) => !existingIds.has(r.tmdbId));
+          if (unique.length === 0) continue;
+
+          setRecs((prev) => {
+            const existing = new Set(prev.map((r) => r.tmdbId));
+            const newUnique = cached.filter(
+              (r) => !existing.has(r.tmdbId),
+            );
+            if (newUnique.length === 0) return prev;
+            return [...prev, ...newUnique];
+          });
+          track('recommendation_load_more', {
+            cooldown_used: cooldownDays,
+            unique_count: unique.length,
+          });
+          appendedAny = true;
+          break;
+        }
+
+        if (!appendedAny) {
+          // 모든 tier 0 — server LLM 다양성 본질 한계. 자동 hard refresh 로 무한 스크롤 보장.
+          track('recommendation_load_more', {
+            cooldown_used: -1,
+            unique_count: 0,
+            auto_hard_refresh: true,
+          });
+          await clearRecHistory();
+          load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
         }
       } catch {
         // 백그라운드는 silent — 사용자 UX 영향 없음
       }
     },
-    [recs, topIdx],
+    [recs, load],
   );
 
   useEffect(() => {
@@ -652,13 +624,11 @@ export default function DiscoverScreen() {
   );
 
   // #17 prefetch 트리거 — 남은 카드 5장 이하 시 다음 배치 백그라운드 로드.
-  // 2026-06-06 (P0 incident Fix B-2) — threshold 3 → 5 + lock 가드.
-  // Instagram L3 표준 N+3~N+7 buffer depth 정합. triggerPrefetch 가 2 batch 연쇄로
-  // N+7 까지 채우므로 사용자 swipe 가 끊김 없이 이어짐.
-  // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.2.
+  // 2026-06-06 (Tier 3 단기 incident 해소) — exhausted lock 가드 페기.
+  // triggerPrefetch 의 progressive fallback (cooldown 7→3→1→0) + 자동 hard refresh
+  // 가 무한 스크롤 보장. 사용자 명시 "EmptyState 화면 자체가 없어야".
   useEffect(() => {
     if (state !== 'ready' || recs.length === 0) return;
-    if (exhaustedRef.current) return;  // 진짜 pool 고갈 — refresh 까지 prefetch 차단
     const remaining = recs.length - topIdx;
     if (remaining > 5) return;
     if (topIdx === 0) return; // 첫 로드 직후 즉시 prefetch 방지
@@ -929,29 +899,23 @@ export default function DiscoverScreen() {
     }
   }
 
-  // 2026-06-06 (P0 incident Fix B-3) — soft refresh.
-  // TikTok / Instagram pull-to-refresh 표준 정합:
-  //   "client applies extra impression on tiles already recently seen, making it
-  //    more likely that those tiles move further down the feed" (UX patent).
-  // 즉 ranking re-shuffle + recent-history exclude. 완전 hard reset 은 별도
-  // `handleHardRefresh` ("추천 기록 초기화" CTA 또는 Profile).
-  // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.3.
-  function handleRefresh() {
-    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
-    // load() 가 7일 cooldown 적용된 historyActive 를 자동 합치므로, 여기서는
-    // 현재 stack 만 명시 exclude. soft refresh = ranking re-shuffle + 최근 7일
-    // 작품 회피. exhausted lock 도 load() 진입 시 reset (Fix B-1 정합).
-    track('recommendation_refresh', { mode: 'soft' });
-    load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
-  }
-
-  // 2026-06-06 (P0 incident Fix B-3) — hard refresh (TikTok 'Refresh For You' 2023 정합).
-  // 사용자 명시적 reset — recHistory 전체 clear → 모든 작품 재추천 후보로 복귀.
-  // 호출처는 ActionBar 또는 Profile 의 "추천 기록 초기화" 버튼.
-  async function handleHardRefresh() {
+  // 2026-06-06 (Tier 3 단기 incident 해소) — 새로고침 = 항상 hard refresh.
+  // 사용자 명시: "새로고침 시 다른 목록" — soft 는 같은 cooldown 적용이라 비슷한
+  // batch 표출 → soft 모드 제거, 새로고침 = recHistory clear + 새 candidate.
+  // Tier 3 Phase A (server LLM 다양성) 완료 후 soft 재도입 가능.
+  async function handleRefresh() {
     await clearRecHistory();
     const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
     track('recommendation_refresh', { mode: 'hard' });
+    load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
+  }
+
+  // handleHardRefresh 별도 유지 — 향후 EmptyState 부활 시 또는 Profile CTA 진입점.
+  // 현재는 handleRefresh 와 동일 동작이지만 추적 분기용 mode=hard_explicit.
+  async function handleHardRefresh() {
+    await clearRecHistory();
+    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
+    track('recommendation_refresh', { mode: 'hard_explicit' });
     load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
   }
 
@@ -1223,17 +1187,13 @@ export default function DiscoverScreen() {
 
   const cardsToShow = filteredRecs.slice(topIdx, topIdx + 3);
   const isLiked = currentRec ? savedIds.has(currentRec.tmdbId) : false;
-  // 2026-06-06 (P0 incident Fix B-1) — exhausted lock 정합 derive.
-  // 기존: state==='ready' && cardsToShow.length===0 → 카드 다 swipe 한 직후 즉시
-  //       EmptyState (prefetch 진행 중에도 노출 = false-positive).
-  // 변경: state===ready + cardsToShow=0 + (진짜 pool 고갈 lock 활성 OR recs 자체 0).
-  // PWA `useRecommendations.ts:140, 537~568` 정합.
-  // recs.length===0 분기: load() 빈 응답 시 prefetch 못 trigger (useEffect 의
-  // recs.length===0 가드) → exhaustedDisplay 가 fallback 으로 EmptyState 노출.
-  const exhaustedDisplay =
-    state === 'ready' &&
-    cardsToShow.length === 0 &&
-    (exhausted || recs.length === 0);
+  // 2026-06-06 (Tier 3 단기 incident 해소) — EmptyState UI 자체 페기.
+  // 무한 스크롤이 의도 → "오늘은 여기까지" 화면 자체가 없어야 함 (사용자 명시).
+  // exhausted lock 은 prefetch progressive fallback (cooldown 7일→3일→1일→0)
+  // 으로 항상 새 batch 확보 → EmptyState 도달 자체를 차단.
+  // Tier 3 Phase A~D (`_workspace/07_refactor-master-plan-2026-06-06.md`) 완료 후
+  // 본 fallback 제거 가능.
+  const exhaustedDisplay = false;
 
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
     recs.some((r) => r.providers.some((p) => p.name === ott)),
