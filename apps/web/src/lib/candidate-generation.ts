@@ -315,9 +315,11 @@ export function stratifiedSample<T extends { totalScore: number }>(
   if (sampleSize <= 0) return top.slice(0, poolSize);
 
   // 가중 sample without replacement. pool 수백 단위라 O(n × sampleSize) OK.
+  // weight = sqrt(totalScore) — linear (totalScore) 는 강한 작품 편향이 커서
+  // tail variance 가 작음. sqrt 로 spread 증가 → batch 간 풀 변동 ↑.
+  // totalScore 음수/0 방어 — 최소 1e-6 부여 (균등 fallback)
   const pool = rest.slice();
-  // totalScore 음수/0 방어 — 최소 weight 1 부여 (균등 fallback)
-  const weights = pool.map((c) => Math.max(c.totalScore, 1e-6));
+  const weights = pool.map((c) => Math.sqrt(Math.max(c.totalScore, 1e-6)));
   let totalWeight = weights.reduce((s, w) => s + w, 0);
 
   const sampled: T[] = [];
@@ -375,7 +377,7 @@ export async function generateCandidates(
   filter: RecommendFilter,
   excludeIds: number[],
   poolSize: number = 1000,
-  topK: number = 100,
+  topK: number = 30,
 ): Promise<TmdbCandidate[]> {
   const admin = supabaseAdmin(); // env 누락 시 throw → caller 가 fallback
 
