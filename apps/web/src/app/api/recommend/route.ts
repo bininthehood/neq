@@ -125,6 +125,9 @@ export async function POST(req: NextRequest) {
               onCard: (rec) => emit({ type: "card", rec }),
               onTimings: (timings) => emit({ type: "timings", timings }),
               onUsage: (usage) => emit({ type: "usage", usage }),
+              // Phase A-4 (2026-06-06) — LLM meta (diversity_axis / temperature
+              // / seed) 흐름. cold-start 경로는 onMeta 미호출.
+              onMeta: (meta) => emit({ type: "meta", meta }),
             },
             useMirror,
             tasteGenres,
@@ -152,7 +155,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { recommendations, timings, usage } = await getRecommendations(
+    const { recommendations, timings, usage, meta } = await getRecommendations(
       favorites ?? [],
       filter ?? {},
       feedback,
@@ -174,10 +177,13 @@ export async function POST(req: NextRequest) {
       "X-RateLimit-Remaining": String(remaining),
     };
     if (serverTiming) headers["Server-Timing"] = serverTiming;
-    return NextResponse.json(
-      usage ? { recommendations, timings, usage } : { recommendations, timings },
-      { headers },
-    );
+    // Phase A-4 (2026-06-06) — meta (LLM diversity_axis / temperature / seed)
+    // response body 포함. 클라이언트 useRecommendations.ts 의 metaToProps 가
+    // `srv_*` prefix props 로 PostHog 매핑.
+    const body: Record<string, unknown> = { recommendations, timings };
+    if (usage) body.usage = usage;
+    if (meta) body.meta = meta;
+    return NextResponse.json(body, { headers });
   } catch (error) {
     console.error("Recommendation error:", error);
     return NextResponse.json(

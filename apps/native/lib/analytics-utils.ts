@@ -55,6 +55,29 @@ export function usageToProps(usage: unknown): Record<string, number> {
 }
 
 /**
+ * Phase A-4 (2026-06-06) — /api/recommend 응답 body 의 meta (CurationMeta) →
+ * PostHog 프로퍼티. baseline `srv_*` prefix 패턴 따름.
+ *  - srv_diversity_axis (string) — Phase A-3
+ *  - srv_temperature    (number) — Phase A-1
+ *  - srv_seed           (number) — Phase A-2
+ */
+export function metaToProps(meta: unknown): Record<string, string | number> {
+  if (!meta || typeof meta !== 'object') return {};
+  const m = meta as Record<string, unknown>;
+  const out: Record<string, string | number> = {};
+  if (typeof m.diversity_axis === 'string') {
+    out.srv_diversity_axis = m.diversity_axis;
+  }
+  if (typeof m.temperature === 'number' && !Number.isNaN(m.temperature)) {
+    out.srv_temperature = m.temperature;
+  }
+  if (typeof m.seed === 'number' && !Number.isNaN(m.seed)) {
+    out.srv_seed = m.seed;
+  }
+  return out;
+}
+
+/**
  * Server-Timing 헤더 파싱.
  * 형식: `enrich;dur=286,llm;dur=8855` → { enrich: 286, llm: 8855 }
  *

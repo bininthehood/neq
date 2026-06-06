@@ -75,6 +75,32 @@ function usageToProps(usage: unknown): Record<string, number> {
   return out;
 }
 
+/**
+ * Phase A-4 (2026-06-06) — /api/recommend 응답 body 의 meta (CurationMeta) →
+ * PostHog 프로퍼티. baseline `srv_*` prefix 패턴 ([[feedback_posthog_property_keys]])
+ * 따름.
+ *  - srv_diversity_axis (string)  — Phase A-3
+ *  - srv_temperature    (number)  — Phase A-1 (dynamicTemperature 실측치)
+ *  - srv_seed           (number)  — Phase A-2 (OpenAI seed)
+ *
+ * cold-start 경로는 meta 미존재 → 빈 객체 반환 (event prop 누락 정상).
+ */
+function metaToProps(meta: unknown): Record<string, string | number> {
+  if (!meta || typeof meta !== "object") return {};
+  const m = meta as Record<string, unknown>;
+  const out: Record<string, string | number> = {};
+  if (typeof m.diversity_axis === "string") {
+    out.srv_diversity_axis = m.diversity_axis;
+  }
+  if (typeof m.temperature === "number" && !Number.isNaN(m.temperature)) {
+    out.srv_temperature = m.temperature;
+  }
+  if (typeof m.seed === "number" && !Number.isNaN(m.seed)) {
+    out.srv_seed = m.seed;
+  }
+  return out;
+}
+
 
 /** 세션 스토리지에서 온보딩 완료 시각을 1회성으로 꺼냄 */
 function consumeOnboardingTimestamp(): number | undefined {
@@ -338,6 +364,8 @@ export function useRecommendations() {
       let firstCardAt: number | null = null;
       let timingsMeta: unknown;
       let usageMeta: unknown;
+      // Phase A-4 (2026-06-06) — LLM meta (diversity_axis / temperature / seed)
+      let llmMeta: unknown;
 
       const acceptCard = (rec: Recommendation) => {
         if (seenIds.has(rec.tmdbId)) return;
@@ -356,6 +384,7 @@ export function useRecommendations() {
           onCard: acceptCard,
           onTimings: (t) => { timingsMeta = t; },
           onUsage: (u) => { usageMeta = u; },
+          onMeta: (m) => { llmMeta = m; },
           onError: (msg) => { setLoadError(msg); },
         }, controller.signal);
       } else {
@@ -363,6 +392,7 @@ export function useRecommendations() {
         const data = await res.json();
         timingsMeta = data.timings;
         usageMeta = data.usage;
+        llmMeta = data.meta;
         const rawRecs: Recommendation[] = data.recommendations ?? [];
         for (const r of rawRecs) acceptCard(r);
         setRecs(collected);  // non-stream은 최종 한 번
@@ -397,6 +427,7 @@ export function useRecommendations() {
           ...(first_card_ms !== undefined ? { srv_first_card_ms: first_card_ms } : {}),
           ...timingsToProps(timingsMeta),
           ...usageToProps(usageMeta),
+          ...metaToProps(llmMeta),
         });
         // V2 분기 진입 시 별도 이벤트 1건 (스펙 §8.3 cold_start_v2)
         if (v2.coldStartVersion === "v2") {
@@ -516,6 +547,8 @@ export function useRecommendations() {
       const collected: Recommendation[] = [];
       let timingsMeta: unknown;
       let usageMeta: unknown;
+      // Phase A-4 (2026-06-06) — LLM meta (diversity_axis / temperature / seed)
+      let llmMeta: unknown;
 
       if (isStream) {
         // 백그라운드 prefetch는 점진 추가 의미 적음 — 모은 뒤 한 번에 stack에 추가
@@ -523,16 +556,19 @@ export function useRecommendations() {
           onCard: (rec) => collected.push(rec),
           onTimings: (t) => { timingsMeta = t; },
           onUsage: (u) => { usageMeta = u; },
+          onMeta: (m) => { llmMeta = m; },
           onError: () => { /* 백그라운드 silent */ },
         }, controller.signal);
       } else {
         const data = await res.json();
         timingsMeta = data.timings;
         usageMeta = data.usage;
+        llmMeta = data.meta;
         collected.push(...((data.recommendations ?? []) as Recommendation[]));
       }
       const serverTimings = timingsToProps(timingsMeta);
       const serverUsage = usageToProps(usageMeta);
+      const serverLlmMeta = metaToProps(llmMeta);
       const newRecs = collected;
       // unique=0 감지 — candidate pool 고갈 추정. exhausted lock 으로 무한 호출 차단.
       let appendedUnique = 0;
@@ -556,6 +592,7 @@ export function useRecommendations() {
             streamed: isStream,
             ...serverTimings,
             ...serverUsage,
+            ...serverLlmMeta,
           });
           return merged;
         });
@@ -568,6 +605,7 @@ export function useRecommendations() {
           exhausted: true,
           favorites_count: favorites.length,
           ...serverTimings,
+          ...serverLlmMeta,
         });
       }
     } catch (e) {

@@ -68,6 +68,24 @@ export interface CuratedPick {
   reason: string;
 }
 
+/**
+ * Phase A-3/A-4 (2026-06-06) — LLM 호출 메타데이터. 측정 + 디버깅 용도.
+ *
+ * 본 객체는 PostHog `recommendation_loaded` event 의 `srv_*` prefix props 로
+ * 직접 매핑됨 (apps/web/src/hooks/useRecommendations.ts metaToProps).
+ *  - srv_diversity_axis (string) — A-3
+ *  - srv_temperature    (number) — A-4
+ *  - srv_seed           (number) — A-4
+ */
+export interface CurationMeta {
+  /** Phase A-3 — 이번 호출에서 강조한 다양성 축 */
+  diversity_axis: string;
+  /** Phase A-4 — 실제 사용된 temperature (dynamicTemperature 결과) */
+  temperature: number;
+  /** Phase A-4 — 실제 사용된 OpenAI seed (uint32) */
+  seed: number;
+}
+
 // ---------- 외부 노출 타입 ----------
 
 export type TokenUsage = {
@@ -80,10 +98,14 @@ export type RecommendResult = {
   recommendations: Recommendation[];
   timings: Record<string, number>;
   usage?: TokenUsage;
+  /** Phase A-3/A-4 (2026-06-06) — LLM 호출 메타데이터. cold-start 시 미존재. */
+  meta?: CurationMeta;
 };
 
 export type StreamingCallbacks = {
   onCard: (rec: Recommendation) => void;
   onTimings: (timings: Record<string, number>) => void;
   onUsage: (usage: TokenUsage) => void;
+  /** Phase A-3/A-4 (2026-06-06) — meta 흐름. cold-start 시 미호출. */
+  onMeta?: (meta: CurationMeta) => void;
 };

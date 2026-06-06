@@ -11,6 +11,7 @@ import type { Recommendation } from "@/lib/types";
  *   {"type":"card","rec":Recommendation}
  *   {"type":"timings",...}
  *   {"type":"usage",...}
+ *   {"type":"meta",...}        — Phase A-4 (2026-06-06) LLM 메타데이터
  *   {"type":"error","message":"..."}
  *   {"type":"done"}
  */
@@ -21,6 +22,8 @@ export async function consumeStreamingNDJSON(
     onTimings: (timings: unknown) => void;
     onUsage: (usage: unknown) => void;
     onError: (msg: string) => void;
+    /** Phase A-4 (2026-06-06) — LLM meta 흐름. 미정의 시 line 무시. */
+    onMeta?: (meta: unknown) => void;
   },
   signal?: AbortSignal,
 ): Promise<void> {
@@ -37,11 +40,13 @@ export async function consumeStreamingNDJSON(
         rec?: Recommendation;
         timings?: unknown;
         usage?: unknown;
+        meta?: unknown;
         message?: string;
       };
       if (msg.type === "card" && msg.rec) callbacks.onCard(msg.rec);
       else if (msg.type === "timings") callbacks.onTimings(msg.timings);
       else if (msg.type === "usage") callbacks.onUsage(msg.usage);
+      else if (msg.type === "meta") callbacks.onMeta?.(msg.meta);
       else if (msg.type === "error") callbacks.onError(msg.message ?? "stream error");
     } catch {
       /* malformed line, skip */

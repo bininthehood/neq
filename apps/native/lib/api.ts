@@ -5,7 +5,7 @@ import type { Recommendation, RecommendFilter } from '@neq/core';
 // 일반 (non-streaming) 호출은 기본 fetch 그대로 사용 — 영향 최소화.
 import { fetch as expoFetch } from 'expo/fetch';
 import { env } from './env';
-import { track, parseServerTiming, timingsToProps, usageToProps } from './analytics';
+import { track, parseServerTiming, timingsToProps, usageToProps, metaToProps } from './analytics';
 import { buildPrefetchKey } from './prefetch-utils';
 import { consumeStreamingNDJSON } from './recommend-stream';
 
@@ -101,6 +101,7 @@ export async function fetchRecommendations(
     recommendations?: Recommendation[];
     timings?: unknown;
     usage?: unknown;
+    meta?: unknown;
   };
   let recs = data.recommendations ?? [];
   // body.timings → srv_<step>_ms 매핑. 헤더는 키가 없을 때만 보강.
@@ -110,6 +111,8 @@ export async function fetchRecommendations(
     headerTimings[`srv_${k}_ms`] = v;
   }
   const usageProps = usageToProps(data.usage);
+  // Phase A-4 (2026-06-06) — LLM meta props.
+  const metaProps = metaToProps(data.meta);
 
   // #16 Cold start fallback — favorites=[] + 빈 응답일 때 trending으로 보강
   let coldStartFallbackUsed = false;
@@ -143,7 +146,7 @@ export async function fetchRecommendations(
     subscribed_ott_count: subscribedOttCount,
     cold_start_version: coldStartVersion,
   };
-  // body.timings 우선 → 누락된 키만 헤더 fallback. usage 도 동일 모듈에서 매핑.
+  // body.timings 우선 → 누락된 키만 헤더 fallback. usage / meta 도 동일 모듈에서 매핑.
   for (const [k, v] of Object.entries(bodyTimings)) {
     props[k] = v;
   }
@@ -151,6 +154,9 @@ export async function fetchRecommendations(
     if (props[k] === undefined) props[k] = v;
   }
   for (const [k, v] of Object.entries(usageProps)) {
+    props[k] = v;
+  }
+  for (const [k, v] of Object.entries(metaProps)) {
     props[k] = v;
   }
   track('recommendation_loaded', props);
@@ -212,6 +218,8 @@ export async function fetchRecommendationsStreaming(
   let count = 0;
   let bodyTimings: Record<string, number> = {};
   let usageProps: Record<string, number> = {};
+  // Phase A-4 (2026-06-06) — LLM meta (diversity_axis / temperature / seed)
+  let metaProps: Record<string, string | number> = {};
 
   // Cold start fallback (#16) tracking — streaming 시작 후 카드 0건 + favorites 0
   // 인 경우만 trigger.
@@ -271,6 +279,9 @@ export async function fetchRecommendationsStreaming(
           onUsage: (usage) => {
             usageProps = usageToProps(usage);
           },
+          onMeta: (meta) => {
+            metaProps = metaToProps(meta);
+          },
           onError: (msg) => {
             callbacks.onError?.(new Error(msg));
           },
@@ -287,7 +298,7 @@ export async function fetchRecommendationsStreaming(
           const lines = text.split('\n').filter((l) => l.trim());
           for (const line of lines) {
             try {
-              const msg = JSON.parse(line) as { type?: string; rec?: Recommendation; timings?: unknown; usage?: unknown };
+              const msg = JSON.parse(line) as { type?: string; rec?: Recommendation; timings?: unknown; usage?: unknown; meta?: unknown };
               if (msg.type === 'card' && msg.rec) {
                 if (firstCardAt === null) firstCardAt = Date.now();
                 count += 1;
@@ -296,6 +307,8 @@ export async function fetchRecommendationsStreaming(
                 bodyTimings = timingsToProps(msg.timings);
               } else if (msg.type === 'usage') {
                 usageProps = usageToProps(msg.usage);
+              } else if (msg.type === 'meta') {
+                metaProps = metaToProps(msg.meta);
               }
             } catch { /* skip malformed */ }
           }
@@ -309,9 +322,10 @@ export async function fetchRecommendationsStreaming(
   } else {
     // 서버가 streaming 헤더를 무시하고 JSON 응답을 줬다면 (구버전 라우트 등) JSON 파싱
     usedStreaming = false;
-    const data = (await res.json()) as { recommendations?: Recommendation[]; timings?: unknown; usage?: unknown };
+    const data = (await res.json()) as { recommendations?: Recommendation[]; timings?: unknown; usage?: unknown; meta?: unknown };
     bodyTimings = timingsToProps(data.timings);
     usageProps = usageToProps(data.usage);
+    metaProps = metaToProps(data.meta);
     for (const rec of data.recommendations ?? []) {
       if (firstCardAt === null) firstCardAt = Date.now();
       count += 1;
@@ -340,6 +354,7 @@ export async function fetchRecommendationsStreaming(
   };
   for (const [k, v] of Object.entries(bodyTimings)) props[k] = v;
   for (const [k, v] of Object.entries(usageProps)) props[k] = v;
+  for (const [k, v] of Object.entries(metaProps)) props[k] = v;
   track('recommendation_loaded', props);
 
   if (coldStartVersion === 'v2') {
