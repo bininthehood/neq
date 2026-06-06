@@ -109,6 +109,7 @@ export type NekoEvent =
   // 추천 로드
   | 'recommendation_loaded'
   | 'recommendation_load_more'
+  | 'recommendation_refresh'
   | 'recommendation_failed'
   // Cold Start V2
   | 'cold_start_v2'

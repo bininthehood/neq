@@ -221,6 +221,38 @@ export async function addRecHistory(
   await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
 }
 
+/**
+ * 2026-06-06 — seen items decay (Fix B-4, TikTok/Instagram 표준 정합).
+ *
+ * `getRecHistory()` 는 100건 영구 유지지만, excludeIds 계산 시점에는 cooldown 기간
+ * 이내 항목만 사용. 기간 지난 작품은 다시 추천 가능 → candidate pool 영구 신선.
+ *
+ * 기본 7일 — short video 표준 (TikTok 명시 X, Instagram L2 TTL 3~7일 정합) + OTT
+ * 콘텐츠 lifespan (영화/시리즈 영구) 절충. 사용자가 7일 후 재추천 시 "다시 봐도 OK"
+ * 느낌 가질 수 있는 임의 결정 — PostHog 측정 후 조정 권고.
+ */
+export async function getActiveExcludeIds(
+  opts: { cooldownDays?: number } = {},
+): Promise<number[]> {
+  const cooldownDays = opts.cooldownDays ?? 7;
+  const cutoffMs = Date.now() - cooldownDays * 86400_000;
+  const history = await getRecHistory();
+  return history
+    .filter((h) => {
+      const t = new Date(h.date).getTime();
+      return !Number.isNaN(t) && t >= cutoffMs;
+    })
+    .map((h) => h.tmdbId);
+}
+
+/**
+ * 2026-06-06 — Fix B-3 hard refresh 용 (TikTok 'Refresh For You' 2023 정합).
+ * 사용자 명시적 reset. 7일 cooldown 무시하고 모든 작품 재추천 후보로 복귀.
+ */
+export async function clearRecHistory(): Promise<void> {
+  await AsyncStorage.removeItem(HISTORY_KEY);
+}
+
 // ---------- personas (W5 Task G) ----------
 //
 // web `apps/web/src/lib/store.ts:113-198` 의 페르소나 CRUD 와 동등하지만, native 는

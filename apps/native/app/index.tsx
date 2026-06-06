@@ -42,6 +42,8 @@ import {
   addRecHistory,
   getAccountPrefs,
   getRecHistory,
+  getActiveExcludeIds,
+  clearRecHistory,
   getSaved,
   hasOnboarded,
   hasSeenTutorialV3,
@@ -244,6 +246,13 @@ export default function DiscoverScreen() {
   // onCard 가 새 stack 에 끼어드는 race 차단. PWA `useRecommendations.ts:221, 461-462`
   // 정합. 자세한 메커니즘: `_workspace/02_p0_stack_overlap.md` §2.
   const loadAbortRef = useRef<AbortController | null>(null);
+
+  // 2026-06-06 (P0 incident Fix B-1) — exhausted lock. PWA `useRecommendations.ts:140`
+  // 정합. 사용자가 카드 다 swipe 했을 때가 아니라 *진짜 candidate pool 고갈*
+  // (triggerPrefetch 의 unique=0 응답) 시점에만 EmptyState 노출.
+  // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.1
+  const [exhausted, setExhausted] = useState(false);
+  const exhaustedRef = useRef(false);
   // 언마운트 시 대기 중이던 advance 타이머 + in-flight stream 정리.
   useEffect(() => {
     return () => {
@@ -337,24 +346,30 @@ export default function DiscoverScreen() {
       prevOverlayX.value = -SCREEN_WIDTH;
       invalidatePrefetchCache();
 
+      // 2026-06-06 (P0 incident Fix B-1) — 새 load = candidate pool 재시도 가능.
+      // PWA `useRecommendations.ts:170` 정합.
+      exhaustedRef.current = false;
+      setExhausted(false);
+
       setState('loading');
       setErrorMsg(null);
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
-        // 2026-06-06 (P1 다양성) — excludeIds 확장.
+        // 2026-06-06 (P1 다양성 / P0 incident Fix B-4) — excludeIds 확장 + cooldown.
         // 기존: 호출자가 넘긴 현재 stack tmdbId (보통 10~50개) 만 dedup.
-        // 변경: 호출자 excludeIds + recHistory 100건 (FIFO) + saved 전체 합집합.
-        // 효과: 앱 재시작 직후 신규 stack 에도 이전 노출 작품 자동 제외 →
-        //       overlap 85~92% → 15~30% 예상 (`_workspace/02_p1_diversity.md` §4.1).
+        // 변경: 호출자 excludeIds + recHistory **활성 항목만** (7일 cooldown) + saved 전체 합집합.
+        // 효과: 앱 재시작 직후 신규 stack 에도 이전 노출 작품 자동 제외 +
+        //       7일 지난 작품은 다시 추천 후보로 복귀 → candidate pool 영구 신선
+        //       (TikTok/Instagram 표준 정합 — `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.4).
         // PWA 의 `getSeenTitles + savedTitles` 200건 전송과 동등 효과.
         // route.ts:74 가 300개 캡 처리 — 합쳐도 안전.
-        const history = await getRecHistory();
+        const historyActive = await getActiveExcludeIds({ cooldownDays: 7 });
         const baseExcludeIds = opts?.excludeIds ?? [];
         const excludeIds = Array.from(
           new Set<number>([
             ...baseExcludeIds,
-            ...history.map((h) => h.tmdbId),
+            ...historyActive,
             ...saved.map((s) => s.recommendation.tmdbId),
           ]),
         );
@@ -470,16 +485,22 @@ export default function DiscoverScreen() {
    */
   const triggerPrefetch = useCallback(
     async (filter: RecommendFilter) => {
+      // 2026-06-06 (P0 incident Fix B-1) — lock 활성 시 prefetch skip.
+      // 진짜 candidate pool 고갈 확정 상태 — refresh / filter 변경 / persona 전환만
+      // 재시도 가능. PWA `useRecommendations.ts:471` 정합.
+      if (exhaustedRef.current) return;
       try {
         const saved = await getSaved();
         const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
-        // 2026-06-06 (P1 다양성) — excludeIds 확장 (load() 와 동일 합집합).
-        // 현재 stack + recHistory 100 + saved 합쳐 prefetch 결과의 다양성도 보강.
-        const history = await getRecHistory();
+        // 2026-06-06 (P1 다양성 / P0 incident Fix B-4) — excludeIds + 7일 cooldown.
+        // 현재 stack + recHistory 활성 (7일 이내) + saved 합쳐 prefetch 결과 다양성 보강.
+        // 7일 지난 작품은 다시 추천 후보로 복귀 → candidate pool 영구 신선
+        // (`_workspace/06_research-infinite-scroll-2026-06-06.md` §4.4).
+        const historyActive = await getActiveExcludeIds({ cooldownDays: 7 });
         const excludeIds = Array.from(
           new Set<number>([
             ...recs.map((r) => r.tmdbId),
-            ...history.map((h) => h.tmdbId),
+            ...historyActive,
             ...saved.map((s) => s.recommendation.tmdbId),
           ]),
         );
@@ -492,6 +513,8 @@ export default function DiscoverScreen() {
           tasteGenres: prefs.tasteGenres,
           subscribedOtt: prefs.subscribedOtt,
         });
+
+        // === Batch 1 ===
         await prefetchRecommendations({
           filter,
           favorites,
@@ -499,25 +522,79 @@ export default function DiscoverScreen() {
           excludeIds,
           ...v2.body,
         });
-        // prefetch 완료 후 캐시에서 소비해 stack 끝에 누적
-        const cached = consumePrefetchedRecommendations(
+        const cached1 = consumePrefetchedRecommendations(
           filter,
           favorites,
           saved.length,
         );
-        if (cached && cached.length > 0) {
+        let appended1: typeof cached1 = [];
+        if (cached1 && cached1.length > 0) {
           setRecs((prev) => {
             const existing = new Set(prev.map((r) => r.tmdbId));
-            const unique = cached.filter((r) => !existing.has(r.tmdbId));
-            if (unique.length === 0) return prev;
+            const unique = cached1.filter((r) => !existing.has(r.tmdbId));
+            if (unique.length === 0) {
+              // 2026-06-06 (P0 incident Fix B-1) — 진짜 candidate pool 고갈 detect.
+              // PWA `useRecommendations.ts:564~568` 정합. EmptyState 노출 조건.
+              exhaustedRef.current = true;
+              setExhausted(true);
+              track('recommendation_load_more', {
+                exhausted: true,
+                history_count: historyActive.length,
+                saved_count: saved.length,
+              });
+              return prev;
+            }
+            appended1 = unique;
             return [...prev, ...unique];
           });
+        } else {
+          // cached 자체가 없거나 비어있음 — 풀 고갈로 간주
+          exhaustedRef.current = true;
+          setExhausted(true);
+          track('recommendation_load_more', {
+            exhausted: true,
+            history_count: historyActive.length,
+            saved_count: saved.length,
+          });
+          return;
+        }
+
+        // === Batch 2 (Fix B-2 — Instagram L3 표준 N+3~N+7 정합) ===
+        // 첫 batch 후에도 buffer 가 얕으면 연쇄 fetch. 사용자 swipe 가 끊김 없이
+        // 이어지도록 buffer depth N+7 까지 채움.
+        const projectedDepth = recs.length + appended1.length - topIdx;
+        if (projectedDepth < 7 && !exhaustedRef.current) {
+          const appendedIds = appended1.map((c) => c.tmdbId);
+          const excludeIds2 = Array.from(
+            new Set<number>([...excludeIds, ...appendedIds]),
+          );
+          await prefetchRecommendations({
+            filter,
+            favorites,
+            savedCount: saved.length,
+            excludeIds: excludeIds2,
+            ...v2.body,
+          });
+          const cached2 = consumePrefetchedRecommendations(
+            filter,
+            favorites,
+            saved.length,
+          );
+          if (cached2 && cached2.length > 0) {
+            setRecs((prev) => {
+              const existing = new Set(prev.map((r) => r.tmdbId));
+              const unique = cached2.filter((r) => !existing.has(r.tmdbId));
+              if (unique.length === 0) return prev;
+              return [...prev, ...unique];
+            });
+          }
+          // batch 2 는 silent — unique=0 도 exhausted lock set 안 함 (batch 1 이 정답)
         }
       } catch {
         // 백그라운드는 silent — 사용자 UX 영향 없음
       }
     },
-    [recs],
+    [recs, topIdx],
   );
 
   useEffect(() => {
@@ -563,12 +640,16 @@ export default function DiscoverScreen() {
     [],
   );
 
-  // #17 prefetch 트리거 — 남은 카드 3장 이하로 떨어지면 다음 배치 백그라운드 로드
-  // (web 의 page.tsx line 297 패턴: remaining <= 10 — native 는 stack depth 가 작으므로 3 으로 단축)
+  // #17 prefetch 트리거 — 남은 카드 5장 이하 시 다음 배치 백그라운드 로드.
+  // 2026-06-06 (P0 incident Fix B-2) — threshold 3 → 5 + lock 가드.
+  // Instagram L3 표준 N+3~N+7 buffer depth 정합. triggerPrefetch 가 2 batch 연쇄로
+  // N+7 까지 채우므로 사용자 swipe 가 끊김 없이 이어짐.
+  // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.2.
   useEffect(() => {
     if (state !== 'ready' || recs.length === 0) return;
+    if (exhaustedRef.current) return;  // 진짜 pool 고갈 — refresh 까지 prefetch 차단
     const remaining = recs.length - topIdx;
-    if (remaining > 3) return;
+    if (remaining > 5) return;
     if (topIdx === 0) return; // 첫 로드 직후 즉시 prefetch 방지
     const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
     void triggerPrefetch(filter);
@@ -837,11 +918,29 @@ export default function DiscoverScreen() {
     }
   }
 
+  // 2026-06-06 (P0 incident Fix B-3) — soft refresh.
+  // TikTok / Instagram pull-to-refresh 표준 정합:
+  //   "client applies extra impression on tiles already recently seen, making it
+  //    more likely that those tiles move further down the feed" (UX patent).
+  // 즉 ranking re-shuffle + recent-history exclude. 완전 hard reset 은 별도
+  // `handleHardRefresh` ("추천 기록 초기화" CTA 또는 Profile).
+  // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.3.
   function handleRefresh() {
     const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
-    // 2026-05-28 — 새로고침 시 현재 stack tmdbId 들을 dedup 시드로 전달.
-    // 사용자 보고: "새로고침 후 같은 작품이 또 나옴". excludeIds 미전송이
-    // 결정적 원인 (`_workspace/22_refresh_dedup_analysis.md`).
+    // load() 가 7일 cooldown 적용된 historyActive 를 자동 합치므로, 여기서는
+    // 현재 stack 만 명시 exclude. soft refresh = ranking re-shuffle + 최근 7일
+    // 작품 회피. exhausted lock 도 load() 진입 시 reset (Fix B-1 정합).
+    track('recommendation_refresh', { mode: 'soft' });
+    load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
+  }
+
+  // 2026-06-06 (P0 incident Fix B-3) — hard refresh (TikTok 'Refresh For You' 2023 정합).
+  // 사용자 명시적 reset — recHistory 전체 clear → 모든 작품 재추천 후보로 복귀.
+  // 호출처는 ActionBar 또는 Profile 의 "추천 기록 초기화" 버튼.
+  async function handleHardRefresh() {
+    await clearRecHistory();
+    const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
+    track('recommendation_refresh', { mode: 'hard' });
     load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
   }
 
@@ -1113,7 +1212,13 @@ export default function DiscoverScreen() {
 
   const cardsToShow = filteredRecs.slice(topIdx, topIdx + 3);
   const isLiked = currentRec ? savedIds.has(currentRec.tmdbId) : false;
-  const exhausted = state === 'ready' && cardsToShow.length === 0;
+  // 2026-06-06 (P0 incident Fix B-1) — exhausted lock 정합 derive.
+  // 기존: state==='ready' && cardsToShow.length===0 → 카드 다 swipe 한 직후 즉시
+  //       EmptyState (prefetch 진행 중에도 노출 = false-positive).
+  // 변경: state===ready + cardsToShow=0 + **진짜 pool 고갈 lock** 활성 시에만.
+  // PWA `useRecommendations.ts:140, 537~568` 정합.
+  const exhaustedDisplay =
+    state === 'ready' && cardsToShow.length === 0 && exhausted;
 
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
     recs.some((r) => r.providers.some((p) => p.name === ott)),
@@ -1285,7 +1390,7 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {state === 'ready' && !exhausted && (
+        {state === 'ready' && !exhaustedDisplay && (
           <GestureDetector gesture={Gesture.Exclusive(tap, pan)}>
             <Animated.View style={styles.stack}>
               {/* 2026-05-20 prev overlay 통합 — PrevCardOverlay 별도 컴포넌트 폐기.
@@ -1332,7 +1437,7 @@ export default function DiscoverScreen() {
           </GestureDetector>
         )}
 
-        {exhausted && (
+        {exhaustedDisplay && (
           // 2026-06-06 (P1 종료 화면 DESIGN.md 정합) — DESIGN.md §Empty State (230~241):
           //   아이콘 48px text-muted / 아이콘→제목 gap space-md / 제목 text-base 500 /
           //   설명 text-sm 400 text-muted / CTA Ghost variant / max-width 260px.
@@ -1353,6 +1458,15 @@ export default function DiscoverScreen() {
                 <Pressable style={styles.ghostBtn} onPress={handleRefresh}>
                   <Text style={styles.ghostBtnText}>다시 시도</Text>
                 </Pressable>
+                {/* 2026-06-06 (P0 incident Fix B-3) — hard refresh CTA.
+                    필터 X + cooldown 7일 후에도 unique=0 인 극단 케이스 (KR 17K
+                    universe 100% 본 사용자) 에서만 도달. TikTok 'Refresh For You'
+                    2023 정합 — 사용자 명시적 history reset. */}
+                {!hasFilter && (
+                  <Pressable style={styles.ghostBtn} onPress={handleHardRefresh}>
+                    <Text style={styles.ghostBtnText}>추천 기록 초기화</Text>
+                  </Pressable>
+                )}
               </View>
             </View>
           </View>
