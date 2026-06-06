@@ -25,6 +25,7 @@
  * 산출 spec: `_workspace/08_refactor-handoff-2026-06-06.md` §2 Phase B-2.
  */
 import OpenAI from "openai";
+import { parse as parsePartialJSON } from "partial-json";
 import type { TmdbCandidate } from "./candidate-generation";
 import type { WatchFeedback } from "./types";
 import {
@@ -535,6 +536,124 @@ function buildScoreFallbackReason(c: TmdbCandidate): string {
   }
   // 폴백 — 작품명 + 결 (작품명 길이에 따라 변동)
   return `${kindKr} ${c.title}, 한 번 살펴봐요`;
+}
+
+// ---------- 메인: rankCandidatesLLMStreaming (streaming 변형) ----------
+
+/**
+ * Phase B-2 streaming 변형 (2026-06-07, Tier 3 §1 Phase D-2).
+ *
+ * `rankCandidatesLLM` 의 OpenAI streaming 변형. `curateWithLLMStreaming`
+ * (prompt.ts:603) 패턴을 그대로 차용:
+ *   1. candidates 0 → null 반환, onPick / onMeta 미호출.
+ *   2. axis / temperature / seed 결정 후 즉시 `onMeta` emit.
+ *   3. user prompt = `buildRankingUserPrompt` (rankCandidatesLLM 과 동일 헬퍼).
+ *   4. partial-json 으로 buffer 점진 파싱 — `selected[]` 의 length-1 까지만 emit.
+ *      마지막 element 는 incomplete 가능성 있어 stream 종료 후 final JSON.parse 로 emit.
+ *   5. `normalizeReason` 통과 + 후보 풀 ID 검증 통과한 pick 만 onPick.
+ *   6. 종료 시 `usage` 반환 (stream_options.include_usage 로 마지막 chunk 에 포함).
+ *
+ * **streaming UX 핵심:** phase 1 picks 를 buffer 하지 않고 들어오는 대로 즉시 emit.
+ * recommend.ts streaming 통합 시 onPick 콜백 내에서 곧장 `callbacks.onCard` 호출.
+ *
+ * **에러 처리:** API 에러 / 파싱 에러 모두 usage 반환 (가능한 경우) 또는 null —
+ * recommend.ts 측에서 phase1Count===0 일 때 `rankCandidatesScore` 로 안전망.
+ */
+export async function rankCandidatesLLMStreaming(
+  input: RankerInput,
+  onPick: (pick: { id: number; reason: string }) => void,
+  onMeta?: (meta: CurationMeta) => void,
+): Promise<TokenUsage | null> {
+  const { candidates, excludeCount } = input;
+
+  if (candidates.length === 0) return null;
+
+  // Phase A — 호출별 다양성 축 + 동적 temperature + 랜덤 seed (rankCandidatesLLM 과 동일).
+  const axis = pickDiversityAxis();
+  const temperature = dynamicTemperature(excludeCount);
+  const seed = generateSeed();
+  onMeta?.({ diversity_axis: axis, temperature, seed });
+
+  const userPrompt = buildRankingUserPrompt(input, axis);
+  const candidateIds = new Set(candidates.map((c) => c.tmdbId));
+
+  let usage: TokenUsage | null = null;
+  let buffer = "";
+  let lastEmittedIdx = 0;
+
+  // selected[] 의 [lastEmittedIdx, end) 범위 element 를 onPick 으로 흘림.
+  // 후보 풀 ID 검증 + normalizeReason 통과만 emit.
+  const emitFromArray = (sel: unknown[], end: number) => {
+    for (let i = lastEmittedIdx; i < end; i++) {
+      const item = sel[i] as Record<string, unknown> | undefined;
+      if (
+        item &&
+        typeof item.id === "number" &&
+        typeof item.reason === "string"
+      ) {
+        if (!candidateIds.has(item.id)) continue;
+        const normalized = normalizeReason(item.reason);
+        if (normalized !== null) {
+          onPick({ id: item.id, reason: normalized });
+        }
+      }
+    }
+    lastEmittedIdx = end;
+  };
+
+  try {
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: CURATION_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      temperature,
+      seed,
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) buffer += delta;
+
+      if (chunk.usage) {
+        usage = {
+          prompt_tokens: chunk.usage.prompt_tokens ?? 0,
+          completion_tokens: chunk.usage.completion_tokens ?? 0,
+          cached_tokens:
+            chunk.usage.prompt_tokens_details?.cached_tokens ?? 0,
+        };
+      }
+
+      if (!delta) continue;
+
+      try {
+        const parsed = parsePartialJSON(buffer) as { selected?: unknown };
+        const sel = parsed?.selected;
+        if (Array.isArray(sel)) {
+          emitFromArray(sel, Math.max(0, sel.length - 1));
+        }
+      } catch {
+        // 다음 chunk 대기 — partial JSON 파싱 실패는 정상 케이스 (불완전 buffer).
+      }
+    }
+
+    // stream 종료 후 잔여 element emit (마지막 element 포함).
+    try {
+      const parsed = JSON.parse(buffer) as { selected?: unknown };
+      const sel = parsed?.selected;
+      if (Array.isArray(sel)) emitFromArray(sel, sel.length);
+    } catch (err) {
+      console.error("LLM ranking stream final parse failed:", err);
+    }
+  } catch (err) {
+    console.error("LLM ranking stream error:", err);
+  }
+
+  return usage;
 }
 
 // ---------- DIVERSITY_AXES re-export (테스트 의존 회피용) ----------
