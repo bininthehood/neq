@@ -126,20 +126,34 @@ export default function FilterChips({
     active,
     label,
     onPress,
+    disabled: optDisabled = false,
   }: {
     active: boolean;
     label: string;
     onPress: () => void;
+    /** 2026-06-10 (Phase C #6) — OTT 옵션이 결과 모집단에 없을 때 dim/비활성. */
+    disabled?: boolean;
   }) {
     return (
       <Pressable
         onPress={onPress}
+        disabled={optDisabled}
         accessibilityRole="button"
         accessibilityLabel={`${label} 선택`}
-        accessibilityState={{ selected: active }}
-        style={[styles.option, active && styles.optionActive]}
+        accessibilityState={{ selected: active, disabled: optDisabled }}
+        style={[
+          styles.option,
+          active && styles.optionActive,
+          optDisabled && styles.optionDisabled,
+        ]}
       >
-        <Text style={[styles.optionText, active && styles.optionTextActive]}>
+        <Text
+          style={[
+            styles.optionText,
+            active && styles.optionTextActive,
+            optDisabled && styles.optionTextDisabled,
+          ]}
+        >
           {label}
         </Text>
       </Pressable>
@@ -181,15 +195,17 @@ export default function FilterChips({
           kind="별점"
           onPress={() => toggle('rating')}
         />
-        {availableOTTs.length > 0 && (
-          <Chip
-            active={filterOTTs.size > 0}
-            isOpen={openDropdown === 'ott'}
-            label={ottLabel}
-            kind="OTT"
-            onPress={() => toggle('ott')}
-          />
-        )}
+        {/* 2026-06-10 (Phase C #6) — OTT 칩 항상 고정 노출.
+            이전: `availableOTTs.length > 0` gate 로 결과 0 이면 칩 자체 숨김 → 점진 reveal 슬롭.
+            현재: OTT_OPTIONS 7종 항상 mount, dropdown 내부 옵션이 availableOTTs 기준 disabled.
+            DESIGN.md L230 시각 앵커 유지 + L266 동시 움직임 최대 3개 정합. */}
+        <Chip
+          active={filterOTTs.size > 0}
+          isOpen={openDropdown === 'ott'}
+          label={ottLabel}
+          kind="OTT"
+          onPress={() => toggle('ott')}
+        />
       </ScrollView>
 
       {/* 2026-05-20 — dropdown 외부 탭 시 닫기 (사용자 보고). PWA FilterChips 는
@@ -285,13 +301,20 @@ export default function FilterChips({
                   setOpenDropdown(null);
                 }}
               />
-              {availableOTTs.map((ott) => {
+              {/* 2026-06-10 (Phase C #6) — OTT_OPTIONS 7종 전부 mount.
+                  availableOTTs 에 없는 OTT 는 disabled (text-muted + opacity 0.5).
+                  사용자가 사전 의도("Disney+ 만 보고 싶다")를 잃지 않도록 selected 상태는
+                  유지하되 비활성화 — 결과 0 시 dim 시각으로 "이번 추천엔 매칭 없음" 신호.
+                  DESIGN.md L230 시각 앵커 유지. */}
+              {OTT_OPTIONS.map((ott) => {
                 const selected = filterOTTs.has(ott);
+                const isAvailable = availableOTTs.includes(ott);
                 return (
                   <Option
                     key={ott}
                     active={selected}
                     label={ott}
+                    disabled={!isAvailable}
                     onPress={() => {
                       const next = new Set(filterOTTs);
                       if (selected) next.delete(ott);
@@ -395,5 +418,13 @@ const styles = StyleSheet.create({
   optionTextActive: {
     color: colors.textInverse,
     fontWeight: '600',
+  },
+  // 2026-06-10 (Phase C #6) — OTT 옵션 비활성 시각 — text-muted + opacity 0.5.
+  // DESIGN.md L227 Quiet Ink: 추가 카피/아이콘 없이 단순 dim. 사용자에게 "결과 없음" 신호.
+  optionDisabled: {
+    opacity: 0.5,
+  },
+  optionTextDisabled: {
+    color: colors.textMuted,
   },
 });

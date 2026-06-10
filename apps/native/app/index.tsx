@@ -1195,6 +1195,10 @@ export default function DiscoverScreen() {
   // 본 fallback 제거 가능.
   const exhaustedDisplay = false;
 
+  // 2026-06-10 (Phase C #6) — "결과 모집단에 노출된 OTT 집합". FilterChips 에
+  // 전달되어 *disable 판정용* 으로 사용 (mount gate 아님 — 칩은 항상 OTT_OPTIONS
+  // 7종 고정 노출). 사용자 멘탈 모델: "내가 선택한 OTT 는 항상 보인다",
+  // DESIGN.md L230 시각 앵커 유지 + L266 동시 움직임 최대 3개 정합.
   const availableOTTs = OTT_OPTIONS.filter((ott) =>
     recs.some((r) => r.providers.some((p) => p.name === ott)),
   );
