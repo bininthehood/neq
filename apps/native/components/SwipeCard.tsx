@@ -233,7 +233,10 @@ export default function SwipeCard({
 
     const d = safe(animatedDepth.value);
     const baseScale = 1 - d * 0.04;
-    const yOffset = d * 12;
+    // 2026-06-10 — yOffset 12 → 0. 사용자 결정: dismiss 후 다음 카드의 "위로 올라오는"
+    // 인지 자체 제거. baseScale 만 유지 (depth 시각 단서). depth 1 frame race 가 yOffset
+    // 보간에서 발생하던 source 도 동시에 해소.
+    const yOffset = 0;
 
     // 2026-05-20 — isDismissing 게이트 추가. 이 카드가 dismiss 진행 중일 때만
     // dismissX 를 transform 으로 적용. 그 외엔 dragX 만 사용 → 옛 top → 새 top
