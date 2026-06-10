@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+// 2026-06-10 (Phase C #3) — BlurView 제거. CatChip/RatingChip 가 `--bg-overlay` solid 면으로 회귀.
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -126,12 +126,15 @@ const CAT_COLOR: Record<CardCategory, string> = {
   variety: colors.catVariety,
 };
 
-/** 카테고리 칩 — bg-overlay + cat 색 + 1px 보더(cat 색 25% alpha). web CatChip 정합.
- *  web `parts.tsx` 의 `color-mix(in srgb, ${color} 25%, transparent)` 를 RN alpha 로 변환. */
+/** 카테고리 칩 — bg-overlay solid + cat 색 텍스트 + 1px 보더(cat 색 25% alpha).
+ *  2026-06-10 (Phase C #3) — BlurView intensity=20 폐기, DESIGN.md L142
+ *  `--bg-overlay` (rgba(18,17,14,0.7) "뱃지, 태그, 힌트 배경") 정본 회귀.
+ *  worst-case 베이지/금색/라벤더/코랄 포스터 위에서도 effective bg ≈ #12110E 근사 →
+ *  text-primary/카테고리 hue 대비비 AA 이상 보장. PWA `parts.tsx` L36 정합. */
 function CatChip({ type }: { type: CardCategory }) {
   const color = CAT_COLOR[type];
   return (
-    <BlurView intensity={20} tint="dark" style={styles.catChip}>
+    <View style={styles.catChip}>
       <Text
         style={[
           styles.catChipText,
@@ -140,17 +143,20 @@ function CatChip({ type }: { type: CardCategory }) {
       >
         {CAT_LABEL[type]}
       </Text>
-    </BlurView>
+    </View>
   );
 }
 
-/** 평점 칩 — bg-overlay + radius-sm + blur. web Rating(IconStar + tabular-nums) 정합. */
+/** 평점 칩 — bg-overlay solid + IconStar amber + 평점 text-primary.
+ *  2026-06-10 (Phase C #3) — BlurView 폐기, `--bg-overlay` 정본 회귀.
+ *  텍스트는 text-primary (#EDEDEF) 로, IconStar 만 amber 유지 (anti-slop #13
+ *  amber 누적 분배 — Rating 별 1개 = 평점 위계 신호, 숫자는 데이터). */
 function RatingChip({ value }: { value: number }) {
   return (
-    <BlurView intensity={20} tint="dark" style={styles.ratingChip}>
+    <View style={styles.ratingChip}>
       <IconStar size={11} color={colors.accent} />
       <Text style={styles.ratingText}>{value.toFixed(1)}</Text>
-    </BlurView>
+    </View>
   );
 }
 
@@ -445,9 +451,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  // CatChip — padding 4×10, radius-sm, bg-overlay(BlurView), text-xs 600
+  // CatChip — padding 4×10, radius-sm, bg-overlay solid (DESIGN.md L142 "뱃지, 태그, 힌트 배경"),
+  // text-xs 600. 2026-06-10 BlurView 폐기.
   catChip: {
     borderRadius: radius.sm,
+    backgroundColor: colors.overlay,
     overflow: 'hidden',
   },
   catChipText: {
@@ -459,7 +467,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: radius.sm,
   },
-  // Rating 칩 — padding 4×10, radius-sm, bg-overlay(BlurView)
+  // Rating 칩 — padding 4×10, radius-sm, bg-overlay solid (DESIGN.md L142). 2026-06-10 BlurView 폐기.
   ratingChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -467,11 +475,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.sm,
+    backgroundColor: colors.overlay,
     overflow: 'hidden',
   },
   ratingText: {
     fontFamily: fontsV2.data, // Geist Mono tabular-nums (web Rating 정합)
-    color: colors.accent,
+    // 2026-06-10 (Phase C #3) — anti-slop #13 amber 누적 분배. text-primary 로
+    // 강등하고 IconStar 만 amber 유지 (별 = 평점 위계 신호, 숫자 = 데이터).
+    color: colors.textPrimary,
     fontSize: 12,
     fontWeight: '600',
   },
