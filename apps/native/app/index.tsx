@@ -80,29 +80,20 @@ const PREV_OVERLAY_TRIGGER = 0.3;
 // 메모리 [Pan gesture offset 임계 충돌] 회피 — activeOffset/failOffset 도입 X.
 const VELOCITY_THRESHOLD = 800; // px/s
 const VELOCITY_TRIGGER_DISTANCE = 30; // px (임계 미달 시 최소 변위)
-// pass dismiss 의 advance(topIdx++) 콜백 타이밍. feedback_swipe_ux.md 잠금 (pass 360ms).
-const PASS_DISMISS_MS = durations.swipePassDismiss; // 360
 const SAVE_ABSORB_MS = durations.swipeSaveDismiss; // 480
-// M-2 (native↔PWA 정합): pass dismiss 의 *시각 슬라이드* duration.
-// PWA pass 카드 = CSS `transition: transform 0.3s` → 300ms 동안 화면 밖으로 슬라이드.
-// advance(PASS_DISMISS_MS=360) 와 분리 — 시각 transition(300) < 콜백 타이머(360) 구조를
-// PWA 와 동일하게 맞춘다. durations 토큰에 300 값이 없어 명명 상수로 신설.
-const PASS_DISMISS_SLIDE_MS = 300;
 
-/**
- * 사이클 2 worklet화 + M-2 정합: pass dismiss 시각 곡선.
- *
- * 기존: `setDragX(-SCREEN_WIDTH)` JS 스레드 setState → RN bridge → 다음 frame 적용
- *       → 60fps 보장 어려움. qa-tester 평가에서 web CSS transition 보다 떨림 보고됨.
- *
- * 신규: `useSharedValue` + `withTiming(target, { easing })` 으로 UI 스레드 worklet 구동.
- *       - duration: 300ms (PASS_DISMISS_SLIDE_MS) — PWA `transform 0.3s` 정합
- *       - easing: Easing.bezier(...easings.spring) — 미세 오버슈트 30% (`[0.34, 1.3, 0.64, 1]`)
- *         PWA pass 카드의 `cubic-bezier(0.34, 1.3, 0.64, 1)` 와 동일 곡선.
- *       - advance(topIdx++) + sharedValue 리셋은 withTiming 콜백이 아니라
- *         별도 360ms 타이머(JS)에서 — 시각 슬라이드(300) 와 advance(360) 분리.
- */
-const PASS_DISMISS_BEZIER = Easing.bezier(...easings.spring);
+// 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
+//   - PASS_DISMISS_MS / PASS_DISMISS_SLIDE_MS / PASS_DISMISS_BEZIER 폐기.
+//   - dismissX SharedValue / dismissingTmdbId state / passAdvanceTimer ref 폐기.
+//   - dismissThenNext / advancePassIndex 함수 폐기.
+//   - handleSwipeLeft 단순화 — setTopIdx 즉시 + dragX withTiming(0).
+//   - PWA `useSwipeGesture.ts:205-208` (dragX 비리셋 + nextCard) 1:1 포팅.
+// 좌 swipe 시각/콜백 곡선은 SWIPE_LEFT_MS (300ms) + easings.spring 으로 통일.
+const SWIPE_LEFT_MS = 300;
+const SWIPE_LEFT_BEZIER = Easing.bezier(...easings.spring);
+// ux-review WARN #3 — TutorialFlow snap-back 등 임계 미달 복귀는 durations.moderate(250) 미만
+// 으로 더 빠른 200ms (인지 가벼움). easings.spring 곡선은 유지.
+const SNAPBACK_MS = 200;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -180,9 +171,8 @@ export default function DiscoverScreen() {
   const dragX = useSharedValue(0);
   // Stage 4 D1: 위/아래 스와이프 변위
   const dragY = useSharedValue(0);
-  // 비탑 카드(depth ≥ 1)에 전달할 zero SharedValue — worklet 에서 dragX/Y 를 읽지만
-  // isTop=false 분기에서 tx/ty 계산에 안 쓰이므로 안전. SharedValue prop 타입 정합용.
-  const zeroDragSV = useSharedValue(0);
+  // 2026-06-10 swipe anim 재설계 — zeroDragSV 폐기. 비탑 카드도 dragX 직접 전달
+  // (PWA 정합: promote 시 SharedValue 연속성 보장).
   const [isDragging, setIsDragging] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   // Stage 4 D1: save 흡수 모션 + flash
@@ -222,6 +212,13 @@ export default function DiscoverScreen() {
   const [stackRect, setStackRect] = useState<LayoutRectangle | null>(null);
 
   const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
+  // 2026-06-10 swipe anim v3 — dismiss 모션 SharedValue 분리.
+  // dragX 는 drag 추적 전용. 옛 top 의 slide-out (-300 → -SCREEN_W) 은 dismissX.
+  // dismissCardIdSV 가 dismiss 진행 카드의 tmdbId 보유 (-1 = idle). worklet 안에서
+  // tmdbId 매칭으로 옛 top 만 dismissX 적용 → 새 top / 비탑 영향 0.
+  // SharedValue 라 React state isDismissing prop 의 commit 전이 race 없음.
+  const dismissX = useSharedValue(0);
+  const dismissCardIdSV = useSharedValue<number>(-1);
   // 배치 G — 첫 카드 힌트 worklet 측 1회 게이트 (0=미발사, 1=발사됨).
   const firstCardHintGate = useSharedValue(0);
   // TutorialFlow step whitelist worklet 가드용 — pan.onEnd 안에서 React state
@@ -230,16 +227,11 @@ export default function DiscoverScreen() {
   // pan.onEnd 가 step 별 허용/차단 결정에 참조. onUpdate 는 변경 없음 (drag 시각 따라옴
   // 유지) — onEnd 시점에서만 dismiss/prev 진행을 가드하여 사용자 자연 인지 보존.
   const tutorialStepSV = useSharedValue(0);
-  // 사이클 2: pass dismiss worklet 곡선용 sharedValue.
-  // 0 = idle, 음수값 = 좌측 dismiss 진행. SwipeCard 가 dragX 대신 이 값을 사용.
-  const dismissX = useSharedValue(0);
-  // 2026-05-20 snap-back fix — 현재 dismiss 진행 중인 카드의 tmdbId.
-  // SwipeCard 에 `isDismissing` 으로 전달 → 해당 카드만 worklet 에서 dismissX 를 적용.
-  // 새 top 카드는 isDismissing=false 라 dismissX 영향 0 → 옛/새 top 전이 시 한 프레임
-  // 점프 (snap-back) 차단.
-  const [dismissingTmdbId, setDismissingTmdbId] = useState<number | null>(null);
-  // M-2: pass advance(topIdx++) 타이머 핸들. 시각 슬라이드(300ms)와 분리된
-  // 360ms 콜백을 들고 있다가, 연속 스와이프 시 이전 타이머를 취소해 어긋남을 막는다.
+  // 2026-06-10 swipe anim 재설계 v2 — PWA 정합 정정.
+  // dismissX SharedValue / dismissingTmdbId state 는 폐기 유지 (race source).
+  // passAdvanceTimer ref 복원 — PWA `discover/page.tsx:215-224` 의 nextCard 패턴
+  // (setDragX(-600) 으로 옛 top 슬라이드 아웃 + setTimeout 360ms 안에 setTopIdx+setDragX(0))
+  // 정합. dragX 단일 SharedValue 로 옛 top 의 slide-out 모션 표현.
   const passAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 2026-06-06 (P0 stack 겹침) — 직전 in-flight stream abort 용 controller.
   // load() 진입 시 이전 controller.abort() + 새 controller 발급 → 옛 stream 의
@@ -253,15 +245,15 @@ export default function DiscoverScreen() {
   // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.1
   const [exhausted, setExhausted] = useState(false);
   const exhaustedRef = useRef(false);
-  // 언마운트 시 대기 중이던 advance 타이머 + in-flight stream 정리.
+  // 언마운트 시 in-flight stream + 진행 중인 passAdvance 타이머 정리.
   useEffect(() => {
     return () => {
+      loadAbortRef.current?.abort();
+      loadAbortRef.current = null;
       if (passAdvanceTimer.current) {
         clearTimeout(passAdvanceTimer.current);
         passAdvanceTimer.current = null;
       }
-      loadAbortRef.current?.abort();
-      loadAbortRef.current = null;
     };
   }, []);
 
@@ -293,6 +285,20 @@ export default function DiscoverScreen() {
       tutorialStepSV.value = 4;
     }
   }, [tutorialStep, tutorialStepSV]);
+
+  // 2026-06-10 swipe anim v3 — dismissCardIdSV 안전 리셋.
+  // topIdx 변경 시 (좌 swipe advance / prev / 기타 진입) React commit + paint 후
+  // 본 effect 발화. 그 시점에 옛 top 은 이미 unmount → 옛 top 의 worklet 평가
+  // 트리거 없음. 새 top 은 tmdbId 매칭 안 됨이라 dismissCardIdSV 변경 영향 0.
+  // 옛 top 이 prev 로 cardsToShow 에 재진입한 경우에도 worklet 의 isDismissing
+  // 가드가 false 가 되어 dismissX 무시 → 정상 위치 등장.
+  useEffect(() => {
+    if (dismissCardIdSV.value !== -1) {
+      dismissCardIdSV.value = -1;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topIdx]);
+
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -339,10 +345,8 @@ export default function DiscoverScreen() {
       setRecs([]);
       setTopIdx(0);
       setPrevActive(false);
-      setDismissingTmdbId(null);
       dragX.value = 0;
       dragY.value = 0;
-      dismissX.value = 0;
       prevOverlayX.value = -SCREEN_WIDTH;
       invalidatePrefetchCache();
 
@@ -481,7 +485,7 @@ export default function DiscoverScreen() {
         setState('error');
       }
     },
-    // dismissX / prevOverlayX 는 SharedValue ref 이므로 stable. 의존성 0 유지.
+    // prevOverlayX / dragX / dragY 는 SharedValue ref 이므로 stable. 의존성 0 유지.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -705,93 +709,71 @@ export default function DiscoverScreen() {
   }
 
   /**
-   * 2026-05-20 snap-back fix — dismiss 시각 곡선 / advance / shared value 시작점 재설계.
+   * 2026-06-10 swipe anim v3 — dismiss 모션 SharedValue 분리.
    *
-   * 기존 결함:
-   *   advancePassIndex 가 `setTopIdx` 와 `dismissX.value = 0` 을 같은 JS task 에서
-   *   호출했다. React commit 메시지와 dismissX 메시지가 UI 스레드 큐에 따로 도착하면서:
-   *     - dismissX=0 이 먼저 도착하면 옛 top 카드가 한 프레임 중앙(0)으로 snap →
-   *       "깜빡임" 으로 인지.
-   *     - React commit 이 먼저 도착하면 새 top 카드가 한 프레임 -SCREEN_WIDTH 위치
-   *       (=화면 밖) 로 렌더링 → 옆에서 들어오는 듯한 깜빡임.
+   * v2 결함 (사용자 피드백 "넘긴 작품이 1회 깜빡임"):
+   *   - v2: dragX 를 -SCREEN_W 로 보간 후 360ms 시점에 dragX=0 즉시 리셋.
+   *   - 그 시점에 옛 top 이 아직 cardsToShow 에 있고 isTop=true → worklet 재평가
+   *     → tx = dragX = 0 → 옛 top 이 화면 밖에서 *중앙으로 점프* (한 프레임).
+   *   - React commit 후 unmount 이지만 그 한 프레임 깜빡임이 인지됨.
    *
-   * 새 구조:
-   *   - `dismissingTmdbId` state 로 현재 dismiss 중인 카드 식별. SwipeCard 의
-   *     `isDismissing` 게이트로 해당 카드만 worklet 에서 dismissX 사용. 새 top 은
-   *     `isDismissing=false` 라 dismissX 영향 받지 않음 — UI 메시지 순서와 무관.
-   *   - `dismissX.value` 시작점을 `사용자 마지막 dragX` 로 잡고, withTiming 보간 시작은
-   *     `useEffect`(dismissingTmdbId 변경 감지) 에 위임. React commit 후 보간 시작이라
-   *     옛 top 카드의 prop 갱신 후 시각 보간 시작 → 점프 0.
-   *   - advancePassIndex 는 더 이상 dismissX 를 리셋하지 않는다. 새 top 은
-   *     isDismissing=false 라 dismissX 값(예: -SCREEN_WIDTH)을 무시하므로 안전.
+   * v3: dragX 와 dismissX 분리.
+   *   - dragX: drag 추적 전용. 좌 swipe trigger 즉시 0 으로 리셋 (옛 top 영향 0 —
+   *     아래 isDismissing 가드로 dragX 사용 안 함).
+   *   - dismissX: 옛 top 의 slide-out 전용. -300 (사용자 마지막) → -SCREEN_W 보간.
+   *   - dismissCardIdSV: SharedValue. 옛 top tmdbId 보유. worklet 안에서 tmdbId
+   *     매칭으로 dismissX 적용 카드 식별. React state 가 아닌 SharedValue 라
+   *     commit 전이 race 0.
+   *   - advance 시점에 dismissX 리셋 안 함 (다음 swipe 가 덮어쓰기) → 옛 top 의
+   *     중앙 점프 없음. dismissCardIdSV 도 setTopIdx 와 같이 -1 로 리셋.
    *
-   * 정량 유지: 시각 슬라이드 PASS_DISMISS_SLIDE_MS=300, advance PASS_DISMISS_MS=360,
-   *           easings.spring (미세 오버슈트 30%, PWA cubic-bezier 와 동일 곡선).
+   * 새 top / 비탑 카드는 dismissCardIdSV 매칭 안 됨 → dragX 만 사용 → 옛 top
+   * slide-out 진행과 무관하게 위치 0 유지 → 깜빡임 0.
    */
-  function advancePassIndex() {
-    setTopIdx((i) => Math.min(i + 1, recs.length));
-    setDismissingTmdbId(null);
-    passAdvanceTimer.current = null;
-    // dismissX.value 리셋 안 함 — 새 top 은 isDismissing=false 라 영향 0.
-  }
-  function dismissThenNext() {
+  function handleSwipeLeftAnim() {
     if (!recs[topIdx]) return;
-    // 2026-06-06 (P1 애니메이션 Fix C) — 빠른 연속 스와이프 시 직전 보간 1 frame 잔존 차단.
-    // 진단: `_workspace/02_p1_animation.md` §4.4 (cancelAnimation 호출 0건).
-    // withTiming 은 같은 SharedValue 재할당 시 자동 cancel 되지만 effect 의존성
-    // race (`§4.2`) 가 있으면 한 frame 늦을 수 있음. 명시 cancel 로 frame 보장.
-    // Reanimated 4 정식 패턴 — 무한 worklet cleanup 패턴과 충돌 없음.
+    const curId = recs[topIdx].tmdbId;
+    // 빠른 연속 swipe: 직전 보간/타이머 정리.
+    cancelAnimation(dragX);
+    cancelAnimation(dragY);
     cancelAnimation(dismissX);
-    cancelAnimation(prevOverlayX);
-    // 사이클 2 통일 매핑: pass = light
-    hapticLight();
-    const lastDragX = dragX.value; // 사용자가 손가락 뗀 마지막 위치 — dismissX 시작점.
-    setIsDragging(false);
-    dragX.value = 0;
-    dragY.value = 0;
-    // 연속 스와이프 안전: 직전 pass 의 advance 타이머가 아직 살아 있으면 즉시 소진.
-    // (대기 중이던 advance 를 누락 없이 먼저 처리 → 카드/인덱스 어긋남 방지)
-    let activeIdx = topIdx;
     if (passAdvanceTimer.current) {
       clearTimeout(passAdvanceTimer.current);
       passAdvanceTimer.current = null;
-      advancePassIndex();
-      // closure 의 topIdx 는 옛값 — advance 후 실제 새 top index 는 +1.
-      activeIdx = topIdx + 1;
     }
-    const cur = recs[activeIdx];
-    if (!cur) return;
-    // dismissX 시작점을 사용자 마지막 위치로 둔다 — useEffect 가 commit 후
-    // withTiming 보간을 시작하므로 옛 top 카드의 prop 이 isDismissing=true 로
-    // 바뀐 직후 lastDragX → -SCREEN_WIDTH 보간이 자연스럽게 이어진다.
-    dismissX.value = lastDragX;
-    setDismissingTmdbId(cur.tmdbId);
-  }
+    hapticLight();
+    setIsDragging(false);
 
-  /**
-   * dismiss 보간 + advance 타이머 구동 effect.
-   * dismissingTmdbId 가 non-null 로 바뀌면 카드 dismiss 시각 슬라이드(300ms)와
-   * 360ms 후 advance 콜백을 시작. dependency 변경 시 cleanup 으로 타이머 취소 →
-   * 연속 스와이프 안전.
-   */
-  useEffect(() => {
-    if (dismissingTmdbId === null) return;
+    // Phase 1 — dismiss 모션 설정.
+    // 1. dismissCardIdSV 에 옛 top tmdbId 기록 → 옛 top 의 worklet 이 isDismissing=true
+    //    → dismissX 사용 시작.
+    // 2. dismissX 시작점 = dragX.value (사용자 마지막 위치, 예: -300). 자연 연장.
+    // 3. dismissX withTiming(-SCREEN_W). 옛 top 카드 화면 밖으로 슬라이드.
+    // 4. dragX = 0 즉시. 옛 top 은 isDismissing 가드라 영향 0. 새 top / 비탑도 영향 0.
+    dismissCardIdSV.value = curId;
+    dismissX.value = dragX.value;
     dismissX.value = withTiming(-SCREEN_WIDTH, {
-      duration: PASS_DISMISS_SLIDE_MS,
-      easing: PASS_DISMISS_BEZIER,
+      duration: SWIPE_LEFT_MS,
+      easing: SWIPE_LEFT_BEZIER,
     });
+    dragX.value = 0;
+    dragY.value = withTiming(0, {
+      duration: SWIPE_LEFT_MS,
+      easing: SWIPE_LEFT_BEZIER,
+    });
+
+    // Phase 2: 360ms 후 advance — setTopIdx 만 호출.
+    //   dismissCardIdSV = -1 리셋은 본 함수 안에서 *직접 호출 금지*.
+    //   직접 호출 시 UI thread 가 React commit 보다 먼저 message 처리 → 옛 top 의
+    //   worklet 재평가 → isDismissing=false → tx=dragX=0 → 옛 top 이 화면 밖 →
+    //   중앙으로 한 프레임 점프 → 사용자 인지 1회 깜빡임.
+    //   대신 아래 useEffect(topIdx) 가 React commit + paint 후 발화 → 옛 top
+    //   이미 unmount → 평가 트리거 없음 → 깜빡임 0.
     passAdvanceTimer.current = setTimeout(() => {
-      advancePassIndex();
-    }, PASS_DISMISS_MS);
-    return () => {
-      if (passAdvanceTimer.current) {
-        clearTimeout(passAdvanceTimer.current);
-        passAdvanceTimer.current = null;
-      }
-    };
-    // advancePassIndex 는 stable setter 만 호출 — dismissingTmdbId 변화에만 반응해야 함.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dismissingTmdbId]);
+      setTopIdx((i) => Math.min(i + 1, recs.length));
+      passAdvanceTimer.current = null;
+    }, 360);
+  }
 
   function toPrev() {
     // 사이클 2 통일 매핑: prev card 진입 = medium (web vibrate('medium')=14ms 와 정합)
@@ -970,7 +952,7 @@ export default function DiscoverScreen() {
     }
     // W5 Task B — TutorialFlow v3: 좌 스와이프 신호 emit.
     setLeftSwipeCount((c) => c + 1);
-    dismissThenNext();
+    handleSwipeLeftAnim();
   }
 
   // 배치 G — 첫 카드 힌트. 첫 카드(topIdx===0)에서 우 드래그 시 1회 toast.
@@ -1164,10 +1146,16 @@ export default function DiscoverScreen() {
             e.velocityX < 0 &&
             e.translationX < -VELOCITY_TRIGGER_DISTANCE;
           if (e.translationX < -SWIPE_THRESHOLD || leftVelocityTrigger) {
+            // 2026-06-10 swipe anim 재설계 — handleSwipeLeft 가 setTopIdx + dragX
+            // withTiming(0) 을 직접 처리. dragX 리셋 X — 옛/새 top 보간 연속성 유지.
             runOnJS(handleSwipeLeft)();
+            // dragY 도 handleSwipeLeftAnim 안에서 withTiming(0) 처리.
+          } else {
+            // 임계 미달 snap-back — withTiming 으로 부드러운 복귀 (ux-review WARN #3:
+            // 200ms < durations.moderate=250). 즉시 0 점프 회피.
+            dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
+            dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
           }
-          dragX.value = 0;
-          dragY.value = 0;
         }
       } else {
         // vertical — G1-A (Handoff v2 Phase B+C): ↑ 진입 제거.
@@ -1179,9 +1167,14 @@ export default function DiscoverScreen() {
           e.translationY > VELOCITY_TRIGGER_DISTANCE;
         if (e.translationY > SWIPE_THRESHOLD || downVelocityTrigger) {
           runOnJS(handleSwipeDown)();
+          // triggerSaveAbsorption 내부에서 흡수 모션 종료 시 dragX/dragY 리셋.
+          dragX.value = 0;
+          dragY.value = 0;
+        } else {
+          // 임계 미달 snap-back — withTiming 으로 부드러운 복귀.
+          dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
+          dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
         }
-        dragX.value = 0;
-        dragY.value = 0;
       }
     });
 
@@ -1408,20 +1401,27 @@ export default function DiscoverScreen() {
                       rec={rec}
                       isTop={isTop}
                       depth={depth}
-                      dragX={isTop ? dragX : zeroDragSV}
-                      dragY={isTop ? dragY : zeroDragSV}
+                      // 2026-06-10 swipe anim 재설계 — 비탑 카드도 dragX 전달.
+                      // worklet 안 `tx = isTop ? dragX.value : 0` 이 isTop=false 분기에서
+                      // 0 처리. 다만 좌 swipe trigger 시 새 top (이전 depth=1) 이 promote
+                      // 되며 React key 보존 → 같은 SwipeCard 인스턴스의 isTop prop 이
+                      // false→true 로 바뀜. 그 순간 dragX SharedValue 가 이미 -300 →
+                      // 새 top worklet 이 -300 위치에서 0 으로 슬라이드 보간 (PWA 정합).
+                      // 따라서 비탑도 dragX 를 받아야 promote 시 SharedValue 연속성 보장.
+                      dragX={dragX}
+                      dragY={dragY}
                       isDragging={isDragging}
                       immersive={isTop && immersive}
                       absorbing={isTop && saveAbsorbing}
                       saveTargetPoint={saveTargetPoint}
-                      // 사이클 2: top 카드만 worklet dismiss 곡선을 받음
-                      dismissX={isTop ? dismissX : undefined}
-                      // 2026-05-20 snap-back fix — dismiss 진행 중인 카드만 worklet
-                      // 에서 dismissX 적용. 새 top 은 false → dismissX 영향 0.
-                      isDismissing={rec.tmdbId === dismissingTmdbId}
                       // 2026-05-20 prev overlay 통합
                       isPrev={isPrev}
                       prevOverlayX={isPrev ? prevOverlayX : undefined}
+                      // 2026-06-10 swipe anim v3 — dismiss 모션 분리.
+                      // 모든 카드에 dismissX + dismissCardIdSV 전달. worklet 안에서
+                      // tmdbId 매칭으로 옛 top 만 dismissX 적용 → 새 top / 비탑 영향 0.
+                      dismissX={dismissX}
+                      dismissCardIdSV={dismissCardIdSV}
                     />
                   );
                 });

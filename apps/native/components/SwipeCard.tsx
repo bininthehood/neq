@@ -16,6 +16,14 @@ import { fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, shadowsNative } from '../lib/tokens';
 import { IconStar } from './Icons';
 
+// 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
+//   - dismissX / isDismissing prop 폐기. dragX 단일 SharedValue 로 PWA 정합.
+//   - animatedDepth useSharedValue + useEffect(DEPTH_MS) 폐기. baseScale=1 고정, depth 시각 단서 페기.
+//   - DEPTH_BEZIER / DEPTH_MS 상수 폐기.
+//   - worklet 의 dismissRaw/dismissActive/effectiveDragX 폐기 → `tx = isTop ? dragX.value : 0`.
+//   - zIndex 는 depth prop 직접 사용 (Math.round(10 - depth)).
+//   - PWA `apps/web/src/hooks/useSwipeGesture.ts:205-208` + `SwipeCard.tsx:68-89` 1:1 포팅.
+
 /**
  * hex(#RRGGBB) → rgba 문자열 변환. CatChip 보더의 25% alpha 처리용.
  * web CatChip 은 `color-mix(in srgb, ${color} 25%, transparent)` 를 쓰지만 RN 은
@@ -62,26 +70,8 @@ interface Props {
   /** save 버튼 화면 좌표 (절대 위치). 흡수 목표점. 미지정 시 우측하단 기본값. */
   saveTargetPoint?: { x: number; y: number } | null;
   /**
-   * 사이클 2: pass dismiss worklet 곡선용 sharedValue.
-   * 0 = idle, 음수값 = 좌측 dismiss 진행. 부모(`index.tsx`)에서 `withTiming` 으로 구동.
-   * 지정 시 worklet 안에서 `dragX` 대신 이 값을 사용 (JS state 의존성 제거 → 60fps).
-   */
-  dismissX?: SharedValue<number>;
-  /**
-   * 2026-05-20 snap-back fix — 이 카드가 현재 dismiss 진행 중인 카드인지 표시.
-   * 부모에서 `dismissingTmdbId === rec.tmdbId` 로 계산. true 일 때만 worklet 에서
-   * dismissX 를 transform 으로 적용.
-   *
-   * 왜 필요한가: 기존 구조에서 dismissX 는 shared value 라 옛 top → 새 top 으로
-   * isTop 이 전이될 때 React commit / UI 메시지 순서에 따라 옛 top 이 한 프레임
-   * 중앙으로 snap 하거나 새 top 이 한 프레임 화면 밖으로 튀는 결함이 있었다.
-   * `isDismissing` 으로 게이트하면 옛 top 만 dismissX 를 읽고, 새 top 은 dragX
-   * (=0) 로 정상 위치 — 한 프레임 점프 0.
-   */
-  isDismissing?: boolean;
-  /**
    * 2026-05-20 prev overlay 통합 — 이 카드가 prev overlay 모드인지.
-   * true 면 worklet 이 depth/dragX/dismissX 모두 무시하고 prevOverlayX 만 적용.
+   * true 면 worklet 이 depth/dragX 모두 무시하고 prevOverlayX 만 적용.
    * zIndex 100 으로 stack 의 다른 카드들 위에 깔린다.
    *
    * 왜: 기존 `PrevCardOverlay` 와 stack 의 새 top `SwipeCard` 가 별개 component
@@ -93,17 +83,29 @@ interface Props {
   isPrev?: boolean;
   /** prev overlay 모드 위치(translateX) sharedValue. isPrev=true 일 때만 사용. */
   prevOverlayX?: SharedValue<number>;
+  /**
+   * 2026-06-10 swipe anim 재설계 v3 — dismiss 모션 SharedValue 분리.
+   *
+   * v2 결함: 좌 swipe trigger 시 dragX 를 -SCREEN_W 까지 보간 + 360ms 후 dragX=0.
+   * 옛 top 이 isTop=true + dragX=0 변경에 worklet 재평가 → -SCREEN_W → 0 (중앙)
+   * 점프 후 unmount → 사용자 인지 "옛 카드 1회 깜빡임".
+   *
+   * v3: 옛 top 의 slide-out 모션을 dragX 와 분리. dismissX SharedValue 가 dismiss
+   * 진행 카드 전용. worklet 안에서 `dismissCardIdSV.value === rec.tmdbId` 매칭으로
+   * 해당 카드만 dismissX 적용. 새 top / 비탑 카드는 영향 0.
+   *
+   * 식별을 SharedValue 로 — React state isDismissing prop (이전 wave 패턴) 의
+   * commit 전이 race 없음. UI thread 단일 처리.
+   */
+  dismissX?: SharedValue<number>;
+  /** dismiss 진행 중인 카드의 tmdbId. -1 = idle. SharedValue 라 race 0. */
+  dismissCardIdSV?: SharedValue<number>;
 }
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const SPRING_BEZIER = Easing.bezier(...easings.spring);
-// 2026-05-20 정합 재교정 — depth 전환 곡선. M-1 (5/19) 가 ease-move 로 바꿨으나
-// 대칭 가속-감속은 초반이 느려 새 top 카드가 "settle/loading" 처럼 인지된다.
-// PWA `transform 0.3s ease-out` 진짜 정합으로 단방향 감속(빠른 시작 → 부드러운 안착)
-// 으로 교체. CSS `ease-out` = `cubic-bezier(0, 0, 0.58, 1)`.
-const DEPTH_BEZIER = Easing.bezier(0, 0, 0.58, 1);
-// PWA 와 동일한 300ms (durations.steady=350 은 바텀시트용, depth 보간엔 50ms 과함).
-const DEPTH_MS = 300;
+// 2026-06-10 swipe anim 재설계 — DEPTH_BEZIER / DEPTH_MS / animatedDepth 트랙 전부 폐기.
+// baseScale 1 hard + depth prop 직접 zIndex 사용. PWA 정합 (`SwipeCard.tsx:68-89`).
 
 // ─────────────────────────────────────────────────────
 // CardVariantA RN 포팅 — 2026-05-19 native↔PWA 정합 audit C-1.
@@ -170,35 +172,12 @@ export default function SwipeCard({
   immersive = false,
   absorbing = false,
   saveTargetPoint,
-  dismissX,
-  isDismissing = false,
   isPrev = false,
   prevOverlayX,
+  dismissX,
+  dismissCardIdSV,
 }: Props) {
-  const animatedDepth = useSharedValue(depth);
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
-
-  useEffect(() => {
-    // 2026-06-06 (P1 애니메이션 Fix A) — 새 top 카드 (depth=0) 진입은 즉시 적용.
-    // 진단: `_workspace/02_p1_animation.md` §2 (root cause 1).
-    //
-    // 기존 결함: pass dismiss 직후 새 top 카드의 depth prop 1→0 전환에 withTiming
-    //   300ms 가 매번 처음부터 다시 보간 → scale 0.96→1, yOffset 12→0 이 ease-out
-    //   초반 (변화량 작은 구간) 으로 인지되며 "한 박자 뒤에 앞으로 나오는 딜레이"
-    //   체감. PWA 는 동일 곡선이지만 CSS transition 이 GPU 합성으로 즉시 → 인지 0.
-    //
-    // 수정: depth===0 진입 (= 새 top) 은 보간 없이 즉시. 다른 depth (뒤로 빠지는
-    //   카드) 는 기존 ease-out 300ms 그대로 → stack 의 "뒤로 빠지는 카드" 시각만
-    //   부드럽고 새 top 은 즉시 도착 → PWA 와 인지 동등.
-    if (depth === 0) {
-      animatedDepth.value = 0;
-    } else {
-      animatedDepth.value = withTiming(depth, {
-        duration: DEPTH_MS,
-        easing: DEPTH_BEZIER,
-      });
-    }
-  }, [depth, animatedDepth]);
 
   useEffect(() => {
     if (absorbing && isTop) {
@@ -219,7 +198,7 @@ export default function SwipeCard({
     // finite number 로 강제. (가시적 동작 동일, 단 NaN race 시 안전한 0 fallback.)
     const safe = (n: number, fallback = 0): number => (Number.isFinite(n) ? n : fallback);
 
-    // 2026-05-20 prev overlay 모드 — depth/dragX/dismissX 모두 무시하고
+    // 2026-05-20 prev overlay 모드 — depth/dragX 모두 무시하고
     // prevOverlayX 만 translateX 로 적용. scale 1, zIndex 100.
     // 도착 후 isPrev=false 로 전환 시 dragX=0 → translateX=0, zIndex=10 → 같은
     // 위치 유지 (translateX 0=0). 인스턴스 재활용으로 native view 보존.
@@ -231,32 +210,30 @@ export default function SwipeCard({
       };
     }
 
-    const d = safe(animatedDepth.value);
-    const baseScale = 1 - d * 0.04;
-    // 2026-06-10 — yOffset 12 → 0. 사용자 결정: dismiss 후 다음 카드의 "위로 올라오는"
-    // 인지 자체 제거. baseScale 만 유지 (depth 시각 단서). depth 1 frame race 가 yOffset
-    // 보간에서 발생하던 source 도 동시에 해소.
+    // 2026-06-10 swipe anim 재설계 — baseScale 1 hard, yOffset 0.
+    // 사용자 결정: stack 깊이감 (depth scale 0.96/0.92) 폐기. depth 시각 단서는
+    // zIndex 만으로 충분. PWA `SwipeCard.tsx:68-89` 의 baseTx=isTop?dragX:0 와 1:1.
+    const baseScale = 1;
     const yOffset = 0;
 
-    // 2026-05-20 — isDismissing 게이트 추가. 이 카드가 dismiss 진행 중일 때만
-    // dismissX 를 transform 으로 적용. 그 외엔 dragX 만 사용 → 옛 top → 새 top
-    // 전이 시 한 프레임 점프 차단.
-    // 2026-06-06 (P1 애니메이션 Fix B) — dragX/dragY 는 SharedValue. worklet 안에서
-    // 직접 `.value` 읽기로 JS thread 왕복 제거. 비탑 카드는 isTop=false 라
-    // 아래 분기에서 tx=0 이 되므로 dragX 값을 읽어도 영향 없음.
-    const dismissRaw =
-      isDismissing && dismissX !== undefined ? safe(dismissX.value) : 0;
+    // 2026-06-10 swipe anim v3 — dismiss 모션 SharedValue 분리.
+    // dragX 는 drag 추적 전용. 옛 top 의 slide-out 은 dismissX (별도 SharedValue).
+    // dismissCardIdSV.value === rec.tmdbId 매칭으로 옛 top 만 dismissX 적용.
+    // 새 top / 비탑 카드는 dragX 만 → dismissX 변경 영향 0.
+    // 식별 가드를 SharedValue 로 (React state 가 아닌) → commit 전이 race 0.
     const dragXSafe = safe(dragX.value);
     const dragYSafe = dragY !== undefined ? safe(dragY.value) : 0;
-    const dismissActive = dismissRaw !== 0;
-    const effectiveDragX = dismissActive ? dismissRaw : dragXSafe;
+    const isDismissing =
+      dismissCardIdSV !== undefined && dismissCardIdSV.value === rec.tmdbId;
+    const dismissXSafe =
+      isDismissing && dismissX !== undefined ? safe(dismissX.value) : 0;
 
-    // tx/ty: top 카드만 drag 반영
-    let tx = isTop ? effectiveDragX : 0;
+    // tx/ty: dismiss 진행 카드는 dismissX 만. 그 외 isTop 만 dragX 반영.
+    let tx = isDismissing ? dismissXSafe : isTop ? dragXSafe : 0;
     let ty = isTop ? dragYSafe * 0.6 + yOffset : yOffset;
-    // M-3 (2026-05-19 정합 audit) — 좌 스와이프 회전을 PWA 정합으로.
-    // 계수 0.04→0.06, 상한 -8→-15deg. (우 방향은 native prevOverlay 모델이라 0 유지.)
-    let rot = isTop && effectiveDragX < 0 ? Math.max(effectiveDragX * 0.06, -15) : 0;
+    // 회전 — dismiss 중이면 dismissX, 아니면 dragX 기준
+    const rotSource = isDismissing ? dismissXSafe : dragXSafe;
+    let rot = (isDismissing || isTop) && rotSource < 0 ? Math.max(rotSource * 0.06, -15) : 0;
     let scale = baseScale;
     let opacity = 1;
     if (isTop && dragYSafe > 30) {
@@ -289,11 +266,11 @@ export default function SwipeCard({
         { rotate: `${safe(rot)}deg` },
       ],
       opacity: safe(opacity, 1),
-      // 2026-05-18 — SIGABRT 진짜 원인: Fabric `zIndex` prop 은 `std::optional<int>`.
-      // `10 - d` (d=animatedDepth.value, withTiming 결과 = double) 가 9.9 같은 비정수면
-      // folly::to<long long, double> 변환 실패 → ConversionError → cloneShadow abort.
-      // Math.round 로 정수 강제.
-      zIndex: Math.round(10 - d),
+      // 2026-06-10 swipe anim 재설계 — animatedDepth 폐기. depth prop 직접 사용.
+      // Fabric `zIndex` 는 정수 필수 → Math.round 유지. depth 가 number 이므로
+      // Reanimated 가 Animated.View props 변경 시 worklet 자동 재평가 (React commit
+      // 후 매 frame 이 아닌 prop 변경 시점).
+      zIndex: Math.round(10 - depth),
     };
   });
 
