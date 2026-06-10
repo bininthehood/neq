@@ -18,6 +18,7 @@
  */
 
 import { NextResponse } from "next/server";
+import OpenAI from "openai";
 import { isAuthorizedCron } from "@/lib/notifications/cron-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -79,19 +80,40 @@ export async function GET(req: Request) {
     console.error("[warmup] supabaseAdmin init failed:", err);
   }
 
+  // OpenAI client TLS handshake + edge connection warm.
+  // models.list() 는 단순 GET, quota / token 소비 없음.
+  // 실패는 warmup 응답에 영향 주지 않음 (best-effort).
+  let openaiOk = false;
+  let openaiError: string | null = null;
+  try {
+    const tOpenai = Date.now();
+    const openai = new OpenAI();
+    await openai.models.list();
+    mark("openai_ms", tOpenai);
+    openaiOk = true;
+  } catch (err) {
+    openaiError = err instanceof Error ? err.message : String(err);
+    console.error("[warmup] openai ping failed:", openaiError);
+  }
+
   const total_ms = Date.now() - startedAt;
 
   // PostHog 측정 — cold start 빈도 + warmup 효과 추적용.
   // warmup_ping event 의 db_ms 가 500ms+ 면 connection 새로 만든 cold instance.
+  // openai_ms 가 500ms+ 면 OpenAI SDK cold (TLS handshake / Edge cold).
   await trackWarmup({
     ok: dbOk,
     db_ms: timings.db_ms ?? null,
     total_ms,
     db_error: dbError,
+    openai_ok: openaiOk,
+    openai_ms: timings.openai_ms ?? null,
+    openai_error: openaiError,
   });
 
   return NextResponse.json({
     ok: dbOk,
+    openai_ok: openaiOk,
     timings,
     total_ms,
   });
