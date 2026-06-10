@@ -93,14 +93,19 @@ export function OttChip({ name, size = 22 }: { name: string; size?: number }) {
   );
 }
 
-/* ─── Rating — star + tabular-nums ─────────────────── */
+/* ─── Rating — star + tabular-nums ───────────────────
+ * DESIGN.md L33 anti-slop #13: amber 누적 분배.
+ * 텍스트는 text-primary, IconStar 만 accent 유지 (별 모양 = 평점 위계 신호).
+ */
 export function Rating({
   value,
-  color = "var(--accent)",
+  color = "var(--text-primary)",
+  iconColor = "var(--accent)",
   size = 11,
 }: {
   value: number;
   color?: string;
+  iconColor?: string;
   size?: number;
 }) {
   return (
@@ -116,7 +121,7 @@ export function Rating({
         fontVariantNumeric: "tabular-nums",
       }}
     >
-      <IconStar size={size} color={color} />
+      <IconStar size={size} color={iconColor} />
       {value.toFixed(1)}
     </span>
   );
