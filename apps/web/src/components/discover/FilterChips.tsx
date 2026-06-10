@@ -150,25 +150,24 @@ export default function FilterChips({
           {RATING_LABELS[filterRating]}{" "}
           <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
         </button>
-        {availableOTTs.length > 0 && (
-          <button
-            type="button"
-            onClick={() =>
-              setOpenDropdown(openDropdown === "ott" ? null : "ott")
-            }
-            aria-haspopup="listbox"
-            aria-expanded={openDropdown === "ott"}
-            aria-label={`OTT 필터: ${ottLabel}`}
-            className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
-            style={chipStyle(
-              filterOTTs.size > 0,
-              openDropdown === "ott",
-            )}
-          >
-            {ottLabel}{" "}
-            <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() =>
+            setOpenDropdown(openDropdown === "ott" ? null : "ott")
+          }
+          disabled={loading}
+          aria-haspopup="listbox"
+          aria-expanded={openDropdown === "ott"}
+          aria-label={`OTT 필터: ${ottLabel}`}
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+          style={chipStyle(
+            filterOTTs.size > 0,
+            openDropdown === "ott",
+          )}
+        >
+          {ottLabel}{" "}
+          <span aria-hidden="true" style={{ fontSize: 11, opacity: 0.3 }}>&#9662;</span>
+        </button>
       </div>
 
       {/* dropdown panel */}
@@ -284,8 +283,9 @@ export default function FilterChips({
                 >
                   모든 OTT
                 </button>
-                {availableOTTs.map((ott) => {
+                {OTT_OPTIONS.map((ott) => {
                   const selected = filterOTTs.has(ott);
+                  const isAvailable = availableOTTs.includes(ott);
                   return (
                     <button
                       key={ott}
@@ -302,11 +302,18 @@ export default function FilterChips({
                         onResetTopIdx();
                       }}
                       type="button"
-                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2"
+                      disabled={!isAvailable}
+                      aria-disabled={!isAvailable}
+                      className="px-3 py-2 text-xs whitespace-nowrap transition-all duration-200 flex items-center gap-1.5 active:scale-95 rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 disabled:cursor-not-allowed"
                       style={{
                         background: selected ? "var(--accent)" : "transparent",
-                        color: selected ? "var(--text-inverse)" : "var(--text-secondary)",
+                        color: selected
+                          ? "var(--text-inverse)"
+                          : isAvailable
+                            ? "var(--text-secondary)"
+                            : "var(--text-muted)",
                         fontWeight: selected ? 600 : 400,
+                        opacity: isAvailable ? 1 : 0.5,
                       }}
                     >
                       {getOTTIcon(ott) && (
