@@ -35,7 +35,7 @@ import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env } from '../lib/env';
-import { addSaved, isSaved } from '../lib/store';
+import { isSaved, toggleSaved } from '../lib/store';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 // PR2 (2026-06-01) — 풀스크린 Modal 전환. swipe-down dismiss 임계는 화면 높이의 30%.
@@ -143,22 +143,24 @@ export default function DetailSheet({
     setSynopsisExpanded(false);
   }, [rec?.tmdbId]);
 
-  // PR2 — share mode 의 sticky CTA 저장 상태. mode='detail' 에서는 미사용.
-  const [shareSaved, setShareSaved] = useState(false);
+  // 2026-06-10 (Phase C #4) — sticky CTA 저장 상태. mode 무관 (detail/share 양쪽 사용).
+  // detail mode 에서 Saved 진입 후 unsave 도 같은 토글 경로로 동작 — sheet 내부에서
+  // 저장/저장 해제 발견성 확보. PWA DetailSheet L222~277 정합.
+  const [savedStatus, setSavedStatus] = useState(false);
   useEffect(() => {
-    if (mode !== 'share' || !visible || !rec?.tmdbId) {
-      setShareSaved(false);
+    if (!visible || !rec?.tmdbId) {
+      setSavedStatus(false);
       return;
     }
     let cancelled = false;
     (async () => {
       const s = await isSaved(rec.tmdbId);
-      if (!cancelled) setShareSaved(s);
+      if (!cancelled) setSavedStatus(s);
     })();
     return () => {
       cancelled = true;
     };
-  }, [mode, visible, rec?.tmdbId]);
+  }, [visible, rec?.tmdbId]);
 
   useEffect(() => {
     if (visible) {
@@ -346,13 +348,23 @@ export default function DetailSheet({
     }
   }
 
-  // PR2 — share mode CTA (저장하기). mode='detail' 에서는 미사용.
-  const handleShareSave = useCallback(async () => {
-    if (!rec || shareSaved) return;
-    await addSaved(rec);
-    setShareSaved(true);
-    track('share_saved', { tmdb_id: rec.tmdbId, title: rec.title, source: 'native_share' });
-  }, [rec, shareSaved]);
+  // 2026-06-10 (Phase C #4) — sticky CTA 저장 토글. mode 무관.
+  // - share mode: 최초 저장 시 `share_saved` 이벤트 기존 호환 유지 (savedStatus false→true 전이).
+  //   unsave 도 가능 (share 진입자도 저장 후 마음 변경 시 해제). source=native_share.
+  // - detail mode: Saved 진입 후 unsave 진입로 (이전엔 ActionBar 만이었지만 Saved 화면엔
+  //   ActionBar 가 없어 sheet 내부가 유일한 unsave 진입로). source=native_detail.
+  const handleToggleSave = useCallback(async () => {
+    if (!rec) return;
+    const next = await toggleSaved(rec);
+    setSavedStatus(next);
+    if (next) {
+      track('share_saved', {
+        tmdb_id: rec.tmdbId,
+        title: rec.title,
+        source: mode === 'share' ? 'native_share' : 'native_detail',
+      });
+    }
+  }, [rec, mode]);
 
   async function openProvider(providerName: string, watchLink: string | null) {
     if (!rec) return;
@@ -394,8 +406,9 @@ export default function DetailSheet({
   const showTitleEn = !!rec.titleEn && rec.titleEn !== rec.title;
   const typeBadge =
     rec.type === 'series' ? '시리즈' : rec.type === 'variety' ? '예능' : '영화';
-  // sticky CTA 높이 추정 (mode='share' 시 2개 풀폭 row, mode='detail' 시 1개 ghost) — 본문 paddingBottom 보정.
-  const stickyCtaHeight = mode === 'share' ? 56 + insets.bottom + 24 : 52 + insets.bottom + 24;
+  // sticky CTA 높이 추정 — mode 무관 2버튼 row (amber save/unsave + ghost share/추천 더 보기).
+  // 2026-06-10 (Phase C #4) — detail/share 분기 통합 후 56+inset+24 단일 식.
+  const stickyCtaHeight = 56 + insets.bottom + 24;
 
   // 2026-06-04 (P0-#1 fix) — mode='share' 는 Modal 을 우회하고 풀스크린 View 로 직접 렌더.
   //
@@ -659,7 +672,9 @@ export default function DetailSheet({
               ) : null}
             </View>
 
-            {/* Sticky bottom CTA — mode 분기 */}
+            {/* Sticky bottom CTA — 2026-06-10 (Phase C #4) mode 통합.
+                amber save/unsave (toggleable) + ghost (share mode: "추천 더 보기" / detail mode: "공유하기").
+                PWA DetailSheet L222~277 정합. anti-slop #13: Save 는 amber 카운트 제외 (DESIGN.md L37). */}
             <View
               pointerEvents="box-none"
               style={[
@@ -667,27 +682,31 @@ export default function DetailSheet({
                 { paddingBottom: insets.bottom + spacing.md },
               ]}
             >
-              {mode === 'share' ? (
-                <View style={styles.shareCtaRow}>
-                  <Pressable
+              <View style={styles.shareCtaRow}>
+                <Pressable
+                  style={[
+                    styles.ctaPrimary,
+                    savedStatus && styles.ctaPrimarySaved,
+                  ]}
+                  onPress={handleToggleSave}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: savedStatus }}
+                  accessibilityLabel={
+                    savedStatus
+                      ? `${rec.title} 저장 해제`
+                      : `${rec.title} 저장`
+                  }
+                >
+                  <Text
                     style={[
-                      styles.ctaPrimary,
-                      shareSaved && styles.ctaPrimaryDisabled,
+                      styles.ctaPrimaryText,
+                      savedStatus && styles.ctaPrimarySavedText,
                     ]}
-                    onPress={handleShareSave}
-                    disabled={shareSaved}
-                    accessibilityRole="button"
-                    accessibilityLabel={shareSaved ? '이미 저장됨' : '저장하기'}
                   >
-                    <Text
-                      style={[
-                        styles.ctaPrimaryText,
-                        shareSaved && styles.ctaPrimaryDisabledText,
-                      ]}
-                    >
-                      {shareSaved ? '저장됨' : '저장하기'}
-                    </Text>
-                  </Pressable>
+                    {savedStatus ? '저장됨' : '저장하기'}
+                  </Text>
+                </Pressable>
+                {mode === 'share' ? (
                   <Pressable
                     style={styles.ctaGhost}
                     onPress={onClose}
@@ -696,18 +715,18 @@ export default function DetailSheet({
                   >
                     <Text style={styles.ctaGhostText}>추천 더 보기</Text>
                   </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  style={styles.shareBtn}
-                  onPress={handleShare}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${rec.title} 공유하기`}
-                >
-                  <IconShare size={16} color={colors.textSecondary} />
-                  <Text style={styles.shareText}>공유하기</Text>
-                </Pressable>
-              )}
+                ) : (
+                  <Pressable
+                    style={styles.ctaGhost}
+                    onPress={handleShare}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${rec.title} 공유하기`}
+                  >
+                    <IconShare size={16} color={colors.textPrimary} />
+                    <Text style={styles.ctaGhostText}>공유하기</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           </Animated.View>
         </GestureDetector>
@@ -1243,25 +1262,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 0.5,
     borderTopColor: colors.borderSubtle,
   },
-  // detail mode — ghost 공유 1개 (현행 패턴 유지).
-  shareBtn: {
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-  },
-  shareText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  // share mode — amber 저장 (full width) + ghost 추천 더 보기 (full width). 세로 stack (모바일 풀폭).
+  // 2026-06-10 (Phase C #4) — sticky CTA row. amber save/unsave + ghost share/추천 더 보기 풀폭 2버튼.
+  // PWA DetailSheet L222~277 정합. share/detail mode 통합.
   shareCtaRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -1273,21 +1275,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.accent,
+    borderWidth: 1,
+    borderColor: colors.accent,
     minHeight: 48,
   },
-  ctaPrimaryDisabled: {
-    backgroundColor: colors.surface,
+  // 저장됨 상태 — PWA 정합: surface-raised + accent-border + accent text (L243~246).
+  ctaPrimarySaved: {
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.accentBorder,
   },
   ctaPrimaryText: {
     color: colors.textInverse,
     fontWeight: '700',
     fontSize: 14,
   },
-  ctaPrimaryDisabledText: {
-    color: colors.textMuted,
+  ctaPrimarySavedText: {
+    color: colors.accent,
   },
   ctaGhost: {
     flex: 1,
+    flexDirection: 'row',
+    gap: spacing.xs + 2,
     paddingVertical: 14,
     borderRadius: radius.lg,
     alignItems: 'center',
