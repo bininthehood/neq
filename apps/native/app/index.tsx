@@ -41,6 +41,7 @@ import {
 import {
   addRecHistory,
   getAccountPrefs,
+  getActivePersona,
   getRecHistory,
   getActiveExcludeIds,
   clearRecHistory,
@@ -373,8 +374,20 @@ export default function DiscoverScreen() {
       setState('loading');
       setErrorMsg(null);
       try {
-        const saved = await getSaved();
-        const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
+        const [saved, activePersona] = await Promise.all([
+          getSaved(),
+          getActivePersona(),
+        ]);
+        // 2026-06-11 (build 24 hotfix) — persona sync miss 차단.
+        // 기존: saved 글로벌 bucket 만 사용 → persona 변경이 추천 입력에 미반영.
+        // 변경: 활성 persona favorites 우선, 빈 경우 saved 폴백 (default persona 패턴).
+        // web `apps/web/src/hooks/useRecommendations.ts:329` (onboardingPicks = getFavorites() = getActivePersona().favorites) 정합.
+        const personaFavorites = activePersona?.favorites ?? [];
+        const favorites = (
+          personaFavorites.length > 0
+            ? personaFavorites
+            : saved.map((s) => s.recommendation.title)
+        ).slice(0, 20);
         // 2026-06-06 (P1 다양성 / P0 incident Fix B-4) — excludeIds 확장 + cooldown.
         // 기존: 호출자가 넘긴 현재 stack tmdbId (보통 10~50개) 만 dedup.
         // 변경: 호출자 excludeIds + recHistory **활성 항목만** (7일 cooldown) + saved 전체 합집합.
@@ -516,8 +529,17 @@ export default function DiscoverScreen() {
   const triggerPrefetch = useCallback(
     async (filter: RecommendFilter) => {
       try {
-        const saved = await getSaved();
-        const favorites = saved.map((s) => s.recommendation.title).slice(0, 20);
+        const [saved, activePersona] = await Promise.all([
+          getSaved(),
+          getActivePersona(),
+        ]);
+        // 2026-06-11 (build 24 hotfix) — load() 와 동일한 persona-aware favorites 입력.
+        const personaFavorites = activePersona?.favorites ?? [];
+        const favorites = (
+          personaFavorites.length > 0
+            ? personaFavorites
+            : saved.map((s) => s.recommendation.title)
+        ).slice(0, 20);
         const prefs = await getAccountPrefs();
         const v2 = computeV2Inputs({
           tasteGenresEnabled: true,
@@ -606,6 +628,24 @@ export default function DiscoverScreen() {
     if (onboardCheck !== 'pass') return;
     load();
   }, [load, onboardCheck]);
+
+  // 2026-06-11 (build 24 hotfix) — persona switch / create 후 자동 reload.
+  // 사용자 보고: Profile 에서 새 취향 생성 후 Discover 진입 시 추천이 새 취향으로 재계산 X.
+  // 원인: 위 mount useEffect 는 1회만 실행, useFocusEffect 는 saved 만 refresh.
+  // → activePersonaId 변화 감지 useEffect 로 명시적 reload 트리거.
+  // sentinel ref 첫 값 null = mount 초기화 (mount useEffect 가 처리), 그 후 변경만 감지.
+  const prevActivePersonaIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (onboardCheck !== 'pass') return;
+    if (prevActivePersonaIdRef.current === null) {
+      prevActivePersonaIdRef.current = persona.activePersonaId;
+      return;
+    }
+    if (persona.activePersonaId !== prevActivePersonaIdRef.current) {
+      prevActivePersonaIdRef.current = persona.activePersonaId;
+      load();
+    }
+  }, [persona.activePersonaId, load, onboardCheck]);
 
   // W5 Task B — TutorialFlow v3 노출 정책.
   // onboarding 가드 통과 후 1회만 AsyncStorage 점검. flag 가 없으면 eligible=true.
