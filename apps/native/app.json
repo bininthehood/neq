@@ -16,13 +16,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.neq.app",
-      "buildNumber": "24",
+      "buildNumber": "25",
       "associatedDomains": [
         "applinks:neq.me"
       ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSUserTrackingUsageDescription": "추천 품질 개선을 위해 익명 사용 데이터를 수집해요. 개인 식별 정보는 수집하지 않아요."
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
