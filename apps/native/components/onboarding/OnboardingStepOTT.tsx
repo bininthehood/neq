@@ -34,7 +34,14 @@ export default function OnboardingStepOTT({
   onNext,
   initialProviders = [],
 }: Props) {
-  const [selected, setSelected] = useState<Set<number>>(new Set(initialProviders));
+  // 2026-06-11 — comingSoon OTT 는 initial state 에서 자동 제외 (재진입 시 안전).
+  // 기존 사용자가 Coupang Play 선택 상태로 onboarding 재진입해도 자동 deselect.
+  const [selected, setSelected] = useState<Set<number>>(() => {
+    const comingSoonIds = new Set(
+      OTT_OPTIONS.filter((o) => o.comingSoon).map((o) => o.providerId),
+    );
+    return new Set(initialProviders.filter((id) => !comingSoonIds.has(id)));
+  });
 
   const toggle = (providerId: number) => {
     setSelected((prev) => {
@@ -69,18 +76,26 @@ export default function OnboardingStepOTT({
       <ScrollView style={styles.scroll} contentContainerStyle={styles.list}>
         {OTT_OPTIONS.map((o) => {
           const on = selected.has(o.providerId);
+          const isComingSoon = o.comingSoon === true;
           const lookupName = OTT_ICON_LOOKUP[o.id];
           const iconUrl = lookupName ? getOTTIcon(lookupName) : null;
           return (
             <Pressable
               key={o.id}
-              onPress={() => toggle(o.providerId)}
+              onPress={() => {
+                if (isComingSoon) return;
+                toggle(o.providerId);
+              }}
+              accessibilityState={{ disabled: isComingSoon }}
+              accessibilityLabel={
+                isComingSoon ? `${o.name} (곧 지원)` : o.name
+              }
               style={({ pressed }) => [
                 styles.row,
                 {
                   backgroundColor: on ? colors.surfaceRaised : colors.surface,
                   borderColor: on ? colors.accent : colors.border,
-                  opacity: pressed ? 0.92 : 1,
+                  opacity: isComingSoon ? 0.5 : pressed ? 0.92 : 1,
                 },
               ]}
             >
@@ -100,17 +115,21 @@ export default function OnboardingStepOTT({
                 </View>
               )}
               <Text style={styles.rowName}>{o.name}</Text>
-              <View
-                style={[
-                  styles.check,
-                  {
-                    backgroundColor: on ? colors.accent : 'transparent',
-                    borderColor: on ? colors.accent : colors.border,
-                  },
-                ]}
-              >
-                {on && <Text style={styles.checkMark}>✓</Text>}
-              </View>
+              {isComingSoon ? (
+                <Text style={styles.comingSoonLabel}>곧 지원</Text>
+              ) : (
+                <View
+                  style={[
+                    styles.check,
+                    {
+                      backgroundColor: on ? colors.accent : 'transparent',
+                      borderColor: on ? colors.accent : colors.border,
+                    },
+                  ]}
+                >
+                  {on && <Text style={styles.checkMark}>✓</Text>}
+                </View>
+              )}
             </Pressable>
           );
         })}
@@ -213,6 +232,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkMark: { color: colors.bg, fontSize: 12 },
+  comingSoonLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
+  },
   ctaWrap: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,

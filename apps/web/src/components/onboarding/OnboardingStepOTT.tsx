@@ -37,7 +37,13 @@ interface Props {
 }
 
 export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Props) {
-  const [selected, setSelected] = useState<Set<number>>(new Set(initialProviders));
+  // 2026-06-11 — comingSoon OTT 는 initial state 에서 자동 제외 (재진입 시 안전).
+  const [selected, setSelected] = useState<Set<number>>(() => {
+    const comingSoonIds = new Set(
+      OTT_OPTIONS.filter((o) => o.comingSoon).map((o) => o.providerId),
+    );
+    return new Set(initialProviders.filter((id) => !comingSoonIds.has(id)));
+  });
 
   const toggle = (providerId: number) => {
     setSelected((prev) => {
@@ -79,17 +85,26 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
         <div className="flex flex-col gap-2">
           {OTT_OPTIONS.map((o) => {
             const on = selected.has(o.providerId);
+            const isComingSoon = o.comingSoon === true;
             const lookupName = OTT_ICON_LOOKUP[o.id];
             const iconUrl = lookupName ? getOTTIcon(lookupName) : null;
             return (
               <button
                 key={o.id}
                 type="button"
-                onClick={() => toggle(o.providerId)}
+                disabled={isComingSoon}
+                aria-disabled={isComingSoon}
+                aria-label={isComingSoon ? `${o.name} (곧 지원)` : o.name}
+                onClick={() => {
+                  if (isComingSoon) return;
+                  toggle(o.providerId);
+                }}
                 className="flex items-center gap-3 px-3 py-3 rounded-lg transition-colors active:scale-[0.99]"
                 style={{
                   background: on ? "var(--surface-raised)" : "var(--surface)",
                   border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                  opacity: isComingSoon ? 0.5 : 1,
+                  cursor: isComingSoon ? "default" : "pointer",
                 }}
               >
                 {iconUrl ? (
@@ -119,17 +134,26 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
                     {o.name}
                   </div>
                 </div>
-                <div
-                  className="w-[22px] h-[22px] rounded-full flex items-center justify-center"
-                  style={{
-                    background: on ? "var(--accent)" : "transparent",
-                    border: `1.5px solid ${on ? "var(--accent)" : "var(--border)"}`,
-                    color: "var(--bg)",
-                    flexShrink: 0,
-                  }}
-                >
-                  {on && <IconCheck size={12} color="var(--bg)" />}
-                </div>
+                {isComingSoon ? (
+                  <div
+                    className="text-[11px] font-medium"
+                    style={{ color: "var(--text-muted)", flexShrink: 0 }}
+                  >
+                    곧 지원
+                  </div>
+                ) : (
+                  <div
+                    className="w-[22px] h-[22px] rounded-full flex items-center justify-center"
+                    style={{
+                      background: on ? "var(--accent)" : "transparent",
+                      border: `1.5px solid ${on ? "var(--accent)" : "var(--border)"}`,
+                      color: "var(--bg)",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {on && <IconCheck size={12} color="var(--bg)" />}
+                  </div>
+                )}
               </button>
             );
           })}

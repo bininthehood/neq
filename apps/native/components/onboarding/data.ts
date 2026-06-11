@@ -21,6 +21,13 @@ export interface OttOption {
   name: string;
   short: string;
   color: string;
+  /**
+   * "곧 지원" 마킹 — onboarding OTT step / Filter chip 에서 disabled + 라벨 노출.
+   * 현재 사용: Coupang Play (TMDB watch providers API 가 KR Coupang Play 데이터 미공급 →
+   * 추천 결과에 가용성 미반영. 사용자 기대치 mismatch 차단). 2026-06-11 출시 D-7 추가.
+   * 추후 데이터 공급 또는 직접 매핑 구현 시 false 또는 필드 제거.
+   */
+  comingSoon?: boolean;
 }
 
 export interface NotifOption {
@@ -55,7 +62,7 @@ export const OTT_OPTIONS: OttOption[] = [
   { id: 'watcha',  providerId: 97,   name: 'Watcha',      short: 'W',  color: '#FF0558' },
   { id: 'disney',  providerId: 337,  name: 'Disney+',     short: 'D+', color: '#0E47BA' },
   { id: 'apple',   providerId: 350,  name: 'Apple TV+',   short: 'A',  color: '#000000' },
-  { id: 'coupang', providerId: 356,  name: 'Coupang Play',short: 'C',  color: '#A335EE' },
+  { id: 'coupang', providerId: 356,  name: 'Coupang Play',short: 'C',  color: '#A335EE', comingSoon: true },
 ];
 
 export const NOTIF_OPTIONS: NotifOption[] = [
