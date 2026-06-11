@@ -18,7 +18,7 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import SwipeCard from '../components/SwipeCard';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
@@ -302,6 +302,21 @@ export default function DiscoverScreen() {
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // 2026-06-11 사용자 피드백 #1 — shared 링크 진입 시 DetailSheet stacking race fix.
+  // 진단: share/[id] 자체는 P0-#1 fix (DetailSheet.tsx:413) 로 Modal 우회 풀스크린
+  // View. 그러나 Discover tab 의 DetailSheet (RN Modal) 이 tab 위에 떠 있는 채로
+  // share tab 진입 → iOS UIKit modal 우선 표시 → 사용자가 기존 DetailSheet 닫아야
+  // share 화면 노출 (사용자 인지 "기존 화면이 뜨고 진입 작품은 뒤").
+  // 수정: usePathname 으로 share 경로 진입 감지 시 Discover 의 modal sheet 강제
+  // close. share 진입 의도는 직접 보기 → 기존 sheet 자동 close 가 자연 UX.
+  const pathname = usePathname();
+  useEffect(() => {
+    if (pathname.startsWith('/share/')) {
+      setDetailOpen(false);
+      setSearchOpen(false);
+    }
+  }, [pathname]);
   // 2026-05-20 — SearchSheet 작품 탭 → DetailSheet 진입 시 표시할 Recommendation.
   // currentRec (discover stack 의 현재 카드) 와 별개 상태 — 두 곳 모두에서 DetailSheet
   // 진입 가능. DetailSheet 의 rec 는 `searchSelectedRec ?? currentRec` 우선순위.
@@ -943,6 +958,19 @@ export default function DiscoverScreen() {
   }
 
   function handleSwipeLeft() {
+    // 2026-06-11 사용자 피드백 #4 — 빠른 연속 swipe race fix.
+    // 진단: 직전 swipe 의 passAdvanceTimer (360ms) 미처리 동안 새 swipe trigger
+    // 시 topIdx 가 아직 advance 안 됨 → `recs[topIdx]` = 옛 작품 → dismissCardIdSV
+    // 가 같은 tmdbId 로 재할당 → 같은 작품 반복 dismiss → 사용자 인지 "같은 작품
+    // 계속 넘기는 현상".
+    // 수정: PWA `useSwipeGesture.onTouchStart:106` 의 `if (swiping) return;` 정합.
+    // passAdvanceTimer 살아있으면 새 swipe 무시 + drag 위치 snap-back. 360ms 마다
+    // 1 swipe 처리 → 빠른 연속 swipe 시 일부 swipe 무시되지만 PWA 와 인지 동등.
+    if (passAdvanceTimer.current) {
+      dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
+      dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
+      return;
+    }
     if (currentRec) {
       track('card_swiped', {
         direction: 'left',

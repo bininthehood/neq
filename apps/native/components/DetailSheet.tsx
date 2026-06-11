@@ -13,7 +13,7 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconClose, IconShare } from './Icons';
+import { IconClose, IconShare, IconSave } from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -642,7 +642,11 @@ export default function DetailSheet({
               )}
             </Animated.ScrollView>
 
-            {/* 좌상단 X 버튼 — 풀스크린 1차 dismiss. hero 위 absolute, 44×44 터치 타겟. */}
+            {/* 우상단 X 버튼 — 풀스크린 1차 dismiss. hero 위 absolute, 44×44 터치 타겟.
+                2026-06-11 (build 22) — 닫기 위치 좌→우 이동 (사용자 결정).
+                공유 버튼 제거 후 좌측 단일이라 위치 자유. iOS 표준 navigation right
+                close 와 정합. PWA DetailSheet L183~197 의 좌측 패턴과는 다르지만
+                native 단독 결정. */}
             <View
               pointerEvents="box-none"
               style={[
@@ -659,22 +663,13 @@ export default function DetailSheet({
               >
                 <IconClose size={20} color={colors.textPrimary} />
               </Pressable>
-              {mode === 'detail' ? (
-                <Pressable
-                  style={styles.topNavBtn}
-                  onPress={handleShare}
-                  hitSlop={12}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${rec.title} 공유하기`}
-                >
-                  <IconShare size={18} color={colors.textPrimary} />
-                </Pressable>
-              ) : null}
             </View>
 
-            {/* Sticky bottom CTA — 2026-06-10 (Phase C #4) mode 통합.
-                amber save/unsave (toggleable) + ghost (share mode: "추천 더 보기" / detail mode: "공유하기").
-                PWA DetailSheet L222~277 정합. anti-slop #13: Save 는 amber 카운트 제외 (DESIGN.md L37). */}
+            {/* Sticky bottom CTA — 2026-06-10 (Phase C #4) mode 통합 → 2026-06-11 (build 21) 위계 강화.
+                detail mode (위계 명확): amber save/unsave (flex 1, primary) + ghost share (square 44, icon-only).
+                share mode (UL 진입): amber save/unsave (flex 1) + ghost "추천 더 보기" (flex 1, 라벨).
+                PWA DetailSheet L222~277 정합 (PWA 도 detail mode 에서 공유 버튼은 px-4 square + sr-only 라벨).
+                anti-slop #13: Save 는 amber 카운트 제외 (DESIGN.md L37). */}
             <View
               pointerEvents="box-none"
               style={[
@@ -697,6 +692,11 @@ export default function DetailSheet({
                       : `${rec.title} 저장`
                   }
                 >
+                  <IconSave
+                    size={16}
+                    color={savedStatus ? colors.accent : colors.textInverse}
+                    filled={savedStatus}
+                  />
                   <Text
                     style={[
                       styles.ctaPrimaryText,
@@ -717,13 +717,12 @@ export default function DetailSheet({
                   </Pressable>
                 ) : (
                   <Pressable
-                    style={styles.ctaGhost}
+                    style={styles.ctaGhostSquare}
                     onPress={handleShare}
                     accessibilityRole="button"
                     accessibilityLabel={`${rec.title} 공유하기`}
                   >
-                    <IconShare size={16} color={colors.textPrimary} />
-                    <Text style={styles.ctaGhostText}>공유하기</Text>
+                    <IconShare size={16} color={colors.textSecondary} />
                   </Pressable>
                 )}
               </View>
@@ -1026,7 +1025,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    // 2026-06-11 추가 — 닫기 버튼 우측상단 배치 (사용자 결정, build 22).
+    // 공유 버튼 제거 후 좌측 단일이라 위치 자유. iOS 표준 navigation right close
+    // (예: 시트 dismiss) 와 정합.
+    justifyContent: 'flex-end',
     zIndex: 10,
   },
   topNavBtn: {
@@ -1270,6 +1272,8 @@ const styles = StyleSheet.create({
   },
   ctaPrimary: {
     flex: 1,
+    flexDirection: 'row',
+    gap: spacing.xs + 2, // 8 — IconSave + label
     paddingVertical: 14,
     borderRadius: radius.lg,
     alignItems: 'center',
@@ -1304,6 +1308,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     minHeight: 48,
+  },
+  // 2026-06-11 (build 21) — detail mode 의 공유 버튼. 라벨 제거, 아이콘만 + 44×44 square.
+  // PWA DetailSheet L262~276 정합 (px-4 square, sr-only 라벨).
+  // 모바일 터치 타겟 minHeight/Width 48 보장.
+  ctaGhostSquare: {
+    width: 48,
+    minHeight: 48,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   ctaGhostText: {
     color: colors.textPrimary,
