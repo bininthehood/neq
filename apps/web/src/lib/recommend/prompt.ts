@@ -218,10 +218,10 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - 일본 애니/대만 청춘물/태국 BL 등 아시아 작품은 자막 가용성과 "한국에서 보기 어려운 결" 이라는 발견 가치 강조 가능
 
 [취향 신호 우선순위]
-- 사용자 메시지에 "이 페르소나의 좋아한 작품"이 있으면 가장 강한 신호로 취급. 이 작품들의 결(분위기·주제·감독·캐릭터 깊이)을 우선 매칭하세요.
+- 사용자 메시지에 "이 취향의 좋아한 작품"이 있으면 가장 강한 신호로 취급. 이 작품들의 결(분위기·주제·감독·캐릭터 깊이)을 우선 매칭하세요.
 - "사용자 선호 장르 (계정 공통)" 정보가 있을 때, 해당 장르를 우선시하되 다양성 원칙(최소 4개 장르 등장)도 함께 지켜주세요. 한 장르에 몰빵 금지.
-- 선호 장르 정보가 없을 때는 페르소나 favorites만 기반으로 결을 잡고, 장르 다양성은 폭넓게 가져가세요.
-- 페르소나 favorites와 계정 선호 장르가 충돌하면(예: favorites는 다큐인데 tasteGenres에 액션) 페르소나 favorites를 우선 신호로 두고, 선호 장르는 보조로 고려하세요.
+- 선호 장르 정보가 없을 때는 취향 favorites만 기반으로 결을 잡고, 장르 다양성은 폭넓게 가져가세요.
+- 취향 favorites와 계정 선호 장르가 충돌하면(예: favorites는 다큐인데 tasteGenres에 액션) 취향 favorites를 우선 신호로 두고, 선호 장르는 보조로 고려하세요.
 - "loved" / "good" 피드백이 있으면 그 결을 강하게 반영, "meh" / "dropped" 결은 회피 신호로 다루세요. 단순히 같은 장르를 피하는 게 아니라 "어떤 톤" 이 안 맞았는지 추정해 그 톤을 회피.
 
 [구독 OTT 가중치 가이드 (약한 신호)]
@@ -246,7 +246,7 @@ export const CURATION_SYSTEM_PROMPT = `당신은 한국 사용자를 위한 OTT 
 - selected 배열 안 같은 id 중복 금지 — 한 작품은 한 번만 선정
 
 [출력 순서 (중요)]
-- selected 배열은 자신 있는 매칭 순서로 정렬. 첫 pick = 사용자의 페르소나·취향에 가장 강하게 매칭되는 작품
+- selected 배열은 자신 있는 매칭 순서로 정렬. 첫 pick = 사용자의 취향에 가장 강하게 매칭되는 작품
 - 2번째 pick 부터는 매칭 강도가 점진적으로 약해지도록 배치 (다양성 원칙은 유지)
 - 응답이 partial 로 소비될 수 있으므로 앞쪽 pick 일수록 확신도가 높아야 함
 
@@ -463,7 +463,7 @@ export function buildCurationUserPrompt(
   const v2Block = v2Lines ? `\n${v2Lines}` : "";
   const favoritesLabel =
     tasteGenresLine || subscribedOttLine
-      ? "이 페르소나의 좋아한 작품"
+      ? "이 취향의 좋아한 작품"
       : "좋아하는 작품";
 
   const totalFeedback = feedback
@@ -477,7 +477,7 @@ export function buildCurationUserPrompt(
   // 결과 100% 동일).
   const tasteSummaryBlock =
     tasteSummary && tasteSummary.trim().length > 0
-      ? `\n\n[페르소나 취향]\n${truncateTasteSummary(tasteSummary.trim())}`
+      ? `\n\n[취향 요약]\n${truncateTasteSummary(tasteSummary.trim())}`
       : '';
 
   // Phase A-3 (2026-06-06) — 다양성 축 강조 블록. axis undefined 면 생략

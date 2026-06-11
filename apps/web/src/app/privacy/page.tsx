@@ -46,7 +46,7 @@ export default function PrivacyPolicyPage() {
         <h3 className="mb-1 mt-3 font-medium">2.3 사용자 콘텐츠 (User Content)</h3>
         <p className="mb-2 text-neutral-300">
           사용자가 직접 입력한 취향 데이터 — 선호 장르, 즐겨찾는 작품, 시청 리포트,
-          페르소나 설문 응답. 디바이스 단위로 익명 저장되며 다른 사용자와 공유되지
+          취향 설문 응답. 디바이스 단위로 익명 저장되며 다른 사용자와 공유되지
           않아요.
         </p>
         <h3 className="mb-1 mt-3 font-medium">2.4 수집하지 않는 데이터</h3>
@@ -87,7 +87,7 @@ export default function PrivacyPolicyPage() {
           </li>
           <li>
             <strong className="text-neutral-100">Supabase</strong> — 익명 사용자
-            데이터 (취향·저장·페르소나) 보관 위탁. 디바이스 단위 격리.
+            데이터 (취향·저장) 보관 위탁. 디바이스 단위 격리.
           </li>
           <li>
             <strong className="text-neutral-100">Vercel</strong> — 웹/API 서버 호스팅
@@ -159,7 +159,7 @@ export default function PrivacyPolicyPage() {
       <section className="mb-8">
         <h2 className="mb-2 text-lg font-semibold">6. 데이터 보존 기간</h2>
         <ul className="ml-4 list-disc space-y-1 text-neutral-300">
-          <li>사용자 콘텐츠 (취향·저장·페르소나): 디바이스에 영구 보관 — reset/삭제 즉시 폐기</li>
+          <li>사용자 콘텐츠 (취향·저장): 디바이스에 영구 보관 — reset/삭제 즉시 폐기</li>
           <li>분석 이벤트 (PostHog): 1년 후 자동 삭제</li>
           <li>서버 로그: 90일 후 자동 삭제</li>
         </ul>
@@ -172,8 +172,8 @@ export default function PrivacyPolicyPage() {
         </p>
         <ul className="ml-4 list-disc space-y-1 text-neutral-300">
           <li><strong>데이터 삭제</strong> — 프로필 → "모든 데이터 초기화" 또는 앱 삭제</li>
-          <li><strong>데이터 접근</strong> — 앱 안에서 저장·페르소나·시청 리포트 모두 직접 조회 가능</li>
-          <li><strong>수정</strong> — 취향·페르소나 언제든 재설정 가능</li>
+          <li><strong>데이터 접근</strong> — 앱 안에서 저장·취향·시청 리포트 모두 직접 조회 가능</li>
+          <li><strong>수정</strong> — 취향 언제든 재설정 가능</li>
           <li><strong>처리정지 요구</strong> — 아래 연락처로 요청 시 처리 정지 가능</li>
         </ul>
         <p className="mt-3 text-neutral-300">
@@ -223,7 +223,7 @@ export default function PrivacyPolicyPage() {
         </ul>
         <p className="mt-3 text-neutral-300">
           <strong>거부 방법</strong> — 브라우저 설정에서 사이트 데이터 차단 또는
-          앱 삭제로 모든 자동수집장치 데이터가 제거돼요. 차단 시 추천·저장·페르소나
+          앱 삭제로 모든 자동수집장치 데이터가 제거돼요. 차단 시 추천·저장·취향
           기능이 동작하지 않을 수 있어요.
         </p>
       </section>

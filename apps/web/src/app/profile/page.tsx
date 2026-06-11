@@ -299,7 +299,7 @@ export default function ProfilePage() {
           style={{ background: "var(--bg)" }}
           role="dialog"
           aria-modal="true"
-          aria-label="새 페르소나 만들기"
+          aria-label="새 취향 만들기"
         >
           <PersonaSurveyController
             onComplete={(personaId) => {

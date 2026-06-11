@@ -142,7 +142,7 @@ describe('IRON RULE — buildCurationUserPrompt tasteSummary 분기', () => {
     expect(v2Whitespace).toBe(v1);
   });
 
-  it('tasteSummary 정상 → [페르소나 취향] 블록 추가됨', () => {
+  it('tasteSummary 정상 → [취향 요약] 블록 추가됨', () => {
     const v1 = buildCurationUserPrompt(
       BASE_ARGS.candidates,
       BASE_ARGS.favorites,
@@ -164,7 +164,7 @@ describe('IRON RULE — buildCurationUserPrompt tasteSummary 분기', () => {
       summary,
     );
     expect(v2).not.toBe(v1);
-    expect(v2).toContain('[페르소나 취향]');
+    expect(v2).toContain('[취향 요약]');
     expect(v2).toContain(summary);
     // 기존 prompt 의 모든 텍스트가 v2 에도 그대로 (추가만, 제거 없음)
     expect(v2).toContain('[사용자 취향 기반]');
@@ -185,8 +185,8 @@ describe('IRON RULE — buildCurationUserPrompt tasteSummary 분기', () => {
       BASE_ARGS.subscribedOtt,
       long,
     );
-    // [페르소나 취향] 블록 안의 truncated 길이 < 원본
-    expect(v2).toContain('[페르소나 취향]');
+    // [취향 요약] 블록 안의 truncated 길이 < 원본
+    expect(v2).toContain('[취향 요약]');
     expect(v2.length).toBeLessThan(long.length + 500); // 다른 블록 포함해도 long 보다 짧음
   });
 
@@ -202,7 +202,7 @@ describe('IRON RULE — buildCurationUserPrompt tasteSummary 분기', () => {
       BASE_ARGS.subscribedOtt,
       summary,
     );
-    expect(v2).toContain('[페르소나 취향]\n여운이 긴 작품');
-    expect(v2).not.toContain('[페르소나 취향]\n  여운');
+    expect(v2).toContain('[취향 요약]\n여운이 긴 작품');
+    expect(v2).not.toContain('[취향 요약]\n  여운');
   });
 });

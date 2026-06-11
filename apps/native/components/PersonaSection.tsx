@@ -14,7 +14,7 @@ import { fonts } from '@neq/design';
 import { IconClose } from './Icons';
 
 /**
- * PersonaSection — Profile 탭의 취향(페르소나) 리스트 + 전환/삭제/생성 UI.
+ * PersonaSection — Profile 탭의 취향(페르소나) 리스트 + 삭제/생성 UI.
  *
  * web `apps/web/src/components/profile/PersonaSection.tsx` 의 native 포팅.
  *
@@ -22,6 +22,11 @@ import { IconClose } from './Icons';
  *   - 활성 페르소나는 accent border + ✓ 체크 표시
  *   - 비-default + 비활성 페르소나는 삭제 버튼 노출
  *   - 최대 3개 (MAX_PERSONAS) 도달 시 생성 버튼 → 안내 문구로 대체
+ *
+ * 2026-06-11 — 페르소나 선택(탭) 비활성화. row Pressable → View. Profile 에서
+ * switch 시 Discover 의 useRecommendations 가 새 persona 로 재계산하지 못하는 sync miss
+ * 버그 우회. 생성 직후 자동 switch 는 호출 측(profile.tsx) 흐름이므로 영향 분리됨.
+ * 근본 원인 fix 는 [[project_native_parity_gaps]] 출시 후 wave 후보.
  *
  * 생성 UI 차이:
  *   web 은 `NewPersonaSheet` (mini search + trending grid + posters) — 큰 sheet.
@@ -94,17 +99,13 @@ export default function PersonaSection({
               (p.favorites.length > 3 ? ` 외 ${p.favorites.length - 3}편` : '')
             : '아직 5픽이 없어요';
         return (
-          <Pressable
+          <View
             key={p.id}
-            onPress={() => {
-              if (!isActive) onSwitch(p.id);
-            }}
-            style={({ pressed }) => [
+            style={[
               styles.personaRow,
               isActive
                 ? styles.personaRowActive
                 : styles.personaRowInactive,
-              pressed && !isActive && styles.personaRowPressed,
             ]}
           >
             <View style={styles.personaBody}>
@@ -136,7 +137,7 @@ export default function PersonaSection({
                 <IconClose size={12} color={colors.textMuted} />
               </Pressable>
             ) : null}
-          </Pressable>
+          </View>
         );
       })}
 

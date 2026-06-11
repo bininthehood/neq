@@ -390,7 +390,7 @@ export function buildFallbackSummary(
       : null;
 
   const lines: string[] = [];
-  lines.push(`${companionLabel} 볼 ${contextLabel}를 위한 페르소나입니다.`);
+  lines.push(`${companionLabel} 볼 ${contextLabel}를 위한 취향입니다.`);
   if (axes.length > 0) {
     const axisSummary = axes
       .map((a) => `${a.name}은 "${a.value}"`)

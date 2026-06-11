@@ -293,7 +293,7 @@ function buildRankingUserPrompt(
   const v2Block = v2Lines ? `\n${v2Lines}` : "";
   const favoritesLabel =
     tasteGenresLine || subscribedOttLine
-      ? "이 페르소나의 좋아한 작품"
+      ? "이 취향의 좋아한 작품"
       : "좋아하는 작품";
 
   const totalFeedback = feedback
@@ -307,7 +307,7 @@ function buildRankingUserPrompt(
 
   const tasteSummaryBlock =
     tasteSummary && tasteSummary.trim().length > 0
-      ? `\n\n[페르소나 취향]\n${truncateTasteSummary(tasteSummary.trim())}`
+      ? `\n\n[취향 요약]\n${truncateTasteSummary(tasteSummary.trim())}`
       : "";
 
   const diversityBlock = `\n\n[다양성 강조 (이번 호출)]\n${buildDiversityHint(axis)}`;

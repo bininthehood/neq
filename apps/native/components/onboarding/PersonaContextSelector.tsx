@@ -73,7 +73,7 @@ export default function PersonaContextSelector({ onNext, initial }: Props) {
   return (
     <View style={styles.wrap}>
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
-        <Text style={styles.heading}>어떤 페르소나를 만들까요?</Text>
+        <Text style={styles.heading}>어떤 취향을 만들까요?</Text>
         <Text style={styles.subtitle}>기분이나 상황에 따라 따로 가질 수 있어요</Text>
 
         <Text style={styles.groupLabel}>콘텐츠 유형 (복수 선택 가능)</Text>

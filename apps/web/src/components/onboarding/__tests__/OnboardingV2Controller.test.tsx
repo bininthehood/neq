@@ -274,16 +274,16 @@ describe("Persona 건너뛰기 (P0 trap 차단)", () => {
   it("persona subStep=1 일 때는 건너뛰기 버튼이 보이지 않는다 (back 으로 나갈 수 있음)", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
-    expect(screen.queryByLabelText("페르소나 만들기 건너뛰기")).toBeNull();
+    expect(screen.queryByLabelText("취향 만들기 건너뛰기")).toBeNull();
   });
 
   it("persona subStep≥2 에서 건너뛰기 버튼 노출 — LLM 행 / rate-limit trap 차단", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-sub-2"));
-    expect(screen.getByLabelText("페르소나 만들기 건너뛰기")).toBeTruthy();
+    expect(screen.getByLabelText("취향 만들기 건너뛰기")).toBeTruthy();
     fireEvent.click(screen.getByTestId("persona-sub-5"));
-    expect(screen.getByLabelText("페르소나 만들기 건너뛰기")).toBeTruthy();
+    expect(screen.getByLabelText("취향 만들기 건너뛰기")).toBeTruthy();
   });
 
   it("건너뛰기 confirm 후 → goNext (persona_created=false, skipped_from_header=true)", () => {
@@ -291,7 +291,7 @@ describe("Persona 건너뛰기 (P0 trap 차단)", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-sub-3"));
-    fireEvent.click(screen.getByLabelText("페르소나 만들기 건너뛰기"));
+    fireEvent.click(screen.getByLabelText("취향 만들기 건너뛰기"));
     expect(confirmSpy).toHaveBeenCalled();
     expect(screen.getByText("9 / 10")).toBeTruthy(); // OTT step
     const personaCompletion = mockTrack.mock.calls.find(
@@ -308,7 +308,7 @@ describe("Persona 건너뛰기 (P0 trap 차단)", () => {
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-sub-4"));
     expect(screen.getByText("7 / 10")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("페르소나 만들기 건너뛰기"));
+    fireEvent.click(screen.getByLabelText("취향 만들기 건너뛰기"));
     expect(screen.getByText("7 / 10")).toBeTruthy(); // 그대로
     confirmSpy.mockRestore();
   });

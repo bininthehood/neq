@@ -225,7 +225,7 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
     await capture('hybrid-05-persona-context');
 
     // PR #14 회귀 가드 — subStep=1 일 때 우상단 X 는 hidden, back 만 노출
-    const skipBtnHidden = !(await $('~페르소나 만들기 건너뛰기').isExisting());
+    const skipBtnHidden = !(await $('~취향 만들기 건너뛰기').isExisting());
     if (!skipBtnHidden) {
       console.warn('subStep=1 에서 우상단 X 가 노출됨 — P0#1 가드 위반 가능성');
     }
@@ -245,15 +245,15 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
 
     // === Persona — subStep ≥ 2 (step_loading + 우상단 X 검증) ===
     // 우상단 X (페르소나 만들기 건너뛰기) 가 mount 됐는지 확인. PR #14 P0#1 fix.
-    if (!(await waitForLabel('페르소나 만들기 건너뛰기', 8000))) {
+    if (!(await waitForLabel('취향 만들기 건너뛰기', 8000))) {
       throw new Error(
-        'PR #14 P0#1 회귀: subStep≥2 에서 우상단 X "페르소나 만들기 건너뛰기" 미노출 — trap 차단 실패',
+        'PR #14 P0#1 회귀: subStep≥2 에서 우상단 X "취향 만들기 건너뛰기" 미노출 — trap 차단 실패',
       );
     }
     await capture('hybrid-06-persona-skip-button');
 
     // X 탭 → Alert.alert "건너뛰기" 확인 → OTT 으로 advance
-    if (!(await tapByLabel('페르소나 만들기 건너뛰기'))) {
+    if (!(await tapByLabel('취향 만들기 건너뛰기'))) {
       throw new Error('우상단 X tap 실패');
     }
     await browser.pause(1000);

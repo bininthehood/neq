@@ -147,7 +147,7 @@ export default function OnboardingV2Controller() {
 
   function handlePersonaSkip() {
     if (typeof window !== "undefined") {
-      const ok = window.confirm("페르소나 만들기를 건너뛸까요? 나중에 프로필에서 만들 수 있어요.");
+      const ok = window.confirm("취향 만들기를 건너뛸까요? 나중에 프로필에서 만들 수 있어요.");
       if (!ok) return;
     }
     goNext({ persona_created: false, skipped_from_header: true });
@@ -162,7 +162,7 @@ export default function OnboardingV2Controller() {
           step > 0 && (step !== 3 || personaSubStep === 1) ? goBack : undefined
         }
         onSkip={showPersonaSkip ? handlePersonaSkip : undefined}
-        skipLabel="페르소나 만들기 건너뛰기"
+        skipLabel="취향 만들기 건너뛰기"
       />
 
       {step === 0 && <OnboardingStepWelcome onNext={() => goNext()} />}

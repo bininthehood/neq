@@ -62,7 +62,7 @@ export default function PersonaContextSelector({ onNext, initial }: Props) {
             letterSpacing: "-0.02em",
           }}
         >
-          어떤 페르소나를 만들까요?
+          어떤 취향을 만들까요?
         </p>
         <p
           className="text-sm mb-10"
