@@ -110,16 +110,26 @@ WHERE event IN ('recommendation_loaded', 'recommendation_failed')
   AND timestamp >= now() - INTERVAL 7 DAY
 `;
 
-// ── 5) 온보딩 깔때기 — onboarding_started → onboarding_completed (14일)
+// ── 5) 온보딩 깔때기 — unique distinct_id 기반 (14일)
+// 2026-06-11: 단일 outlier (5/28 build, 단일 device 2828번 emit) 이 1.1% false alarm 유발 → unique 기반으로 교체.
+// 진단: _workspace/posthog-diagnosis-2026-06-11.md
+// events 기반 (legacy) 도 비교용 병행 출력.
 const Q_ONBOARDING_FUNNEL = `
 SELECT
-  countIf(event = 'onboarding_started') AS started,
-  countIf(event = 'onboarding_completed') AS completed,
+  uniqIf(distinct_id, event = 'onboarding_started') AS unique_started,
+  uniqIf(distinct_id, event = 'onboarding_completed') AS unique_completed,
+  round(
+    uniqIf(distinct_id, event = 'onboarding_completed') * 100.0
+    / nullif(uniqIf(distinct_id, event = 'onboarding_started'), 0),
+    1
+  ) AS unique_completion_pct,
+  countIf(event = 'onboarding_started') AS events_started,
+  countIf(event = 'onboarding_completed') AS events_completed,
   round(
     countIf(event = 'onboarding_completed') * 100.0
     / nullif(countIf(event = 'onboarding_started'), 0),
-    1
-  ) AS completion_pct
+    2
+  ) AS events_completion_pct
 FROM events
 WHERE event IN ('onboarding_started', 'onboarding_completed')
   AND timestamp >= now() - INTERVAL 14 DAY
@@ -261,16 +271,24 @@ async function main() {
   lines.push(`| ${fmt(loaded)} | ${fmt(failed)} | ${fmt(failPct, "%")} | ${pass(failN, "lte", 2)} |`);
   lines.push("");
 
-  // 6. Onboarding funnel
-  lines.push("## 6) 온보딩 깔때기 (14일)");
+  // 6. Onboarding funnel — unique distinct_id 기반 (2026-06-11 진단 후 교체)
+  lines.push("## 6) 온보딩 깔때기 (14일, unique distinct_id 기반)");
   lines.push("");
-  const [started, completed, compPct] = rOnb.results[0] ?? [0, 0, null];
-  const compN = num(compPct);
+  const [uniqStarted, uniqCompleted, uniqPct, evStarted, evCompleted, evPct] =
+    rOnb.results[0] ?? [0, 0, null, 0, 0, null];
+  const uniqN = num(uniqPct);
+  lines.push("| metric | started | completed | completion_pct | 통과 (≥ 30%) |");
+  lines.push("|---|---|---|---|---|");
   lines.push(
-    `| started | completed | completion_pct | 통과 (≥ 60%) |`,
+    `| **unique distinct_id** | ${fmt(uniqStarted)} | ${fmt(uniqCompleted)} | ${fmt(uniqPct, "%")} | ${pass(uniqN, "gte", 30)} |`,
   );
-  lines.push(`|---|---|---|---|`);
-  lines.push(`| ${fmt(started)} | ${fmt(completed)} | ${fmt(compPct, "%")} | ${pass(compN, "gte", 60)} |`);
+  lines.push(
+    `| events (legacy) | ${fmt(evStarted)} | ${fmt(evCompleted)} | ${fmt(evPct, "%")} | — |`,
+  );
+  lines.push("");
+  lines.push(
+    "**해석:** unique = 게이트 판정 기준 (≥ 30%). events 기반은 단일 device 의 무한 emit 으로 noise 큼 (5/28 outlier 사례). 진단: `_workspace/posthog-diagnosis-2026-06-11.md`.",
+  );
   lines.push("");
 
   // 7. warmup ping
