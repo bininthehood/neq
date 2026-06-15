@@ -650,12 +650,12 @@ function IdleContent({
       )}
       {trending.length > 0 && (
         <View accessibilityLabel="지금 검색해볼 만한 제안" style={styles.trendingSection}>
-          {/* 2026-06-15 (build 27) — 사용자 피드백: "TRENDING · 지금 떠오르는" 이
-              랜덤하게 느껴짐 + ALL CAPS 가 Quiet Ink 톤과 어긋남. "제안" 의미를
-              유지하면서 sentence-case 한글 톤으로 정합. RECENT 는 영문 약어로
-              uppercase 정당 — 둘의 위계는 weight/color 로 유지하므로 RECENT 는
-              건드리지 않음 (사용자 결정 영역). */}
-          <Text style={styles.sectionHeadAlt}>제안 · 지금 검색해볼 만한</Text>
+          {/* 2026-06-15 (build 27 fix iter2) — 사용자 결정 라벨: `SUGGESTED · 제안`.
+              이전 fix iter1 의 `제안 · 지금 검색해볼 만한` + 신규 sectionHeadAlt 스타일
+              (textSecondary / 500 / sentence-case) 은 RECENT (sectionHead, textPrimary /
+              600 / ALL CAPS) 와 위계 불일치. RECENT 와 시각 위계 균등하게 sectionHead
+              스타일 재사용 → SUGGESTED 도 영문 약어로 ALL CAPS 정당성 확보. */}
+          <Text style={styles.sectionHead}>SUGGESTED · 제안</Text>
           <View style={styles.chipRow}>
             {trending.slice(0, 6).map((t) => (
               <TrendingChip
@@ -1087,19 +1087,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
     paddingBottom: spacing.xs + 2,
   },
-  // 2026-06-15 (build 27) — 한글 sentence-case head. uppercase / 0.12em+ 자간 미사용.
-  // letterSpacing 0.02em (≈0.22) — DESIGN.md xs(11px) 토큰의 0.02em 정합.
-  // weight 500 / color textSecondary — RECENT(600/primary) 보다 한 단계 옅게.
-  // Trending 보다 검색 hint 톤에 가깝게 — "제안" 어휘와 정합.
-  sectionHeadAlt: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.22,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs + 2,
-  },
+  // 2026-06-15 (build 27 fix iter2) — sectionHeadAlt 제거.
+  // 사유: SUGGESTED 라벨 채택으로 sectionHead 와 시각 위계 균등 유지 결정.
+  // RECENT 와 동일 스타일 (textPrimary / 600 / ALL CAPS / 1.3 letterSpacing) 재사용.
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

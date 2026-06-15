@@ -9,6 +9,7 @@ import {
   Dimensions,
   Linking,
   Share,
+  ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -35,6 +36,7 @@ import type {
   Recommendation,
   RelatedWork,
   RelatedWorksResponse,
+  SearchResult,
 } from '../lib/types';
 import { getOTTLink, getOTTIcon, getPrimaryCountryName } from '@neq/core';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
@@ -312,7 +314,7 @@ export default function DetailSheet({
   const handleRelatedClick = useCallback(
     async (
       work: RelatedWork,
-      source: 'collection' | 'director' | 'recommendations',
+      source: 'collection' | 'director' | 'recommendations' | 'person-works',
     ) => {
       if (!rec) return;
       track('detail_related_clicked', {
@@ -391,11 +393,26 @@ export default function DetailSheet({
   // RelatedRow 의 "더보기" 누름 → DetailSheet 위에 absolute fill list.
   // 작품 탭 시 dismiss → handleRelatedClick 로 history push 후 detail 표시.
   // ← 누름 → subScreen=null (DetailSheet 복귀).
-  type SubScreen = {
-    type: 'collection' | 'director' | 'recommendations';
-    works: RelatedWork[];
-    title: string;
-  };
+  //
+  // 2026-06-15 (build 27 iter3) — person-works variant 추가. cast (감독/배우) 탭 시
+  // SearchSheet 전환 대신 DetailSheet 내부 sub-screen 으로 표시. Modal 전환 0회.
+  // person-works variant 는 fetch 비동기 → loading/error state 보관.
+  type SubScreen =
+    | {
+        type: 'collection' | 'director' | 'recommendations';
+        works: RelatedWork[];
+        title: string;
+      }
+    | {
+        type: 'person-works';
+        personId: number;
+        personName: string;
+        role: '감독' | '출연';
+        works: RelatedWork[];
+        loading: boolean;
+        error: boolean;
+        title: string;
+      };
   const [subScreen, setSubScreen] = useState<SubScreen | null>(null);
 
   const openSubScreen = useCallback(
@@ -407,6 +424,63 @@ export default function DetailSheet({
         count: next.works.length,
       });
       setSubScreen(next);
+    },
+    [rec],
+  );
+
+  // 2026-06-15 (build 27 iter3) — cast → person-works sub-screen 진입.
+  // /api/tmdb/person-works?id=X&dept=Directing|Acting 호출. 응답 SearchResult[] → RelatedWork 매핑.
+  // (SearchResult 는 RelatedWork 의 superset — rating 만 drop. 안전 변환.)
+  const openPersonWorks = useCallback(
+    async (person: { tmdbId: number; name: string; role: '감독' | '출연' }) => {
+      if (!rec) return;
+      const title =
+        person.role === '감독'
+          ? `${person.name} 감독의 작품`
+          : `${person.name} 출연작`;
+      track('detail_cast_works_opened', {
+        tmdb_id: rec.tmdbId,
+        person_id: person.tmdbId,
+        role: person.role,
+      });
+      setSubScreen({
+        type: 'person-works',
+        personId: person.tmdbId,
+        personName: person.name,
+        role: person.role,
+        works: [],
+        loading: true,
+        error: false,
+        title,
+      });
+      try {
+        const dept = person.role === '감독' ? 'Directing' : 'Acting';
+        const res = await fetch(
+          `${env.API_BASE_URL}/api/tmdb/person-works?id=${person.tmdbId}&dept=${dept}`,
+        );
+        if (!res.ok) throw new Error(`person-works ${res.status}`);
+        const works = (await res.json()) as SearchResult[];
+        const mapped: RelatedWork[] = (Array.isArray(works) ? works : []).map(
+          (s) => ({
+            id: s.id,
+            title: s.title,
+            posterUrl: s.posterUrl,
+            year: s.year,
+            mediaType: s.mediaType,
+          }),
+        );
+        setSubScreen((prev) =>
+          prev && prev.type === 'person-works' && prev.personId === person.tmdbId
+            ? { ...prev, works: mapped, loading: false, error: false }
+            : prev,
+        );
+      } catch {
+        setSubScreen((prev) =>
+          prev && prev.type === 'person-works' && prev.personId === person.tmdbId
+            ? { ...prev, loading: false, error: true }
+            : prev,
+        );
+      }
     },
     [rec],
   );
@@ -658,7 +732,9 @@ export default function DetailSheet({
                 );
               })() : null}
 
-              {/* Cast — ChapterMark + 가로 스크롤. share mode 에서는 onSearchPerson 비활성. */}
+              {/* Cast — ChapterMark + 가로 스크롤. share mode 에서는 진입 비활성.
+                  2026-06-15 (build 27 iter3) — tmdbId 있으면 DetailSheet 내부
+                  person-works sub-screen (Modal 전환 0). 없으면 SearchSheet fallback. */}
               {(rec.director || rec.cast.length > 0) && (
                 <>
                   <View style={styles.section}>
@@ -673,6 +749,7 @@ export default function DetailSheet({
                         ? rec.castMembers
                         : lazyCastMembers
                     }
+                    onPressPerson={mode === 'detail' ? openPersonWorks : undefined}
                     onSearchPerson={mode === 'detail' ? onSearchPerson : undefined}
                   />
                 </>
@@ -945,6 +1022,18 @@ export default function DetailSheet({
             onBack={closeSubScreen}
             onItemPress={handleSubScreenItemPress}
             disabled={hydratingRelated}
+            loading={subScreen.type === 'person-works' && subScreen.loading}
+            error={subScreen.type === 'person-works' && subScreen.error}
+            onRetry={
+              subScreen.type === 'person-works'
+                ? () =>
+                    openPersonWorks({
+                      tmdbId: subScreen.personId,
+                      name: subScreen.personName,
+                      role: subScreen.role,
+                    })
+                : undefined
+            }
           />
         ) : null}
       </View>
@@ -986,15 +1075,22 @@ function CastRow({
   cast,
   directorMember,
   castMembers,
+  onPressPerson,
   onSearchPerson,
 }: {
   director: string | null;
   cast: string[];
   directorMember: CastMember | null;
   castMembers: CastMember[];
+  onPressPerson?: (person: {
+    tmdbId: number;
+    name: string;
+    role: '감독' | '출연';
+  }) => void;
   onSearchPerson?: (name: string) => void;
 }) {
   type Item = {
+    tmdbId: number | null;
     name: string;
     role: '감독' | '출연';
     profileUrl: string | null;
@@ -1004,6 +1100,7 @@ function CastRow({
 
   if (directorMember) {
     items.push({
+      tmdbId: directorMember.tmdbId,
       name: directorMember.name,
       role: '감독',
       profileUrl: directorMember.profileUrl,
@@ -1011,6 +1108,7 @@ function CastRow({
     });
   } else if (director) {
     items.push({
+      tmdbId: null,
       name: director,
       role: '감독',
       profileUrl: null,
@@ -1021,6 +1119,7 @@ function CastRow({
   if (castMembers && castMembers.length > 0) {
     for (const m of castMembers) {
       items.push({
+        tmdbId: m.tmdbId,
         name: m.name,
         role: '출연',
         profileUrl: m.profileUrl,
@@ -1030,6 +1129,7 @@ function CastRow({
   } else {
     for (let i = 0; i < cast.length; i++) {
       items.push({
+        tmdbId: null,
         name: cast[i],
         role: '출연',
         profileUrl: null,
@@ -1050,9 +1150,11 @@ function CastRow({
         {items.map((p) => (
           <CastItem
             key={p.keyId}
+            tmdbId={p.tmdbId}
             name={p.name}
             role={p.role}
             profileUrl={p.profileUrl}
+            onPressPerson={onPressPerson}
             onSearchPerson={onSearchPerson}
           />
         ))}
@@ -1062,14 +1164,24 @@ function CastRow({
 }
 
 function CastItem({
+  tmdbId,
   name,
   role,
   profileUrl,
+  onPressPerson,
   onSearchPerson,
 }: {
+  tmdbId: number | null;
   name: string;
   role: '감독' | '출연';
   profileUrl: string | null;
+  // 2026-06-15 (build 27 iter3) — tmdbId 있으면 DetailSheet 내부 sub-screen.
+  // 없으면 (legacy rec, name 만) onSearchPerson 으로 SearchSheet 진입 fallback.
+  onPressPerson?: (person: {
+    tmdbId: number;
+    name: string;
+    role: '감독' | '출연';
+  }) => void;
   onSearchPerson?: (name: string) => void;
 }) {
   const Avatar = (
@@ -1096,15 +1208,27 @@ function CastItem({
     </>
   );
 
-  if (onSearchPerson) {
+  // 2026-06-15 (build 27 iter3) — onPress 우선순위:
+  //   1) tmdbId 있고 onPressPerson 있으면 → DetailSheet 내부 sub-screen (Modal 전환 0)
+  //   2) onSearchPerson 만 있으면 → 기존 SearchSheet 진입 fallback (legacy rec)
+  //   3) 콜백 모두 없으면 비클릭 View (회귀 0)
+  const canOpenSubScreen = tmdbId != null && onPressPerson;
+  const canFallbackSearch = onSearchPerson != null;
+  if (canOpenSubScreen || canFallbackSearch) {
     return (
       <Pressable
         onPress={() => {
           track('detail_cast_clicked', { name, role });
-          onSearchPerson(name);
+          if (canOpenSubScreen) {
+            onPressPerson({ tmdbId: tmdbId!, name, role });
+          } else if (onSearchPerson) {
+            onSearchPerson(name);
+          }
         }}
         accessibilityRole="button"
-        accessibilityLabel={`${name} ${role} 검색`}
+        accessibilityLabel={
+          canOpenSubScreen ? `${name} ${role} 작품 보기` : `${name} ${role} 검색`
+        }
         style={({ pressed }) => [
           styles.castCell,
           pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] },
@@ -1197,7 +1321,29 @@ function RelatedRow({
   const showMore = !!onShowMore && works.length > RELATED_SHOW_MORE_THRESHOLD;
   return (
     <View style={styles.relatedSection}>
-      <Text style={styles.relatedSectionTitle}>{label}</Text>
+      {/* 2026-06-15 (build 27 fix iter2) — 더보기 버튼 위치 이동.
+          이전: 가로 스크롤 끝의 dashed 카드 (works.length>4 시) → 스크롤 끝까지 가야 접근.
+          현재: 라벨 헤더 우측의 텍스트 버튼 (iOS 표준 "See All" 패턴).
+          노출 임계 유지 (works.length > 4), accessibilityLabel 동일. */}
+      <View style={styles.relatedHeader}>
+        <Text style={styles.relatedSectionTitle}>{label}</Text>
+        {showMore ? (
+          <Pressable
+            disabled={disabled}
+            onPress={onShowMore}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} 전체 보기`}
+            style={({ pressed }) => [
+              styles.relatedHeaderMore,
+              pressed && { opacity: 0.6 },
+              disabled && { opacity: 0.5 },
+            ]}
+          >
+            <Text style={styles.relatedHeaderMoreText}>더보기 →</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -1233,28 +1379,6 @@ function RelatedRow({
             {w.year ? <Text style={styles.relatedYear}>{w.year}</Text> : null}
           </Pressable>
         ))}
-        {showMore ? (
-          <Pressable
-            disabled={disabled}
-            onPress={onShowMore}
-            accessibilityRole="button"
-            accessibilityLabel={`${label} 전체 보기`}
-            style={({ pressed }) => [
-              styles.relatedCard,
-              styles.relatedShowMoreCard,
-              pressed && { opacity: 0.7 },
-              disabled && { opacity: 0.5 },
-            ]}
-          >
-            <View style={styles.relatedShowMoreInner}>
-              <Text style={styles.relatedShowMoreLabel}>더보기</Text>
-              <Text style={styles.relatedShowMoreArrow}>→</Text>
-              <Text style={styles.relatedShowMoreCount}>
-                {works.length}편
-              </Text>
-            </View>
-          </Pressable>
-        ) : null}
       </ScrollView>
     </View>
   );
@@ -1274,20 +1398,28 @@ function RelatedListScreen({
   onBack,
   onItemPress,
   disabled,
+  loading,
+  error,
+  onRetry,
 }: {
   title: string;
   works: RelatedWork[];
   onBack: () => void;
   onItemPress: (work: RelatedWork) => void;
   disabled?: boolean;
+  loading?: boolean;
+  error?: boolean;
+  onRetry?: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  // 2-col grid. 좌우 paddingHorizontal 22 + gap 12.
-  // posterWidth = (screen - 22*2 - 12) / 2
-  // 2026-06-15 (build 27 fix iteration) — UX FIX 2: 22 → 20.
-  // DESIGN.md L154 (4px 배수) + L156 (콘텐츠 좌우 20px) 정합.
-  // 산식: (screen - 20*2 - 12) / 2. 390 기준 cardWidth ≈ 169 (기존 167 → +2px).
-  const cardWidth = Math.floor((Dimensions.get('window').width - 20 * 2 - 12) / 2);
+  // 2026-06-15 (build 27 fix iter2) — 3-col grid 전환 (사용자 결정).
+  // 이전: 2-col (cardWidth ≈ 169, posterHeight ≈ 254, 카드 큼)
+  // 현재: 3-col (cardWidth ≈ 105, posterHeight ≈ 158)
+  // 산식: (screen - paddingHorizontal*2 - columnGap*2) / 3
+  //       = (390 - 20*2 - 12*2) / 3 = 108.66 → floor 108
+  // 좌우 paddingHorizontal 20 (DESIGN.md L156), column gap 12, row gap 12 통합.
+  // 카드 비율 2:3 포스터 유지.
+  const cardWidth = Math.floor((Dimensions.get('window').width - 20 * 2 - 12 * 2) / 3);
   const posterHeight = Math.round(cardWidth * 1.5); // 2:3
 
   return (
@@ -1321,6 +1453,33 @@ function RelatedListScreen({
         </Text>
       </View>
 
+      {loading ? (
+        <View style={styles.subScreenStatus}>
+          <ActivityIndicator color={colors.textSecondary} />
+        </View>
+      ) : error ? (
+        <View style={styles.subScreenStatus}>
+          <Text style={styles.subScreenStatusText}>작품을 불러오지 못했어요</Text>
+          {onRetry ? (
+            <Pressable
+              onPress={onRetry}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="다시 시도"
+              style={({ pressed }) => [
+                styles.subScreenRetryBtn,
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={styles.subScreenRetryText}>다시 시도</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : works.length === 0 ? (
+        <View style={styles.subScreenStatus}>
+          <Text style={styles.subScreenStatusText}>표시할 작품이 없어요</Text>
+        </View>
+      ) : (
       <ScrollView
         contentContainerStyle={[
           styles.subScreenGrid,
@@ -1363,11 +1522,14 @@ function RelatedListScreen({
               {w.title}
             </Text>
             {w.year ? (
-              <Text style={styles.subScreenItemYear}>{w.year}</Text>
+              <Text style={styles.subScreenItemYear} numberOfLines={1}>
+                {w.year}
+              </Text>
             ) : null}
           </Pressable>
         ))}
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -1721,6 +1883,25 @@ const styles = StyleSheet.create({
     marginTop: spacing.md + 4,
     marginLeft: 22,
   },
+  // 2026-06-15 (build 27 fix iter2) — 라벨 + 우측 더보기 헤더 row.
+  // iOS 표준 "See All" 패턴. 좌측 라벨, 우측 텍스트 버튼. align baseline.
+  // marginRight 22 — 우측 가장자리 여백 (relatedSection 의 marginLeft 22 와 대칭).
+  relatedHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginRight: 22,
+    marginBottom: spacing.sm,
+  },
+  relatedHeaderMore: {
+    paddingVertical: 2,
+  },
+  // 더보기 텍스트 — Quiet Ink 톤. textSecondary 12px, 라벨과 위계 균등.
+  relatedHeaderMoreText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
   // PR2 — ChapterMark amber 1개 규칙 정합. 관련작 label 은 textSecondary 강등.
   relatedSectionTitle: {
     color: colors.textSecondary,
@@ -1729,7 +1910,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    marginBottom: spacing.sm,
+    // 2026-06-15 (build 27 fix iter2) — relatedHeader row 안으로 이동하면서
+    // marginBottom 제거 (헤더 row 가 통합 spacing 담당).
   },
   relatedRowContent: {
     gap: spacing.sm + 2,
@@ -1794,44 +1976,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: fonts.data,
   },
-  // 2026-06-15 (build 27) — RelatedRow 가로 스크롤 끝 "더보기 →" 카드.
-  // 기존 포스터 카드(90×132) 와 같은 너비. 보더 dashed 로 자연 종료 느낌.
-  // 면(filled) 강조 없이 위계 강등 — 본 카드들이 주인공, 더보기는 보조.
-  relatedShowMoreCard: {},
-  relatedShowMoreInner: {
-    width: 90,
-    height: 132,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    marginBottom: 6,
-  },
-  relatedShowMoreLabel: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  relatedShowMoreArrow: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: '500',
-    lineHeight: 16,
-  },
-  relatedShowMoreCount: {
-    color: colors.textMuted,
-    // 2026-06-15 (build 27 fix iteration) — UX FIX 1: 10 → 11.
-    // anti-slop #8 (한글 + letterSpacing 0.1, 0.12em 예외 미충족) 해소.
-    fontSize: 11,
-    fontFamily: fonts.data,
-    letterSpacing: 0.1,
-    marginTop: 2,
-  },
+  // 2026-06-15 (build 27 fix iter2) — RelatedRow 더보기 카드 (dashed) 폐기.
+  // 사유: 사용자 결정 — 스크롤 끝까지 가야 접근하는 UX 회피, iOS 표준 "See All"
+  // 패턴 (라벨 헤더 우측 텍스트 버튼) 으로 이동 (위 relatedHeaderMore* 참조).
+  // 이전 스타일 5종 (relatedShowMoreCard/Inner/Label/Arrow/Count) 제거.
   // 2026-06-15 (build 27) — RelatedListScreen overlay. DetailSheet 위 absolute fill.
   // Modal 도 아니고 새 route 도 아닌 같은 Container 내부 sub-screen.
   subScreen: {
@@ -1882,16 +2030,47 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 8,
   },
+  // 2026-06-15 (build 27 fix iter2) — 3-col grid 전환에 따른 폰트 한 단계 축소.
+  // 카드 폭 ≈ 169 → 108 (36% 축소) → 13px 두 줄 시 컷오프 위험. 12 / 500 으로 정합.
+  // anti-slop #8 (한글 10px 미만 금지) 위반 없음 — 12px 안전선.
   subScreenItemTitle: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
-    lineHeight: 17,
+    lineHeight: 16,
   },
+  // year 는 11px 유지 (anti-slop #8 마지노선). Geist Mono / textMuted 약 위계.
   subScreenItemYear: {
     color: colors.textMuted,
     fontSize: 11,
     fontFamily: fonts.data,
     marginTop: 2,
+  },
+  // 2026-06-15 (build 27 iter3) — person-works sub-screen 의 loading/error/empty 상태.
+  // 전체 본문 영역을 차지하고 중앙 정렬. spinner 또는 안내 텍스트 1줄.
+  subScreenStatus: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  subScreenStatusText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  subScreenRetryBtn: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  subScreenRetryText: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

@@ -132,6 +132,8 @@ export type NekoEvent =
   // 위임 O — Cast 클릭 → 검색 진입
   | 'detail_cast_clicked'
   | 'detail_to_search_person'
+  // 2026-06-15 (build 27 iter3) — Cast 클릭 → DetailSheet 내부 person-works sub-screen
+  | 'detail_cast_works_opened'
   // 위임 O — Saved 뷰 모드 토글
   | 'saved_view_changed'
   // 시청 리포트
