@@ -129,6 +129,39 @@ export function IconArchive({ size = 16, color = '#000' }: IconProps) {
   );
 }
 
+// 2026-06-15 (build 27) — DetailSheet history navigation (← / →). 좌상단 prev/next
+// 화살표. Phase 4 정본 chevron 패턴 (polyline, strokeWidth 2, round terminals).
+// 단일 chevron shape — IconChevronDown 과 동일 두께/스타일. viewBox 24 통일.
+export function IconChevronLeft({ size = 18, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polyline
+        points="15 6 9 12 15 18"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
+export function IconChevronRight({ size = 18, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polyline
+        points="9 6 15 12 9 18"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 // 2026-05-20 — FilterChips / SavedFilters 공용 chevron. web `▾` 글리프 (fontSize 11)
 // 가 native 시스템 폰트에서 작고 흐릿하게 렌더 → 가독성 부족. SVG polyline 으로
 // 명확한 v 모양 + 적절한 크기. SavedFilters 의 자체 IconChevronDown 도 향후 이걸로 통일.

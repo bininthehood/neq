@@ -13,7 +13,13 @@ import {
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconClose, IconShare, IconSave } from './Icons';
+import {
+  IconClose,
+  IconShare,
+  IconSave,
+  IconChevronLeft,
+  IconChevronRight,
+} from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -119,10 +125,38 @@ export default function DetailSheet({
     },
   });
 
-  // 관련 작품 카드 클릭 시 sheet 내부에서 rec 을 교체. F3 spec — 새 sheet 교체 단순화.
-  const [relatedRec, setRelatedRec] = useState<Recommendation | null>(null);
+  // 2026-06-15 (build 27) — DetailSheet history navigation.
+  //
+  // 기존: relatedRec 1개 슬롯 — 관련 작품 클릭 시 setRelatedRec(next) 로 교체.
+  // 사용자가 여러 단계 깊이 들어가도 돌아갈 길 없었음 → 좌상단 ← / → 도입.
+  //
+  // history: 진입한 작품 순서대로 push. 항상 1개 이상 (외부 entry = [initialRec]).
+  // currentIndex: 현재 표시 중인 history index. 0 ≤ idx < history.length.
+  //
+  // 동작:
+  //   - 관련 작품 클릭 → history.slice(0, currentIndex+1) 로 forward 가지 잘라낸 후
+  //     newRec push, currentIndex++ (브라우저 패턴).
+  //   - ← / → → currentIndex ± 1, rec = history[next].
+  //   - 외부 rec prop 변경 (initialRec 새 값) → history = [newRec], currentIndex = 0.
+  //   - X 닫기 → useEffect 가 visible=false 받아 history reset.
+  //
+  // 표시되는 rec = history[currentIndex] ?? initialRec (history 빈 케이스 안전망).
+  const [history, setHistory] = useState<Recommendation[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [hydratingRelated, setHydratingRelated] = useState(false);
-  const rec = relatedRec ?? initialRec;
+  const rec = history[currentIndex] ?? initialRec;
+  const canGoBack = currentIndex > 0;
+  const canGoForward = currentIndex < history.length - 1;
+  // 2026-06-15 (build 27 fix iteration) — QA MED 1: closure stale race 차단.
+  // handleRelatedClick 가 hydrate await 동안 currentIndex 를 closure capture 함.
+  // 사용자가 빠르게 2회 탭 시 (hydratingRelated 가드를 우회하는 이론적 race) 두 번째
+  // 호출의 stale closure 가 잘못된 idx 로 truncate 할 위험 → ref 로 latest snapshot 유지.
+  // setHistory 의 functional updater 안에서 currentIndexRef.current 를 참조하면
+  // 첫 번째 setCurrentIndex 가 적용되지 않은 상태에서도 latest 값 보장.
+  const currentIndexRef = useRef(0);
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
 
   // 위임 O #1.3 (위임 P #3 동기화) — Cast 사진 lazy fetch.
   // mirror cache 경로 rec 은 castMembers 가 빈 배열 → 사진 안 보임.
@@ -170,7 +204,10 @@ export default function DetailSheet({
     } else {
       // sheet 닫힘 → state reset. translateY 다시 0으로 (다음 진입 대비).
       translateY.value = 0;
-      setRelatedRec(null);
+      // 2026-06-15 (build 27) — history 도 초기화. 다음 진입 시 clean state.
+      setHistory([]);
+      setCurrentIndex(0);
+      setSubScreen(null);
       setRelated(null);
     }
     // Reanimated 4 Fabric crash 메모리 정합 — unmount 시 worklet cleanup.
@@ -179,6 +216,19 @@ export default function DetailSheet({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, translateY]);
+
+  // 2026-06-15 (build 27) — 외부 rec prop (initialRec) 변경 시 history reset.
+  // 새 detail 진입 = clean state. visible 일 때만 실행 (닫힌 상태에서 prop 만
+  // 바뀐 경우는 위 useEffect 가 이미 reset 처리).
+  useEffect(() => {
+    if (!visible || !initialRec) return;
+    setHistory([initialRec]);
+    setCurrentIndex(0);
+    setSubScreen(null);
+    // initialRec 의 tmdbId 가 바뀌면 새 entry 로 간주.
+    // (같은 작품 재선택은 setHistory 이전과 같은 값이라 별 영향 없음.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialRec?.tmdbId]);
 
   // 위임 O #1.3 — Cast 사진 lazy fetch.
   // sheet 가 visible 이고 rec.castMembers 가 비어있으면 /api/tmdb/credits 1회 호출.
@@ -279,7 +329,22 @@ export default function DetailSheet({
         );
         if (res.ok) {
           const next: Recommendation = await res.json();
-          setRelatedRec(next);
+          // 2026-06-15 (build 27) — history stack push.
+          // forward 가지 잘라낸 후 push, currentIndex++ (브라우저 패턴).
+          // 이미 history 에 있는 작품 재진입도 새 entry — 사용자가 의식적으로
+          // 다시 들어간 것이므로 동일 작품의 history 중복 push 허용.
+          //
+          // 2026-06-15 (build 27 fix iteration) — QA MED 1: closure stale race 차단.
+          // currentIndex 대신 currentIndexRef.current 사용 (latest snapshot).
+          // setCurrentIndex 도 ref 기반 next 값으로 명시 — 빠른 연속 탭 시 stale 방지.
+          const latestIdx = currentIndexRef.current;
+          setHistory((prev) => {
+            const truncated = prev.slice(0, latestIdx + 1);
+            return [...truncated, next];
+          });
+          const nextIdx = latestIdx + 1;
+          currentIndexRef.current = nextIdx;
+          setCurrentIndex(nextIdx);
           // 새 작품으로 교체했으니 본문 스크롤 위로
           scrollRef.current?.scrollTo({ y: 0, animated: false });
         }
@@ -289,7 +354,75 @@ export default function DetailSheet({
         setHydratingRelated(false);
       }
     },
+    // 2026-06-15 (build 27 fix iteration) — QA MED 1: currentIndex 의존성 제거.
+    // currentIndexRef 로 latest snapshot 보장 → useCallback 재생성 빈도도 낮춤.
     [rec],
+  );
+
+  // 2026-06-15 (build 27) — history ← / →.
+  // 캐시된 Recommendation 객체 그대로 사용 (재fetch X). scroll 만 위로.
+  const handleHistoryBack = useCallback(() => {
+    if (!canGoBack) return;
+    const fromIdx = currentIndex;
+    const toIdx = currentIndex - 1;
+    setCurrentIndex(toIdx);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    track('detail_history_back', {
+      from_tmdb_id: history[fromIdx]?.tmdbId ?? null,
+      to_tmdb_id: history[toIdx]?.tmdbId ?? null,
+      stack_depth: history.length,
+    });
+  }, [canGoBack, currentIndex, history]);
+
+  const handleHistoryForward = useCallback(() => {
+    if (!canGoForward) return;
+    const fromIdx = currentIndex;
+    const toIdx = currentIndex + 1;
+    setCurrentIndex(toIdx);
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+    track('detail_history_forward', {
+      from_tmdb_id: history[fromIdx]?.tmdbId ?? null,
+      to_tmdb_id: history[toIdx]?.tmdbId ?? null,
+      stack_depth: history.length,
+    });
+  }, [canGoForward, currentIndex, history]);
+
+  // 2026-06-15 (build 27) — Task C: 더보기 풀스크린 sub-screen.
+  // RelatedRow 의 "더보기" 누름 → DetailSheet 위에 absolute fill list.
+  // 작품 탭 시 dismiss → handleRelatedClick 로 history push 후 detail 표시.
+  // ← 누름 → subScreen=null (DetailSheet 복귀).
+  type SubScreen = {
+    type: 'collection' | 'director' | 'recommendations';
+    works: RelatedWork[];
+    title: string;
+  };
+  const [subScreen, setSubScreen] = useState<SubScreen | null>(null);
+
+  const openSubScreen = useCallback(
+    (next: SubScreen) => {
+      if (!rec) return;
+      track('detail_related_more_opened', {
+        tmdb_id: rec.tmdbId,
+        source: next.type,
+        count: next.works.length,
+      });
+      setSubScreen(next);
+    },
+    [rec],
+  );
+
+  const closeSubScreen = useCallback(() => {
+    setSubScreen(null);
+  }, []);
+
+  const handleSubScreenItemPress = useCallback(
+    async (work: RelatedWork) => {
+      // 1) 풀스크린 dismiss 후 history push — UX 순서: 시각 전환 → 데이터 hydrate.
+      const source = subScreen?.type ?? 'recommendations';
+      setSubScreen(null);
+      await handleRelatedClick(work, source);
+    },
+    [handleRelatedClick, subScreen],
   );
 
   const pan = Gesture.Pan()
@@ -612,6 +745,13 @@ export default function DetailSheet({
                       source="collection"
                       disabled={hydratingRelated}
                       onPressItem={handleRelatedClick}
+                      onShowMore={() =>
+                        openSubScreen({
+                          type: 'collection',
+                          works: related.collection!.works,
+                          title: related.collection!.name,
+                        })
+                      }
                     />
                   )}
 
@@ -622,6 +762,13 @@ export default function DetailSheet({
                       source="recommendations"
                       disabled={hydratingRelated}
                       onPressItem={handleRelatedClick}
+                      onShowMore={() =>
+                        openSubScreen({
+                          type: 'recommendations',
+                          works: related.recommendations,
+                          title: '비슷한 작품',
+                        })
+                      }
                     />
                   )}
 
@@ -636,17 +783,30 @@ export default function DetailSheet({
                       source="director"
                       disabled={hydratingRelated}
                       onPressItem={handleRelatedClick}
+                      onShowMore={() =>
+                        openSubScreen({
+                          type: 'director',
+                          works: related.directorWorks,
+                          title: related.directorName
+                            ? `${related.directorName} 감독의 다른 작품`
+                            : '감독의 다른 작품',
+                        })
+                      }
                     />
                   )}
                 </>
               )}
             </Animated.ScrollView>
 
-            {/* 우상단 X 버튼 — 풀스크린 1차 dismiss. hero 위 absolute, 44×44 터치 타겟.
-                2026-06-11 (build 22) — 닫기 위치 좌→우 이동 (사용자 결정).
-                공유 버튼 제거 후 좌측 단일이라 위치 자유. iOS 표준 navigation right
-                close 와 정합. PWA DetailSheet L183~197 의 좌측 패턴과는 다르지만
-                native 단독 결정. */}
+            {/* TopNav — 좌측 ← / → (build 27 history), 우측 X (build 22 닫기).
+                hero 위 absolute, 모든 버튼 44×44 터치 타겟.
+                2026-06-15 (build 27) — 좌상단 history navigation 추가 (사용자 결정).
+                  - ← (canGoBack) / → (canGoForward) 모두 항상 노출. disabled 색으로 비활성 표시.
+                  - hidden 아닌 disabled (사용자 결정: "비활성=회색").
+                  - 가시성: history.length > 1 일 때만 nav row 자체 노출 — 첫 진입 (단일 entry)
+                    에서는 시각 잡음 회피. 두 번째 작품 이상 들어가야 의미 있음.
+                2026-06-11 (build 22) — X 위치 좌→우 이동 (그대로 유지).
+                  공유 버튼 제거 후 우측 단일. iOS 표준 right-close 와 정합. */}
             <View
               pointerEvents="box-none"
               style={[
@@ -654,6 +814,47 @@ export default function DetailSheet({
                 { paddingTop: insets.top + spacing.sm, paddingHorizontal: spacing.md },
               ]}
             >
+              {/* 좌측 history nav — history 가 2개 이상일 때만 row 노출 */}
+              {history.length > 1 ? (
+                <View style={styles.topNavLeftGroup}>
+                  <Pressable
+                    style={[
+                      styles.topNavBtn,
+                      !canGoBack && styles.topNavBtnDisabled,
+                    ]}
+                    onPress={handleHistoryBack}
+                    disabled={!canGoBack}
+                    hitSlop={12}
+                    accessibilityLabel="이전 작품"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canGoBack }}
+                  >
+                    <IconChevronLeft
+                      size={18}
+                      color={canGoBack ? colors.textPrimary : colors.textMuted}
+                    />
+                  </Pressable>
+                  <Pressable
+                    style={[
+                      styles.topNavBtn,
+                      !canGoForward && styles.topNavBtnDisabled,
+                    ]}
+                    onPress={handleHistoryForward}
+                    disabled={!canGoForward}
+                    hitSlop={12}
+                    accessibilityLabel="다음 작품"
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canGoForward }}
+                  >
+                    <IconChevronRight
+                      size={18}
+                      color={canGoForward ? colors.textPrimary : colors.textMuted}
+                    />
+                  </Pressable>
+                </View>
+              ) : (
+                <View />
+              )}
               <Pressable
                 style={styles.topNavBtn}
                 onPress={onClose}
@@ -729,6 +930,23 @@ export default function DetailSheet({
             </View>
           </Animated.View>
         </GestureDetector>
+        {/* 2026-06-15 (build 27) — RelatedListScreen overlay (Task C).
+            DetailSheet 위에 absolute fill. expo-router 새 route 아님 — 같은 Modal 내부에서
+            sub-screen 형태로 push. subScreen=null 이면 렌더 X. open 시 우선 X 닫기 버튼이
+            가려지므로 RelatedListScreen 자체에 ← 헤더 (DetailSheet 닫기는 ← 뒤로 후 X 로 가능).
+
+            2026-06-15 (build 27 fix iteration) — QA MED 2: share mode 명시 가드.
+            share mode 에서는 RelatedRow 자체가 차단되어 (L713 가드) subScreen=null 고정 →
+            현재는 도달 불가 (dead path) 이지만, refactor 안전망으로 명시 가드 추가. */}
+        {mode !== 'share' && subScreen ? (
+          <RelatedListScreen
+            title={subScreen.title}
+            works={subScreen.works}
+            onBack={closeSubScreen}
+            onItemPress={handleSubScreenItemPress}
+            disabled={hydratingRelated}
+          />
+        ) : null}
       </View>
   );
 
@@ -949,12 +1167,18 @@ function RelatedPosterFallback({ title }: { title: string }) {
  * 관련 작품 가로 스크롤 — neko-detail-sheet.jsx SimilarStrip 매핑.
  * 카드 90×132, 간격 10. label 은 amber accent + uppercase tracking.
  */
+// 2026-06-15 (build 27) — 가로 스크롤 끝 "더보기" 카드 가시 임계.
+// works.length 가 이 값 이하면 더보기 숨김 (있는 데이터 다 보이는 경우 = 자연 종료).
+// 90×132 카드 + gap 10 → iPhone (390w) 기준 약 3~4장 1차 가시. 4 초과 시 더보기 노출.
+const RELATED_SHOW_MORE_THRESHOLD = 4;
+
 function RelatedRow({
   label,
   works,
   source,
   disabled,
   onPressItem,
+  onShowMore,
 }: {
   label: string;
   works: RelatedWork[];
@@ -964,7 +1188,13 @@ function RelatedRow({
     work: RelatedWork,
     source: 'collection' | 'director' | 'recommendations',
   ) => void;
+  /**
+   * 2026-06-15 (build 27) — 가로 스크롤 끝 "더보기 →" 누름. works.length 가
+   * RELATED_SHOW_MORE_THRESHOLD 초과 시에만 버튼 노출. 미지정 시 더보기 숨김.
+   */
+  onShowMore?: () => void;
 }) {
+  const showMore = !!onShowMore && works.length > RELATED_SHOW_MORE_THRESHOLD;
   return (
     <View style={styles.relatedSection}>
       <Text style={styles.relatedSectionTitle}>{label}</Text>
@@ -1003,6 +1233,140 @@ function RelatedRow({
             {w.year ? <Text style={styles.relatedYear}>{w.year}</Text> : null}
           </Pressable>
         ))}
+        {showMore ? (
+          <Pressable
+            disabled={disabled}
+            onPress={onShowMore}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} 전체 보기`}
+            style={({ pressed }) => [
+              styles.relatedCard,
+              styles.relatedShowMoreCard,
+              pressed && { opacity: 0.7 },
+              disabled && { opacity: 0.5 },
+            ]}
+          >
+            <View style={styles.relatedShowMoreInner}>
+              <Text style={styles.relatedShowMoreLabel}>더보기</Text>
+              <Text style={styles.relatedShowMoreArrow}>→</Text>
+              <Text style={styles.relatedShowMoreCount}>
+                {works.length}편
+              </Text>
+            </View>
+          </Pressable>
+        ) : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+// 2026-06-15 (build 27) — RelatedListScreen: 더보기 풀스크린 sub-screen.
+// DetailSheet 의 ContainerView 안에서 absolute fill overlay. expo-router 새 route 아님.
+// 상단 헤더: ← (뒤로) + 타이틀
+// 본문: 2-column grid (포스터 카드 + 제목/연도). 기존 RelatedRow 카드와 시각 일관성.
+// 항목 탭 → onItemPress → DetailSheet history push.
+//
+// 그리드 카드 사이즈: 화면 너비 - paddingHorizontal*2 - gap 을 2 로 나눔.
+// 포스터 비율 2:3 유지. 작은 화면 (320) 까지 안전.
+function RelatedListScreen({
+  title,
+  works,
+  onBack,
+  onItemPress,
+  disabled,
+}: {
+  title: string;
+  works: RelatedWork[];
+  onBack: () => void;
+  onItemPress: (work: RelatedWork) => void;
+  disabled?: boolean;
+}) {
+  const insets = useSafeAreaInsets();
+  // 2-col grid. 좌우 paddingHorizontal 22 + gap 12.
+  // posterWidth = (screen - 22*2 - 12) / 2
+  // 2026-06-15 (build 27 fix iteration) — UX FIX 2: 22 → 20.
+  // DESIGN.md L154 (4px 배수) + L156 (콘텐츠 좌우 20px) 정합.
+  // 산식: (screen - 20*2 - 12) / 2. 390 기준 cardWidth ≈ 169 (기존 167 → +2px).
+  const cardWidth = Math.floor((Dimensions.get('window').width - 20 * 2 - 12) / 2);
+  const posterHeight = Math.round(cardWidth * 1.5); // 2:3
+
+  return (
+    <View
+      style={styles.subScreen}
+      accessibilityViewIsModal
+      accessibilityLabel={`${title} 전체 목록`}
+    >
+      {/* 헤더 — 좌측 ← + 타이틀. X 는 DetailSheet 의 닫기 버튼이 상위에 있으므로 생략. */}
+      <View
+        style={[
+          styles.subScreenHeader,
+          { paddingTop: insets.top + spacing.sm },
+        ]}
+      >
+        <Pressable
+          style={styles.topNavBtn}
+          onPress={onBack}
+          hitSlop={12}
+          accessibilityLabel="뒤로"
+          accessibilityRole="button"
+        >
+          <IconChevronLeft size={18} color={colors.textPrimary} />
+        </Pressable>
+        <Text
+          style={styles.subScreenTitle}
+          numberOfLines={1}
+          accessibilityRole="header"
+        >
+          {title}
+        </Text>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.subScreenGrid,
+          { paddingBottom: insets.bottom + spacing.xl },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {works.map((w) => (
+          <Pressable
+            key={w.id}
+            disabled={disabled}
+            onPress={() => onItemPress(w)}
+            accessibilityRole="button"
+            accessibilityLabel={`${w.title} 상세 보기`}
+            style={({ pressed }) => [
+              styles.subScreenCard,
+              { width: cardWidth },
+              pressed && { opacity: 0.75 },
+              disabled && { opacity: 0.5 },
+            ]}
+          >
+            <View
+              style={[
+                styles.subScreenPosterWrap,
+                { width: cardWidth, height: posterHeight },
+              ]}
+            >
+              {w.posterUrl ? (
+                <Image
+                  source={{ uri: w.posterUrl }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  transition={0}
+                />
+              ) : (
+                <RelatedPosterFallback title={w.title} />
+              )}
+            </View>
+            <Text style={styles.subScreenItemTitle} numberOfLines={2}>
+              {w.title}
+            </Text>
+            {w.year ? (
+              <Text style={styles.subScreenItemYear}>{w.year}</Text>
+            ) : null}
+          </Pressable>
+        ))}
       </ScrollView>
     </View>
   );
@@ -1018,18 +1382,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
-  // 좌상단 X (+ 우상단 공유 mode='detail' 시) — hero 위 absolute, scroll 무관.
+  // hero 위 absolute, scroll 무관.
+  // 2026-06-15 (build 27) — 좌측 history nav (← →) + 우측 X 닫기. space-between.
+  // history.length <= 1 일 때는 좌측 placeholder View 가 자리만 잡고 X 는 우측 유지.
   topNav: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     flexDirection: 'row',
-    // 2026-06-11 추가 — 닫기 버튼 우측상단 배치 (사용자 결정, build 22).
-    // 공유 버튼 제거 후 좌측 단일이라 위치 자유. iOS 표준 navigation right close
-    // (예: 시트 dismiss) 와 정합.
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     zIndex: 10,
+  },
+  // 2026-06-15 (build 27) — 좌측 ← / → 버튼 그룹. 두 버튼 사이 작은 gap.
+  topNavLeftGroup: {
+    flexDirection: 'row',
+    gap: spacing.xs + 2, // 6 — 두 chevron 사이 시각 분리. 44+6+44 = 94px (좌측 영역).
   },
   topNavBtn: {
     width: 44,
@@ -1038,6 +1407,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // 2026-06-15 (build 27) — disabled 상태 (회색, 사용자 결정). hidden 아님.
+  // surfaceRaised 그대로 두고 opacity 만 낮춰 면적 인지는 유지, 색채 위계만 강등.
+  // 아이콘 색은 button 자체가 아닌 IconChevron color prop 으로 textMuted 전달.
+  topNavBtnDisabled: {
+    opacity: 0.55,
   },
   body: { flex: 1 },
   bodyContent: {
@@ -1418,5 +1793,105 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 2,
     fontFamily: fonts.data,
+  },
+  // 2026-06-15 (build 27) — RelatedRow 가로 스크롤 끝 "더보기 →" 카드.
+  // 기존 포스터 카드(90×132) 와 같은 너비. 보더 dashed 로 자연 종료 느낌.
+  // 면(filled) 강조 없이 위계 강등 — 본 카드들이 주인공, 더보기는 보조.
+  relatedShowMoreCard: {},
+  relatedShowMoreInner: {
+    width: 90,
+    height: 132,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
+    marginBottom: 6,
+  },
+  relatedShowMoreLabel: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  relatedShowMoreArrow: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 16,
+  },
+  relatedShowMoreCount: {
+    color: colors.textMuted,
+    // 2026-06-15 (build 27 fix iteration) — UX FIX 1: 10 → 11.
+    // anti-slop #8 (한글 + letterSpacing 0.1, 0.12em 예외 미충족) 해소.
+    fontSize: 11,
+    fontFamily: fonts.data,
+    letterSpacing: 0.1,
+    marginTop: 2,
+  },
+  // 2026-06-15 (build 27) — RelatedListScreen overlay. DetailSheet 위 absolute fill.
+  // Modal 도 아니고 새 route 도 아닌 같은 Container 내부 sub-screen.
+  subScreen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.bg,
+    zIndex: 20,
+  },
+  subScreenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+    gap: spacing.md - 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.borderSubtle,
+  },
+  // Quiet Ink 헤더 — display 폰트 절제. 22px Instrument Serif 와 잘 어울리는
+  // 한글 메인은 본문 Pretendard. 여기는 body 14 + 500 weight 로 무난한 명료함.
+  subScreenTitle: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.15,
+  },
+  subScreenGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    // 2026-06-15 (build 27 fix iteration) — UX FIX 2: 22 → 20.
+    // DESIGN.md L154 (4px 배수, 20 = 5×) + L156 (콘텐츠 좌우 20px) 정합.
+    // cardWidth 산식도 같이 정정 (위 L1264).
+    paddingHorizontal: 20,
+    paddingTop: spacing.lg,
+    gap: 12, // row/column 통합 gap. RN 0.71+ 지원.
+  },
+  subScreenCard: {
+    // width 는 inline (cardWidth) 으로 주입. grid item.
+  },
+  subScreenPosterWrap: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 8,
+  },
+  subScreenItemTitle: {
+    color: colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 17,
+  },
+  subScreenItemYear: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: fonts.data,
+    marginTop: 2,
   },
 });

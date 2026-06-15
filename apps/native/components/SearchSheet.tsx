@@ -649,8 +649,13 @@ function IdleContent({
         </View>
       )}
       {trending.length > 0 && (
-        <View accessibilityLabel="지금 떠오르는" style={styles.trendingSection}>
-          <Text style={styles.sectionHead}>TRENDING · 지금 떠오르는</Text>
+        <View accessibilityLabel="지금 검색해볼 만한 제안" style={styles.trendingSection}>
+          {/* 2026-06-15 (build 27) — 사용자 피드백: "TRENDING · 지금 떠오르는" 이
+              랜덤하게 느껴짐 + ALL CAPS 가 Quiet Ink 톤과 어긋남. "제안" 의미를
+              유지하면서 sentence-case 한글 톤으로 정합. RECENT 는 영문 약어로
+              uppercase 정당 — 둘의 위계는 weight/color 로 유지하므로 RECENT 는
+              건드리지 않음 (사용자 결정 영역). */}
+          <Text style={styles.sectionHeadAlt}>제안 · 지금 검색해볼 만한</Text>
           <View style={styles.chipRow}>
             {trending.slice(0, 6).map((t) => (
               <TrendingChip
@@ -1078,6 +1083,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1.3,
     textTransform: 'uppercase',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs + 2,
+  },
+  // 2026-06-15 (build 27) — 한글 sentence-case head. uppercase / 0.12em+ 자간 미사용.
+  // letterSpacing 0.02em (≈0.22) — DESIGN.md xs(11px) 토큰의 0.02em 정합.
+  // weight 500 / color textSecondary — RECENT(600/primary) 보다 한 단계 옅게.
+  // Trending 보다 검색 hint 톤에 가깝게 — "제안" 어휘와 정합.
+  sectionHeadAlt: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.22,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs + 2,

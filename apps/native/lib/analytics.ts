@@ -124,6 +124,11 @@ export type NekoEvent =
   | 'card_not_interested'
   | 'detail_opened'
   | 'detail_related_clicked'
+  // 2026-06-15 (build 27) — DetailSheet history navigation (← / →)
+  | 'detail_history_back'
+  | 'detail_history_forward'
+  // 2026-06-15 (build 27) — RelatedRow "더보기 →" 풀스크린 sub-screen 진입
+  | 'detail_related_more_opened'
   // 위임 O — Cast 클릭 → 검색 진입
   | 'detail_cast_clicked'
   | 'detail_to_search_person'
