@@ -116,6 +116,9 @@ export type NekoEvent =
   // 프로필
   | "profile_viewed"
   | "data_reset"
+  // 2026-06-15 (build 27) — Profile 구독 OTT 변경 (onboarding step 9 후속 편집 UI).
+  // payload: { provider_id, on, total_selected }. 다음 추천 호출 시 자연스럽게 반영.
+  | "profile_ott_toggled"
   // 페르소나
   | "persona_switched"
   | "persona_created"

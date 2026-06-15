@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -16,13 +17,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useFocusEffect, router } from 'expo-router';
 import Constants from 'expo-constants';
+import { getOTTIcon } from '@neq/core';
 import {
   getSaved,
   getWatchReports,
   getWatchStats,
   getDeviceId,
   clearAllUserData,
+  getAccountPrefs,
+  setSubscribedOtt,
 } from '../lib/store';
+import { OTT_OPTIONS } from '../components/onboarding/data';
 import { wipeCloudData } from '../lib/sync';
 import {
   calcMonthlyWatch,
@@ -65,6 +70,24 @@ interface Stats {
  */
 const MONTHLY_BAR_EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
+// OTT_OPTIONS.id → @neq/core providers 키 매핑.
+// `OnboardingStepOTT.tsx` 와 동일. 매칭 안 되면 short text placeholder 폴백.
+const OTT_ICON_LOOKUP: Record<string, string> = {
+  netflix: 'Netflix',
+  tving: 'TVING',
+  wavve: 'wavve',
+  watcha: 'Watcha',
+  disney: 'Disney Plus',
+  apple: 'Apple TV Plus',
+  coupang: 'Coupang Play',
+};
+
+// Profile OTT 변경 섹션 — comingSoon (Coupang Play) 자동 제외.
+// onboarding step 9 의 정합 로직 (`OnboardingStepOTT.tsx:39-44`) 과 동일.
+const COMING_SOON_PROVIDER_IDS = new Set(
+  OTT_OPTIONS.filter((o) => o.comingSoon).map((o) => o.providerId),
+);
+
 function MonthlyBar({
   heightPx,
   color,
@@ -106,13 +129,19 @@ export default function ProfileScreen() {
   const [deviceId, setDeviceId] = useState('');
   // 헤더 search 버튼 → SearchSheet 자체 마운트 (web `profile/page.tsx` 정합).
   const [searchOpen, setSearchOpen] = useState(false);
+  // 구독 OTT — onboarding step 9 에서 수집된 provider ids. Profile 에서 변경 가능.
+  // 다음 추천 호출 시 자동 반영 (즉시 refetch 안 함).
+  const [subscribedOtt, setSubscribedOttState] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   const refresh = useCallback(async () => {
-    const [saved, reports, s, did] = await Promise.all([
+    const [saved, reports, s, did, prefs] = await Promise.all([
       getSaved(),
       getWatchReports(),
       getWatchStats(),
       getDeviceId(),
+      getAccountPrefs(),
     ]);
 
     setSavedCount(saved.length);
@@ -120,6 +149,12 @@ export default function ProfileScreen() {
     setStats(s);
     setReportsRaw(reports);
     setDeviceId(did);
+    // comingSoon 자동 제외 (재진입 시 안전 — `OnboardingStepOTT.tsx:39-44` 정합).
+    setSubscribedOttState(
+      new Set(
+        prefs.subscribedOtt.filter((id) => !COMING_SOON_PROVIDER_IDS.has(id)),
+      ),
+    );
 
     // 좋아한 작품: loved/good reaction + saved에 있는 것
     const lovedGoodIds = new Set(
@@ -191,6 +226,26 @@ export default function ProfileScreen() {
       // 회귀 (iOS QA). 명시 refresh 로 AsyncStorage 재read.
       void personaRefresh();
     }, [refresh, personaRefresh]),
+  );
+
+  // OTT 토글 → 즉시 저장 (디바운스 X, AsyncStorage 단일 키 갱신은 빠름).
+  // 추천에 미치는 영향은 다음 `/api/recommend` 호출 시 자연스럽게 반영.
+  const toggleOtt = useCallback(
+    async (providerId: number) => {
+      const next = new Set(subscribedOtt);
+      const on = next.has(providerId);
+      if (on) next.delete(providerId);
+      else next.add(providerId);
+      setSubscribedOttState(next);
+      const arr = Array.from(next);
+      await setSubscribedOtt(arr);
+      track('profile_ott_toggled', {
+        provider_id: providerId,
+        on: !on,
+        total_selected: arr.length,
+      });
+    },
+    [subscribedOtt],
   );
 
   function handleReset() {
@@ -314,7 +369,7 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>시청 기록</Text>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{savedCount}</Text>
+              <Text style={[styles.statValue, styles.statValueAccent]}>{savedCount}</Text>
               <Text style={styles.statLabel}>저장한 작품</Text>
             </View>
             <View style={styles.statCard}>
@@ -371,6 +426,99 @@ export default function ProfileScreen() {
             labelWidth={72}
           />
         )}
+
+        {/* 구독 OTT — onboarding step 9 에서 수집한 `subscribedOtt` 변경 섹션 (2026-06-15).
+            추천 LLM 프롬프트의 약한 신호 (`apps/web/src/lib/ranking.ts:287-291`) 로 사용.
+            토글 → 즉시 AsyncStorage 갱신, 다음 추천 호출 시 자연스럽게 반영.
+            Coupang Play 는 `comingSoon: true` → disabled + "곧 지원" 라벨 (정합).
+            amber 카운트: 섹션 1건으로 셈 (선택된 row 갯수 무관, DESIGN.md L34). */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>구독 OTT</Text>
+          <Text style={styles.ottHint}>
+            구독 중인 OTT를 알려 주시면 추천에 살짝 반영해요
+          </Text>
+          <View style={styles.ottList}>
+            {OTT_OPTIONS.map((o) => {
+              const on = subscribedOtt.has(o.providerId);
+              const isComingSoon = o.comingSoon === true;
+              const lookupName = OTT_ICON_LOOKUP[o.id];
+              const iconUrl = lookupName ? getOTTIcon(lookupName) : null;
+              return (
+                <Pressable
+                  key={o.id}
+                  onPress={() => {
+                    if (isComingSoon) return;
+                    void toggleOtt(o.providerId);
+                  }}
+                  accessibilityRole="switch"
+                  accessibilityState={{
+                    checked: on,
+                    disabled: isComingSoon,
+                  }}
+                  accessibilityLabel={
+                    isComingSoon ? `${o.name} (곧 지원)` : o.name
+                  }
+                  accessibilityHint={
+                    isComingSoon
+                      ? undefined
+                      : on
+                        ? '탭하면 구독 해제'
+                        : '탭하면 구독 추가'
+                  }
+                  style={({ pressed }) => [
+                    styles.ottRow,
+                    {
+                      backgroundColor: on
+                        ? colors.surfaceRaised
+                        : colors.surface,
+                      borderColor: on ? colors.accent : colors.border,
+                      opacity: isComingSoon ? 0.5 : pressed ? 0.92 : 1,
+                    },
+                  ]}
+                >
+                  {iconUrl ? (
+                    <View
+                      style={[
+                        styles.ottLogo,
+                        { backgroundColor: colors.surfaceRaised },
+                      ]}
+                    >
+                      <Image
+                        source={{ uri: iconUrl }}
+                        style={styles.ottLogoImage}
+                        contentFit="contain"
+                        transition={0}
+                        accessibilityLabel={o.name}
+                      />
+                    </View>
+                  ) : (
+                    <View
+                      style={[styles.ottLogo, { backgroundColor: o.color }]}
+                    >
+                      <Text style={styles.ottLogoLabel}>{o.short}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.ottRowName}>{o.name}</Text>
+                  {isComingSoon ? (
+                    <Text style={styles.ottComingSoon}>곧 지원</Text>
+                  ) : (
+                    <View
+                      style={[
+                        styles.ottCheck,
+                        {
+                          backgroundColor: on ? colors.accent : 'transparent',
+                          borderColor: on ? colors.accent : colors.border,
+                        },
+                      ]}
+                    >
+                      {on && <Text style={styles.ottCheckMark}>✓</Text>}
+                    </View>
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         {/* W5 Task F — 월별 시청 분포 (web `InsightSections.tsx:189-240` 정합).
             최근 12개월 막대 차트. reports.total === 0 일 때 섹션 숨김.
@@ -555,11 +703,16 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     ...shadowsNative.sm,
   },
+  // 2026-06-15 (build 27 Phase 8 fix) — UX 리뷰 amber #13 정합 (Saved L464 패턴).
+  // 정적 amber 카운트 4 한계 회복: 저장한 작품(브랜드 닻)만 amber 유지, 시청 리포트 primary 박탈.
   statValue: {
-    color: colors.accent,
+    color: colors.textPrimary,
     fontSize: 28,
     // 2026-04-29 fontsV2 — data = Geist Mono. web 통계 숫자 정합.
     fontFamily: fontsV2.data,
+  },
+  statValueAccent: {
+    color: colors.accent,
   },
   statLabel: {
     color: colors.textMuted,
@@ -635,6 +788,64 @@ const styles = StyleSheet.create({
   monthlyFooterAccent: {
     color: colors.accent,
     fontWeight: '600',
+  },
+  // 구독 OTT 섹션 (2026-06-15) — onboarding step 9 (`OnboardingStepOTT.tsx`)
+  // 의 row 스타일 정합. 헤딩만 sectionTitle 패턴 (uppercase + tracking) 으로 통일.
+  ottHint: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -spacing.xs,
+    marginBottom: spacing.sm + 4,
+  },
+  ottList: {
+    gap: spacing.sm,
+  },
+  ottRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  ottLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  ottLogoImage: {
+    width: 28,
+    height: 28,
+  },
+  ottLogoLabel: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  ottRowName: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  ottCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ottCheckMark: { color: colors.bg, fontSize: 12 },
+  ottComingSoon: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '500',
   },
   resetBtn: {
     flexDirection: 'row',
