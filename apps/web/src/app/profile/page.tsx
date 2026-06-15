@@ -23,6 +23,7 @@ import {
 import PersonaSection from "@/components/profile/PersonaSection";
 import InsightSections from "@/components/profile/InsightSections";
 import NewPersonaSheet from "@/components/profile/NewPersonaSheet";
+import SubscribedOttSection from "@/components/profile/SubscribedOttSection";
 import PersonaSurveyController from "@/components/onboarding/PersonaSurveyController";
 
 const PERSONA_SURVEY_V2_ENABLED =
@@ -162,6 +163,10 @@ export default function ProfilePage() {
           ottDist={ottDist}
           monthly={monthly}
         />
+
+        {/* 2026-06-15 (build 27 follow-up) — 구독 OTT 변경 섹션 (native 정합).
+            데이터 레이어 재사용 (account-prefs), 토글 즉시 저장. */}
+        <SubscribedOttSection />
 
         {/* 설정 */}
         <section className="px-5 mb-6">

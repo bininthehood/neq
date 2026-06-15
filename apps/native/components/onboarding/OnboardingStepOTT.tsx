@@ -11,6 +11,7 @@ import { getOTTIcon } from '@neq/core';
 import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
 import { setSubscribedOtt } from '../../lib/store';
 import { OTT_OPTIONS } from './data';
+import { IconCheck } from '../Icons';
 
 // OTT_OPTIONS.id → @neq/core providers 키 매핑.
 // web `apps/web/src/components/onboarding/OnboardingStepOTT.tsx` 와 동일.
@@ -127,7 +128,7 @@ export default function OnboardingStepOTT({
                     },
                   ]}
                 >
-                  {on && <Text style={styles.checkMark}>✓</Text>}
+                  {on && <IconCheck size={12} color={colors.bg} />}
                 </View>
               )}
             </Pressable>
@@ -231,7 +232,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkMark: { color: colors.bg, fontSize: 12 },
   comingSoonLabel: {
     color: colors.textMuted,
     fontSize: 11,

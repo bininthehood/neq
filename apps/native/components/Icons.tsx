@@ -162,6 +162,25 @@ export function IconChevronRight({ size = 18, color = '#000' }: IconProps) {
   );
 }
 
+// 2026-06-15 (build 27 follow-up) — Genre/OTT row check 마크 SVG.
+// DESIGN.md L466 (2026-05-13) 결정 — raw `✓` 글리프 → IconCheck SVG.
+// Chevron 들과 동일 polyline + strokeWidth 2 + round terminals 패턴.
+// viewBox 24, 작은 크기 사용 위해 default size 12. anti-slop #7 (이모지 사용) 정합.
+export function IconCheck({ size = 12, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Polyline
+        points="5 13 10 18 19 7"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+    </Svg>
+  );
+}
+
 // 2026-05-20 — FilterChips / SavedFilters 공용 chevron. web `▾` 글리프 (fontSize 11)
 // 가 native 시스템 폰트에서 작고 흐릿하게 렌더 → 가독성 부족. SVG polyline 으로
 // 명확한 v 모양 + 적절한 크기. SavedFilters 의 자체 IconChevronDown 도 향후 이걸로 통일.

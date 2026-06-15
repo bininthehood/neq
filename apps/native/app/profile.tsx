@@ -41,7 +41,7 @@ import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
 import SearchSheet from '../components/SearchSheet';
 import DistributionChart from '../components/DistributionChart';
-import { IconClose, IconSearch } from '../components/Icons';
+import { IconClose, IconSearch, IconCheck } from '../components/Icons';
 import { track } from '../lib/analytics';
 
 /**
@@ -511,7 +511,7 @@ export default function ProfileScreen() {
                         },
                       ]}
                     >
-                      {on && <Text style={styles.ottCheckMark}>✓</Text>}
+                      {on && <IconCheck size={12} color={colors.bg} />}
                     </View>
                   )}
                 </Pressable>
@@ -728,7 +728,9 @@ const styles = StyleSheet.create({
   reactionText: {
     fontSize: 12,
   },
-  reactionLoved: { color: colors.accent },
+  // 2026-06-15 (build 27 follow-up) — UX 리뷰 FOLLOW-UP: amber 박탈.
+  // 인생작 동시 노출 시 6번째 cluster 차단 (Saved L464 reaction loved 박탈 패턴 정합).
+  reactionLoved: { color: colors.textPrimary },
   reactionGood: { color: colors.textSecondary },
   reactionMeh: { color: colors.textMuted },
   reactionDropped: { color: colors.danger },
@@ -841,7 +843,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ottCheckMark: { color: colors.bg, fontSize: 12 },
   ottComingSoon: {
     color: colors.textMuted,
     fontSize: 11,
