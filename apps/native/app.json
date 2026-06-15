@@ -16,12 +16,14 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.neq.app",
-      "buildNumber": "26",
+      "buildNumber": "27",
       "associatedDomains": [
         "applinks:neq.me"
       ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleDevelopmentRegion": "ko",
+        "CFBundleLocalizations": ["ko"]
       }
     },
     "android": {
@@ -62,6 +64,9 @@
       "expo-font",
       "expo-secure-store"
     ],
+    "locales": {
+      "ko": "./locales/ko.json"
+    },
     "experiments": {
       "typedRoutes": true
     },
