@@ -2,7 +2,7 @@
  * PostHog readiness 잔여 P0 진단 (2026-06-11).
  *
  * 목적: release-readiness-result.md 의 2건 ❌ 원인 분리
- *  1) recommendation_failed 6.76% (25/345) — fail_reason 분포
+ *  1) recommendation_failed 6.76% (25/345) — reason 분포
  *     사용자 측 (네트워크/취소) vs 코드 측 (LLM null / TMDB miss)
  *  2) 온보딩 completion 1.1% (32/2966) — 측정 정의 검증
  *     2966 started 비현실. autocapture noise / 봇 / event 정의 mismatch 의심
@@ -42,16 +42,16 @@ async function hogQL(label: string, query: string): Promise<HogQLResult> {
   return (await res.json()) as HogQLResult;
 }
 
-// ── A) recommendation_failed fail_reason 분포 (7일)
+// ── A) recommendation_failed reason 분포 (7일)
 const Q_FAIL_REASON = `
 SELECT
-  coalesce(properties.fail_reason, '(none)') AS fail_reason,
+  coalesce(properties.reason, '(none)') AS reason,
   coalesce(properties.\$lib, 'unknown') AS lib,
   count(*) AS n
 FROM events
 WHERE event = 'recommendation_failed'
   AND timestamp >= now() - INTERVAL 7 DAY
-GROUP BY fail_reason, lib
+GROUP BY reason, lib
 ORDER BY n DESC
 `;
 
@@ -161,7 +161,7 @@ function fmt(v: unknown, suffix = ""): string {
 async function main() {
   const [rFail, rFailKeys, rStarted, rCompleted, rStartedDaily, rTopDistinct, rCompletedDaily, rUniqFunnel] =
     await Promise.all([
-      hogQL("fail_reason", Q_FAIL_REASON),
+      hogQL("reason", Q_FAIL_REASON),
       hogQL("fail_keys", Q_FAIL_KEYS),
       hogQL("onb_started", Q_ONB_STARTED_PROFILE),
       hogQL("onb_completed", Q_ONB_COMPLETED_PROFILE),
@@ -181,13 +181,13 @@ async function main() {
   lines.push("> 2) 온보딩 completion 1.1% (32/2966)");
   lines.push("");
 
-  // A. fail_reason 분포
-  lines.push("## A) recommendation_failed fail_reason × lib (7일)");
+  // A. reason 분포
+  lines.push("## A) recommendation_failed reason × lib (7일)");
   lines.push("");
   if (rFail.results.length === 0) {
     lines.push("_no recommendation_failed events in last 7d_");
   } else {
-    lines.push("| fail_reason | lib | n |");
+    lines.push("| reason | lib | n |");
     lines.push("|---|---|---|");
     for (const row of rFail.results) {
       const [reason, lib, n] = row;
@@ -196,7 +196,7 @@ async function main() {
   }
   lines.push("");
   lines.push("**판정 가이드:**");
-  lines.push("- `(none)` 대부분 → fail_reason property 누락 (코드 수정 필요)");
+  lines.push("- `(none)` 대부분 → reason property 누락 (코드 수정 필요)");
   lines.push("- `network` / `timeout` / `aborted` 다수 → 사용자 측 (false alarm 비중 큼)");
   lines.push("- `llm_null` / `no_recommendations` / `tmdb_miss` 다수 → 코드 측 (fix wave 필요)");
   lines.push("");
@@ -215,7 +215,7 @@ async function main() {
     }
   }
   lines.push("");
-  lines.push("**판정 가이드:** `fail_reason` 키가 모든 row 에 있는지 확인. 없으면 instrumentation gap.");
+  lines.push("**판정 가이드:** `reason` 키가 모든 row 에 있는지 확인. 없으면 instrumentation gap.");
   lines.push("");
 
   // C. onboarding_started profile by lib

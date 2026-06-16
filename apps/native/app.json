@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.neq.app",
-      "buildNumber": "29",
+      "buildNumber": "30",
       "associatedDomains": [
         "applinks:neq.me"
       ],
