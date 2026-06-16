@@ -11,7 +11,6 @@ import OnboardingStepHello from '../../components/onboarding/OnboardingStepHello
 import OnboardingStepTaste from '../../components/onboarding/OnboardingStepTaste';
 import PersonaSurveyController from '../../components/onboarding/PersonaSurveyController';
 import OnboardingStepOTT from '../../components/onboarding/OnboardingStepOTT';
-import OnboardingStepNotify from '../../components/onboarding/OnboardingStepNotify';
 import {
   STEP_LABELS,
   TOTAL_STEPS,
@@ -28,18 +27,19 @@ import {
  */
 
 /**
- * Onboarding V2 (D4a, native) — 6단계 router.
+ * Onboarding V2 (D4a, native) — 5단계 router.
  *
- * 단계: welcome → hello → genre → taste → ott → notify → /onboarding/complete
+ * 단계: welcome → hello → genre → persona → ott → /onboarding/complete
  *  - 'genre' = 장르 칩 3개 선택 (구 OnboardingStepTaste 의미 유지)
- *  - 'taste' = 작품 3-5개 선택 (web `OnboardingStepTaste` 정합, 신규 추가 2026-05-18)
+ *  - 'persona' = Persona v2 동적 설문 (controller sub-step 5종 포함)
  *  - 각 단계 진입 시 `onboarding_step_viewed` 발사
  *  - 각 단계 완료 시 `onboarding_step_completed` (duration_ms)
  *  - 마지막 단계 완료 시 `onboarding_completed` (전체 duration + 카운트)
  *
  * account_prefs 저장은 각 단계 컴포넌트 내부에서 즉시 수행 (사용자 도중 종료해도 보존).
  *
- * Q4=A: native Notify 단계 토글은 활성화하되 "iOS 출시 후 활성화" 라벨 + push 발급 X.
+ * 2026-06-16: notify 단계 제거. 알림 인프라 disabled 로 사용자에게 토글 약속만 노출되는
+ * 문제 차단. 활성화 시점 결정되면 설정 화면 또는 onboarding 재도입.
  *
  * 진입 경로 (W5 Task A):
  *  - `finalize()` 에서 `setOnboarded()` 호출 → AsyncStorage 'neq_onboarded' = 'true'.
@@ -64,7 +64,7 @@ export default function OnboardingScreen() {
     track('onboarding_started');
   }, []);
 
-  // persona step 을 떠나면 personaSubStep 리셋 — 다시 들어왔을 때 헤더 stale 회귀 차단.
+  // persona step (index 3) 을 떠나면 personaSubStep 리셋 — 다시 들어왔을 때 헤더 stale 회귀 차단.
   useEffect(() => {
     if (lastViewedStepRef.current === step) return;
     lastViewedStepRef.current = step;
@@ -102,10 +102,6 @@ export default function OnboardingScreen() {
       duration_ms: totalDuration,
       tasteGenres_count: prefs.tasteGenres.length,
       subscribedOtt_count: prefs.subscribedOtt.length,
-      notify_weekly: prefs.notificationPrefs.weeklyRec,
-      notify_new_release: prefs.notificationPrefs.newRelease,
-      notify_ott_expiry: prefs.notificationPrefs.ottExpiry,
-      notify_monthly_report: prefs.notificationPrefs.monthlyReport,
     });
 
     await setOnboarded();
@@ -123,11 +119,11 @@ export default function OnboardingScreen() {
     <>
       <Stack.Screen options={{ headerShown: false }} />
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* 통합 10단계 progress (모든 step 에서 동일 StepHeader 사용):
+        {/* 통합 9단계 progress (모든 step 에서 동일 StepHeader 사용):
             - welcome(0)/hello(1)/genre(2) → 1·2·3
             - persona(3) sub-step (1~5) → 4·5·6·7·8 (Controller 가 onSubStepChange
               callback 으로 personaSubStep 갱신)
-            - ott(4)/notify(5) → 9·10
+            - ott(4) → 9
             persona step 에서 뒤로가기 = subStep 1 (context_select) 일 때만 onboarding
             goBack (Genre 복귀). 그 외엔 controller 내부 phase 뒤로 미지원 → hide.
             건너뛰기 UI 는 제품 결정으로 제거 — 정적 풀 (트랙 B) 로 LLM 행 안전망 대체. */}
@@ -155,7 +151,6 @@ export default function OnboardingScreen() {
             />
           )}
           {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
-          {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
         </View>
       </SafeAreaView>
     </>

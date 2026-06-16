@@ -176,7 +176,9 @@ export async function tapWithRetry(
  *
  * 흐름은 hybrid-onboarding-2026-05-27.test.ts (H1) 의 happy path 와 동일:
  *   welcome → hello (이름 skip 가능) → genre → persona context → persona skip
- *   → ott (나중에 설정) → notify (받지 않기) → discover
+ *   → ott (시작하기 또는 나중에 설정) → discover
+ *
+ * 2026-06-16: notify 단계 제거. OTT 가 마지막 단계 → CTA "시작하기".
  *
  * 반환:
  *   true  — Discover 도달 (또는 진입 시점에 이미 onboarded)
@@ -314,7 +316,7 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
   await tapByLabel('맞아요');
   await browser.pause(1500);
 
-  // (10) OTT — 나중에 설정 우선, fallback Netflix + 다음
+  // (10) OTT — 마지막 단계. 나중에 설정 우선, fallback Netflix + 시작하기.
   const ottReached =
     (await waitForLabel('Netflix', 8000)) ||
     (await waitForLabel('TVING', 5000)) ||
@@ -326,23 +328,17 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
   if (!(await tapByLabel('나중에 설정'))) {
     await tapByLabel('Netflix');
     await browser.pause(300);
-    await tapByLabel('다음');
+    // OTT 가 최종 step → CTA "시작하기". 구 빌드 ("다음" 사용) fallback 유지.
+    if (
+      !(await tapByLabel('시작하기', { timeout: 2000 })) &&
+      !(await tapByLabel('다음', { timeout: 1500 }))
+    ) {
+      console.warn('ensureOnboarded: OTT 단계 CTA tap 실패');
+      return false;
+    }
   }
 
-  // (11) Notify — CTA 라벨 "시작하기" (OnboardingStepNotify.tsx:103, 마지막 step 이라
-  // "다음" 대신 "시작하기" 사용). Welcome 의 "시작하기" 와 라벨 동일하나 Stack unmount
-  // 로 실제 매칭은 Notify 화면 button 1개. 구 디자인 fallback ("알림 받지 않기" / "다음") 도 유지.
-  await browser.pause(1500);
-  if (
-    !(await tapByLabel('시작하기', { timeout: 3000 })) &&
-    !(await tapByLabel('알림 받지 않기', { timeout: 1500 })) &&
-    !(await tapByLabel('다음', { timeout: 1500 }))
-  ) {
-    console.warn('ensureOnboarded: notify 단계 진행 실패');
-    return false;
-  }
-
-  // (12) Discover 도달 확인
+  // (11) Discover 도달 확인
   await browser.pause(3000);
   return (
     (await pageSourceContains('발견')) ||

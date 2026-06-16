@@ -6,14 +6,16 @@
  * flag (`NEXT_PUBLIC_ONBOARDING_V2`) ON 시 `apps/web/src/app/onboarding/page.tsx` 가
  * 본 컴포넌트를 mount. flag OFF 면 V1 단일 단계 그대로 사용 (회귀 0).
  *
- * 단계: welcome → hello → taste → ott → notify → /onboarding/complete
+ * 단계: welcome → hello → genre → persona → ott → /onboarding/complete
  *  - 각 단계 진입 시 `onboarding_step_viewed` 발사
  *  - 각 단계 완료 시 `onboarding_step_completed` (duration_ms 포함)
  *  - 마지막 단계 완료 시 `onboarding_completed` (전체 duration + 카운트)
  *
  * account_prefs 저장은 각 단계 컴포넌트 내부에서 즉시 수행 (사용자 도중 종료해도 보존).
  *
- * 디자인 산출물 NekoOnboarding 함수 매핑.
+ * 2026-06-16: notify 단계 제거. 알림 인프라 disabled
+ *   (NEXT_PUBLIC_NOTIFICATIONS_ENABLED=false + VAPID 키 미설정) 로 사용자에게 토글
+ *   약속만 노출되는 문제 차단. 활성화 시점 결정되면 설정 화면 또는 onboarding 재도입.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -27,7 +29,6 @@ import OnboardingStepHello from "./OnboardingStepHello";
 import OnboardingStepGenre from "./OnboardingStepGenre";
 import PersonaSurveyController from "./PersonaSurveyController";
 import OnboardingStepOTT from "./OnboardingStepOTT";
-import OnboardingStepNotify from "./OnboardingStepNotify";
 import {
   STEP_LABELS,
   TOTAL_STEPS,
@@ -110,10 +111,6 @@ export default function OnboardingV2Controller() {
       duration_ms: totalDuration,
       tasteGenres_count: prefs.tasteGenres.length,
       subscribedOtt_count: prefs.subscribedOtt.length,
-      notify_weekly: prefs.notificationPrefs.weeklyRec,
-      notify_new_release: prefs.notificationPrefs.newRelease,
-      notify_ott_expiry: prefs.notificationPrefs.ottExpiry,
-      notify_monthly_report: prefs.notificationPrefs.monthlyReport,
     });
 
     // V1 호환: persona.refresh + onboarding 완료 시각 기록
@@ -182,7 +179,6 @@ export default function OnboardingV2Controller() {
         />
       )}
       {step === 4 && <OnboardingStepOTT onNext={() => goNext()} />}
-      {step === 5 && <OnboardingStepNotify onNext={() => goNext()} />}
     </div>
   );
 }

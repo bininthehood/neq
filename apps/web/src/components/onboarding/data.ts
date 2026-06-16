@@ -2,8 +2,10 @@
  * Onboarding V2 (D4a) — 5단계 정적 데이터.
  *
  * 디자인 산출물 `_workspace/design-handoff/_incoming/neq-design/project/neko-onboarding.jsx`
- * 의 GENRE_CHIPS / OTTS_LIST / NOTIF_OPTIONS 와 1:1 매칭. id/slug 는 LLM 입력
+ * 의 GENRE_CHIPS / OTTS_LIST 와 1:1 매칭. id/slug 는 LLM 입력
  * (`apps/web/src/lib/account-prefs.ts` tasteGenres) 과 TMDB provider id 와 호환.
+ *
+ * 2026-06-16: NOTIF_OPTIONS 제거 (notify 단계 폐기 — 알림 인프라 disabled).
  *
  * 스펙: _workspace/onboarding-v2-spec.md §1.2 (AccountPrefs)
  */
@@ -27,13 +29,6 @@ export interface OttOption {
    * 2026-06-11 출시 D-7 추가. 추후 데이터 공급 또는 직접 매핑 구현 시 false 또는 필드 제거.
    */
   comingSoon?: boolean;
-}
-
-export interface NotifOption {
-  id: 'weeklyRec' | 'newRelease' | 'ottExpiry' | 'monthlyReport';
-  title: string;
-  desc: string;
-  defaultOn: boolean;
 }
 
 // 디자인 산출물 GENRE_CHIPS 와 동일 (15종) + TMDB movie genre id 매핑.
@@ -79,23 +74,19 @@ export const OTT_OPTIONS: OttOption[] = [
   { id: 'coupang', providerId: 356,  name: 'Coupang Play',short: 'C',  color: '#A335EE', comingSoon: true },
 ];
 
-export const NOTIF_OPTIONS: NotifOption[] = [
-  { id: 'weeklyRec',     title: '주간 추천',     desc: '매주 월요일 아침, 취향에 맞는 작품 5개', defaultOn: true },
-  { id: 'newRelease',    title: '새 작품 알림',  desc: '저장한 감독·배우의 새 작품이 공개될 때',   defaultOn: true },
-  { id: 'ottExpiry',     title: 'OTT 만료',      desc: '저장한 작품이 OTT에서 곧 내려갈 때',      defaultOn: false },
-  { id: 'monthlyReport', title: '월간 리포트',   desc: '매월 1일, 한 달간 본 작품 요약',          defaultOn: true },
-];
-
 /**
  * 단계 라벨 — 진행률/PostHog 이벤트 step prop 에 사용.
  * 2026-05-26: taste (작품선택) 제거 + persona (Persona v2 동적 설문) 추가.
  * Persona v2 흐름이 favorites_pick step 자체 포함 → 별도 작품선택 단계 중복 제거.
+ * 2026-06-16: notify (알림 체크리스트) 제거. 알림 인프라 disabled
+ *   (NEXT_PUBLIC_NOTIFICATIONS_ENABLED=false + VAPID 키 미설정) 상태에서 사용자에게
+ *   토글 약속만 노출되는 문제 차단. 활성화 시점 결정되면 설정 화면 또는 onboarding 재도입.
  * native data.ts 와 동기화 필수.
  */
-export const STEP_LABELS = ['welcome', 'hello', 'genre', 'persona', 'ott', 'notify'] as const;
+export const STEP_LABELS = ['welcome', 'hello', 'genre', 'persona', 'ott'] as const;
 export type StepKey = typeof STEP_LABELS[number];
 
-export const TOTAL_STEPS = 6;
+export const TOTAL_STEPS = 5;
 
 /**
  * persona step 의 sub-step 개수 (context_select / step1 / step2-or-3 / favorites_pick / summary).
@@ -115,7 +106,7 @@ export const UNIFIED_TOTAL_STEPS = TOTAL_STEPS + PERSONA_SUB_STEPS - 1;
  * StepHeader 의 0-indexed `current` 값 계산 — step 과 personaSubStep 으로부터.
  * - step < PERSONA_INDEX: 그대로 (welcome=0 / hello=1 / genre=2)
  * - step === PERSONA_INDEX: PERSONA_INDEX + (personaSubStep - 1) → 3..7
- * - step > PERSONA_INDEX: step + (PERSONA_SUB_STEPS - 1) → ott=8 / notify=9
+ * - step > PERSONA_INDEX: step + (PERSONA_SUB_STEPS - 1) → ott=8
  */
 export function computeUnifiedHeaderCurrent(step: number, personaSubStep: number): number {
   const personaIdx = STEP_LABELS.indexOf('persona');

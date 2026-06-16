@@ -4,15 +4,15 @@
  * 디자인 산출물 spec 과 LLM 입력 호환성을 보장하기 위한 가드.
  * - GENRE_CHIPS: 디자인 산출물 15종 동일 + id 가 LLM 프롬프트 slug 와 호환
  * - OTT_OPTIONS: TMDB provider id 가 KR region 실제 id 와 일치
- * - NOTIF_OPTIONS: NotificationPrefs 필드명과 1:1 매칭 (id == prefs key)
- * - STEP_LABELS: 5단계 + 순서 (welcome → ... → notify)
+ * - STEP_LABELS: 5단계 + 순서 (welcome → hello → genre → persona → ott)
+ *
+ * 2026-06-16: NOTIF_OPTIONS / notify 단계 제거 (알림 인프라 disabled).
  */
 
 import { describe, it, expect } from "vitest";
 import {
   GENRE_CHIPS,
   OTT_OPTIONS,
-  NOTIF_OPTIONS,
   STEP_LABELS,
   TOTAL_STEPS,
   PERSONA_SUB_STEPS,
@@ -75,47 +75,15 @@ describe("OTT_OPTIONS", () => {
   });
 });
 
-describe("NOTIF_OPTIONS", () => {
-  it("4종 (weeklyRec/newRelease/ottExpiry/monthlyReport) 알림", () => {
-    expect(NOTIF_OPTIONS).toHaveLength(4);
-    const ids = NOTIF_OPTIONS.map((n) => n.id).sort();
-    expect(ids).toEqual([
-      "monthlyReport",
-      "newRelease",
-      "ottExpiry",
-      "weeklyRec",
-    ]);
-  });
-
-  it("id 가 NotificationPrefs 의 key 와 1:1 매칭한다", () => {
-    // updateNotificationPrefs 호출 시 직접 key 로 사용 — 오타 방지
-    const requiredKeys = ["weeklyRec", "newRelease", "ottExpiry", "monthlyReport"];
-    const ids = NOTIF_OPTIONS.map((n) => n.id);
-    for (const k of requiredKeys) {
-      expect(ids).toContain(k);
-    }
-  });
-
-  it("기본 ON 3건 + OFF 1건 (ottExpiry false)", () => {
-    const onCount = NOTIF_OPTIONS.filter((n) => n.defaultOn).length;
-    const offCount = NOTIF_OPTIONS.filter((n) => !n.defaultOn).length;
-    expect(onCount).toBe(3);
-    expect(offCount).toBe(1);
-    const ottExpiry = NOTIF_OPTIONS.find((n) => n.id === "ottExpiry");
-    expect(ottExpiry?.defaultOn).toBe(false);
-  });
-});
-
 describe("STEP_LABELS / TOTAL_STEPS", () => {
-  it("6단계 + 순서 (welcome → hello → genre → persona → ott → notify)", () => {
-    expect(TOTAL_STEPS).toBe(6);
+  it("5단계 + 순서 (welcome → hello → genre → persona → ott)", () => {
+    expect(TOTAL_STEPS).toBe(5);
     expect(STEP_LABELS).toEqual([
       "welcome",
       "hello",
       "genre",
       "persona",
       "ott",
-      "notify",
     ]);
     expect(STEP_LABELS).toHaveLength(TOTAL_STEPS);
   });
@@ -126,37 +94,35 @@ describe("UNIFIED_TOTAL_STEPS / PERSONA_SUB_STEPS", () => {
     expect(PERSONA_SUB_STEPS).toBe(5);
   });
 
-  it("UNIFIED_TOTAL_STEPS = TOTAL_STEPS + PERSONA_SUB_STEPS - 1 (= 10)", () => {
+  it("UNIFIED_TOTAL_STEPS = TOTAL_STEPS + PERSONA_SUB_STEPS - 1 (= 9)", () => {
     expect(UNIFIED_TOTAL_STEPS).toBe(TOTAL_STEPS + PERSONA_SUB_STEPS - 1);
-    expect(UNIFIED_TOTAL_STEPS).toBe(10);
+    expect(UNIFIED_TOTAL_STEPS).toBe(9);
   });
 });
 
 describe("computeUnifiedHeaderCurrent — 산식 매핑", () => {
   it("step < persona(3) 일 때 step 그대로", () => {
-    expect(computeUnifiedHeaderCurrent(0, 1)).toBe(0); // welcome → 1/10
-    expect(computeUnifiedHeaderCurrent(1, 1)).toBe(1); // hello → 2/10
-    expect(computeUnifiedHeaderCurrent(2, 1)).toBe(2); // genre → 3/10
+    expect(computeUnifiedHeaderCurrent(0, 1)).toBe(0); // welcome → 1/9
+    expect(computeUnifiedHeaderCurrent(1, 1)).toBe(1); // hello → 2/9
+    expect(computeUnifiedHeaderCurrent(2, 1)).toBe(2); // genre → 3/9
   });
 
-  it("step === persona(3) 일 때 sub-step 1~5 → 3..7 매핑 (4/10 ~ 8/10)", () => {
-    expect(computeUnifiedHeaderCurrent(3, 1)).toBe(3); // context_select → 4/10
-    expect(computeUnifiedHeaderCurrent(3, 2)).toBe(4); // step 1 → 5/10
-    expect(computeUnifiedHeaderCurrent(3, 3)).toBe(5); // step 2/3 → 6/10
-    expect(computeUnifiedHeaderCurrent(3, 4)).toBe(6); // favorites → 7/10
-    expect(computeUnifiedHeaderCurrent(3, 5)).toBe(7); // summary → 8/10
+  it("step === persona(3) 일 때 sub-step 1~5 → 3..7 매핑 (4/9 ~ 8/9)", () => {
+    expect(computeUnifiedHeaderCurrent(3, 1)).toBe(3); // context_select → 4/9
+    expect(computeUnifiedHeaderCurrent(3, 2)).toBe(4); // step 1 → 5/9
+    expect(computeUnifiedHeaderCurrent(3, 3)).toBe(5); // step 2/3 → 6/9
+    expect(computeUnifiedHeaderCurrent(3, 4)).toBe(6); // favorites → 7/9
+    expect(computeUnifiedHeaderCurrent(3, 5)).toBe(7); // summary → 8/9
   });
 
   it("step > persona(3) 일 때 step + 4 (= step + (PERSONA_SUB_STEPS - 1))", () => {
-    expect(computeUnifiedHeaderCurrent(4, 1)).toBe(8); // ott → 9/10
-    expect(computeUnifiedHeaderCurrent(5, 1)).toBe(9); // notify → 10/10
+    expect(computeUnifiedHeaderCurrent(4, 1)).toBe(8); // ott → 9/9 (최종)
   });
 
   it("subStep 인자는 step !== persona 일 때 무시된다 (stale subStep 안전 가드)", () => {
     // persona 단계 종료 후 OTT 로 advance 했을 때 personaSubStep 이 stale 5 라도
     // headerCurrent = 4 + (PERSONA_SUB_STEPS-1) = 8 — subStep 영향 받지 않음
     expect(computeUnifiedHeaderCurrent(4, 5)).toBe(8);
-    expect(computeUnifiedHeaderCurrent(5, 5)).toBe(9);
     // step < persona 도 동일
     expect(computeUnifiedHeaderCurrent(2, 5)).toBe(2);
   });

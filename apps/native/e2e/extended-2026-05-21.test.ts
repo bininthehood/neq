@@ -154,7 +154,7 @@ describe('B1 — Onboarding 진입 경로', () => {
     //  - reset entry (b1-01) 가 onboarding 으로 router.replace 한다는 코드 패스 보호
     // 즉 spec 은 entry 존재 (b1-01) 로 충분. 본 step 은 documentation only PASS.
     console.log('Onboarding 진입 경로 코드 패스: profile reset → setOnboarded clear → router.replace');
-    console.log('full walk-through (Welcome→Hello→OTT→Genre→Taste→Notify) 은 destructive 라 별도 트랙');
+    console.log('full walk-through (Welcome→Hello→Genre→Persona→OTT) 은 destructive 라 별도 트랙');
     expect(true).toBe(true);
   });
 });

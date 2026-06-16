@@ -109,14 +109,10 @@ async function main() {
       await findAndTap(browser, '다음');
       await browser.pause(1500);
 
-      // 4. OTT: "나중에 설정"
-      console.log('[qa-w5] ott: 나중에 설정');
+      // 4. OTT (마지막 단계): "나중에 설정" → 곧바로 Bridge + Discover 진입
+      // 2026-06-16: notify 단계 제거. OTT 가 최종.
+      console.log('[qa-w5] ott: 나중에 설정 (완료)');
       await findAndTap(browser, '나중에 설정');
-      await browser.pause(1500);
-
-      // 5. Notify: 시작하기 (완료)
-      console.log('[qa-w5] notify: 시작하기 (완료)');
-      await findAndTap(browser, '시작하기');
       await browser.pause(4000);  // Bridge + Discover 진입
     }
 
@@ -165,10 +161,9 @@ async function main() {
     }
 
     if (scenario === 'bridge-capture') {
-      // OTT skip → Notify 시작하기 → Bridge 진입 캡처 (애니메이션 확인용 — 여러 frame)
+      // OTT skip (마지막 단계) → Bridge 진입 캡처 (애니메이션 확인용 — 여러 frame)
+      // 2026-06-16: notify 단계 제거로 OTT 의 "나중에 설정" 만으로 Bridge 진입.
       try { await findAndTap(browser, '나중에 설정'); } catch {}
-      await browser.pause(1500);
-      try { await findAndTap(browser, '시작하기'); } catch {}
       // Bridge 시점 빠른 캡처 3장
       for (let i = 0; i < 3; i++) {
         await browser.pause(500);

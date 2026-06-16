@@ -3,9 +3,9 @@
  *
  * 검증 범위:
  *   H1  Hybrid happy path — welcome → hello → genre → persona(skip via 우상단 X)
- *       → ott → notify → complete. PR #14 신규 동작 = persona 우상단 X 노출 +
- *       Alert.alert confirm 분기.
- *   H2  StepHeader progress 매핑 — 1/10 ~ 4/10 까지 정수 sequential 확인.
+ *       → ott → complete. PR #14 신규 동작 = persona 우상단 X 노출 +
+ *       Alert.alert confirm 분기. 2026-06-16: notify 단계 제거, OTT 최종.
+ *   H2  StepHeader progress 매핑 — 1/9 ~ 4/9 까지 정수 sequential 확인.
  *       persona subStep≥2 진입 시점에 우상단 X 버튼 노출 확인.
  *
  * 회귀 가드 (PR #14 review fix):
@@ -172,8 +172,8 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
     await capture('hybrid-01-after-reset');
   });
 
-  it('H1 — welcome → hello → genre → persona(skip) → ott → notify → complete', async () => {
-    // === Welcome (1/10) ===
+  it('H1 — welcome → hello → genre → persona(skip) → ott → complete', async () => {
+    // === Welcome (1/9) ===
     if (!(await waitForLabel('시작하기'))) {
       throw new Error('welcome "시작하기" 미노출 — reset 실패 또는 onboarding flag OFF');
     }
@@ -182,7 +182,7 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
       throw new Error('welcome → hello 전이 실패 (A2 mount race 가능)');
     }
 
-    // === Hello (2/10) ===
+    // === Hello (2/9) ===
     await browser.pause(500);
     const inputs = await $$('//XCUIElementTypeTextField');
     if (inputs.length > 0) {
@@ -204,7 +204,7 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
       }
     }
 
-    // === Genre (3/10) ===
+    // === Genre (3/9) ===
     await browser.pause(800);
     await capture('hybrid-04-genre');
     for (const chip of ['드라마', '스릴러', '로맨스']) {
@@ -218,7 +218,7 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
       }
     }
 
-    // === Persona — subStep 1 (context_select, header 4/10) ===
+    // === Persona — subStep 1 (context_select, header 4/9) ===
     if (!(await waitForLabel('영화', 12000))) {
       throw new Error('persona context_select "영화" pill 미노출 — hybrid inline mount 실패 가능');
     }
@@ -268,8 +268,9 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
     await browser.pause(1500);
     await capture('hybrid-07-after-skip-confirm');
 
-    // === OTT (9/10) ===
-    // persona skip 후 step=4 (ott) 으로 advance. OTT 단계의 어떤 라벨 노출 확인.
+    // === OTT (9/9, 최종 단계) ===
+    // persona skip 후 step=4 (ott) 으로 advance. OTT 가 최종 단계 — CTA "시작하기".
+    // 2026-06-16: notify 단계 제거. OTT 완료 → 곧바로 Discover 진입.
     const ottReached =
       (await waitForLabel('Netflix', 8000)) ||
       (await waitForLabel('TVING', 5000)) ||
@@ -277,27 +278,23 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
     if (!ottReached) {
       throw new Error('persona skip 후 OTT step 미진입 — P0#2 분기 실패');
     }
+    await capture('hybrid-08-ott');
 
     if (!(await tapByLabel('나중에 설정'))) {
-      // OTT 1개 선택 + 다음 fallback
+      // OTT 1개 선택 + "시작하기" (구 빌드 "다음" fallback)
       await tapByLabel('Netflix');
       await browser.pause(300);
-      await tapByLabel('다음');
-    }
-
-    // === Notify (10/10) ===
-    await browser.pause(1500);
-    await capture('hybrid-08-notify');
-    if (
-      !(await tapByLabel('알림 받지 않기')) &&
-      !(await tapByLabel('다음'))
-    ) {
-      throw new Error('notify 단계 진행 실패');
+      if (
+        !(await tapByLabel('시작하기', { timeout: 2000 })) &&
+        !(await tapByLabel('다음', { timeout: 1500 }))
+      ) {
+        throw new Error('OTT 단계 CTA tap 실패');
+      }
     }
 
     // === Complete — Discover 또는 Bridge 도달 ===
     await browser.pause(3000);
-    await capture('hybrid-09-after-notify');
+    await capture('hybrid-09-after-ott');
     const reachedApp =
       (await pageSourceContains('발견')) ||
       (await pageSourceContains('discover'));

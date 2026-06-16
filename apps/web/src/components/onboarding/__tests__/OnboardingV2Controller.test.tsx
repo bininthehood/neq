@@ -1,9 +1,11 @@
 /**
- * Hybrid Onboarding (10단계 통합 progress) — OnboardingV2Controller integration test.
+ * Hybrid Onboarding (9단계 통합 progress) — OnboardingV2Controller integration test.
  *
- * Persona inline mount + 외부 StepHeader 가 통합 1~10 진행률을 정확히 표시하는지,
+ * Persona inline mount + 외부 StepHeader 가 통합 1~9 진행률을 정확히 표시하는지,
  * embedded subStep callback 이 sub-step 1~5 (context_select → summary) 를 4~8 로
  * 매핑하는지, back 버튼이 정책대로 노출/숨김 되는지 검증.
+ *
+ * 2026-06-16: notify 단계 제거 → TOTAL_STEPS 6→5, UNIFIED 10→9. OTT 가 마지막 단계.
  *
  * Playwright 미구축 (devDep 만 존재) → vitest + RTL 로 동등 커버리지.
  */
@@ -32,12 +34,6 @@ vi.mock("@/lib/account-prefs", () => ({
   getAccountPrefs: () => ({
     tasteGenres: [],
     subscribedOtt: [],
-    notificationPrefs: {
-      weeklyRec: false,
-      newRelease: false,
-      ottExpiry: false,
-      monthlyReport: false,
-    },
   }),
 }));
 
@@ -74,14 +70,6 @@ vi.mock("../OnboardingStepOTT", () => ({
   default: ({ onNext }: { onNext: () => void }) => (
     <button data-testid="ott-next" onClick={onNext}>
       ott
-    </button>
-  ),
-}));
-
-vi.mock("../OnboardingStepNotify", () => ({
-  default: ({ onNext }: { onNext: () => void }) => (
-    <button data-testid="notify-next" onClick={onNext}>
-      notify
     </button>
   ),
 }));
@@ -147,51 +135,50 @@ beforeEach(() => {
   sessionStorage.clear();
 });
 
-function advanceTo(step: 0 | 1 | 2 | 3 | 4 | 5) {
+function advanceTo(step: 0 | 1 | 2 | 3 | 4) {
   if (step >= 1) fireEvent.click(screen.getByTestId("welcome-next"));
   if (step >= 2) fireEvent.click(screen.getByTestId("hello-next"));
   if (step >= 3) fireEvent.click(screen.getByTestId("genre-next"));
   if (step >= 4) fireEvent.click(screen.getByTestId("persona-complete"));
-  if (step >= 5) fireEvent.click(screen.getByTestId("ott-next"));
 }
 
-describe("Hybrid onboarding — 통합 10단계 progress", () => {
-  it("step 0 (welcome) — 라벨 '1 / 10', back 버튼 hidden", () => {
+describe("Hybrid onboarding — 통합 9단계 progress", () => {
+  it("step 0 (welcome) — 라벨 '1 / 9', back 버튼 hidden", () => {
     render(<OnboardingV2Controller />);
-    expect(screen.getByText("1 / 10")).toBeTruthy();
+    expect(screen.getByText("1 / 9")).toBeTruthy();
     expect(screen.queryByLabelText("이전 단계")).toBeNull();
   });
 
-  it("step 1 (hello) — '2 / 10', back visible", () => {
+  it("step 1 (hello) — '2 / 9', back visible", () => {
     render(<OnboardingV2Controller />);
     advanceTo(1);
-    expect(screen.getByText("2 / 10")).toBeTruthy();
+    expect(screen.getByText("2 / 9")).toBeTruthy();
     expect(screen.getByLabelText("이전 단계")).toBeTruthy();
   });
 
-  it("step 2 (genre) — '3 / 10', back visible", () => {
+  it("step 2 (genre) — '3 / 9', back visible", () => {
     render(<OnboardingV2Controller />);
     advanceTo(2);
-    expect(screen.getByText("3 / 10")).toBeTruthy();
+    expect(screen.getByText("3 / 9")).toBeTruthy();
   });
 
   it("step 3 persona — sub 1~5 가 4~8 로 매핑된다", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
-    // 진입 초기 personaSubStep=1 → '4 / 10'
-    expect(screen.getByText("4 / 10")).toBeTruthy();
+    // 진입 초기 personaSubStep=1 → '4 / 9'
+    expect(screen.getByText("4 / 9")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("persona-sub-2"));
-    expect(screen.getByText("5 / 10")).toBeTruthy();
+    expect(screen.getByText("5 / 9")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("persona-sub-3"));
-    expect(screen.getByText("6 / 10")).toBeTruthy();
+    expect(screen.getByText("6 / 9")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("persona-sub-4"));
-    expect(screen.getByText("7 / 10")).toBeTruthy();
+    expect(screen.getByText("7 / 9")).toBeTruthy();
 
     fireEvent.click(screen.getByTestId("persona-sub-5"));
-    expect(screen.getByText("8 / 10")).toBeTruthy();
+    expect(screen.getByText("8 / 9")).toBeTruthy();
   });
 
   it("persona subStep≥2 — back 버튼 hidden (사용자가 persona 내부 phase 로 돌아가지 못함)", () => {
@@ -210,24 +197,19 @@ describe("Hybrid onboarding — 통합 10단계 progress", () => {
   it("persona subStep=1 일 때 back → step=2 (genre) 로 복귀", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
-    expect(screen.getByText("4 / 10")).toBeTruthy();
+    expect(screen.getByText("4 / 9")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("이전 단계"));
-    expect(screen.getByText("3 / 10")).toBeTruthy();
+    expect(screen.getByText("3 / 9")).toBeTruthy();
     expect(screen.getByTestId("genre-next")).toBeTruthy();
   });
 
-  it("step 4 (ott) — '9 / 10', back visible", () => {
+  it("step 4 (ott) — '9 / 9', back visible", () => {
     render(<OnboardingV2Controller />);
     advanceTo(4);
-    expect(screen.getByText("9 / 10")).toBeTruthy();
+    expect(screen.getByText("9 / 9")).toBeTruthy();
     expect(screen.getByLabelText("이전 단계")).toBeTruthy();
   });
 
-  it("step 5 (notify) — '10 / 10'", () => {
-    render(<OnboardingV2Controller />);
-    advanceTo(5);
-    expect(screen.getByText("10 / 10")).toBeTruthy();
-  });
 });
 
 describe("Persona 완료/취소 분기", () => {
@@ -235,7 +217,7 @@ describe("Persona 완료/취소 분기", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-complete"));
-    expect(screen.getByText("9 / 10")).toBeTruthy();
+    expect(screen.getByText("9 / 9")).toBeTruthy();
     const completedCall = mockTrack.mock.calls.find(
       (c) => c[0] === "onboarding_step_completed" && c[1]?.step === "persona",
     );
@@ -246,7 +228,7 @@ describe("Persona 완료/취소 분기", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-cancel"));
-    expect(screen.getByText("9 / 10")).toBeTruthy();
+    expect(screen.getByText("9 / 9")).toBeTruthy();
     const completedCall = mockTrack.mock.calls.find(
       (c) => c[0] === "onboarding_step_completed" && c[1]?.step === "persona",
     );
@@ -254,11 +236,11 @@ describe("Persona 완료/취소 분기", () => {
   });
 });
 
-describe("finalize — notify 완료 시", () => {
+describe("finalize — OTT 완료 시", () => {
   it("onboarding_completed 발사 + persona.refresh + localStorage 마킹 + /onboarding/complete push", () => {
     render(<OnboardingV2Controller />);
-    advanceTo(5);
-    fireEvent.click(screen.getByTestId("notify-next"));
+    advanceTo(4);
+    fireEvent.click(screen.getByTestId("ott-next"));
 
     expect(
       mockTrack.mock.calls.some((c) => c[0] === "onboarding_completed"),
@@ -293,7 +275,7 @@ describe("Persona 건너뛰기 (P0 trap 차단)", () => {
     fireEvent.click(screen.getByTestId("persona-sub-3"));
     fireEvent.click(screen.getByLabelText("취향 만들기 건너뛰기"));
     expect(confirmSpy).toHaveBeenCalled();
-    expect(screen.getByText("9 / 10")).toBeTruthy(); // OTT step
+    expect(screen.getByText("9 / 9")).toBeTruthy(); // OTT step
     const personaCompletion = mockTrack.mock.calls.find(
       (c) => c[0] === "onboarding_step_completed" && c[1]?.step === "persona",
     );
@@ -307,9 +289,9 @@ describe("Persona 건너뛰기 (P0 trap 차단)", () => {
     render(<OnboardingV2Controller />);
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-sub-4"));
-    expect(screen.getByText("7 / 10")).toBeTruthy();
+    expect(screen.getByText("7 / 9")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("취향 만들기 건너뛰기"));
-    expect(screen.getByText("7 / 10")).toBeTruthy(); // 그대로
+    expect(screen.getByText("7 / 9")).toBeTruthy(); // 그대로
     confirmSpy.mockRestore();
   });
 });
@@ -320,11 +302,11 @@ describe("personaSubStep 리셋 (P1#5 회귀)", () => {
     advanceTo(3);
     fireEvent.click(screen.getByTestId("persona-sub-5")); // 8/10
     fireEvent.click(screen.getByTestId("persona-complete")); // → 9/10 (OTT)
-    expect(screen.getByText("9 / 10")).toBeTruthy();
+    expect(screen.getByText("9 / 9")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("이전 단계")); // back → persona
     // personaSubStep 가 리셋됐어야 함. PersonaSurveyController 가 mount 되며
     // useEffect 로 onSubStepChange(1) 호출. 리셋이 없으면 5 가 stale 상태로 남아 8/10 표시.
-    expect(screen.getByText("4 / 10")).toBeTruthy();
-    expect(screen.queryByText("8 / 10")).toBeNull();
+    expect(screen.getByText("4 / 9")).toBeTruthy();
+    expect(screen.queryByText("8 / 9")).toBeNull();
   });
 });

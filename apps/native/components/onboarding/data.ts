@@ -30,13 +30,6 @@ export interface OttOption {
   comingSoon?: boolean;
 }
 
-export interface NotifOption {
-  id: 'weeklyRec' | 'newRelease' | 'ottExpiry' | 'monthlyReport';
-  title: string;
-  desc: string;
-  defaultOn: boolean;
-}
-
 export const GENRE_CHIPS: GenreChip[] = [
   { id: 'drama',     ko: '드라마',     en: 'Drama',         tmdbMovieId: 18 },
   { id: 'thriller',  ko: '스릴러',     en: 'Thriller',      tmdbMovieId: 53 },
@@ -65,22 +58,17 @@ export const OTT_OPTIONS: OttOption[] = [
   { id: 'coupang', providerId: 356,  name: 'Coupang Play',short: 'C',  color: '#A335EE', comingSoon: true },
 ];
 
-export const NOTIF_OPTIONS: NotifOption[] = [
-  { id: 'weeklyRec',     title: '주간 추천',     desc: '매주 월요일 아침, 취향에 맞는 작품 5개', defaultOn: true },
-  { id: 'newRelease',    title: '새 작품 알림',  desc: '저장한 감독·배우의 새 작품이 공개될 때',   defaultOn: true },
-  { id: 'ottExpiry',     title: 'OTT 만료',      desc: '저장한 작품이 OTT에서 곧 내려갈 때',      defaultOn: false },
-  { id: 'monthlyReport', title: '월간 리포트',   desc: '매월 1일, 한 달간 본 작품 요약',          defaultOn: true },
-];
-
 /**
  * 2026-05-26 — taste (작품선택) 제거 + persona (Persona v2 동적 설문) 추가.
- * Persona v2 흐름은 자체적으로 favorites_pick step 포함 → 별도 작품선택 단계 중복.
- * 단일 종합 onboarding 으로 재구성. flag OFF 시 fallback 은 별도 (현 시점 미지원).
+ * 2026-06-16 — notify (알림 체크리스트) 제거. 알림 인프라 disabled
+ *   (NEXT_PUBLIC_NOTIFICATIONS_ENABLED=false + VAPID 키 미설정 + native push 미발급)
+ *   상태에서 사용자에게 토글 노출 = 구현되지 않은 약속. 활성화 시점 결정되면
+ *   설정 화면 또는 onboarding 재도입.
  */
-export const STEP_LABELS = ['welcome', 'hello', 'genre', 'persona', 'ott', 'notify'] as const;
+export const STEP_LABELS = ['welcome', 'hello', 'genre', 'persona', 'ott'] as const;
 export type StepKey = typeof STEP_LABELS[number];
 
-export const TOTAL_STEPS = 6;
+export const TOTAL_STEPS = 5;
 
 /**
  * persona step 의 sub-step 개수 (context_select / step1 / step2-or-3 / favorites_pick / summary).

@@ -154,7 +154,7 @@ export default function OnboardingStepOTT({
               { color: hasSelection ? colors.bg : colors.textMuted },
             ]}
           >
-            다음
+            시작하기
           </Text>
         </Pressable>
         <Pressable onPress={skip} style={styles.skipBtn}>

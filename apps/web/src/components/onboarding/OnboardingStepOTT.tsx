@@ -173,7 +173,7 @@ export default function OnboardingStepOTT({ onNext, initialProviders = [] }: Pro
             cursor: hasSelection ? "pointer" : "default",
           }}
         >
-          다음
+          시작하기
         </button>
         <button
           type="button"
