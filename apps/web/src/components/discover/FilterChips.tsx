@@ -27,6 +27,14 @@ interface FilterChipsProps {
   onRatingChange: (r: FilterRating) => void;
   onOTTChange: (otts: Set<string>) => void;
   onResetTopIdx: () => void;
+  /**
+   * 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+   * native `apps/native/components/FilterChips.tsx` 동등 정합. 동작·시각 일관성.
+   */
+  myOTTToggle: boolean;
+  myOTTAvailable: boolean;
+  onMyOTTToggle: (next: boolean) => void;
+  onMyOTTSetupNavigate: () => void;
 }
 
 export default function FilterChips({
@@ -42,6 +50,10 @@ export default function FilterChips({
   onRatingChange,
   onOTTChange,
   onResetTopIdx,
+  myOTTToggle,
+  myOTTAvailable,
+  onMyOTTToggle,
+  onMyOTTSetupNavigate,
 }: FilterChipsProps) {
   const [openDropdown, setOpenDropdown] = useState<
     "type" | "origin" | "year" | "rating" | "ott" | null
@@ -81,6 +93,68 @@ export default function FilterChips({
     <div className="shrink-0 relative">
       {/* chip row */}
       <div className="flex gap-2 px-4 pb-2">
+        {/* 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — chip row leftmost.
+            기존 5칩 (유형/국가/년도/별점/OTT) 은 dropdown picker → border-bottom amber.
+            본 chip 은 단발 토글 → 시각 구분 위해 filled pill 형태.
+            - OFF: bg transparent + 1px border / text-primary
+            - ON : bg var(--accent) + checkmark + text-inverse
+            - dis: opacity 0.5 + text-muted. tap 시 Profile 설정 CTA Alert.
+            native FilterChips.myOTTChip 와 1:1 시각 정합. */}
+        <button
+          type="button"
+          onClick={() => {
+            if (loading) return;
+            if (!myOTTAvailable) {
+              // subscribedOtt 0건 — confirm() 으로 Profile 진입 CTA. RN Alert 정합.
+              const ok = window.confirm(
+                '먼저 구독 중인 OTT 를 알려주세요.\n프로필에서 설정할 수 있어요.\n\n설정 화면으로 이동할까요?',
+              );
+              if (ok) onMyOTTSetupNavigate();
+              return;
+            }
+            onMyOTTToggle(!myOTTToggle);
+          }}
+          disabled={loading}
+          role="switch"
+          aria-checked={myOTTToggle}
+          aria-disabled={loading || !myOTTAvailable}
+          aria-label="내 OTT 만 보기"
+          className="px-3 py-2.5 min-h-[44px] text-xs whitespace-nowrap transition-all duration-200 disabled:opacity-50 flex items-center gap-1 active:scale-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 rounded-full border"
+          style={{
+            background:
+              myOTTToggle && myOTTAvailable ? "var(--accent)" : "transparent",
+            color:
+              myOTTToggle && myOTTAvailable
+                ? "var(--text-inverse)"
+                : !myOTTAvailable
+                  ? "var(--text-muted)"
+                  : "var(--text-primary)",
+            borderColor:
+              myOTTToggle && myOTTAvailable
+                ? "var(--accent)"
+                : "var(--border)",
+            opacity: !myOTTAvailable ? 0.5 : 1,
+            fontWeight: myOTTToggle && myOTTAvailable ? 600 : 500,
+          }}
+        >
+          {myOTTToggle && myOTTAvailable && (
+            // DESIGN.md L466 IconCheck 정합 — raw ✓ 글리프 대신 SVG path.
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          )}
+          내 OTT
+        </button>
         <button
           type="button"
           onClick={() =>

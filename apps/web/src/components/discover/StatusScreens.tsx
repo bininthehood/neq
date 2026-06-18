@@ -18,6 +18,11 @@ interface FilterChipsPassthrough {
   onRatingChange: (r: FilterRating) => void;
   onOTTChange: (otts: Set<string>) => void;
   onResetTopIdx: () => void;
+  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — FilterChips 신규 props.
+  myOTTToggle: boolean;
+  myOTTAvailable: boolean;
+  onMyOTTToggle: (next: boolean) => void;
+  onMyOTTSetupNavigate: () => void;
 }
 
 interface LoadingScreenProps extends FilterChipsPassthrough {

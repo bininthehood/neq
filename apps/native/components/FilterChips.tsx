@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Modal,
+  Alert,
 } from 'react-native';
 import {
   TYPE_LABELS,
@@ -19,7 +20,7 @@ import {
   type FilterRating,
 } from '@neq/core';
 import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
-import { IconChevronDown } from './Icons';
+import { IconCheck, IconChevronDown } from './Icons';
 
 type DropdownKey = 'type' | 'origin' | 'year' | 'rating' | 'ott' | null;
 
@@ -35,6 +36,18 @@ interface Props {
   onYearChange: (y: FilterYear) => void;
   onRatingChange: (r: FilterRating) => void;
   onOTTChange: (otts: Set<string>) => void;
+  /**
+   * 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+   * subscribedOtt (account_prefs) 가 비어있지 않을 때만 의미 있는 토글.
+   * - myOTTToggle: 현재 토글 상태 (true = ON = subscribedOtt 셋이 filterOTTs 에 적용됨)
+   * - myOTTAvailable: 구독 OTT 보유 여부. false 면 chip disabled + tap 시 CTA 노출
+   * - onMyOTTToggle: 토글 상태 변경 핸들러
+   * - onMyOTTSetupNavigate: disabled 상태에서 tap → 구독 OTT 설정 화면(Profile) 진입
+   */
+  myOTTToggle: boolean;
+  myOTTAvailable: boolean;
+  onMyOTTToggle: (next: boolean) => void;
+  onMyOTTSetupNavigate: () => void;
 }
 
 const TYPE_OPTIONS: FilterType[] = ['all', 'movie', 'series', 'variety'];
@@ -54,6 +67,10 @@ export default function FilterChips({
   onYearChange,
   onRatingChange,
   onOTTChange,
+  myOTTToggle,
+  myOTTAvailable,
+  onMyOTTToggle,
+  onMyOTTSetupNavigate,
 }: Props) {
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
   // 2026-05-20 — chip row 의 viewport 절대 좌표 측정. dropdown 패널 위치 결정용.
@@ -167,6 +184,56 @@ export default function FilterChips({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.chipRow}
       >
+        {/* 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — chip row 의 leftmost.
+            기존 5칩 (유형/국가/년도/별점/OTT) 은 dropdown picker → 시각: border-bottom amber.
+            본 chip 은 단발 액션 토글 → 시각 구분 위해 *filled chip*:
+              ON  : background = accent / text = textInverse / IconCheck 표시
+              OFF : background = transparent + border / text = textPrimary
+              dis : opacity 0.5 + textMuted (subscribedOtt 0건)
+            DESIGN.md L227 Quiet Ink + L466 IconCheck SVG (raw ✓ 글리프 금지) 정합. */}
+        <Pressable
+          onPress={() => {
+            if (disabled) return;
+            if (!myOTTAvailable) {
+              // subscribedOtt 0건 — Alert + Profile 네비게이션 (사용자 결정 #3).
+              Alert.alert(
+                '내 OTT 설정',
+                '먼저 구독 중인 OTT 를 알려주세요.\n프로필에서 설정할 수 있어요.',
+                [
+                  { text: '취소', style: 'cancel' },
+                  { text: '설정하기', onPress: onMyOTTSetupNavigate },
+                ],
+              );
+              return;
+            }
+            onMyOTTToggle(!myOTTToggle);
+          }}
+          disabled={disabled}
+          accessibilityRole="switch"
+          accessibilityLabel="내 OTT 만 보기"
+          accessibilityState={{
+            checked: myOTTToggle,
+            disabled: disabled || !myOTTAvailable,
+          }}
+          style={[
+            styles.myOTTChip,
+            myOTTToggle && myOTTAvailable && styles.myOTTChipActive,
+            (disabled || !myOTTAvailable) && styles.myOTTChipDisabled,
+          ]}
+        >
+          {myOTTToggle && myOTTAvailable && (
+            <IconCheck size={12} color={colors.textInverse} />
+          )}
+          <Text
+            style={[
+              styles.myOTTChipText,
+              myOTTToggle && myOTTAvailable && styles.myOTTChipTextActive,
+              !myOTTAvailable && styles.myOTTChipTextDisabled,
+            ]}
+          >
+            내 OTT
+          </Text>
+        </Pressable>
         <Chip
           active={filterType !== 'all'}
           isOpen={openDropdown === 'type'}
@@ -425,6 +492,44 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   optionTextDisabled: {
+    color: colors.textMuted,
+  },
+  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — chip row leftmost.
+  // 시각 차별: 기존 chip 의 border-bottom 패턴 대신 filled toggle.
+  // - OFF (default): bg transparent / border 1px subtle / textPrimary
+  // - ON           : bg accent / IconCheck + textInverse / border 투명
+  // - disabled     : opacity 0.5 + textMuted (subscribedOtt 0건)
+  // DESIGN.md L466 IconCheck SVG 정본 + L227 Quiet Ink 정합.
+  myOTTChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm + 4,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    minHeight: 44,
+    gap: 4,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  myOTTChipActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  myOTTChipDisabled: {
+    opacity: 0.5,
+  },
+  myOTTChipText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  myOTTChipTextActive: {
+    color: colors.textInverse,
+    fontWeight: '600',
+  },
+  myOTTChipTextDisabled: {
     color: colors.textMuted,
   },
 });

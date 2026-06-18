@@ -9,6 +9,8 @@ import {
   addSeenTitles,
   hasOnboarded,
 } from "@/lib/store";
+import { getAccountPrefs } from "@/lib/account-prefs";
+import { subscribedOttToFilterOTTs } from "@neq/core";
 import { vibrate } from "@/lib/haptics";
 import { track } from "@/lib/analytics";
 import { getPrimaryCountryName } from "@/lib/country-names";
@@ -88,6 +90,44 @@ export default function DiscoverPage() {
   // searchInitialQuery 가 SearchSheet 에 prop 으로 전달되며 sheet 가 열릴 때 자동 트리거.
   // 평소(검색 버튼 클릭)에는 빈 문자열 → SearchSheet 가 idle 상태 유지.
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
+
+  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+  // native `apps/native/app/index.tsx` 동등 정합.
+  // - myOTTToggle: 토글 상태 (ON 시 filterOTTs = subscribedOtt 셋)
+  // - subscribedOtt: account_prefs.subscribedOtt (TMDB providerId[])
+  // - prevFilterOTTsRef: ON 직전 filterOTTs 보존, OFF 시 복원
+  // 토글 핸들러는 chipsProps.onOTTChange 를 우회하고 rec.handleOTTChange 를 직접 호출 →
+  // chipsProps.onOTTChange 의 자동 OFF 분기는 사용자 직접 dropdown 변경에만 진입.
+  const [myOTTToggle, setMyOTTToggle] = useState(false);
+  const [subscribedOtt, setSubscribedOtt] = useState<number[]>([]);
+  const prevFilterOTTsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    // mount 시 1회 load. Profile 변경 후 복귀는 (Profile 페이지가 router.push 로 navigate
+    // 후 back 으로 복귀) 새 mount → 본 effect 재발화 → subscribedOtt 동기화.
+    // Profile 안에서 SPA 내 변경 시점에 즉시 반영하려면 별도 storage event listener 필요하지만,
+    // 사용자 plot 은 항상 Profile 진입 → 변경 → 뒤로 가기 흐름이라 본 effect 로 충분.
+    setSubscribedOtt(getAccountPrefs().subscribedOtt);
+  }, []);
+  // subscribedOtt 외부 변경 (Profile 에서 변경 + Discover 복귀) 동기화 — native 정합.
+  // 토글 ON 상태에서 변경 감지 시 자동 OFF + 복원.
+  const prevSubscribedOttKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = subscribedOtt.slice().sort().join(",");
+    if (prevSubscribedOttKeyRef.current === null) {
+      prevSubscribedOttKeyRef.current = key;
+      return;
+    }
+    if (prevSubscribedOttKeyRef.current === key) return;
+    prevSubscribedOttKeyRef.current = key;
+    if (myOTTToggle) {
+      const restored = prevFilterOTTsRef.current ?? new Set<string>();
+      prevFilterOTTsRef.current = null;
+      // rec.handleOTTChange 직접 호출 → chipsProps.onOTTChange 우회 → 자동 OFF 분기 미진입.
+      rec.handleOTTChange(restored);
+      setMyOTTToggle(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscribedOtt]);
   // detail.closeDetail() 호출하지 않음 — DetailSheet 유지하면서 SearchSheet 을 위에 띄움.
   // SearchSheet cancel 시 자연스럽게 DetailSheet 이 다시 노출됨 (z-stacking).
   const handleSearchPersonFromDetail = (name: string) => {
@@ -551,6 +591,38 @@ export default function DiscoverPage() {
     [],
   );
 
+  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — 토글 핸들러.
+  // native 정합: ON 시 prevFilterOTTsRef 보존, OFF 시 복원. rec.handleOTTChange 직접
+  // 호출로 chipsProps.onOTTChange 의 자동 OFF 분기 우회.
+  const handleMyOTTToggle = useCallback(
+    (next: boolean) => {
+      let nextOtts: Set<string>;
+      if (next) {
+        prevFilterOTTsRef.current = rec.filterOTTs;
+        nextOtts = subscribedOttToFilterOTTs(subscribedOtt);
+      } else {
+        nextOtts = prevFilterOTTsRef.current ?? new Set<string>();
+        prevFilterOTTsRef.current = null;
+      }
+      // chipsProps.onOTTChange 우회 — chipsProps.onOTTChange 의 자동 OFF 분기
+      // (`if (myOTTToggle)`) 가 본 호출을 사용자 직접 변경으로 오인하지 않도록 직접 호출.
+      rec.handleOTTChange(nextOtts);
+      setMyOTTToggle(next);
+      setTopIdx(0);
+      track("filter_changed", {
+        kind: "my_ott_toggle",
+        value: next ? "on" : "off",
+        subscribed_ott_count: subscribedOtt.length,
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rec.filterOTTs, subscribedOtt],
+  );
+  const handleMyOTTSetupNavigate = useCallback(() => {
+    track("filter_changed", { kind: "my_ott_setup_cta", value: "tap" });
+    router.push("/profile");
+  }, [router]);
+
   // --- shared props ---
   const chipsProps = {
     filterType: rec.filterType, filterOrigin: rec.filterOrigin, filterYear: rec.filterYear, filterRating: rec.filterRating, filterOTTs: rec.filterOTTs,
@@ -569,9 +641,21 @@ export default function DiscoverPage() {
       // 별점은 클라이언트 필터 — 서버 재요청 불필요. recs 그대로 두고 filtered 만 변동.
     },
     onOTTChange: (otts: Set<string>) => {
+      // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+      // 사용자가 OTT dropdown 으로 OTT 변경 시 토글 자동 OFF (override 의미 강조).
+      // handleMyOTTToggle 은 본 함수를 우회하므로 본 분기는 사용자 직접 변경에만 진입한다.
+      if (myOTTToggle) {
+        prevFilterOTTsRef.current = null;
+        setMyOTTToggle(false);
+      }
       rec.handleOTTChange(otts);
       setTopIdx(0);
     }, onResetTopIdx: () => setTopIdx(0),
+    // 2026-06-18 ("내 OTT 만 보기" 토글) — FilterChips leftmost 신규.
+    myOTTToggle,
+    myOTTAvailable: subscribedOtt.length > 0,
+    onMyOTTToggle: handleMyOTTToggle,
+    onMyOTTSetupNavigate: handleMyOTTSetupNavigate,
   };
   const filterLabel = [
     rec.filterOrigin === "kr" ? "국내" : rec.filterOrigin === "foreign" ? "해외" : "",
@@ -602,7 +686,7 @@ export default function DiscoverPage() {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
     // 온보딩 완료했거나 saved 있으면 cold start 아님 → 필터 좁음 메시지 대신 일반 empty 메시지
     const isCold = !hasOnboarded() && getSaved().length === 0;
-    return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
   }
   // topIdx 가 stack 끝을 넘긴 상태 (B3 fix 후 무한 추가 로드 흐름).
   // - exhausted (prefetch 가 unique=0 응답) → EmptyScreen + 새로고침 안내
@@ -610,7 +694,7 @@ export default function DiscoverPage() {
   //   (전체 LoadingScreen 으로 덮어쓰지 않음 — 사용자 컨텍스트 보존, 2026-05-10 UX 개선)
   if (topIdx >= filtered.length && rec.exhausted) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
-    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();
@@ -631,6 +715,9 @@ export default function DiscoverPage() {
             rec.abortLoading();
             rec.setFilterYear("all");
             rec.setFilterRating("all");
+            // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — 페르소나 전환 시 토글 OFF.
+            prevFilterOTTsRef.current = null;
+            setMyOTTToggle(false);
             setTopIdx(0);
             sessionStorage.removeItem("neq_top_idx");
             rec.loadRecs("all", "all");

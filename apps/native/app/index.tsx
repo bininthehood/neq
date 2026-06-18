@@ -20,6 +20,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { router, useFocusEffect, usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { subscribedOttToFilterOTTs } from '@neq/core';
 import SwipeCard from '../components/SwipeCard';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
@@ -187,6 +188,19 @@ export default function DiscoverScreen() {
   const [filterYear, setFilterYear] = useState<FilterYear>('all');
   const [filterRating, setFilterRating] = useState<FilterRating>('all');
   const [filterOTTs, setFilterOTTs] = useState<Set<string>>(new Set());
+
+  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+  // ON 시 prevFilterOTTsRef 에 이전 filterOTTs 보존 → filterOTTs = subscribedOtt 매핑 셋.
+  // OFF 시 prevFilterOTTsRef 복원. 토글이 켜진 상태에서 사용자가 OTT dropdown 으로 OTT
+  // 변경 시 자동 OFF (override 의 의미 강조 — 명세 §3-1).
+  // 본 패턴은 자동 OFF 가드 ref 가 불필요 — handleMyOTTToggle 가 applyFilterChange 를
+  // 우회하고 setFilterOTTs + load 를 직접 호출하므로, applyFilterChange 의 OTT 변경
+  // 분기는 사용자 직접 변경에만 진입한다.
+  // subscribedOtt 는 별도 effect (subscribedOttKey 의존성) 로 비동기 load → 외부에서
+  // 바뀌면 토글 자동 OFF + filterOTTs 복원.
+  const [myOTTToggle, setMyOTTToggle] = useState(false);
+  const [subscribedOtt, setSubscribedOtt] = useState<number[]>([]);
+  const prevFilterOTTsRef = useRef<Set<string> | null>(null);
 
   // W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
   //
@@ -764,18 +778,105 @@ export default function DiscoverScreen() {
     if (nextState.rating !== undefined) setFilterRating(nextRating);
     if (nextState.otts !== undefined) setFilterOTTs(nextOtts);
 
+    // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+    // 사용자가 OTT dropdown 으로 OTT 변경 시 토글 자동 OFF (override 의미 강조 — 명세 §3-1).
+    // handleMyOTTToggle 는 본 함수를 우회하므로 본 분기는 사용자 직접 변경에만 진입한다.
+    if (nextState.otts !== undefined && myOTTToggle) {
+      prevFilterOTTsRef.current = null;
+      setMyOTTToggle(false);
+    }
+
     load(toApiFilter(nextType, nextOrigin, nextYear, nextRating, nextOtts), {
       excludeIds: recs.map((r) => r.tmdbId),
     });
   }
+
+  /**
+   * 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+   *
+   * ON: prevFilterOTTsRef = filterOTTs (보존) → filterOTTs = subscribedOttToFilterOTTs(subscribedOtt)
+   * OFF: filterOTTs = prevFilterOTTsRef ?? Set() (복원) → prevFilterOTTsRef = null
+   *
+   * 새 filterOTTs 로 즉시 서버 재조회 (filter 셋 변경 = candidate pool 변동).
+   * applyFilterChange 우회 — applyFilterChange 의 자동 OFF 분기 (`if (myOTTToggle)`) 가
+   * 본 호출을 사용자 직접 변경으로 오인해 즉시 OFF 처리하면 무한 토글 회귀.
+   */
+  const handleMyOTTToggle = useCallback(
+    (next: boolean) => {
+      let nextOtts: Set<string>;
+      if (next) {
+        prevFilterOTTsRef.current = filterOTTs;
+        nextOtts = subscribedOttToFilterOTTs(subscribedOtt);
+      } else {
+        nextOtts = prevFilterOTTsRef.current ?? new Set<string>();
+        prevFilterOTTsRef.current = null;
+      }
+      // applyFilterChange 우회 — applyFilterChange 의 자동 OFF 분기 (`if (myOTTToggle)`)
+      // 가 본 호출을 사용자 직접 변경으로 오인해 즉시 OFF 처리하면 무한 토글 회귀.
+      setFilterOTTs(nextOtts);
+      setMyOTTToggle(next);
+      load(
+        toApiFilter(filterType, filterOrigin, filterYear, filterRating, nextOtts),
+        { excludeIds: recs.map((r) => r.tmdbId) },
+      );
+      track('filter_changed', {
+        kind: 'my_ott_toggle',
+        value: next ? 'on' : 'off',
+        subscribed_ott_count: subscribedOtt.length,
+      });
+    },
+    [filterOTTs, subscribedOtt, filterType, filterOrigin, filterYear, filterRating, recs, load],
+  );
+
+  const handleMyOTTSetupNavigate = useCallback(() => {
+    // disabled 상태에서 사용자가 chip tap → Alert 안의 "설정하기" 콜백.
+    // Profile 의 SubscribedOttSection 으로 진입. Profile 내부에서 자동 scroll-to 는 별도 트랙.
+    // 신규 PostHog 이벤트 없이 `filter_changed` 의 kind 분기로 통합 — web/native NekoEvent 동기화 비용 회피.
+    track('filter_changed', { kind: 'my_ott_setup_cta', value: 'tap' });
+    router.push('/profile');
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       getSaved().then((items) => {
         setSavedIds(new Set(items.map((s) => s.recommendation.tmdbId)));
       });
+      // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+      // Profile 에서 subscribedOtt 변경 후 Discover 복귀 시 재로드 → 토글 가용성 동기화.
+      // 본 effect 안에서 직접 myOTTToggle 자동 OFF 까지 처리하지 않는다 — 별도 useEffect
+      // (subscribedOtt deps) 에서 토글 ON 상태 + subscribedOtt 변경 감지 시 OFF + filterOTTs 복원.
+      getAccountPrefs().then((prefs) => {
+        setSubscribedOtt(prefs.subscribedOtt);
+      });
     }, []),
   );
+
+  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
+  // subscribedOtt 외부 변경 (Profile 에서 변경) 동기화. 토글 ON 상태에서 subscribedOtt 가
+  // 바뀌면 자동 OFF + filterOTTs 복원 (명세 §3-1).
+  // mount 초기 sentinel ref — 첫 평가 (prev null) 는 skip. 그 후 변경만 감지.
+  const prevSubscribedOttKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    const key = subscribedOtt.slice().sort().join(',');
+    if (prevSubscribedOttKeyRef.current === null) {
+      prevSubscribedOttKeyRef.current = key;
+      return;
+    }
+    if (prevSubscribedOttKeyRef.current === key) return;
+    prevSubscribedOttKeyRef.current = key;
+    // 변경 감지 — 토글 ON 이면 자동 OFF + filterOTTs 복원.
+    if (myOTTToggle) {
+      const restored = prevFilterOTTsRef.current ?? new Set<string>();
+      prevFilterOTTsRef.current = null;
+      setFilterOTTs(restored);
+      setMyOTTToggle(false);
+      // 새 filterOTTs 로 재조회 (filter 셋 변동).
+      load(toApiFilter(filterType, filterOrigin, filterYear, filterRating, restored), {
+        excludeIds: recs.map((r) => r.tmdbId),
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscribedOtt]);
 
   // rating 클라이언트 사이드 필터 — web `apps/web/src/app/discover/page.tsx:141` 정합.
   // recs 자체는 그대로 두고 표시/swipe 단계에서만 자른다 (서버 재호출 X).
@@ -1351,6 +1452,9 @@ export default function DiscoverScreen() {
     setFilterOrigin('all');
     setFilterYear('all');
     setFilterOTTs(new Set());
+    // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — 전체 초기화 시 토글도 OFF.
+    prevFilterOTTsRef.current = null;
+    setMyOTTToggle(false);
     load({});
   }
 
@@ -1376,6 +1480,9 @@ export default function DiscoverScreen() {
       setFilterYear('all');
       setFilterRating('all');
       setFilterOTTs(new Set());
+      // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — 페르소나 전환 시 토글 OFF.
+      prevFilterOTTsRef.current = null;
+      setMyOTTToggle(false);
       setTopIdx(0);
       load({});
     });
@@ -1428,6 +1535,11 @@ export default function DiscoverScreen() {
         onYearChange={(y) => applyFilterChange({ year: y })}
         onRatingChange={(r) => applyFilterChange({ rating: r })}
         onOTTChange={(otts) => applyFilterChange({ otts })}
+        // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — FilterChips leftmost 신규.
+        myOTTToggle={myOTTToggle}
+        myOTTAvailable={subscribedOtt.length > 0}
+        onMyOTTToggle={handleMyOTTToggle}
+        onMyOTTSetupNavigate={handleMyOTTSetupNavigate}
       />
 
       <View
