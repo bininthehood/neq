@@ -1,0 +1,38 @@
+name: PostHog Regression Deepdive (ad-hoc)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: posthog-regression-deepdive
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --ignore-scripts
+
+      - name: Run regression deepdive
+        env:
+          POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
+          POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+        run: npx tsx scripts/posthog-regression-deepdive-2026-06-18.ts
+
+      - name: Upload result artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-deepdive-result
+          path: posthog-regression-deepdive-result.md
