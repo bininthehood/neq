@@ -346,7 +346,7 @@ export default function DiscoverScreen() {
   const load = useCallback(
     async (
       filter: RecommendFilter = {},
-      opts?: { excludeIds?: number[] },
+      opts?: { excludeIds?: number[]; silent?: boolean },
     ) => {
       // 2026-06-06 (P0 stack 겹침) — 새 stream 시작 전 atomic reset.
       // (1) 직전 in-flight stream abort → 옛 onCard 가 새 stack 에 끼어드는 race 차단.
@@ -354,24 +354,35 @@ export default function DiscoverScreen() {
       // (3) prefetch cache invalidate → 옛 filter 의 prefetch 결과가 새 stack 뒤에
       //     재유입되는 보조 경로 차단 (`_workspace/02_p0_stack_overlap.md` §3).
       // PWA `useRecommendations.ts:454-462` 정합 패턴.
+      //
+      // 2026-06-18 (P2 swipe loading fix 옵션 D — B 단 silent 방어 가드).
+      // opts.silent=true 시 사용자 인지 단절 (setState('loading') / setRecs([]) / setTopIdx(0))
+      // 모두 skip. 백그라운드에서 stack append 만 수행 → 향후 silent reload 시나리오
+      // (persona switch, focus refresh 등) 재사용 가능. 현재 A 단 (silent_skip 분기) 자체가
+      // load() 호출 안 하므로 본 가드는 방어용.
       loadAbortRef.current?.abort();
       const controller = new AbortController();
       loadAbortRef.current = controller;
 
-      setRecs([]);
-      setTopIdx(0);
-      setPrevActive(false);
-      dragX.value = 0;
-      dragY.value = 0;
-      prevOverlayX.value = -SCREEN_WIDTH;
+      if (!opts?.silent) {
+        setRecs([]);
+        setTopIdx(0);
+        setPrevActive(false);
+        dragX.value = 0;
+        dragY.value = 0;
+        prevOverlayX.value = -SCREEN_WIDTH;
+      }
       invalidatePrefetchCache();
 
       // 2026-06-06 (P0 incident Fix B-1) — 새 load = candidate pool 재시도 가능.
       // PWA `useRecommendations.ts:170` 정합.
+      // silent 분기에서도 lock 은 풀어준다 (백그라운드 reload 의도 = pool 재시도).
       exhaustedRef.current = false;
       setExhausted(false);
 
-      setState('loading');
+      if (!opts?.silent) {
+        setState('loading');
+      }
       setErrorMsg(null);
       try {
         const [saved, activePersona] = await Promise.all([
@@ -438,11 +449,28 @@ export default function DiscoverScreen() {
               collected.push(rec);
               if (!firstSeen) {
                 firstSeen = true;
-                setRecs([...collected]);
-                setTopIdx(0);
-                setState('ready');
+                if (opts?.silent) {
+                  // 2026-06-18 (P2 swipe loading fix 옵션 D — silent 분기).
+                  // 기존 stack 보존 + 중복 tmdbId 제외 append. topIdx 유지 → 사용자가 보던 위치 유지.
+                  setRecs((prev) => {
+                    const ids = new Set(prev.map((r) => r.tmdbId));
+                    return [...prev, ...collected.filter((r) => !ids.has(r.tmdbId))];
+                  });
+                } else {
+                  setRecs([...collected]);
+                  setTopIdx(0);
+                  setState('ready');
+                }
               } else {
-                setRecs([...collected]);
+                if (opts?.silent) {
+                  // silent 분기: 누적 append (중복 제외).
+                  setRecs((prev) => {
+                    const ids = new Set(prev.map((r) => r.tmdbId));
+                    return [...prev, ...collected.filter((r) => !ids.has(r.tmdbId))];
+                  });
+                } else {
+                  setRecs([...collected]);
+                }
               }
             },
             onError: (err) => {
@@ -466,11 +494,21 @@ export default function DiscoverScreen() {
             ...v2.body,
           }, controller.signal);
           if (controller.signal.aborted) return;
-          setRecs(data);
-          setTopIdx(0);
-          setState('ready');
+          if (opts?.silent) {
+            // 2026-06-18 (P2 swipe loading fix 옵션 D — silent 폴백 분기).
+            // 기존 stack 보존 + 중복 tmdbId 제외 append. topIdx 유지.
+            setRecs((prev) => {
+              const ids = new Set(prev.map((r) => r.tmdbId));
+              return [...prev, ...data.filter((r) => !ids.has(r.tmdbId))];
+            });
+          } else {
+            setRecs(data);
+            setTopIdx(0);
+            setState('ready');
+          }
           // 2026-06-06 (P0 incident Fix B-1) — 폴백도 빈 응답이면 진짜 풀 고갈 확정.
           // lock set → EmptyState (filter X 분기 = "추천 기록 초기화" CTA 노출).
+          // silent 분기에서는 사용자 UX 영향 없이 lock 만 set (다음 사용자 swipe → cardsToShow=0 시점에 노출).
           if (data.length === 0) {
             exhaustedRef.current = true;
             setExhausted(true);
@@ -605,14 +643,16 @@ export default function DiscoverScreen() {
         }
 
         if (!appendedAny) {
-          // 모든 tier 0 — server LLM 다양성 본질 한계. 자동 hard refresh 로 무한 스크롤 보장.
+          // 2026-06-18 (P2 swipe loading fix 옵션 D — `_workspace/12_p2-swipe-loading-deepdive-2026-06-18.md`)
+          // 기존: clearRecHistory + load() → setState('loading') → 사용자에게 "수 초 후 loading 노출"
+          //       PostHog deepdive 75/225 = 33.3% 비중 확인 (auto_hard_refresh)
+          // 현재: silent return. cardsToShow=0 시점에 fallback loader (b231c4a) 가 자연 노출
+          // Tier 3 Phase A~D (server LLM 다양성 본질 해결) 완료 후 본 분기 완전 폐기 가능
           track('recommendation_load_more', {
             cooldown_used: -1,
             unique_count: 0,
-            auto_hard_refresh: true,
+            silent_skip: true,
           });
-          await clearRecHistory();
-          load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
         }
       } catch {
         // 백그라운드는 silent — 사용자 UX 영향 없음
