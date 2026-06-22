@@ -866,6 +866,7 @@ export async function getRecommendationsStreaming(
   //   - **phase 2 만** applyDiversityReorder 적용. phase 1 의 stream 순서는
   //     이미 사용자에게 emit 되어 재정렬 불가 (50개 합쳐 reorder 하면 phase 1
   //     카드 위치가 변동 → UX 손상). 본 정책은 협상 불가.
+  const tPhase2 = performance.now();
   const phase2Pool = tmdbCandidates.filter(
     (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
   );
@@ -881,6 +882,7 @@ export async function getRecommendationsStreaming(
     );
   }
 
+  mark("phase2", tPhase2);
   const reordered = applyDiversityReorder(phase2Recs);
   for (const rec of reordered) callbacks.onCard(rec);
 

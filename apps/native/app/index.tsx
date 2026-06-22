@@ -22,6 +22,7 @@ import { router, useFocusEffect, usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { subscribedOttToFilterOTTs } from '@neq/core';
 import SwipeCard from '../components/SwipeCard';
+import SkeletonCard from '../components/SkeletonCard';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
@@ -159,6 +160,11 @@ export default function DiscoverScreen() {
 
   const [recs, setRecs] = useState<Recommendation[]>([]);
   const [state, setState] = useState<LoadState>('idle');
+  // 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
+  //   'refresh' = 사용자 새로고침 (handleRefresh) → ApertureBreathLoader 유지.
+  //   'default' = 첫 진입 / 필터 변경 → SkeletonCard (빈 화면 대신 카드 윤곽).
+  // PWA StatusScreens 의 origin 분기와 정합.
+  const [loadOrigin, setLoadOrigin] = useState<'default' | 'refresh'>('default');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [topIdx, setTopIdx] = useState(0);
@@ -360,7 +366,7 @@ export default function DiscoverScreen() {
   const load = useCallback(
     async (
       filter: RecommendFilter = {},
-      opts?: { excludeIds?: number[]; silent?: boolean },
+      opts?: { excludeIds?: number[]; silent?: boolean; origin?: 'default' | 'refresh' },
     ) => {
       // 2026-06-06 (P0 stack 겹침) — 새 stream 시작 전 atomic reset.
       // (1) 직전 in-flight stream abort → 옛 onCard 가 새 stack 에 끼어드는 race 차단.
@@ -395,6 +401,9 @@ export default function DiscoverScreen() {
       setExhausted(false);
 
       if (!opts?.silent) {
+        // 2026-06-22 — 로딩 origin 기록. setState('loading') 직전에 갱신해
+        // 로딩 분기 (SkeletonCard vs ApertureBreathLoader) 가 origin 을 읽음.
+        setLoadOrigin(opts?.origin ?? 'default');
         setState('loading');
       }
       setErrorMsg(null);
@@ -1085,7 +1094,8 @@ export default function DiscoverScreen() {
     await clearRecHistory();
     const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
     track('recommendation_refresh', { mode: 'hard' });
-    load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
+    // 2026-06-22 — 새로고침은 origin='refresh' → ApertureBreathLoader 유지.
+    load(filter, { excludeIds: recs.map((r) => r.tmdbId), origin: 'refresh' });
   }
 
   // handleHardRefresh 별도 유지 — 향후 EmptyState 부활 시 또는 Profile CTA 진입점.
@@ -1094,7 +1104,8 @@ export default function DiscoverScreen() {
     await clearRecHistory();
     const filter = toApiFilter(filterType, filterOrigin, filterYear, filterRating, filterOTTs);
     track('recommendation_refresh', { mode: 'hard_explicit' });
-    load(filter, { excludeIds: recs.map((r) => r.tmdbId) });
+    // 2026-06-22 — 명시적 새로고침도 origin='refresh' → ApertureBreathLoader.
+    load(filter, { excludeIds: recs.map((r) => r.tmdbId), origin: 'refresh' });
   }
 
   // Stage 4 D1 / G1-A (Handoff v2 Phase B+C): 탭 = DetailSheet 단일 진입.
@@ -1546,13 +1557,27 @@ export default function DiscoverScreen() {
         style={styles.stackWrap}
         onLayout={(e) => setStackRect(e.nativeEvent.layout)}
       >
-        {state === 'loading' && (
+        {/* 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
+            refresh = 사용자 새로고침 → ApertureBreathLoader (중앙 호흡) 유지.
+            default = 첫 진입 / 필터 변경 → SkeletonCard (카드 윤곽) 로 빈 화면 제거.
+            PWA StatusScreens origin 분기 정합. */}
+        {state === 'loading' && loadOrigin === 'refresh' && (
           <View
             style={styles.centered}
             accessibilityLiveRegion="polite"
             accessibilityLabel="추천을 준비하고 있어요"
           >
             <ApertureBreathLoader size={72} message="추천을 준비하고 있어요" />
+          </View>
+        )}
+
+        {state === 'loading' && loadOrigin !== 'refresh' && (
+          // dual a11y label 회피 (memory feedback_native_a11y_e2e_patterns §2):
+          // 라벨/role 은 SkeletonCard root(progressbar + "추천을 준비하고 있어요")가
+          // 단일 보유. wrapper 는 liveRegion 만 — 중복 라벨 제거. E2E 라벨 검출은
+          // SkeletonCard root 라벨로 유지됨.
+          <View style={styles.stack} accessibilityLiveRegion="polite">
+            <SkeletonCard />
           </View>
         )}
 

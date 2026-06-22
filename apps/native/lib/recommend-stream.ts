@@ -99,13 +99,23 @@ export async function consumeStreamingNDJSON(
         return;
       }
       const { value, done } = await reader.read();
+      // expo/fetch (winter) 일부 경로에서 마지막 데이터 청크가 done=true read 에
+      // 동봉되어 올 수 있다 (표준 web ReadableStream 은 분리하지만 polyfill 안전망).
+      // done 일 때도 value 가 있으면 먼저 디코드 후 break.
+      if (value) buffer += decoder.decode(value, { stream: !done });
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
       for (const line of lines) await handle(line.trim());
     }
-    if (buffer.trim()) await handle(buffer.trim());
+    // stream 종료 — TextDecoder flush (잔여 멀티바이트) 후 남은 라인 전부 처리.
+    // 마지막 청크가 `...timings}\n{done}\n` 형태로 done read 에 동봉돼도
+    // 여기서 split → timings/done 두 라인 모두 emit 된다.
+    const tail = buffer + decoder.decode();
+    for (const line of tail.split('\n')) {
+      const t = line.trim();
+      if (t) await handle(t);
+    }
   } catch (err) {
     if (!(err instanceof Error && err.name === 'AbortError')) {
       callbacks.onError(err instanceof Error ? err.message : String(err));

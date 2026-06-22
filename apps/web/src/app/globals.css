@@ -263,6 +263,18 @@ body::after {
   animation: spin 2.4s linear infinite;
 }
 
+/* Skeleton pulse — DESIGN.md L224-228 (opacity 1↔0.4, 2s ease-soft).
+   Tailwind animate-pulse 는 valley 0.5 라 native SkeletonCard(valley 0.4) 와
+   톤 불일치 → 전용 keyframe 으로 valley 0.4 정합. 위 prefers-reduced-motion
+   가드가 iteration-count:1 로 자동 정지 → 정적 surface (animate-pulse 와 동일). */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.animate-skeleton-pulse {
+  animation: skeleton-pulse 2s var(--ease-soft, cubic-bezier(0.4, 0, 0.2, 1)) infinite;
+}
+
 /* Bridge screen — poster converge animation */
 @keyframes bridge-orbit {
   0% { transform: translate(var(--tx-start), var(--ty-start)) rotate(var(--rot-start)) scale(1); opacity: 0.85; filter: blur(0); }

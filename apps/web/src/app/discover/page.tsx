@@ -23,7 +23,7 @@ import FilterChips from "@/components/discover/FilterChips";
 import DetailSheet from "@/components/discover/DetailSheet";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialFlow, { type TutorialStep } from "@/components/discover/tutorial/TutorialFlow";
-import { LoadingScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
+import { LoadingScreen, SkeletonScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
 import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
 import SearchSheet from "@/components/discover/SearchSheet";
 import DiscoverHeader from "@/components/discover/DiscoverHeader";
@@ -100,6 +100,16 @@ export default function DiscoverPage() {
   // chipsProps.onOTTChange 의 자동 OFF 분기는 사용자 직접 dropdown 변경에만 진입.
   const [myOTTToggle, setMyOTTToggle] = useState(false);
   const [subscribedOtt, setSubscribedOtt] = useState<number[]>([]);
+  // 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
+  //   refreshing=true (사용자 새로고침) → 기존 LoadingScreen(NeqSpinner) 유지.
+  //   refreshing=false (첫 진입 / 필터 변경) → 카드 스켈레톤 (discover/loading.tsx 패턴 인라인).
+  // native index.tsx loadOrigin 분기와 정합. rec.loading 이 false 로 돌아오면 effect 가 reset.
+  const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    // load 완료 시 refresh origin 해제 — 다음 로딩(필터/첫진입)은 다시 skeleton.
+    if (!rec.loading) setRefreshing(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rec.loading readable value 만 deps. rec 객체 전체는 매 렌더 새 객체.
+  }, [rec.loading]);
   const prevFilterOTTsRef = useRef<Set<string> | null>(null);
   useEffect(() => {
     // mount 시 1회 load. Profile 변경 후 복귀는 (Profile 페이지가 router.push 로 navigate
@@ -670,8 +680,13 @@ export default function DiscoverPage() {
   if (rec.loading) {
     const isFirstLoad =
       rec.recs.length === 0 && hasOnboarded() && getSaved().length === 0;
+    // 첫 cold-start 온보딩 로드는 "취향 분석 중" calibrating 일러 유지 (의도된 별개 경험).
     if (isFirstLoad) return <FirstLoadingSkeleton />;
-    return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+    // 2026-06-22 (게이트 0 first_card_p50 11.9s) — origin 분기.
+    //   refreshing (사용자 새로고침) → 기존 LoadingScreen(NeqSpinner) 유지.
+    //   그 외 (첫 진입 / 필터 변경) → 카드 스켈레톤. native loadOrigin 분기와 정합.
+    if (refreshing) return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+    return <SkeletonScreen {...chipsProps} />;
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
   if (filtered.length === 0) {
@@ -686,7 +701,7 @@ export default function DiscoverPage() {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
     // 온보딩 완료했거나 saved 있으면 cold start 아님 → 필터 좁음 메시지 대신 일반 empty 메시지
     const isCold = !hasOnboarded() && getSaved().length === 0;
-    return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={rec.refreshRecommendations} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={() => { setRefreshing(true); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
   // topIdx 가 stack 끝을 넘긴 상태 (B3 fix 후 무한 추가 로드 흐름).
   // - exhausted (prefetch 가 unique=0 응답) → EmptyScreen + 새로고침 안내
@@ -694,7 +709,7 @@ export default function DiscoverPage() {
   //   (전체 LoadingScreen 으로 덮어쓰지 않음 — 사용자 컨텍스트 보존, 2026-05-10 UX 개선)
   if (topIdx >= filtered.length && rec.exhausted) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
-    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={() => { setTopIdx(0); rec.refreshRecommendations(); }} {...chipsProps} />;
+    return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={() => { setTopIdx(0); setRefreshing(true); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
 
   const deckCards = filtered.slice(topIdx, topIdx + 3).reverse();
@@ -791,7 +806,7 @@ export default function DiscoverPage() {
             swipe.setSwiping(true);
             setRewinding(true);
           }}
-          onRefresh={() => { vibrate("light"); setTopIdx(0); rec.refreshRecommendations(); }} />
+          onRefresh={() => { vibrate("light"); setTopIdx(0); setRefreshing(true); rec.refreshRecommendations(); }} />
       </div>
 
       {/* 첫 카드 힌트 토스트 */}
