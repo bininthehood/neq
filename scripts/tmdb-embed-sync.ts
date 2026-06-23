@@ -196,7 +196,7 @@ async function main(): Promise<void> {
     offset += page.length;
 
     for (const r of page) {
-      if (processed >= LIMIT) break;
+      if (processed + pending.length >= LIMIT) break;
       scanned += 1;
       const doc = buildEmbedDocument(r);
       if (!doc.trim()) {
@@ -221,10 +221,10 @@ async function main(): Promise<void> {
         await flush();
         logProgress(processed, skipped, scanned, approxTokenSum, startedAt);
       }
-      if (processed >= LIMIT) break;
+      if (processed + pending.length >= LIMIT) break;
     }
 
-    if (processed >= LIMIT) break;
+    if (processed + pending.length >= LIMIT) break;
     if (page.length < remainingPull) break; // 마지막 페이지
   }
 
