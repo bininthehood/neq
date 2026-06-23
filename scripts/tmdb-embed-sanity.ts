@@ -104,22 +104,25 @@ async function findSeed(
 }
 
 async function loadPopulation(admin: SupabaseClient): Promise<Row[]> {
+  // keyset 페이지네이션 — deep OFFSET(.range) 은 providers≠null 필터에서 statement timeout.
+  // idx_metadata_providers_keyset (tmdb_id, media_type) WHERE providers IS NOT NULL 활용.
   const rows: Row[] = [];
-  let offset = 0;
+  let cursorId = -1;
   for (;;) {
     const { data, error } = await admin
       .from("tmdb_metadata")
       .select("tmdb_id, media_type, title, title_en, release_date, embedding")
       .not("providers", "is", null)
       .not("embedding", "is", null)
+      .gt("tmdb_id", cursorId)
       .order("tmdb_id", { ascending: true })
       .order("media_type", { ascending: true })
-      .range(offset, offset + PULL_PAGE - 1);
+      .limit(PULL_PAGE);
     if (error) throw new Error(`[tmdb-embed-sanity] 모집단 pull 실패: ${error.message}`);
     const page = (data ?? []) as Row[];
     if (page.length === 0) break;
     rows.push(...page);
-    offset += page.length;
+    cursorId = page[page.length - 1].tmdb_id;
     if (page.length < PULL_PAGE) break;
   }
   return rows;
