@@ -10,8 +10,13 @@ import type { SearchResult } from "@/lib/types";
  * - dept=Directing: crew 에서 job==='Director' (또는 department==='Directing') 만 필터
  * - dept=Acting (기본):   cast 배열 사용 (출연작)
  * - 중복 id 제거 (감독+출연 동시 케이스 안전)
- * - cap: 12 개 — UI 그리드 (3열 × 4줄) 충분량
- * - 포스터 없는 항목 제외 — UI 가 fallback 으로 표시 가능하지만 노이즈가 많아 필터.
+ * - cap: 사실상 전체 (안전 상한 200). 정렬(score desc 관련도순)은 유지 — 메이저작 상위.
+ * - 포스터 없는 항목 제외 — UI 그리드 렌더 불가 + 보통 uncredited/단역 노이즈라 필터.
+ *
+ * 위임 #05 (2026-06-23) — 필모그래피 완전성 버그 수정: slice(0,12) 캡 제거.
+ *  - 드웨인 존슨 메이저작 12개 초과 → '센트럴 인텔리전스'(2016) 점수상 밀려 누락되던 문제.
+ *  - 센트럴 인텔리전스는 poster_path 보유 → 순전히 개수 캡 문제였음. 캡 제거로 자연 위치에 포함.
+ *  - dedup / movie·tv 한정 / 토크쇼·리얼리티·뉴스 제외 / poster 필터는 회귀 방지 위해 유지.
  *
  * 위임 P #5 (2026-05-02) — 사용자 직접 테스트: "톰 행크스 검색 시 토크쇼만 나옴" 회귀 수정.
  *  - 토크쇼/리얼리티/뉴스 장르 제외 (TMDB genre id 10763 News, 10764 Reality, 10767 Talk).
@@ -86,7 +91,9 @@ export async function GET(req: NextRequest) {
 
   filtered.sort((a, b) => score(b) - score(a));
 
-  const works: SearchResult[] = filtered.slice(0, 12).map((c) => ({
+  // 캡 제거: 전 작품 반환 (안전 상한 200 만 유지 — TMDB 단일 응답이라 실측 대부분 그 이하).
+  // 정렬은 score desc 유지 → 메이저작 상위, 센트럴 인텔리전스 등 중위 작품도 빠짐없이 포함.
+  const works: SearchResult[] = filtered.slice(0, 200).map((c) => ({
     id: c.id,
     title: (c.title ?? c.name ?? "") as string,
     posterUrl: posterUrl(c.poster_path, "w200"),

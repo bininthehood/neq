@@ -102,10 +102,32 @@ export type RecommendResult = {
   meta?: CurationMeta;
 };
 
+import type { RecommendCardSource } from "../types";
+
 export type StreamingCallbacks = {
-  onCard: (rec: Recommendation) => void;
+  /**
+   * 카드 1장 emit.
+   * 1.0.4 트랙 B (2026-06-23) — optional `source` 추가.
+   *   - "mirror": Phase 0 rankCandidatesScore 즉시 emit (first_card 당김).
+   *   - "llm":    Phase 1 LLM 신규 pick.
+   *   - 미지정:   fallback / phase2 (옛 동작 그대로 — route.ts 가 source 미부착).
+   * source 는 route.ts 의 emit 에서 NDJSON `card.source` 로 직렬화. 옛 reader 무시.
+   */
+  onCard: (rec: Recommendation, source?: RecommendCardSource) => void;
   onTimings: (timings: Record<string, number>) => void;
   onUsage: (usage: TokenUsage) => void;
   /** Phase A-3/A-4 (2026-06-06) — meta 흐름. cold-start 시 미호출. */
   onMeta?: (meta: CurationMeta) => void;
+  /**
+   * 1.0.4 트랙 B — 이미 emit 된 mirror 카드의 reason 을 LLM 결과로 교체.
+   *   route.ts → NDJSON {type:"reswap", id, reason}. 옛 reader 무시.
+   *   카드 재전송 없이 id(tmdbId) 로 기존 카드 reason 만 갱신하라는 신호.
+   */
+  onReswap?: (id: number, reason: string) => void;
+  /**
+   * 1.0.4 트랙 B — LLM 권장 전체 노출 순서(tmdbId[]).
+   *   route.ts → NDJSON {type:"rank_done", order}. 옛 reader 무시.
+   *   적용 시점/대상(안 본 카드만, drag idle) 판단은 클라이언트 책임.
+   */
+  onRankDone?: (order: number[]) => void;
 };

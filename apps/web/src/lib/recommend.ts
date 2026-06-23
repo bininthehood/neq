@@ -657,12 +657,110 @@ export async function getRecommendationsStreaming(
     timings[key] = (timings[key] ?? 0) + Math.round(performance.now() - t0);
   };
 
-  // Cold start (변경 0)
+  // ── Cold start (favorites 비어있음) ──
+  // 1.0.4 트랙 B 확장 (2026-06-23): no-favorites 경로에도 mirror Phase 0 적용.
+  //   기존: getColdStartRecommendations (live TMDB discoverByGenres + enrich, ~4.9s)
+  //         → 50장 일괄 emit, first_card = 전체 완료 시점 (source 없음).
+  //   신규: generateCandidates (mirror SQL, rating DESC, 인덱스로 ~150ms) → 빈 profile
+  //         이라 평점/인기순 후보. rankCandidatesScore 상위 ~10장을 source="mirror" 로
+  //         즉시 emit → first_card <3s. 나머지는 score-fill 로 백그라운드 채움.
+  //   with-favorites 경로(아래 §match~)는 건드리지 않는다 — 이미 동작.
+  //   LLM rank 는 cold-start (persona 신호 없음) 에 불필요 → 생략. 품질은 rating 순.
   if (favorites.length === 0) {
-    const t = performance.now();
-    const recs = await getColdStartRecommendations(filter, exclude);
-    mark("cold", t);
-    for (const rec of recs) callbacks.onCard(rec);
+    // 빈 PersonaProfile — favorites/장르 신호 없음 → generateCandidates 가 genre
+    //   필터 미적용 (rating DESC 만). subscribedOtt 는 약신호로 SQL/post-fetch 반영.
+    const coldProfile: PersonaProfile = {
+      favoriteGenreIds: [],
+      favoriteTmdbIds: [],
+      tasteGenres,
+      subscribedOtt: providerIdsToTmdbNames(subscribedOtt),
+      favoriteDecades: [],
+    };
+
+    let coldCandidates: TmdbCandidate[] = [];
+    const tColdCands = performance.now();
+    try {
+      coldCandidates = await generateCandidates(
+        coldProfile,
+        filter,
+        excludeIds ?? [],
+        500, // poolSize — 정상 경로와 동일
+      );
+    } catch (err) {
+      console.error(
+        "[cold-start streaming] generateCandidates failed, falling back:",
+        err,
+      );
+    }
+    mark("candidates", tColdCands);
+
+    // mirror 후보 0/throws → 기존 live TMDB cold-start 로 폴백 (변경 전 동작 보존).
+    if (coldCandidates.length === 0) {
+      const t = performance.now();
+      const recs = await getColdStartRecommendations(filter, exclude);
+      mark("cold", t);
+      for (const rec of recs) callbacks.onCard(rec);
+      callbacks.onTimings(timings);
+      return;
+    }
+
+    const candidateById = new Map(
+      coldCandidates.map((c) => [c.tmdbId, c]),
+    );
+    const usedIds = new Set<number>();
+    const usedTitles = new Set<string>();
+
+    // Phase 0: mirror score 상위 ~10장 즉시 emit (source="mirror") → first_card 당김.
+    const MIRROR_PREVIEW = 10;
+    const tMirror = performance.now();
+    {
+      const scored = rankCandidatesScore({
+        candidates: coldCandidates,
+        favorites,
+        feedback,
+        savedCount,
+        onboardingCount,
+        tasteGenres,
+        subscribedOttIds: subscribedOtt,
+        tasteSummary,
+        excludeCount: excludeIds?.length ?? 0,
+        count: MIRROR_PREVIEW,
+      });
+      for (const { id, reason } of scored.picks) {
+        if (usedIds.size >= MIRROR_PREVIEW) break;
+        const tc = candidateById.get(id);
+        if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+        const enriched = tmdbCandidateToEnriched(tc);
+        usedIds.add(tc.tmdbId);
+        usedTitles.add(tc.title);
+        callbacks.onCard(buildRecommendationObject(enriched, reason), "mirror");
+      }
+    }
+    mark("mirror", tMirror);
+
+    // Phase 2: 잔여 후보 score-fill (top 20 유지 + 나머지 셔플) → 50장까지 채움.
+    //   정상 경로 §phase2 패턴 동일. cold-start 도 충분한 카드 보장 (회귀 방지).
+    const tPhase2 = performance.now();
+    const fillPool = coldCandidates.filter(
+      (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
+    );
+    const fillTop = fillPool.slice(0, 20);
+    const fillRest = fillPool.slice(20).sort(() => Math.random() - 0.5);
+    const fillSlots = Math.max(0, 50 - usedIds.size);
+    const fillRecs: Recommendation[] = [];
+    for (const tc of [...fillTop, ...fillRest]) {
+      if (fillRecs.length >= fillSlots) break;
+      if (usedTitles.has(tc.title)) continue;
+      usedTitles.add(tc.title);
+      const enriched = tmdbCandidateToEnriched(tc);
+      fillRecs.push(
+        buildRecommendationObject(enriched, templateReason(enriched)),
+      );
+    }
+    mark("phase2", tPhase2);
+    const reordered = applyDiversityReorder(fillRecs);
+    for (const rec of reordered) callbacks.onCard(rec);
+
     callbacks.onTimings(timings);
     return;
   }
@@ -802,11 +900,55 @@ export async function getRecommendationsStreaming(
   const usedTitles = new Set<string>();
   let phase1Count = 0;
 
-  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지)
+  // ── Phase 0 (1.0.4 트랙 B, 2026-06-23): mirror score 첫 카드 즉시 emit ──
+  // candidates 완료 직후 동기 rankCandidatesScore 로 상위 ~10장을 source="mirror" 로
+  // 즉시 흘린다 → first_card 가 LLM(수 초) 완료 전, candidates 완료 시점으로 당겨짐.
+  // mirrorEmittedIds 에 기록 → Phase 1 에서 동일 id 는 reswap, 신규 id 만 card.
+  const MIRROR_PREVIEW = 10;
+  const mirrorEmittedIds = new Set<number>();
+  const tMirror = performance.now();
+  {
+    const scored = rankCandidatesScore({
+      candidates: tmdbCandidates,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOttIds: subscribedOtt,
+      tasteSummary,
+      excludeCount: matchedIdsSet.size,
+      count: MIRROR_PREVIEW,
+    });
+    for (const { id, reason } of scored.picks) {
+      if (mirrorEmittedIds.size >= MIRROR_PREVIEW) break;
+      const tc = candidateById.get(id);
+      if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+      const enriched = tmdbCandidateToEnriched(tc);
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
+      mirrorEmittedIds.add(tc.tmdbId);
+      phase1Count += 1;
+      callbacks.onCard(buildRecommendationObject(enriched, reason), "mirror");
+    }
+  }
+  mark("mirror", tMirror);
+
+  // ── D1 (1.0.4): LLM 후보 500 → 상위 150 slice ──
+  // tmdbCandidates 는 totalScore desc 정렬(generateCandidates) → 상위 slice 가 곧 최상위.
+  // user prompt 토큰 ~30K → ~9K, rank latency ~14s → ~6s 기대.
+  const LLM_CANDIDATE_LIMIT = 150;
+  const llmCandidates = tmdbCandidates.slice(0, LLM_CANDIDATE_LIMIT);
+
+  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 처리.
+  //   - mirror 가 이미 emit 한 id → onReswap (reason 만 LLM 결과로 교체)
+  //   - 신규 id → onCard(source="llm")
+  //   - 완료 후 LLM 권장 순서(order) → onRankDone
   const tRank = performance.now();
+  const llmOrder: number[] = [];
   const usage = await rankCandidatesLLMStreaming(
     {
-      candidates: tmdbCandidates,
+      candidates: llmCandidates,
       favorites,
       feedback,
       savedCount,
@@ -818,24 +960,35 @@ export async function getRecommendationsStreaming(
       count: 20,
     },
     (pick) => {
-      if (phase1Count >= 20) return;
       const tc = candidateById.get(pick.id);
       if (!tc) return;
+      // LLM 권장 순서 누적 (mirror/신규 무관 — 전체 순서 신호).
+      llmOrder.push(tc.tmdbId);
+      // 이미 mirror 로 emit 된 카드 → reason 만 교체 (카드 재전송 안 함).
+      if (mirrorEmittedIds.has(tc.tmdbId)) {
+        callbacks.onReswap?.(tc.tmdbId, pick.reason);
+        return;
+      }
+      if (phase1Count >= 20 + MIRROR_PREVIEW) return;
       if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) return;
       const enriched = tmdbCandidateToEnriched(tc);
       usedIds.add(tc.tmdbId);
       usedTitles.add(tc.title);
       phase1Count += 1;
-      callbacks.onCard(buildRecommendationObject(enriched, pick.reason));
+      callbacks.onCard(buildRecommendationObject(enriched, pick.reason), "llm");
     },
     (meta) => callbacks.onMeta?.(meta),
   );
   mark("rank", tRank);
 
+  // LLM 권장 전체 순서 emit — 클라이언트가 안 본 카드만/drag idle 시 재정렬에 사용.
+  if (llmOrder.length > 0) callbacks.onRankDone?.(llmOrder);
+
   if (usage) callbacks.onUsage(usage);
 
-  // LLM picks 0 안전망 — rankCandidatesScore 로 phase 1 자리 채움.
-  // (외부 호출 실패 / JSON 파싱 실패 / normalize 0 통과 등)
+  // 안전망 — Phase 0 mirror + Phase 1 LLM 모두 0 카드인 극단 케이스 (전 후보 reason
+  // normalize 실패 등). 정상 happy path 는 Phase 0 mirror 가 이미 ~10장 emit 하므로
+  // phase1Count > 0 → 본 블록 skip. 1.0.4 이전엔 LLM 단독 0 케이스를 막던 자리.
   if (phase1Count === 0) {
     const ranked = rankCandidatesScore({
       candidates: tmdbCandidates,

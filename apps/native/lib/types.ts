@@ -26,6 +26,12 @@ export type {
   AccountPrefs,
   NotificationPrefs,
   NekoPushSubscriptionJSON,
+  // 1.0.4 latency cycle — /api/recommend NDJSON streaming protocol (web+native 공유)
+  RecommendCardSource,
+  RecommendStreamMessage,
+  RecommendStreamCard,
+  RecommendStreamReswap,
+  RecommendStreamRankDone,
 } from '@neq/core';
 
 export { USER_DATA_SCHEMA_VERSION } from '@neq/core';

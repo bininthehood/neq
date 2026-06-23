@@ -122,12 +122,18 @@ export async function POST(req: NextRequest) {
             savedCount,
             onboardingCount,
             {
-              onCard: (rec) => emit({ type: "card", rec }),
+              // 1.0.4 트랙 B (2026-06-23) — source 부착(mirror/llm). 미지정 시
+              // 필드 생략 → 옛 1.0.3 reader 와 바이트 호환 (card.source optional).
+              onCard: (rec, source) =>
+                emit(source ? { type: "card", rec, source } : { type: "card", rec }),
               onTimings: (timings) => emit({ type: "timings", timings }),
               onUsage: (usage) => emit({ type: "usage", usage }),
               // Phase A-4 (2026-06-06) — LLM meta (diversity_axis / temperature
               // / seed) 흐름. cold-start 경로는 onMeta 미호출.
               onMeta: (meta) => emit({ type: "meta", meta }),
+              // 1.0.4 트랙 B — reswap/rank_done. 옛 reader 는 미지 type 무시 → 안전.
+              onReswap: (id, reason) => emit({ type: "reswap", id, reason }),
+              onRankDone: (order) => emit({ type: "rank_done", order }),
             },
             useMirror,
             tasteGenres,

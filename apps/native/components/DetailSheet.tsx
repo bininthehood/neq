@@ -6,6 +6,7 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  FlatList,
   Dimensions,
   Linking,
   Share,
@@ -1480,55 +1481,64 @@ function RelatedListScreen({
           <Text style={styles.subScreenStatusText}>표시할 작품이 없어요</Text>
         </View>
       ) : (
-      <ScrollView
-        contentContainerStyle={[
-          styles.subScreenGrid,
-          { paddingBottom: insets.bottom + spacing.xl },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {works.map((w) => (
-          <Pressable
-            key={w.id}
-            disabled={disabled}
-            onPress={() => onItemPress(w)}
-            accessibilityRole="button"
-            accessibilityLabel={`${w.title} 상세 보기`}
-            style={({ pressed }) => [
-              styles.subScreenCard,
-              { width: cardWidth },
-              pressed && { opacity: 0.75 },
-              disabled && { opacity: 0.5 },
-            ]}
-          >
-            <View
-              style={[
-                styles.subScreenPosterWrap,
-                { width: cardWidth, height: posterHeight },
+        // 2026-06-23 — 전 작품 반환 전환으로 항목 수 급증 가능 → ScrollView+map 에서
+        // FlatList 가상화로 교체. 3-col 유지, 행 무제한 스크롤. 헤더/loading/error/empty
+        // 는 FlatList 밖 유지 (위 분기). keyExtractor 는 id+mediaType (collection 등에서
+        // 동일 id 가 movie/tv 로 중복될 가능성 차단).
+        <FlatList
+          data={works}
+          keyExtractor={(w) => `${w.id}-${w.mediaType}`}
+          numColumns={3}
+          columnWrapperStyle={styles.subScreenColumn}
+          contentContainerStyle={[
+            styles.subScreenGrid,
+            { paddingBottom: insets.bottom + spacing.xl },
+          ]}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={12}
+          windowSize={5}
+          removeClippedSubviews
+          renderItem={({ item: w }) => (
+            <Pressable
+              disabled={disabled}
+              onPress={() => onItemPress(w)}
+              accessibilityRole="button"
+              accessibilityLabel={`${w.title} 상세 보기`}
+              style={({ pressed }) => [
+                styles.subScreenCard,
+                { width: cardWidth },
+                pressed && { opacity: 0.75 },
+                disabled && { opacity: 0.5 },
               ]}
             >
-              {w.posterUrl ? (
-                <Image
-                  source={{ uri: w.posterUrl }}
-                  style={StyleSheet.absoluteFill}
-                  contentFit="cover"
-                  transition={0}
-                />
-              ) : (
-                <RelatedPosterFallback title={w.title} />
-              )}
-            </View>
-            <Text style={styles.subScreenItemTitle} numberOfLines={2}>
-              {w.title}
-            </Text>
-            {w.year ? (
-              <Text style={styles.subScreenItemYear} numberOfLines={1}>
-                {w.year}
+              <View
+                style={[
+                  styles.subScreenPosterWrap,
+                  { width: cardWidth, height: posterHeight },
+                ]}
+              >
+                {w.posterUrl ? (
+                  <Image
+                    source={{ uri: w.posterUrl }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    transition={0}
+                  />
+                ) : (
+                  <RelatedPosterFallback title={w.title} />
+                )}
+              </View>
+              <Text style={styles.subScreenItemTitle} numberOfLines={2}>
+                {w.title}
               </Text>
-            ) : null}
-          </Pressable>
-        ))}
-      </ScrollView>
+              {w.year ? (
+                <Text style={styles.subScreenItemYear} numberOfLines={1}>
+                  {w.year}
+                </Text>
+              ) : null}
+            </Pressable>
+          )}
+        />
       )}
     </View>
   );
@@ -2009,15 +2019,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: -0.15,
   },
+  // 2026-06-23 — FlatList numColumns 전환. contentContainer 는 더 이상 flex row/wrap
+  // 을 직접 관리하지 않음 (FlatList 가 행/열 배치). 좌우 패딩 + 상단 패딩만 유지.
+  // 산식 (cardWidth) 은 좌우 paddingHorizontal 20 + columnGap 12*2 기준 그대로.
   subScreenGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    // 2026-06-15 (build 27 fix iteration) — UX FIX 2: 22 → 20.
     // DESIGN.md L154 (4px 배수, 20 = 5×) + L156 (콘텐츠 좌우 20px) 정합.
-    // cardWidth 산식도 같이 정정 (위 L1264).
     paddingHorizontal: 20,
     paddingTop: spacing.lg,
-    gap: 12, // row/column 통합 gap. RN 0.71+ 지원.
+  },
+  // 한 행(3 카드) 의 가로 간격 — gap 12 로 셀 사이 균등. 마지막 행이 1~2개여도
+  // 좌측 정렬 유지 (space-between 의 끝 카드 벌어짐 회피). 행 간격은 marginBottom.
+  subScreenColumn: {
+    gap: 12,
+    marginBottom: 12,
   },
   subScreenCard: {
     // width 는 inline (cardWidth) 으로 주입. grid item.

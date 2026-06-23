@@ -1,5 +1,5 @@
 import { createApiClient } from '@neq/core';
-import type { Recommendation, RecommendFilter } from '@neq/core';
+import type { Recommendation, RecommendFilter, RecommendCardSource } from '@neq/core';
 // expo/fetch — Hermes 환경에서 `response.body.getReader()` 지원 보장.
 // 기본 RN fetch 는 body 가 ReadableStream 이 아니라 string 으로 전체 받음 (streaming 미작동).
 // 일반 (non-streaming) 호출은 기본 fetch 그대로 사용 — 영향 최소화.
@@ -179,8 +179,21 @@ export async function fetchRecommendations(
 // =============================================================================
 
 interface StreamingCallbacks {
-  /** 카드 1장 도착 시 호출. 순서대로 점진 수신. */
-  onCard: (rec: Recommendation) => void;
+  /**
+   * 카드 1장 도착 시 호출. 순서대로 점진 수신.
+   * source — 1.0.4 latency cycle: 'mirror'(score 즉시 emit) | 'llm'(LLM pick) | undefined(fallback).
+   */
+  onCard: (rec: Recommendation, source?: RecommendCardSource) => void;
+  /**
+   * 1.0.4 latency cycle (트랙 B) — 이미 emit 된 mirror 카드의 reason 만 교체.
+   * id = Recommendation.tmdbId. swap 적용 정책(보고 있는 카드 불변)은 호출자 책임.
+   */
+  onReswap?: (id: number, reason: string) => void;
+  /**
+   * 1.0.4 latency cycle (트랙 B) — LLM 권장 전체 노출 순서 (tmdbId[]).
+   * 안 본 카드만 / drag idle 시 재정렬 — 적용 시점/대상 판단은 호출자 책임.
+   */
+  onRankDone?: (order: number[]) => void;
   /** 전체 stream 종료 시 호출 (timings/usage 받은 후). */
   onComplete?: () => void;
   /** stream/네트워크 오류 시 호출. */
@@ -268,10 +281,10 @@ export async function fetchRecommendationsStreaming(
       await consumeStreamingNDJSON(
         res,
         {
-          onCard: (rec) => {
+          onCard: (rec, source) => {
             if (firstCardAt === null) firstCardAt = Date.now();
             count += 1;
-            callbacks.onCard(rec);
+            callbacks.onCard(rec, source);
           },
           onTimings: (timings) => {
             bodyTimings = timingsToProps(timings);
@@ -281,6 +294,13 @@ export async function fetchRecommendationsStreaming(
           },
           onMeta: (meta) => {
             metaProps = metaToProps(meta);
+          },
+          // 1.0.4 latency cycle (트랙 B) — reswap/rank_done passthrough.
+          onReswap: (id, reason) => {
+            callbacks.onReswap?.(id, reason);
+          },
+          onRankDone: (order) => {
+            callbacks.onRankDone?.(order);
           },
           onError: (msg) => {
             callbacks.onError?.(new Error(msg));
@@ -298,17 +318,31 @@ export async function fetchRecommendationsStreaming(
           const lines = text.split('\n').filter((l) => l.trim());
           for (const line of lines) {
             try {
-              const msg = JSON.parse(line) as { type?: string; rec?: Recommendation; timings?: unknown; usage?: unknown; meta?: unknown };
+              const msg = JSON.parse(line) as {
+                type?: string;
+                rec?: Recommendation;
+                source?: RecommendCardSource;
+                id?: number;
+                reason?: string;
+                order?: number[];
+                timings?: unknown;
+                usage?: unknown;
+                meta?: unknown;
+              };
               if (msg.type === 'card' && msg.rec) {
                 if (firstCardAt === null) firstCardAt = Date.now();
                 count += 1;
-                callbacks.onCard(msg.rec);
+                callbacks.onCard(msg.rec, msg.source);
               } else if (msg.type === 'timings') {
                 bodyTimings = timingsToProps(msg.timings);
               } else if (msg.type === 'usage') {
                 usageProps = usageToProps(msg.usage);
               } else if (msg.type === 'meta') {
                 metaProps = metaToProps(msg.meta);
+              } else if (msg.type === 'reswap' && typeof msg.id === 'number' && typeof msg.reason === 'string') {
+                callbacks.onReswap?.(msg.id, msg.reason);
+              } else if (msg.type === 'rank_done' && Array.isArray(msg.order)) {
+                callbacks.onRankDone?.(msg.order);
               }
             } catch { /* skip malformed */ }
           }

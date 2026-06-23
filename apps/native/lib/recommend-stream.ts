@@ -1,4 +1,4 @@
-import type { Recommendation } from './types';
+import type { Recommendation, RecommendCardSource } from './types';
 
 /**
  * /api/recommend NDJSON stream 응답 처리 — web `apps/web/src/lib/recommend-stream.ts` 정합.
@@ -46,11 +46,21 @@ const __test_delayStream: number = (() => {
 export async function consumeStreamingNDJSON(
   response: Response,
   callbacks: {
-    onCard: (rec: Recommendation) => void;
+    onCard: (rec: Recommendation, source?: RecommendCardSource) => void;
     onTimings: (timings: unknown) => void;
     onUsage: (usage: unknown) => void;
     /** Phase A-4 (2026-06-06) — LLM meta 흐름. 미정의 시 line 무시. */
     onMeta?: (meta: unknown) => void;
+    /**
+     * 1.0.4 latency cycle (트랙 B) — 이미 emit 된 mirror 카드의 reason 만 교체.
+     * id = Recommendation.tmdbId. 미정의 시 line 무시 (옛 reader 하위호환).
+     */
+    onReswap?: (id: number, reason: string) => void;
+    /**
+     * 1.0.4 latency cycle (트랙 B) — LLM 권장 전체 노출 순서 (tmdbId[]).
+     * 미정의 시 line 무시.
+     */
+    onRankDone?: (order: number[]) => void;
     onError: (msg: string) => void;
   },
   signal?: AbortSignal,
@@ -72,13 +82,17 @@ export async function consumeStreamingNDJSON(
       const msg = JSON.parse(line) as {
         type?: string;
         rec?: Recommendation;
+        source?: RecommendCardSource;
+        id?: number;
+        reason?: string;
+        order?: number[];
         timings?: unknown;
         usage?: unknown;
         meta?: unknown;
         message?: string;
       };
       if (msg.type === 'card' && msg.rec) {
-        callbacks.onCard(msg.rec);
+        callbacks.onCard(msg.rec, msg.source);
         // race window 확장 — __test_delayStream 활성 시에만 sleep.
         if (__test_delayStream > 0) {
           await new Promise<void>((resolve) => setTimeout(resolve, __test_delayStream));
@@ -86,7 +100,12 @@ export async function consumeStreamingNDJSON(
       } else if (msg.type === 'timings') callbacks.onTimings(msg.timings);
       else if (msg.type === 'usage') callbacks.onUsage(msg.usage);
       else if (msg.type === 'meta') callbacks.onMeta?.(msg.meta);
-      else if (msg.type === 'error') callbacks.onError(msg.message ?? 'stream error');
+      // 1.0.4 신규 — reswap / rank_done. 옛 reader 는 미지 type 이라 무시 (else 없음).
+      else if (msg.type === 'reswap' && typeof msg.id === 'number' && typeof msg.reason === 'string') {
+        callbacks.onReswap?.(msg.id, msg.reason);
+      } else if (msg.type === 'rank_done' && Array.isArray(msg.order)) {
+        callbacks.onRankDone?.(msg.order);
+      } else if (msg.type === 'error') callbacks.onError(msg.message ?? 'stream error');
     } catch {
       /* malformed line, skip */
     }

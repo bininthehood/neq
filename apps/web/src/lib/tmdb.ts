@@ -49,7 +49,9 @@ export async function searchMulti(query: string): Promise<TMDBResult[]> {
   const data = await res.json();
   return (data.results ?? [])
     .filter((r: TMDBResult & { media_type?: string }) => r.media_type === "movie" || r.media_type === "tv")
-    .slice(0, 6)
+    // 위임 #05 (2026-06-23) — 검색 결과 미흡 완화: 작품 cap 6 → 20.
+    // search/multi 1페이지(최대 20건) 내에서 movie/tv 만 추렸을 때 사실상 전부 노출.
+    .slice(0, 20)
     .map((r: TMDBResult) => ({
       ...r,
       title: r.title ?? r.name,
@@ -85,7 +87,7 @@ export interface TMDBMultiGroupedRaw {
 /**
  * search/multi 1회 호출로 작품 + 인물을 함께 가져온다 (grouped=1 응답용).
  *
- * - 작품(movie/tv): 기존 searchMulti 와 동일한 6개 cap 적용.
+ * - 작품(movie/tv): 기존 searchMulti 와 동일한 cap 적용 (위임 #05 로 6 → 20 완화).
  * - 인물(person): 모든 결과 반환 (라우트에서 Directing/Acting 분류 후 cap).
  *
  * 추가 API 호출 0 — known_for / known_for_department / profile_path 모두 search/multi 응답에 포함.
@@ -103,7 +105,8 @@ export async function searchMultiGrouped(query: string): Promise<TMDBMultiGroupe
       (r as { media_type?: string }).media_type === "movie" ||
       (r as { media_type?: string }).media_type === "tv"
     )
-    .slice(0, 6)
+    // 위임 #05 (2026-06-23) — 검색 결과 미흡 완화: 작품 cap 6 → 20.
+    .slice(0, 20)
     .map((r) => ({ ...r, title: r.title ?? r.name }));
 
   const persons = all.filter((r): r is TMDBPersonRaw =>

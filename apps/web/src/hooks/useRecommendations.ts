@@ -191,6 +191,92 @@ export function useRecommendations() {
   });
   const abortRef = useRef<AbortController | null>(null);
 
+  // ── 1.0.4 latency cycle (트랙 B) — mirror→LLM swap 적용 ───────────────────
+  //
+  // 정책 (입력 정본 §16 안전 디폴트, [[feedback_swipe_ux]] 충돌 차단):
+  //   - 보고 있는/이미 본 카드 (index ≤ topIdx) 절대 불변. reason 도 안 바꿈.
+  //   - 안 본 카드 (index ≥ topIdx+2) 만 reswap reason 교체 + rank_done 순서 재정렬.
+  //   - 재정렬 commit 은 드래그 idle 시에만. 스와이프 중이면 page 가 drag-end 에
+  //     flushPendingReorder() 호출 → 그때 commit.
+  //   - rank_done 은 한 번만 처리 (안 본 영역 순서 확정).
+  //
+  // 제약: topIdx / drag 상태는 discover/page.tsx 소유 (병렬 세션, 본 세션 수정 금지).
+  // 따라서 hook 은 swap context 를 page 가 주입(registerSwapContext)하기 전까지
+  // boundary=+Infinity (안 본 카드 없음 = swap 대상 0) 로 두어 **정책 위반을 원천 차단**.
+  // page 가 wire 하면 안 본 카드만 정확히 swap. wire 안 해도 latency 이득(mirror
+  // 첫 카드)은 기존 onCard 경로로 자동 적용 — swap 은 보수적 no-op.
+  const SWAP_SAFE_GAP = 2;
+  const swapContextRef = useRef<{
+    getBoundary: () => number;
+    isDragIdle: () => boolean;
+  }>({
+    getBoundary: () => Number.POSITIVE_INFINITY, // 미주입 시 안 본 카드 0.
+    isDragIdle: () => true,
+  });
+  const rankDoneHandledRef = useRef(false);
+  const pendingRankOrderRef = useRef<number[] | null>(null);
+
+  /** page(discover/page.tsx)가 topIdx/drag 컨텍스트를 주입. 미호출 시 swap no-op. */
+  const registerSwapContext = (ctx: { getBoundary: () => number; isDragIdle: () => boolean }) => {
+    swapContextRef.current = ctx;
+  };
+
+  /** reason 교체 — 안 본 카드만 (index ≥ topIdx+gap). 보고 있는/이미 본 불변. */
+  const applyReswap = (id: number, reason: string) => {
+    const boundary = swapContextRef.current.getBoundary() + SWAP_SAFE_GAP;
+    setRecs((prev) => {
+      const idx = prev.findIndex((r) => r.tmdbId === id);
+      if (idx < boundary) return prev; // 보고 있는/곧 볼 카드 → 불변.
+      if (prev[idx].reason === reason) return prev;
+      const next = prev.slice();
+      next[idx] = { ...next[idx], reason };
+      return next;
+    });
+  };
+
+  /** 안 본 영역 재정렬 — order(tmdbId[]) 권장 순. boundary 이전 고정, 이후만 재배열. */
+  const commitReorder = (order: number[]) => {
+    const boundary = swapContextRef.current.getBoundary() + SWAP_SAFE_GAP;
+    setRecs((prev) => {
+      if (!Number.isFinite(boundary) || boundary >= prev.length) return prev;
+      const head = prev.slice(0, boundary);
+      const tail = prev.slice(boundary);
+      const rankPos = new Map<number, number>();
+      order.forEach((id, i) => rankPos.set(id, i));
+      const sortedTail = tail
+        .map((rec, i) => ({ rec, i }))
+        .sort((a, b) => {
+          const ra = rankPos.has(a.rec.tmdbId) ? (rankPos.get(a.rec.tmdbId) as number) : Number.MAX_SAFE_INTEGER;
+          const rb = rankPos.has(b.rec.tmdbId) ? (rankPos.get(b.rec.tmdbId) as number) : Number.MAX_SAFE_INTEGER;
+          if (ra !== rb) return ra - rb;
+          return a.i - b.i; // tie → 원순서 안정.
+        })
+        .map((x) => x.rec);
+      return [...head, ...sortedTail];
+    });
+  };
+
+  /** rank_done 수신 — idle 이면 즉시, drag 중이면 pending. */
+  const handleRankDone = (order: number[]) => {
+    if (rankDoneHandledRef.current) return; // 1회만.
+    if (swapContextRef.current.isDragIdle()) {
+      rankDoneHandledRef.current = true;
+      commitReorder(order);
+    } else {
+      pendingRankOrderRef.current = order;
+    }
+  };
+
+  /** page 가 drag-end(idle 전이) 시 호출 — defer 된 reorder commit. */
+  const flushPendingReorder = () => {
+    const order = pendingRankOrderRef.current;
+    if (order && !rankDoneHandledRef.current && swapContextRef.current.isDragIdle()) {
+      rankDoneHandledRef.current = true;
+      pendingRankOrderRef.current = null;
+      commitReorder(order);
+    }
+  };
+
   const loadRecs = async (ft: FilterType, fo: FilterOrigin, fy: FilterYear = "all", otts?: Set<string>) => {
     // 새 로드 시점 = candidate pool 재시도 가능. exhausted 해제.
     exhaustedRef.current = false;
@@ -249,6 +335,9 @@ export function useRecommendations() {
     abortRef.current = controller;
     setLoading(true);
     setLoadError(null);
+    // 1.0.4 트랙 B — 새 stream = 새 rank. swap defer 상태 reset.
+    rankDoneHandledRef.current = false;
+    pendingRankOrderRef.current = null;
     const t0 = performance.now();
     const isFirstEntry = firstEntryRef.current;
     firstEntryRef.current = false;
@@ -381,10 +470,16 @@ export function useRecommendations() {
 
       if (isStream) {
         await consumeStreamingNDJSON(res, {
-          onCard: acceptCard,
+          // 1.0.4 트랙 B — source('mirror'|'llm')는 수신만. 첫 카드(mirror 포함)에서
+          // acceptCard 가 setLoading(false) → first_card 가 mirror Phase 0 시점으로 당겨짐.
+          onCard: (rec) => acceptCard(rec),
           onTimings: (t) => { timingsMeta = t; },
           onUsage: (u) => { usageMeta = u; },
           onMeta: (m) => { llmMeta = m; },
+          // 1.0.4 트랙 B — mirror 카드 reason 교체 (안 본 카드만, applyReswap 내부 가드).
+          onReswap: (id, reason) => applyReswap(id, reason),
+          // 1.0.4 트랙 B — LLM 권장 순서 (안 본 영역만, drag idle 시에만 commit).
+          onRankDone: (order) => handleRankDone(order),
           onError: (msg) => { setLoadError(msg); },
         }, controller.signal);
       } else {
@@ -642,5 +737,9 @@ export function useRecommendations() {
     refreshRecommendations,
     prefetchNextBatch,
     abortLoading,
+    // 1.0.4 트랙 B — swap context 주입 + defer reorder flush. page(discover) 가 wire.
+    // 미호출 시 swap no-op (boundary=+Infinity), latency 이득만 자동 적용.
+    registerSwapContext,
+    flushPendingReorder,
   };
 }
