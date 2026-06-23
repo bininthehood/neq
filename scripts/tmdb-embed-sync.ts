@@ -174,26 +174,32 @@ async function main(): Promise<void> {
   // embedding IS NULL 은 DB 측에서 필터(미처리 우선). hash mismatch 는 pull 후 판정
   // (현재 문서 hash 는 클라이언트에서 계산해야 알 수 있으므로).
   // → 안정적 페이징을 위해 (tmdb_id, media_type) 키 순 정렬 + range 페이징.
-  let offset = 0;
+  // keyset 페이지네이션: deep OFFSET(.range) 은 offset 이 커질수록 statement timeout
+  // 유발 → tmdb_id 커서(.gt)로 교체. offset 깊이와 무관하게 페이지당 O(page) 유지.
+  // 경계에서 같은 tmdb_id 의 다른 media_type 행이 드물게 누락될 수 있으나 멱등 재실행으로 회수.
+  let cursorId = -1;
   while (processed + skipped < LIMIT || LIMIT === Infinity) {
-    const remainingPull =
-      LIMIT === Infinity ? PULL_PAGE : Math.min(PULL_PAGE, LIMIT * 3);
-    const end = offset + Math.max(1, remainingPull) - 1;
+    const pageSize =
+      LIMIT === Infinity
+        ? PULL_PAGE
+        : Math.min(PULL_PAGE, Math.max(1, LIMIT * 3));
 
     const { data, error } = await admin
       .from("tmdb_metadata")
       .select(
-        "tmdb_id, media_type, title, title_en, overview, release_date, director, cast_names, genre_ids, embedding_text_hash, embedding",
+        // embedding 벡터(1536 floats)는 select 안 함 — hash 만으로 null+stale 판정(전송 경량).
+        "tmdb_id, media_type, title, title_en, overview, release_date, director, cast_names, genre_ids, embedding_text_hash",
       )
       .not("providers", "is", null)
+      .gt("tmdb_id", cursorId)
       .order("tmdb_id", { ascending: true })
       .order("media_type", { ascending: true })
-      .range(offset, end);
+      .limit(pageSize);
 
     if (error) throw new Error(`[tmdb-embed-sync] pull 실패: ${error.message}`);
     const page = (data ?? []) as MetaRow[];
     if (page.length === 0) break;
-    offset += page.length;
+    cursorId = page[page.length - 1].tmdb_id;
 
     for (const r of page) {
       if (processed + pending.length >= LIMIT) break;
@@ -205,8 +211,9 @@ async function main(): Promise<void> {
         continue;
       }
       const hash = docHash(doc);
-      // 멱등: 이미 임베딩 존재 + hash 동일 → skip
-      if (r.embedding != null && r.embedding_text_hash === hash) {
+      // 멱등: hash 동일 → 이미 같은 문서로 임베딩됨(embedding 과 hash 는 함께 기록) → skip.
+      // hash null(미임베딩) 또는 불일치(문서 변경) → 재임베딩. 벡터 select 불필요.
+      if (r.embedding_text_hash === hash) {
         skipped += 1;
         continue;
       }
@@ -225,7 +232,7 @@ async function main(): Promise<void> {
     }
 
     if (processed + pending.length >= LIMIT) break;
-    if (page.length < remainingPull) break; // 마지막 페이지
+    if (page.length < pageSize) break; // 마지막 페이지
   }
 
   await flush();
