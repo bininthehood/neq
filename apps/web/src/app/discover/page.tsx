@@ -217,6 +217,23 @@ export default function DiscoverPage() {
 
   const current = filtered[topIdx];
   const isSaved = !!(current && savedIds.has(current.tmdbId));
+  const lastViewedCardKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!current) return;
+    const viewedKey = `${current.tmdbId}:${topIdx}`;
+    if (lastViewedCardKeyRef.current === viewedKey) return;
+    lastViewedCardKeyRef.current = viewedKey;
+    track("card_viewed", {
+      tmdb_id: current.tmdbId,
+      title: current.title,
+      source: "discover_stack",
+      stack_index: topIdx,
+      total_loaded: filtered.length,
+      providers_count: current.providers.length,
+      saved: savedIds.has(current.tmdbId),
+    });
+  }, [current, topIdx, filtered.length, savedIds]);
 
   // --- nextCard ---
   // swipe 는 line 316 useSwipeGesture 결과 (forward closure ref). nextCard 가

@@ -3,6 +3,8 @@
 import { useEffect, useRef } from "react";
 import posthog from "posthog-js";
 import { getDeviceId } from "@/lib/device-id";
+import { track } from "@/lib/analytics";
+import { ensureSessionAnalyticsState } from "@/lib/activation-analytics";
 
 /**
  * PostHog 초기화 + deviceId를 distinct_id로 연결.
@@ -15,8 +17,26 @@ export default function PostHogProvider({ children }: { children: React.ReactNod
     if (initedRef.current) return; // React Strict Mode 이중 실행 방지
     initedRef.current = true;
 
+    const trackSessionStartedOnce = () => {
+      try {
+        const state = ensureSessionAnalyticsState(window.sessionStorage);
+        if (state.shouldTrackSessionStarted) {
+          track("session_started", {
+            session_id: state.sessionId,
+            path: window.location.pathname,
+            referrer: document.referrer || null,
+          });
+        }
+      } catch {
+        // Private mode / storage failures should never block app boot.
+      }
+    };
+
     const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    if (!key) return; // 키가 없으면 초기화 안 함 (개발/테스트 환경)
+    if (!key) {
+      trackSessionStartedOnce();
+      return; // 키가 없으면 초기화 안 함 (개발/테스트 환경)
+    }
 
     posthog.init(key, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com",
@@ -32,6 +52,8 @@ export default function PostHogProvider({ children }: { children: React.ReactNod
         }
       },
     });
+
+    trackSessionStartedOnce();
   }, []);
 
   return <>{children}</>;
