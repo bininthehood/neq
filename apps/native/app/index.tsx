@@ -168,6 +168,11 @@ export default function DiscoverScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [topIdx, setTopIdx] = useState(0);
+  // 1.0.4 latency cycle (트랙 B) — swap 정책용 stale-free 참조.
+  // onReswap/onRankDone 콜백(load 클로저 + drag-idle reaction)에서 최신 topIdx/recs
+  // 가 필요하나 state 는 클로저에 stale. ref 로 미러링.
+  const topIdxRef = useRef(0);
+  const recsRef = useRef<Recommendation[]>([]);
   // 2026-06-06 (P1 애니메이션 Fix B) — drag 추적 SharedValue 화.
   // 진단: `_workspace/02_p1_animation.md` §3 (root cause 2).
   //
@@ -320,6 +325,110 @@ export default function DiscoverScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx]);
 
+  // ── 1.0.4 latency cycle (트랙 B) — mirror→LLM swap 적용 ───────────────────
+  //
+  // 정책 (입력 정본 §16 안전 디폴트, [[feedback_swipe_ux]] 충돌 차단):
+  //   - 보고 있는/이미 본 카드 (index ≤ topIdx) 절대 불변. reason 도 안 바꿈.
+  //   - 안 본 카드 (index ≥ topIdx+2) 만 reswap reason 교체 + rank_done 순서 재정렬.
+  //   - 재정렬 commit 은 드래그 idle (dragX.value === 0) 시에만. 진행 중이면 defer.
+  //   - rank_done 은 한 번만 처리 (안 본 영역 순서 확정).
+  //
+  // topIdx+1 (바로 다음 카드 = stack 의 두 번째) 도 불변으로 둔다. 사용자가 곧
+  // 보게 될 카드라 reason/순서가 눈앞에서 바뀌면 인지 부조화. index ≥ topIdx+2 만.
+  const SWAP_SAFE_GAP = 2;
+  // 이미 처리한 rank_done 차단 (1회만).
+  const rankDoneHandledRef = useRef(false);
+  // drag 진행 중 도착한 rank_done order — idle 시 flush.
+  const pendingRankOrderRef = useRef<number[] | null>(null);
+
+  // recs/topIdx → ref 미러 (콜백 stale closure 방지).
+  useEffect(() => {
+    recsRef.current = recs;
+  }, [recs]);
+  useEffect(() => {
+    topIdxRef.current = topIdx;
+  }, [topIdx]);
+
+  // reason 교체 — 안 본 카드만 (index ≥ topIdx+SWAP_SAFE_GAP). 보고 있는/이미 본 불변.
+  const applyReswap = useCallback((id: number, reason: string) => {
+    const boundary = topIdxRef.current + SWAP_SAFE_GAP;
+    setRecs((prev) => {
+      const idx = prev.findIndex((r) => r.tmdbId === id);
+      if (idx < boundary) return prev; // 보고 있는/곧 볼 카드 → 불변.
+      if (prev[idx].reason === reason) return prev; // 변화 없음 → re-render skip.
+      const next = prev.slice();
+      next[idx] = { ...next[idx], reason };
+      return next;
+    });
+  }, []);
+
+  // 안 본 영역 재정렬 — order(tmdbId[]) 권장 순. boundary 이전(보고 있는/곧 볼)은 고정,
+  // boundary 이후만 order 순으로 재배열. order 에 없는 안-본 카드는 뒤에 원순서로 유지.
+  const commitReorder = useCallback((order: number[]) => {
+    const boundary = topIdxRef.current + SWAP_SAFE_GAP;
+    setRecs((prev) => {
+      if (boundary >= prev.length) return prev; // 재정렬할 안-본 카드 없음.
+      const head = prev.slice(0, boundary); // 불변 영역.
+      const tail = prev.slice(boundary); // 재정렬 대상.
+      const rankPos = new Map<number, number>();
+      order.forEach((id, i) => rankPos.set(id, i));
+      // stable sort: order 에 있으면 그 순위, 없으면 맨 뒤(원순서 유지).
+      const sortedTail = tail
+        .map((rec, i) => ({ rec, i }))
+        .sort((a, b) => {
+          const ra = rankPos.has(a.rec.tmdbId) ? rankPos.get(a.rec.tmdbId)! : Number.MAX_SAFE_INTEGER;
+          const rb = rankPos.has(b.rec.tmdbId) ? rankPos.get(b.rec.tmdbId)! : Number.MAX_SAFE_INTEGER;
+          if (ra !== rb) return ra - rb;
+          return a.i - b.i; // tie → 원순서 안정.
+        })
+        .map((x) => x.rec);
+      return [...head, ...sortedTail];
+    });
+  }, []);
+
+  // 2026-06-23 (1.0.4 트랙 B — ux-review FOLLOW-UP #3).
+  // gesture idle = 좌/우(prev)/상하 어떤 제스처도 진행 중 아님.
+  //   - dragX·dragY: 좌 스와이프 / save(아래) 변위.
+  //   - prevOverlayX: 우 스와이프(이전 카드 오버레이). 진행 중엔 onUpdate 가
+  //     dragX/dragY 를 0 으로 두고 prevOverlayX 만 움직임 (line ~1342). 따라서
+  //     dragX/dragY 만 보면 prev 제스처 중에도 idle=true 로 오판 → [[feedback_swipe_ux]]
+  //     "제스처 진행 중 재정렬 commit 금지" 문언 위반. prevOverlayX 가 오프스크린
+  //     (=-SCREEN_WIDTH) 일 때만 prev 비활성.
+  const isGestureIdle = (): boolean =>
+    dragX.value === 0 && dragY.value === 0 && prevOverlayX.value === -SCREEN_WIDTH;
+
+  // rank_done 수신 — idle 이면 즉시 commit, 제스처 중이면 pending 으로 defer.
+  const handleRankDone = useCallback((order: number[]) => {
+    if (rankDoneHandledRef.current) return; // 1회만.
+    if (isGestureIdle()) {
+      rankDoneHandledRef.current = true;
+      commitReorder(order);
+    } else {
+      pendingRankOrderRef.current = order; // idle reaction 이 flush.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commitReorder]);
+
+  // gesture idle 전이 시 defer 된 reorder commit.
+  const flushPendingReorder = useCallback(() => {
+    const order = pendingRankOrderRef.current;
+    if (order && !rankDoneHandledRef.current) {
+      rankDoneHandledRef.current = true;
+      pendingRankOrderRef.current = null;
+      commitReorder(order);
+    }
+  }, [commitReorder]);
+
+  // gesture idle (dragX·dragY·prevOverlay 모두 정지) 전이 시 pending reorder flush.
+  useAnimatedReaction(
+    () => dragX.value === 0 && dragY.value === 0 && prevOverlayX.value === -SCREEN_WIDTH,
+    (idle, prevIdle) => {
+      if (idle && !prevIdle) {
+        runOnJS(flushPendingReorder)();
+      }
+    },
+  );
+
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -383,6 +492,11 @@ export default function DiscoverScreen() {
       loadAbortRef.current?.abort();
       const controller = new AbortController();
       loadAbortRef.current = controller;
+
+      // 1.0.4 트랙 B — 새 stream = 새 rank. swap defer 상태 reset.
+      // (silent reload 도 새 LLM rank 가 따라오므로 동일 reset.)
+      rankDoneHandledRef.current = false;
+      pendingRankOrderRef.current = null;
 
       if (!opts?.silent) {
         setRecs([]);
@@ -464,37 +578,52 @@ export default function DiscoverScreen() {
             ...v2.body,
           },
           {
-            onCard: (rec) => {
+            // 1.0.4 트랙 B — source('mirror'|'llm') 는 수신만. 첫 카드(mirror 포함)에서
+            // 기존대로 setState('ready') → first_card 가 mirror Phase 0 시점으로 당겨진다.
+            // mirror 카드도 type:'card' 라 동일 경로. source 별 분기 불필요.
+            onCard: (rec, _source) => {
               // 2026-06-06 (P0 stack 겹침) — 직전 stream 의 onCard 가 abort 후에도
               // 한두 frame 늦게 도착할 수 있어 ref 일치 가드. controller 가
               // 본 호출의 ref 와 같지 않으면 옛 호출 → 새 stack 에 안 끼임.
               if (loadAbortRef.current !== controller) return;
               collected.push(rec);
+              // 2026-06-23 (1.0.4 트랙 B — ux-review P1 #2 fix).
+              // 기존: 매 onCard 마다 setRecs([...collected]) 전체 교체. collected 는
+              // push-only 라 applyReswap(reason 교체) / commitReorder(순서 재정렬) 가
+              // React state 에 반영한 swap 결과를 후속 onCard 가 mirror 원본으로 롤백.
+              // 변경: PWA acceptCard append-only 패턴 정합 (useRecommendations.ts).
+              //   신규 tmdbId 카드 1장만 append → 기존 state(swap 반영분) 보존.
+              //   dedup 은 state 기준이라 reswap 후에도 원본 카드 중복 재유입 차단.
+              const appendNew = (prev: Recommendation[]): Recommendation[] => {
+                if (prev.some((r) => r.tmdbId === rec.tmdbId)) return prev;
+                return [...prev, rec];
+              };
               if (!firstSeen) {
                 firstSeen = true;
                 if (opts?.silent) {
                   // 2026-06-18 (P2 swipe loading fix 옵션 D — silent 분기).
-                  // 기존 stack 보존 + 중복 tmdbId 제외 append. topIdx 유지 → 사용자가 보던 위치 유지.
-                  setRecs((prev) => {
-                    const ids = new Set(prev.map((r) => r.tmdbId));
-                    return [...prev, ...collected.filter((r) => !ids.has(r.tmdbId))];
-                  });
+                  // 기존 stack 보존 + 중복 제외 append. topIdx 유지 → 보던 위치 유지.
+                  setRecs(appendNew);
                 } else {
-                  setRecs([...collected]);
+                  setRecs(appendNew);
                   setTopIdx(0);
                   setState('ready');
                 }
               } else {
-                if (opts?.silent) {
-                  // silent 분기: 누적 append (중복 제외).
-                  setRecs((prev) => {
-                    const ids = new Set(prev.map((r) => r.tmdbId));
-                    return [...prev, ...collected.filter((r) => !ids.has(r.tmdbId))];
-                  });
-                } else {
-                  setRecs([...collected]);
-                }
+                // silent / non-silent 동일 — append-only (swap 결과 보존).
+                setRecs(appendNew);
               }
+            },
+            // 1.0.4 트랙 B — mirror 카드 reason 을 LLM reason 으로 교체. 안 본 카드만
+            // (applyReswap 내부에서 index ≥ topIdx+2 가드). 보고 있는 카드 불변.
+            onReswap: (id, reason) => {
+              if (loadAbortRef.current !== controller) return;
+              applyReswap(id, reason);
+            },
+            // 1.0.4 트랙 B — LLM 권장 순서. 안 본 영역만, drag idle 시에만 commit.
+            onRankDone: (order) => {
+              if (loadAbortRef.current !== controller) return;
+              handleRankDone(order);
             },
             onError: (err) => {
               streamError = err;

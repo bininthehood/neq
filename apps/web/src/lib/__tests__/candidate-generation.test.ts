@@ -205,14 +205,14 @@ describe("generateCandidates", () => {
 
     const result = await generateCandidates({}, {}, [100]);
 
-    // movie query 의 .not() 호출에 100 포함 확인
+    // 1.0.4 트랙 A' (2026-06-23) — excludeIds 는 더 이상 SQL `.not("tmdb_id", "in", ...)`
+    // 로 보내지 않는다 (거대 IN 리스트 × rating DESC 정렬이 candidates SQL 악화 → warm 역전).
+    // exclude 는 fetch 후 blockSet post-fetch 필터로 처리한다.
     const notCalls = lastMovieQuery?._calls.filter((c) => c.method === "not") ?? [];
-    expect(notCalls.length).toBeGreaterThan(0);
     const tmdbIdNotCall = notCalls.find((c) => c.args[0] === "tmdb_id");
-    expect(tmdbIdNotCall).toBeDefined();
-    expect(String(tmdbIdNotCall?.args[2])).toContain("100");
+    expect(tmdbIdNotCall).toBeUndefined(); // tmdb_id 는 SQL not() 에 없어야 함
 
-    // 결과에 차단된 id 없어야 함 (SQL 단계가 mock 이라 client 측 blockSet 후처리만 동작)
+    // 결과에 차단된 id 없어야 함 (post-fetch blockSet 필터가 100 제거)
     expect(result.find((r) => r.tmdbId === 100)).toBeUndefined();
     expect(result.find((r) => r.tmdbId === 101)).toBeDefined();
   });

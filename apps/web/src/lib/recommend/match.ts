@@ -7,13 +7,17 @@ import type { Candidate, MatchedFavorite } from "./types";
 export async function matchFavoritesToTMDB(favorites: string[]): Promise<MatchedFavorite[]> {
   const results = await Promise.all(
     favorites.map(async (title) => {
-      let result = await searchTMDB(title, "movie");
-      let type: "movie" | "series" = "movie";
-      if (!result) {
-        result = await searchTMDB(title, "series");
-        type = "series";
-      }
+      // 1.0.4 트랙 C (2026-06-23) — movie→series 순차 fallback 을 병렬 호출로 전환.
+      //   기존: movie 검색 await 후 miss 면 series 검색 await (favorite 당 최대 2 RTT 직렬).
+      //   변경: movie/series 동시 호출 후 병합. movie 우선(영화 매칭이 더 흔함),
+      //   miss 면 series. latency = max(movie,series) ≈ 1 RTT.
+      const [movieRes, seriesRes] = await Promise.all([
+        searchTMDB(title, "movie"),
+        searchTMDB(title, "series"),
+      ]);
+      const result = movieRes ?? seriesRes;
       if (!result) return null;
+      const type: "movie" | "series" = movieRes ? "movie" : "series";
       return { id: result.id, type, title, genreIds: result.genre_ids ?? [] };
     })
   );

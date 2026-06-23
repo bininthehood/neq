@@ -802,11 +802,55 @@ export async function getRecommendationsStreaming(
   const usedTitles = new Set<string>();
   let phase1Count = 0;
 
-  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지)
+  // ── Phase 0 (1.0.4 트랙 B, 2026-06-23): mirror score 첫 카드 즉시 emit ──
+  // candidates 완료 직후 동기 rankCandidatesScore 로 상위 ~10장을 source="mirror" 로
+  // 즉시 흘린다 → first_card 가 LLM(수 초) 완료 전, candidates 완료 시점으로 당겨짐.
+  // mirrorEmittedIds 에 기록 → Phase 1 에서 동일 id 는 reswap, 신규 id 만 card.
+  const MIRROR_PREVIEW = 10;
+  const mirrorEmittedIds = new Set<number>();
+  const tMirror = performance.now();
+  {
+    const scored = rankCandidatesScore({
+      candidates: tmdbCandidates,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOttIds: subscribedOtt,
+      tasteSummary,
+      excludeCount: matchedIdsSet.size,
+      count: MIRROR_PREVIEW,
+    });
+    for (const { id, reason } of scored.picks) {
+      if (mirrorEmittedIds.size >= MIRROR_PREVIEW) break;
+      const tc = candidateById.get(id);
+      if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+      const enriched = tmdbCandidateToEnriched(tc);
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
+      mirrorEmittedIds.add(tc.tmdbId);
+      phase1Count += 1;
+      callbacks.onCard(buildRecommendationObject(enriched, reason), "mirror");
+    }
+  }
+  mark("mirror", tMirror);
+
+  // ── D1 (1.0.4): LLM 후보 500 → 상위 150 slice ──
+  // tmdbCandidates 는 totalScore desc 정렬(generateCandidates) → 상위 slice 가 곧 최상위.
+  // user prompt 토큰 ~30K → ~9K, rank latency ~14s → ~6s 기대.
+  const LLM_CANDIDATE_LIMIT = 150;
+  const llmCandidates = tmdbCandidates.slice(0, LLM_CANDIDATE_LIMIT);
+
+  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 처리.
+  //   - mirror 가 이미 emit 한 id → onReswap (reason 만 LLM 결과로 교체)
+  //   - 신규 id → onCard(source="llm")
+  //   - 완료 후 LLM 권장 순서(order) → onRankDone
   const tRank = performance.now();
+  const llmOrder: number[] = [];
   const usage = await rankCandidatesLLMStreaming(
     {
-      candidates: tmdbCandidates,
+      candidates: llmCandidates,
       favorites,
       feedback,
       savedCount,
@@ -818,24 +862,35 @@ export async function getRecommendationsStreaming(
       count: 20,
     },
     (pick) => {
-      if (phase1Count >= 20) return;
       const tc = candidateById.get(pick.id);
       if (!tc) return;
+      // LLM 권장 순서 누적 (mirror/신규 무관 — 전체 순서 신호).
+      llmOrder.push(tc.tmdbId);
+      // 이미 mirror 로 emit 된 카드 → reason 만 교체 (카드 재전송 안 함).
+      if (mirrorEmittedIds.has(tc.tmdbId)) {
+        callbacks.onReswap?.(tc.tmdbId, pick.reason);
+        return;
+      }
+      if (phase1Count >= 20 + MIRROR_PREVIEW) return;
       if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) return;
       const enriched = tmdbCandidateToEnriched(tc);
       usedIds.add(tc.tmdbId);
       usedTitles.add(tc.title);
       phase1Count += 1;
-      callbacks.onCard(buildRecommendationObject(enriched, pick.reason));
+      callbacks.onCard(buildRecommendationObject(enriched, pick.reason), "llm");
     },
     (meta) => callbacks.onMeta?.(meta),
   );
   mark("rank", tRank);
 
+  // LLM 권장 전체 순서 emit — 클라이언트가 안 본 카드만/drag idle 시 재정렬에 사용.
+  if (llmOrder.length > 0) callbacks.onRankDone?.(llmOrder);
+
   if (usage) callbacks.onUsage(usage);
 
-  // LLM picks 0 안전망 — rankCandidatesScore 로 phase 1 자리 채움.
-  // (외부 호출 실패 / JSON 파싱 실패 / normalize 0 통과 등)
+  // 안전망 — Phase 0 mirror + Phase 1 LLM 모두 0 카드인 극단 케이스 (전 후보 reason
+  // normalize 실패 등). 정상 happy path 는 Phase 0 mirror 가 이미 ~10장 emit 하므로
+  // phase1Count > 0 → 본 블록 skip. 1.0.4 이전엔 LLM 단독 0 케이스를 막던 자리.
   if (phase1Count === 0) {
     const ranked = rankCandidatesScore({
       candidates: tmdbCandidates,

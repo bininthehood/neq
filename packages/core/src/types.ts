@@ -304,3 +304,90 @@ export interface UserDataExport {
 }
 
 export const USER_DATA_SCHEMA_VERSION = 2;
+
+// ---------- /api/recommend NDJSON streaming protocol (web + native 공유) ----------
+//
+// 1.0.4 latency cycle 트랙 B (2026-06-23) — mirror score 첫 카드 즉시 emit + LLM swap.
+// 서버(apps/web .../api/recommend/route.ts)가 한 줄당 하나의 JSON 객체를 흘리고,
+// 클라이언트(useRecommendations.ts / native recommend-stream.ts)가 줄 단위로 파싱한다.
+//
+// 하위호환 계약 (절대 위반 금지):
+//   - 옛 1.0.3 reader 는 알 수 없는 `type` 을 무시한다 (native handle() else 없음, PWA 동일).
+//   - 따라서 `reswap` / `rank_done` 은 옛 클라이언트가 받아도 안전(no-op).
+//   - mirror 카드도 여전히 `type: "card"` 이므로 옛 reader 가 즉시 렌더 → latency 이득 자동.
+//   - `card.source` 는 신규 optional 필드 — 옛 reader 는 읽지 않으므로 무해.
+
+/** card 의 출처 — mirror(score 즉시 emit) vs llm(LLM 큐레이션). 옛 reader 무시. */
+export type RecommendCardSource = 'mirror' | 'llm';
+
+/**
+ * 카드 1장. 1.0.4 부터 `source` optional 추가.
+ *  - Phase 0 (mirror): rankCandidatesScore 상위 ~10장. source="mirror".
+ *  - Phase 1 (llm):   LLM 신규 pick. source="llm".
+ *  - fallback / phase2: source 미설정 (옛 동작 그대로).
+ */
+export interface RecommendStreamCard {
+  type: 'card';
+  rec: Recommendation;
+  source?: RecommendCardSource;
+}
+
+/**
+ * 1.0.4 신규 — 이미 emit 된 mirror 카드의 reason 을 LLM 결과로 교체하라는 신호.
+ * 카드 자체는 재전송하지 않는다 (id 로 기존 카드를 찾아 reason 만 갱신).
+ * id = Recommendation.tmdbId.
+ * swap 적용 정책(보고 있는 카드 불변)은 클라이언트 책임 — 서버는 신호만 emit.
+ */
+export interface RecommendStreamReswap {
+  type: 'reswap';
+  /** 대상 카드의 tmdbId */
+  id: number;
+  /** LLM 이 새로 산출한 reason (normalizeReason 통과본) */
+  reason: string;
+}
+
+/**
+ * 1.0.4 신규 — LLM 이 권장하는 전체 노출 순서. order = tmdbId 배열(권장 순).
+ * 클라이언트는 "안 본 카드(topIdx+2 이상)만, drag idle 시" 재정렬에 사용한다.
+ * 서버는 순서만 담고 적용 시점/대상 판단은 하지 않는다.
+ */
+export interface RecommendStreamRankDone {
+  type: 'rank_done';
+  /** LLM 권장 노출 순서 (tmdbId[]) */
+  order: number[];
+}
+
+export interface RecommendStreamTimings {
+  type: 'timings';
+  timings: Record<string, number>;
+}
+
+export interface RecommendStreamUsage {
+  type: 'usage';
+  usage: { prompt_tokens: number; completion_tokens: number; cached_tokens: number };
+}
+
+export interface RecommendStreamMeta {
+  type: 'meta';
+  meta: { diversity_axis: string; temperature: number; seed: number };
+}
+
+export interface RecommendStreamDone {
+  type: 'done';
+}
+
+export interface RecommendStreamError {
+  type: 'error';
+  message: string;
+}
+
+/** /api/recommend NDJSON 한 줄에 대응하는 union. 옛 reader 는 미지 type 을 무시. */
+export type RecommendStreamMessage =
+  | RecommendStreamCard
+  | RecommendStreamReswap
+  | RecommendStreamRankDone
+  | RecommendStreamTimings
+  | RecommendStreamUsage
+  | RecommendStreamMeta
+  | RecommendStreamDone
+  | RecommendStreamError;
