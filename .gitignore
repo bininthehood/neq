@@ -52,6 +52,9 @@ _brand/
 .playwright-mcp/
 .mcp.json
 
+# local Hermes/Jessi operating notes and plans
+.hermes/
+
 # local analysis/cache
 .understand-anything/
 
