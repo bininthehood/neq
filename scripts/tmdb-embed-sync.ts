@@ -161,11 +161,27 @@ async function main(): Promise<void> {
       embedding_text_hash: p.hash,
       embedding_fetched_at: now,
     }));
-    const { error } = await admin.from("tmdb_metadata").upsert(rows, {
-      onConflict: "tmdb_id,media_type",
-    });
-    if (error) {
-      throw new Error(`[tmdb-embed-sync] upsert 실패: ${error.message}`);
+    // upsert 도 일시적 statement timeout 가능 → retry/backoff (전체 백필이 한 배치로 죽지 않게)
+    let upsertErr: string | null = null;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      const { error } = await admin.from("tmdb_metadata").upsert(rows, {
+        onConflict: "tmdb_id,media_type",
+      });
+      if (!error) {
+        upsertErr = null;
+        break;
+      }
+      upsertErr = error.message;
+      if (attempt < 4) {
+        const waitMs = 1000 * 2 ** attempt; // 2s, 4s, 8s
+        console.warn(
+          `[tmdb-embed-sync] upsert 재시도 ${attempt}/3 (${error.message}) — ${waitMs}ms 대기`,
+        );
+        await new Promise((r) => setTimeout(r, waitMs));
+      }
+    }
+    if (upsertErr) {
+      throw new Error(`[tmdb-embed-sync] upsert 실패(4회): ${upsertErr}`);
     }
     processed += batch.length;
   }
