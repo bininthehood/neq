@@ -297,7 +297,7 @@ export default function SearchSheet({
   // 2026-05-20 — 인물 카드 클릭 핸들러. PWA `handleSelectPerson` 정합:
   //   - 같은 카드 다시 누르면 닫음 (toggle).
   //   - 다른 카드 누르면 갈아탐.
-  //   - /api/tmdb/person-works?id=X&dept=Directing|Acting 호출 → top 10.
+  //   - /api/tmdb/person-works?id=X&dept=Directing|Acting 호출 → 전 작품 (캡 폐기 2026-06-23).
   const handleSelectPerson = useCallback(
     async (person: PersonResult) => {
       if (selectedPersonId === person.id) {
@@ -323,7 +323,9 @@ export default function SearchSheet({
         );
         if (!res.ok) throw new Error(`person-works failed (${res.status})`);
         const works = (await res.json()) as SearchResult[];
-        setPersonWorks(Array.isArray(works) ? works.slice(0, 10) : []);
+        // 2026-06-23 — 12개 캡 폐기. person-works 가 전 작품 반환으로 전환됨.
+        // WorksGrid 가 3열 무제한 wrap 으로 렌더, 부모 okScroll ScrollView 가 세로 스크롤.
+        setPersonWorks(Array.isArray(works) ? works : []);
       } catch {
         setPersonWorksError(true);
         setPersonWorks([]);

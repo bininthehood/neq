@@ -126,7 +126,7 @@ export default function SearchSheet({
 
   // 위임 J #2 — Person 카드 클릭 시 그 사람 작품 펼침 패널.
   // - selectedPerson: 현재 펼쳐진 인물. null 이면 작품 패널 미노출.
-  // - personWorks: TMDB /person/{id}/combined_credits 에서 popularity desc top 10.
+  // - personWorks: TMDB /person/{id}/combined_credits 에서 popularity desc 전 작품 (캡 폐기 2026-06-23).
   // - personWorksLoading/Err: 로딩/오류 상태.
   // 같은 카드 다시 누르면 펼침 닫음 (toggle).
   const [selectedPerson, setSelectedPerson] = useState<PersonResult | null>(null);
@@ -397,7 +397,9 @@ export default function SearchSheet({
         throw new Error(`person-works failed (${res.status})`);
       }
       const works = (await res.json()) as SearchResult[];
-      setPersonWorks(Array.isArray(works) ? works.slice(0, 10) : []);
+      // 2026-06-23 — 10개 캡 폐기. person-works 가 전 작품 반환으로 전환됨.
+      // SelectedPersonPanel 이 3열 그리드로 전체 렌더, sheet body 가 세로 스크롤.
+      setPersonWorks(Array.isArray(works) ? works : []);
     } catch {
       setPersonWorksError(true);
       setPersonWorks([]);
