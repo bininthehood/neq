@@ -657,12 +657,110 @@ export async function getRecommendationsStreaming(
     timings[key] = (timings[key] ?? 0) + Math.round(performance.now() - t0);
   };
 
-  // Cold start (변경 0)
+  // ── Cold start (favorites 비어있음) ──
+  // 1.0.4 트랙 B 확장 (2026-06-23): no-favorites 경로에도 mirror Phase 0 적용.
+  //   기존: getColdStartRecommendations (live TMDB discoverByGenres + enrich, ~4.9s)
+  //         → 50장 일괄 emit, first_card = 전체 완료 시점 (source 없음).
+  //   신규: generateCandidates (mirror SQL, rating DESC, 인덱스로 ~150ms) → 빈 profile
+  //         이라 평점/인기순 후보. rankCandidatesScore 상위 ~10장을 source="mirror" 로
+  //         즉시 emit → first_card <3s. 나머지는 score-fill 로 백그라운드 채움.
+  //   with-favorites 경로(아래 §match~)는 건드리지 않는다 — 이미 동작.
+  //   LLM rank 는 cold-start (persona 신호 없음) 에 불필요 → 생략. 품질은 rating 순.
   if (favorites.length === 0) {
-    const t = performance.now();
-    const recs = await getColdStartRecommendations(filter, exclude);
-    mark("cold", t);
-    for (const rec of recs) callbacks.onCard(rec);
+    // 빈 PersonaProfile — favorites/장르 신호 없음 → generateCandidates 가 genre
+    //   필터 미적용 (rating DESC 만). subscribedOtt 는 약신호로 SQL/post-fetch 반영.
+    const coldProfile: PersonaProfile = {
+      favoriteGenreIds: [],
+      favoriteTmdbIds: [],
+      tasteGenres,
+      subscribedOtt: providerIdsToTmdbNames(subscribedOtt),
+      favoriteDecades: [],
+    };
+
+    let coldCandidates: TmdbCandidate[] = [];
+    const tColdCands = performance.now();
+    try {
+      coldCandidates = await generateCandidates(
+        coldProfile,
+        filter,
+        excludeIds ?? [],
+        500, // poolSize — 정상 경로와 동일
+      );
+    } catch (err) {
+      console.error(
+        "[cold-start streaming] generateCandidates failed, falling back:",
+        err,
+      );
+    }
+    mark("candidates", tColdCands);
+
+    // mirror 후보 0/throws → 기존 live TMDB cold-start 로 폴백 (변경 전 동작 보존).
+    if (coldCandidates.length === 0) {
+      const t = performance.now();
+      const recs = await getColdStartRecommendations(filter, exclude);
+      mark("cold", t);
+      for (const rec of recs) callbacks.onCard(rec);
+      callbacks.onTimings(timings);
+      return;
+    }
+
+    const candidateById = new Map(
+      coldCandidates.map((c) => [c.tmdbId, c]),
+    );
+    const usedIds = new Set<number>();
+    const usedTitles = new Set<string>();
+
+    // Phase 0: mirror score 상위 ~10장 즉시 emit (source="mirror") → first_card 당김.
+    const MIRROR_PREVIEW = 10;
+    const tMirror = performance.now();
+    {
+      const scored = rankCandidatesScore({
+        candidates: coldCandidates,
+        favorites,
+        feedback,
+        savedCount,
+        onboardingCount,
+        tasteGenres,
+        subscribedOttIds: subscribedOtt,
+        tasteSummary,
+        excludeCount: excludeIds?.length ?? 0,
+        count: MIRROR_PREVIEW,
+      });
+      for (const { id, reason } of scored.picks) {
+        if (usedIds.size >= MIRROR_PREVIEW) break;
+        const tc = candidateById.get(id);
+        if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+        const enriched = tmdbCandidateToEnriched(tc);
+        usedIds.add(tc.tmdbId);
+        usedTitles.add(tc.title);
+        callbacks.onCard(buildRecommendationObject(enriched, reason), "mirror");
+      }
+    }
+    mark("mirror", tMirror);
+
+    // Phase 2: 잔여 후보 score-fill (top 20 유지 + 나머지 셔플) → 50장까지 채움.
+    //   정상 경로 §phase2 패턴 동일. cold-start 도 충분한 카드 보장 (회귀 방지).
+    const tPhase2 = performance.now();
+    const fillPool = coldCandidates.filter(
+      (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
+    );
+    const fillTop = fillPool.slice(0, 20);
+    const fillRest = fillPool.slice(20).sort(() => Math.random() - 0.5);
+    const fillSlots = Math.max(0, 50 - usedIds.size);
+    const fillRecs: Recommendation[] = [];
+    for (const tc of [...fillTop, ...fillRest]) {
+      if (fillRecs.length >= fillSlots) break;
+      if (usedTitles.has(tc.title)) continue;
+      usedTitles.add(tc.title);
+      const enriched = tmdbCandidateToEnriched(tc);
+      fillRecs.push(
+        buildRecommendationObject(enriched, templateReason(enriched)),
+      );
+    }
+    mark("phase2", tPhase2);
+    const reordered = applyDiversityReorder(fillRecs);
+    for (const rec of reordered) callbacks.onCard(rec);
+
     callbacks.onTimings(timings);
     return;
   }
