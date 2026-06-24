@@ -103,6 +103,7 @@ import {
   tasteGenresToIds,
   buildTasteVector,
   embeddingRetrieval,
+  dppGreedyMAP,
 } from "../candidate-generation";
 
 beforeEach(() => {
@@ -703,5 +704,48 @@ describe("generateCandidates — P2 flag gating (회귀 0)", () => {
     expect(result).toHaveLength(1);
     expect(result[0].totalScore).toBeGreaterThan(1); // SQL 공식
     expect(lastMovieQuery).not.toBeNull();
+  });
+});
+
+// ---------- P3 — DPP greedy MAP ----------
+describe("dppGreedyMAP (P3 다양성)", () => {
+  // 3 클러스터 (직교 임베딩) × 2개씩. cluster 내 cos=1, 클러스터 간 cos=0.
+  //   A(idx 0,1): [1,0,0]  q=0.9 / 0.85   ← 최고 relevance
+  //   B(idx 2,3): [0,1,0]  q=0.80 / 0.70
+  //   C(idx 4,5): [0,0,1]  q=0.60 / 0.50
+  const emb = [
+    [1, 0, 0],
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 1, 0],
+    [0, 0, 1],
+    [0, 0, 1],
+  ];
+  const q = [0.9, 0.85, 0.8, 0.7, 0.6, 0.5];
+  const clusterOf = (i: number) => Math.floor(i / 2);
+
+  it("같은 클러스터 중복 대신 클러스터를 분산 선택한다", () => {
+    const picked = dppGreedyMAP(q, emb, 3);
+    expect(picked).toHaveLength(3);
+    const clusters = picked.map(clusterOf);
+    // 3개 모두 서로 다른 클러스터 (셔플/relevance-only 면 A 클러스터 2개 뽑힐 것)
+    expect(new Set(clusters).size).toBe(3);
+    // 첫 선택은 최고 relevance (A 클러스터 idx 0)
+    expect(picked[0]).toBe(0);
+  });
+
+  it("relevance-only(top-k)와 다름을 보장 — top3 는 A,A,B 지만 DPP 는 분산", () => {
+    const picked = dppGreedyMAP(q, emb, 3);
+    // top-3 relevance = [0,1,2] (A,A,B). DPP 는 idx 1(A 중복) 회피.
+    expect(picked).not.toContain(1);
+  });
+
+  it("완전 중복(cos=1)은 한계이득 0 → 다양한 대표만 선택 (DPP 정상 거동)", () => {
+    // k=10 이어도 클러스터 대표 3개만 (중복 1,3,5 는 marginal gain 0 → 제외).
+    expect(dppGreedyMAP(q, emb, 10)).toEqual([0, 2, 4]);
+  });
+
+  it("빈 입력 방어", () => {
+    expect(dppGreedyMAP([], [], 3)).toEqual([]);
   });
 });

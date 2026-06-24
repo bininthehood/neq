@@ -588,6 +588,158 @@ export async function embeddingRetrieval(
   return stratifiedSample(candidates, poolSize, topK);
 }
 
+// ---------- P3 (2026-06-24): DPP 다양성 (greedy MAP) ----------
+//
+// 설계 정본: _workspace/08·09 + project_rec_refactor P3.
+// LLM rerank 입력 풀 선별을 stratifiedSample(셔플성) → DPP greedy MAP 로 교체.
+// 커널 L = diag(q)·CosSim·diag(q) (quality-diversity 분해, PSD 보장):
+//   - q_i = relevance(totalScore) — 대각 L_ii = q_i²
+//   - S_ij = cos(e_i, e_j) (정규화 임베딩 dot) — 유사 작품일수록 ↑ → DPP 가 동시선택 회피
+//   라이브 A/B 에서 MMR·휴리스틱 상회(YouTube Wilhelm CIKM2018 / Hulu Chen NeurIPS2018).
+//   greedy Cholesky O(K·n·dim), 60→35 sub-10ms. **셔플로 다양성 흉내 금지** — DPP 가 정공법.
+
+/** DPP 후보 상한 — embedding fetch + 거리계산 비용 bound (관련성 top N 만). */
+const DPP_POOL = 90;
+
+/** tmdb_metadata 에서 embedding 일괄 read → L2 정규화 Map. (parseEmbedding 재사용) */
+async function fetchNormalizedEmbeddings(
+  admin: SupabaseClient,
+  ids: number[],
+): Promise<Map<number, number[]>> {
+  const map = new Map<number, number[]>();
+  if (ids.length === 0) return map;
+  const { data, error } = await admin
+    .from("tmdb_metadata")
+    .select("tmdb_id, embedding")
+    .in("tmdb_id", ids)
+    .not("embedding", "is", null);
+  if (error) throw error;
+  for (const r of (data ?? []) as Array<{
+    tmdb_id: number;
+    embedding: number[] | string | null;
+  }>) {
+    if (map.has(r.tmdb_id)) continue; // (tmdb_id, media_type) 복합 PK — 첫 행만
+    const v = parseEmbedding(r.embedding);
+    if (!v || v.length === 0) continue;
+    let norm = 0;
+    for (let i = 0; i < v.length; i++) norm += v[i] * v[i];
+    norm = Math.sqrt(norm);
+    if (norm === 0) continue;
+    map.set(
+      r.tmdb_id,
+      v.map((x) => x / norm),
+    );
+  }
+  return map;
+}
+
+/**
+ * DPP greedy MAP (Chen et al. NeurIPS2018 fast greedy).
+ * @param q   relevance (양수). 대각 커널 L_ii = q_i².
+ * @param emb L2 정규화 임베딩 (cos = dot).
+ * @param k   선택 개수.
+ * @returns 선택된 인덱스 배열 (선택 순서 = 관련성·다양성 균형 순).
+ *
+ * 매 step: 잔여 i 의 잔차분산 d_i² 갱신 → 최대 d_i² 선택. d_i² 는 "이미 선택된 것과
+ * 겹치지 않는 quality" → 관련성 높고 기존 선택과 다른 작품이 뽑힘.
+ */
+export function dppGreedyMAP(
+  q: number[],
+  emb: number[][],
+  k: number,
+): number[] {
+  const n = q.length;
+  const K = Math.min(k, n);
+  if (n === 0 || K === 0) return [];
+
+  const cis: number[][] = Array.from({ length: n }, () => []);
+  const d2 = q.map((qi) => qi * qi); // d_i² = L_ii
+  const sel = new Set<number>();
+  const order: number[] = [];
+
+  // 첫 선택 = 최대 quality
+  let j = 0;
+  for (let i = 1; i < n; i++) if (d2[i] > d2[j]) j = i;
+  sel.add(j);
+  order.push(j);
+
+  while (order.length < K) {
+    const cj = cis[j];
+    const dj = Math.sqrt(d2[j]);
+    if (!(dj > 1e-9)) break;
+    for (let i = 0; i < n; i++) {
+      if (sel.has(i) || d2[i] <= 1e-12) continue;
+      // L_ji = q_j q_i cos(e_j, e_i)
+      let cos = 0;
+      const ej = emb[j];
+      const ei = emb[i];
+      for (let t = 0; t < ej.length; t++) cos += ej[t] * ei[t];
+      const Lji = q[j] * q[i] * cos;
+      // <c_j, c_i>
+      const ciI = cis[i];
+      let cc = 0;
+      for (let t = 0; t < cj.length; t++) cc += cj[t] * ciI[t];
+      const e = (Lji - cc) / dj;
+      ciI.push(e);
+      d2[i] -= e * e;
+    }
+    let best = -1;
+    for (let i = 0; i < n; i++) {
+      if (sel.has(i) || d2[i] <= 1e-12) continue;
+      if (best < 0 || d2[i] > d2[best]) best = i;
+    }
+    if (best < 0) break;
+    j = best;
+    sel.add(j);
+    order.push(j);
+  }
+  return order;
+}
+
+/**
+ * DPP 다양성 선별 — 후보 k 개를 관련성+다양성 균형으로 고르고 **DPP greedy 순서 유지**.
+ *
+ * 배치(2026-06-24 실측 결정): LLM rerank *앞*이 아니라 **Phase 2 채움**(나머지 30장)에 적용.
+ *   rerank 앞 DPP 는 LLM 이 관련성으로 재클러스터 + 35풀→20픽 비율(1.75×)이 좁아 효과 ~0.
+ *   Phase 2 는 ~130풀→30 (여유 큼) + Math.random() 셔플(안티패턴) 대체 → 실질 다양화.
+ *   DPP 순서 = 각 픽이 이전 선택과 최대 상이 → 연속 유사작 회피(스와이프 UX).
+ *
+ * 관련성 top DPP_POOL 의 임베딩 fetch → DPP greedy.
+ * **best-effort**: 후보 부족/임베딩 부족/에러 → null (caller 가 기존 셔플 fallback).
+ */
+export async function dppDiversify(
+  candidates: TmdbCandidate[],
+  k: number,
+): Promise<TmdbCandidate[] | null> {
+  if (candidates.length === 0) return [];
+  if (candidates.length <= k) return candidates.slice();
+  try {
+    const admin = supabaseAdmin();
+    const pool = candidates.slice(0, Math.min(DPP_POOL, candidates.length));
+    const embMap = await fetchNormalizedEmbeddings(
+      admin,
+      pool.map((c) => c.tmdbId),
+    );
+    const items = pool.filter((c) => embMap.has(c.tmdbId));
+    if (items.length <= k) return null; // 부족 → caller fallback
+    const q = items.map((c) => Math.max(c.totalScore, 1e-6));
+    const emb = items.map((c) => embMap.get(c.tmdbId)!);
+    const pickedIdx = dppGreedyMAP(q, emb, k);
+    const picked = pickedIdx.map((i) => items[i]);
+    // DPP 가 완전중복 등으로 k 미만 반환 시 → relevance 상위 미선택분으로 top-up.
+    if (picked.length < k) {
+      const pickedSet = new Set(pickedIdx);
+      for (let i = 0; i < items.length && picked.length < k; i++) {
+        if (!pickedSet.has(i)) picked.push(items[i]);
+      }
+    }
+    return picked; // DPP 순서 유지 (relevance 재정렬 안 함 — 다양성 순서가 핵심)
+  } catch (err) {
+    console.error("[P3] DPP failed:", err);
+    return null;
+  }
+}
+
 // ---------- 메인: generateCandidates ----------
 
 /**

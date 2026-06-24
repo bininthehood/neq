@@ -25,6 +25,7 @@ import type {
 import {
   generateCandidates,
   stratifiedSample,
+  dppDiversify,
   type PersonaProfile,
   type TmdbCandidate,
 } from "./candidate-generation";
@@ -497,7 +498,7 @@ export async function getRecommendations(
 
   // ── 정상 경로 (2-stage) — Stage 2: rank ──
   const tRank = performance.now();
-  // LLM rerank 입력만 ~50 으로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
+  // LLM rerank 입력만 ~35 로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
   const rankPool = stratifiedSample(
     tmdbCandidates,
     LLM_RERANK_INPUT,
@@ -558,9 +559,20 @@ export async function getRecommendations(
   const phase2Pool = tmdbCandidates.filter(
     (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
   );
-  const phase2Top = phase2Pool.slice(0, 20);
-  const phase2Rest = phase2Pool.slice(20).sort(() => Math.random() - 0.5);
-  for (const tc of [...phase2Top, ...phase2Rest]) {
+  const phase2Slots = Math.max(0, 50 - results.length);
+  // P3 (2026-06-24): DPP 다양성 선별로 Math.random() 셔플 대체 (안티패턴 제거).
+  //   best-effort → null 이면 기존 top20+셔플 fallback.
+  const dppP2 =
+    process.env.REC_DPP_ENABLED === "true"
+      ? await dppDiversify(phase2Pool, phase2Slots)
+      : null;
+  const phase2Ordered =
+    dppP2 ??
+    [
+      ...phase2Pool.slice(0, 20),
+      ...phase2Pool.slice(20).sort(() => Math.random() - 0.5),
+    ];
+  for (const tc of phase2Ordered) {
     if (results.length >= 50) break;
     const enriched = tmdbCandidateToEnriched(tc);
     results.push(buildRecommendationObject(enriched, templateReason(enriched)));
@@ -834,7 +846,7 @@ export async function getRecommendationsStreaming(
 
   // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지)
   const tRank = performance.now();
-  // LLM rerank 입력만 ~50 으로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
+  // LLM rerank 입력만 ~35 로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
   const rankPool = stratifiedSample(
     tmdbCandidates,
     LLM_RERANK_INPUT,
@@ -906,11 +918,20 @@ export async function getRecommendationsStreaming(
   const phase2Pool = tmdbCandidates.filter(
     (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
   );
-  const phase2Top = phase2Pool.slice(0, 20);
-  const phase2Rest = phase2Pool.slice(20).sort(() => Math.random() - 0.5);
   const phase2Slots = Math.max(0, 50 - phase1Count);
+  // P3 (2026-06-24): DPP 다양성 선별로 Math.random() 셔플 대체 (안티패턴 제거).
+  const dppP2 =
+    process.env.REC_DPP_ENABLED === "true"
+      ? await dppDiversify(phase2Pool, phase2Slots)
+      : null;
+  const phase2Ordered =
+    dppP2 ??
+    [
+      ...phase2Pool.slice(0, 20),
+      ...phase2Pool.slice(20).sort(() => Math.random() - 0.5),
+    ];
   const phase2Recs: Recommendation[] = [];
-  for (const tc of [...phase2Top, ...phase2Rest]) {
+  for (const tc of phase2Ordered) {
     if (phase2Recs.length >= phase2Slots) break;
     const enriched = tmdbCandidateToEnriched(tc);
     phase2Recs.push(
