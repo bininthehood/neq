@@ -24,9 +24,19 @@ import type {
 // 본 파일은 wiring 만 — 두 모듈 출력을 enrich-호환 객체로 변환해 buildRecommendationObject 에 흘림.
 import {
   generateCandidates,
+  stratifiedSample,
   type PersonaProfile,
   type TmdbCandidate,
 } from "./candidate-generation";
+
+// LLM rerank 입력 캡 — retrieval→rerank 정공법: 비싼 LLM 은 *소수*만 재정렬.
+//   후보 전량(ANN 150 / SQL 최대 500)을 직렬화하면 prompt ~20K~40K 토큰 → first-token
+//   지연(rank 단계가 전체 latency 병목). count(20) pick 보다 넉넉히 위인 50 으로 캡하되,
+//   stratifiedSample(상위 deterministic + 가중 random tail)로 골라 관련성 + 다양성 보존.
+//   Phase 2(나머지 30 채움)는 전체 풀을 그대로 사용 → 50건 출력 불변.
+//   완성형 다양성 선별은 P3(DPP)가 이 자리를 대체. count 변경 시 INPUT > count 유지.
+const LLM_RERANK_INPUT = 50;
+const LLM_RERANK_TOPK = 20;
 import {
   rankCandidatesLLM,
   rankCandidatesLLMStreaming,
@@ -478,8 +488,14 @@ export async function getRecommendations(
 
   // ── 정상 경로 (2-stage) — Stage 2: rank ──
   const tRank = performance.now();
+  // LLM rerank 입력만 ~50 으로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
+  const rankPool = stratifiedSample(
+    tmdbCandidates,
+    LLM_RERANK_INPUT,
+    LLM_RERANK_TOPK,
+  );
   let ranked = await rankCandidatesLLM({
-    candidates: tmdbCandidates,
+    candidates: rankPool,
     favorites,
     feedback,
     savedCount,
@@ -804,9 +820,15 @@ export async function getRecommendationsStreaming(
 
   // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지)
   const tRank = performance.now();
+  // LLM rerank 입력만 ~50 으로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
+  const rankPool = stratifiedSample(
+    tmdbCandidates,
+    LLM_RERANK_INPUT,
+    LLM_RERANK_TOPK,
+  );
   const usage = await rankCandidatesLLMStreaming(
     {
-      candidates: tmdbCandidates,
+      candidates: rankPool,
       favorites,
       feedback,
       savedCount,
