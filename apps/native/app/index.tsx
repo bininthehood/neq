@@ -46,6 +46,7 @@ import {
   getActivePersona,
   getRecHistory,
   getActiveExcludeIds,
+  buildFeedbackInputs,
   clearRecHistory,
   getSaved,
   hasOnboarded,
@@ -449,10 +450,16 @@ export default function DiscoverScreen() {
           subscribedOtt: prefs.subscribedOtt,
         });
 
+        // 리포트 반영 — feedback(loved/good/meh/dropped 제목) 은 서버 LLM 힌트,
+        // negativeTmdbIds(dropped/meh) 는 취향벡터에서 제외.
+        const { feedback, negativeTmdbIds } = await buildFeedbackInputs(saved);
+        const negativeSet = new Set<number>(negativeTmdbIds);
         // 저장작 TMDB id — 취향벡터 합산용 (retrieval 만, 최근 50개). "저장할수록
-        // 추천이 그쪽으로 이동". excludeIds(재추천 차단) 와 별개 신호.
+        // 추천이 그쪽으로 이동". 단 dropped/meh 작품은 제외(싫어한 작품이 취향을
+        // 끌어당기는 모순 방지). excludeIds(재추천 차단) 와 별개 신호.
         const savedTmdbIds = saved
           .map((s) => s.recommendation.tmdbId)
+          .filter((id) => !negativeSet.has(id))
           .slice(0, 50);
 
         // 2026-05-18 — streaming 적용 (web 정합). 첫 카드 도착 시 'ready' 전환.
@@ -468,6 +475,7 @@ export default function DiscoverScreen() {
             savedCount: saved.length,
             excludeIds,
             savedTmdbIds,
+            feedback,
             ...v2.body,
           },
           {
@@ -522,6 +530,7 @@ export default function DiscoverScreen() {
             savedCount: saved.length,
             excludeIds,
             savedTmdbIds,
+            feedback,
             ...v2.body,
           }, controller.signal);
           if (controller.signal.aborted) return;
@@ -617,9 +626,13 @@ export default function DiscoverScreen() {
           subscribedOtt: prefs.subscribedOtt,
         });
 
-        // 저장작 TMDB id — 취향벡터 합산용 (load() 와 동일, prefetch 정합).
+        // 리포트 반영 (load() 와 동일, prefetch 정합).
+        const { feedback, negativeTmdbIds } = await buildFeedbackInputs(saved);
+        const negativeSet = new Set<number>(negativeTmdbIds);
+        // 저장작 TMDB id — 취향벡터 합산용. dropped/meh 제외 (load() 와 동일).
         const savedTmdbIds = saved
           .map((s) => s.recommendation.tmdbId)
+          .filter((id) => !negativeSet.has(id))
           .slice(0, 50);
 
         // 2026-06-06 (Tier 3 단기 incident 해소) — Progressive fallback.
@@ -650,6 +663,7 @@ export default function DiscoverScreen() {
             savedCount: saved.length,
             excludeIds,
             savedTmdbIds,
+            feedback,
             ...v2.body,
           });
           const cached = consumePrefetchedRecommendations(

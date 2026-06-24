@@ -16,6 +16,7 @@ import type {
   Recommendation,
   SavedItem,
   TasteSurveyAnswer,
+  WatchFeedback,
   WatchReaction,
   WatchReport,
 } from './types';
@@ -130,6 +131,33 @@ export async function getWatchStats(): Promise<{
     meh: reports.filter((r) => r.reaction === 'meh').length,
     dropped: reports.filter((r) => r.reaction === 'dropped').length,
   };
+}
+
+/**
+ * 추천 요청용 리포트 반영 입력 — web `useRecommendations.ts:312` 패턴 정합.
+ *
+ * reports + saved(제목 join) → WatchFeedback (서버 buildFeedbackPrompt 가 LLM 힌트로:
+ *   loved/good=이 결 우선, meh/dropped=이런 류 제외).
+ * negativeTmdbIds (dropped+meh) → 호출자가 취향벡터 입력(savedTmdbIds)에서 제외 —
+ *   싫어한 작품이 취향벡터를 끌어당기는 모순 방지.
+ *
+ * @param saved 이미 로드한 SavedItem[] (중복 fetch 회피 위해 호출자가 전달).
+ */
+export async function buildFeedbackInputs(saved: SavedItem[]): Promise<{
+  feedback: WatchFeedback;
+  negativeTmdbIds: number[];
+}> {
+  const reports = await getWatchReports();
+  const feedback: WatchFeedback = { loved: [], good: [], meh: [], dropped: [] };
+  const negativeTmdbIds: number[] = [];
+  for (const r of reports) {
+    const item = saved.find((s) => s.recommendation.tmdbId === r.tmdbId);
+    if (item) feedback[r.reaction].push(item.recommendation.title);
+    if (r.reaction === 'dropped' || r.reaction === 'meh') {
+      negativeTmdbIds.push(r.tmdbId);
+    }
+  }
+  return { feedback, negativeTmdbIds };
 }
 
 // ---------- archive (W5 Task F) ----------
