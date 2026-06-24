@@ -526,7 +526,7 @@ describe("embeddingRetrieval (P2)", () => {
     };
   }
 
-  it("RPC 인자 매핑 — match_count = poolSize*3, 필터 전달", async () => {
+  it("RPC 인자 매핑 — match_count = ANN_MATCH_COUNT(150) 캡, 필터 전달", async () => {
     const capture: { args?: Record<string, unknown> } = {};
     const admin = makeRpcAdmin([], capture);
     await embeddingRetrieval(
@@ -538,7 +538,8 @@ describe("embeddingRetrieval (P2)", () => {
       100,
       30,
     );
-    expect(capture.args?.match_count).toBe(300); // 100 * 3
+    // poolSize(100) 무관하게 ANN top-K 150 으로 캡 (IVFFlat cliff 회피). 2026-06-24.
+    expect(capture.args?.match_count).toBe(150);
     expect(capture.args?.query_embedding).toEqual(taste);
     expect(capture.args?.p_media_type).toBe("movie");
     expect(capture.args?.p_origin).toBe("kr");
@@ -547,10 +548,26 @@ describe("embeddingRetrieval (P2)", () => {
     expect(capture.args?.p_exclude_ids).toEqual(
       expect.arrayContaining([42, 99]),
     );
-    // genre = 액션 (28, 10759)
-    expect(capture.args?.p_genre_ids).toEqual(
-      expect.arrayContaining([28, 10759]),
+    // 장르 하드필터 미적용 — movie/series 는 취향벡터가 장르를 내포하므로 null.
+    // (broad genre && 가 IVFFlat 인덱스를 깨 cold timeout → 2026-06-24 제거.)
+    expect(capture.args?.p_genre_ids).toBeNull();
+  });
+
+  it("RPC 인자 매핑 — variety 만 좁은 장르 [10764,10767] 전달", async () => {
+    const capture: { args?: Record<string, unknown> } = {};
+    const admin = makeRpcAdmin([], capture);
+    await embeddingRetrieval(
+      admin,
+      taste,
+      { tasteGenres: ["액션"], favoriteTmdbIds: [99] },
+      { type: "variety" },
+      [],
+      100,
+      30,
     );
+    expect(capture.args?.p_media_type).toBe("tv");
+    // variety = reality/talk format 장르만 (좁아서 인덱스 영향 미미)
+    expect(capture.args?.p_genre_ids).toEqual([10764, 10767]);
   });
 
   it("popularity 블렌딩 정렬 — similarity 높은 row 우선 (similarity + 0.15*rating/10)", async () => {

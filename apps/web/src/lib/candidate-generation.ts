@@ -353,8 +353,17 @@ export function stratifiedSample<T extends { totalScore: number }>(
 // 순수 additive — feature flag(REC_EMBED_RETRIEVAL_ENABLED) off 시 미진입.
 // 임베딩 신규 호출 없음 — favorites 의 *기존* DB embedding 만 사용.
 
-/** OVERFETCH — RPC match_count 배율. OTT/origin client 후처리 손실 보정. */
-const EMBED_OVERFETCH = 3;
+/**
+ * ANN top-K 상한 (RPC match_count).
+ *
+ * IVFFlat 는 대형 K 에서 planner 가 인덱스를 버리고 seq-scan + exact sort 로 전환 →
+ * 수초~수십초(8s statement_timeout 초과 → silent SQL fallback). 2026-06-24 실측 cliff:
+ *   K=150 media_type 필터 130ms / K=300 필터 7.5s (필터 결합 시 더 빨리 무너짐).
+ * 아키텍처 정본도 "pgvector ANN top~100". poolSize×3(=1500) 는 ANN 부적합 → 150 으로 캡.
+ * OTT/origin client 후처리 손실은 150 헤드룸으로 흡수(최종 picks ~10-30). 좁은 OTT
+ * 구독(1개)에서 후보 부족 시 → probes↑+K↑ 동반 튜닝 또는 OTT 를 SQL 로 이관(P3 follow-up).
+ */
+const ANN_MATCH_COUNT = 150;
 /** popularity 블렌딩 가중 — finalScore = similarity + POP_WEIGHT*(rating/10). */
 const POP_WEIGHT = 0.15;
 
@@ -479,19 +488,20 @@ export async function embeddingRetrieval(
   poolSize: number,
   topK: number,
 ): Promise<TmdbCandidate[]> {
-  // ── 필터 매핑 (generateCandidates SQL 빌더와 동일 의미) ──
-  // genre 합집합: favorites + tasteGenres (variety 는 reality/talk inject).
-  const genreFilterIds = new Set<number>();
-  for (const gid of profile.favoriteGenreIds ?? []) genreFilterIds.add(gid);
-  for (const gid of tasteGenresToIds(profile.tasteGenres)) genreFilterIds.add(gid);
-
+  // ── 필터 매핑 ──
+  // ⚠️ 장르 하드필터 미적용 (2026-06-24 실측 결정): broad genre `&&` 필터는 IVFFlat planner 가
+  //   인덱스를 버리고 exact-sort 로 전환(~12K 행 cold 6~10s → statement_timeout → silent SQL
+  //   fallback). 임베딩 경로는 **취향벡터가 장르/주제를 이미 내포**하므로 프로필 장르 하드필터는
+  //   중복이자 유해. 단 variety(예능)는 format 정의 장르(reality/talk)가 좁아(=적은 행, cold도 빠름)
+  //   유지 — 이게 없으면 "tv 전체"가 되어 예능 정체성이 사라짐.
+  //   (media_type/연도/origin/providers/excludeIds 하드필터는 인덱스와 양립 → 유지.)
   let pMediaType: "movie" | "tv" | null = null;
+  let pGenreIds: number[] | null = null;
   if (filter.type === "movie") pMediaType = "movie";
   else if (filter.type === "series") pMediaType = "tv";
   else if (filter.type === "variety") {
     pMediaType = "tv";
-    genreFilterIds.add(10764);
-    genreFilterIds.add(10767);
+    pGenreIds = [10764, 10767]; // reality/talk — 좁은 필터, 인덱스 영향 미미
   }
 
   const dateRange = yearFilterToRange(filter.year);
@@ -509,9 +519,9 @@ export async function embeddingRetrieval(
 
   const { data, error } = await admin.rpc("match_tmdb_by_embedding", {
     query_embedding: taste,
-    match_count: poolSize * EMBED_OVERFETCH,
+    match_count: ANN_MATCH_COUNT,
     p_media_type: pMediaType,
-    p_genre_ids: genreFilterIds.size > 0 ? Array.from(genreFilterIds) : null,
+    p_genre_ids: pGenreIds,
     p_date_gte: dateRange?.gte ?? null,
     p_date_lte: dateRange?.lte ?? null,
     p_origin: pOrigin,

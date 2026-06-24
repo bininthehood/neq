@@ -32,12 +32,15 @@
 -- p_exclude_ids: 정본 계약 그대로 int[]. tmdb_id 가 bigint 여도 `bigint = ANY(int[])` 는
 --   Postgres 가 int element 를 bigint 로 promote → 정상. 계약(int[]) 유지.
 --
--- ivfflat.probes (recall 튜닝, 정확성 무관):
---   본 함수는 LANGUAGE sql STABLE → 함수 본문 내 SET LOCAL 불가. 세션 기본 probes(IVFFlat 기본=1,
---   인덱스 migration 권장=10) 에 의존. probes ↑ = recall ↑ (정확성에는 영향 없음, latency trade).
---   recall 튜닝 필요 시 RPC 호출 *전* 세션에서:
---     SELECT set_config('ivfflat.probes', '10', false);   -- 세션 단위 (false=세션, true=트랜잭션)
---   HNSW 로 승격한 경우엔 SET hnsw.ef_search = 40; 패턴.
+-- ⚠️ 구현 방식 = PL/pgSQL 동적 SQL (2026-06-24 진단 후 LANGUAGE sql 에서 전환):
+--   초기 LANGUAGE sql STABLE + `(p IS NULL OR col=p)` OR 술어 버전은 **IVFFlat 인덱스를 안 탔다**.
+--   EXPLAIN ANALYZE 실측: Function Scan, 412K buffers(~3.2GB seq-scan+sort), Exec 61,112ms
+--   → service_role/authenticator statement_timeout 8s 초과 → 57014 취소 → 항상 SQL fallback.
+--   원인: (a) `SET search_path` 가 SQL 함수 인라인을 막고, (b) PostgREST 파라미터화 + OR 술어로
+--          planner 가 ANN 인덱스를 못 고름(파라미터를 plan-time 상수로 fold 못 함).
+--   해결: 동적 SQL 로 *제공된 필터만* 깔끔한 술어(AND col=…)로 붙여 인덱스 사용을 보장.
+--         probes 도 함수 내부에서 set_config 로 설정(LANGUAGE sql 은 불가했던 부분).
+--   RPC 계약(시그니처/RETURNS/반환컬럼)은 **불변** — candidate-generation.ts 무영향.
 
 CREATE OR REPLACE FUNCTION match_tmdb_by_embedding(
   query_embedding vector(1536),
@@ -57,25 +60,56 @@ RETURNS TABLE (
   providers jsonb, watch_link text,
   similarity float
 )
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT
-    tmdb_id, media_type, title, title_en, overview, rating, release_date,
-    poster_path, backdrop_path, director, cast_names, runtime, seasons,
-    country, origin_country, genre_ids, providers, watch_link,
-    1 - (embedding <=> query_embedding) AS similarity
-  FROM tmdb_metadata
-  WHERE providers IS NOT NULL
-    AND embedding IS NOT NULL
-    AND (p_media_type IS NULL OR media_type = p_media_type)
-    AND (p_genre_ids  IS NULL OR genre_ids && p_genre_ids)
-    AND (p_date_gte   IS NULL OR release_date >= p_date_gte)
-    AND (p_date_lte   IS NULL OR release_date <= p_date_lte)
-    AND (p_origin IS NULL
-         OR (p_origin = 'kr'      AND country @> ARRAY['KR'])
-         OR (p_origin = 'foreign' AND NOT (country @> ARRAY['KR'])))
-    AND (p_exclude_ids IS NULL OR NOT (tmdb_id = ANY(p_exclude_ids)))
-  ORDER BY embedding <=> query_embedding
-  LIMIT match_count;
+-- statement_timeout 헤드룸: 정상 경로는 cold 578ms / warm ~200ms 이나, 인스턴스 cold spike
+--   (index 페이지 대량 evict 후) 대비 15s 부여 → 8s(authenticator) 에서 silent SQL fallback 차단.
+LANGUAGE plpgsql STABLE SECURITY INVOKER SET statement_timeout = '15000' AS $$
+DECLARE
+  q    text;
+  vlit text := quote_literal(query_embedding::text);  -- 벡터를 리터럴로 인라인
+BEGIN
+  -- IVFFlat recall — 트랜잭션 로컬(PostgREST 가 호출을 트랜잭션으로 감쌈).
+  PERFORM set_config('ivfflat.probes', '10', true);
+  -- iterative_scan(pgvector 0.8) — media_type 등 post-filter 로 LIMIT 미충족 시 인덱스 추가 스캔.
+  PERFORM set_config('ivfflat.iterative_scan', 'relaxed_order', true);
+
+  -- ⚠️ 모든 값을 bind 파라미터가 아니라 quote_literal 리터럴로 인라인한다.
+  --   이유(2026-06-24 실측): bind 파라미터($1 벡터)로는 PostgREST/PG 가 실행 수 회 후
+  --   generic plan 으로 전환하며 IVFFlat 인덱스를 버려 seq-scan(8s+ → statement_timeout).
+  --   ORDER BY 대상(벡터)이 *상수 리터럴*이면 planner 가 매번 custom plan 으로 인덱스를 탐 →
+  --   호출 간 latency 안정(인덱스 130ms vs seq-scan 8s+). 모든 입력은 quote_literal 로 주입 안전.
+  q := '
+    SELECT tmdb_id, media_type, title, title_en, overview, rating, release_date,
+           poster_path, backdrop_path, director, cast_names, runtime, seasons,
+           country, origin_country, genre_ids, providers, watch_link,
+           1 - (embedding <=> ' || vlit || '::vector) AS similarity
+    FROM tmdb_metadata
+    WHERE providers IS NOT NULL AND embedding IS NOT NULL';
+
+  IF p_media_type IS NOT NULL THEN
+    q := q || ' AND media_type = ' || quote_literal(p_media_type);
+  END IF;
+  IF p_genre_ids IS NOT NULL THEN
+    q := q || ' AND genre_ids && ' || quote_literal(p_genre_ids::text) || '::int[]';
+  END IF;
+  IF p_date_gte IS NOT NULL THEN
+    q := q || ' AND release_date >= ' || quote_literal(p_date_gte);
+  END IF;
+  IF p_date_lte IS NOT NULL THEN
+    q := q || ' AND release_date <= ' || quote_literal(p_date_lte);
+  END IF;
+  IF p_origin = 'kr' THEN
+    q := q || ' AND country @> ARRAY[''KR'']';
+  ELSIF p_origin = 'foreign' THEN
+    q := q || ' AND NOT (country @> ARRAY[''KR''])';
+  END IF;
+  IF p_exclude_ids IS NOT NULL THEN
+    q := q || ' AND NOT (tmdb_id = ANY(' || quote_literal(p_exclude_ids::text) || '::int[]))';
+  END IF;
+
+  q := q || ' ORDER BY embedding <=> ' || vlit || '::vector LIMIT ' || match_count::text;
+
+  RETURN QUERY EXECUTE q;
+END;
 $$;
 
 GRANT EXECUTE ON FUNCTION match_tmdb_by_embedding(
