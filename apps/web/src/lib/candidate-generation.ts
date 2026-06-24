@@ -601,6 +601,17 @@ export async function embeddingRetrieval(
 /** DPP 후보 상한 — embedding fetch + 거리계산 비용 bound (관련성 top N 만). */
 const DPP_POOL = 90;
 
+/**
+ * DPP quality↔diversity knob — q_i = (relevance/max)^γ.
+ *   γ=1: 관련성 그대로. γ↓: q 평탄화 → 다양성 비중↑(γ=0 = 순수 다양성).
+ *
+ * **실측 결론(2026-06-24 스윕, γ=1.0/0.5/0.25):** 다양성은 거의 불변(+5.7~6.3%, 노이즈
+ *   수준)인데 평탄화할수록 후미 평균평점만 하락(7.07→6.78). 다양성은 q 가중이 아니라
+ *   임베딩 cosine 커널+풀 구성이 지배 → **γ=1.0 이 다양성·품질 모두 최적, 기본 채택.**
+ *   knob 은 향후(interaction 데이터 후) 재튜닝용으로 보존. 환경변수 DPP_GAMMA 로 스윕.
+ */
+const DPP_GAMMA = Number(process.env.DPP_GAMMA ?? "1");
+
 /** tmdb_metadata 에서 embedding 일괄 read → L2 정규화 Map. (parseEmbedding 재사용) */
 async function fetchNormalizedEmbeddings(
   admin: SupabaseClient,
@@ -722,7 +733,11 @@ export async function dppDiversify(
     );
     const items = pool.filter((c) => embMap.has(c.tmdbId));
     if (items.length <= k) return null; // 부족 → caller fallback
-    const q = items.map((c) => Math.max(c.totalScore, 1e-6));
+    // q_i = (relevance/max)^γ — γ<1 평탄화로 다양성 비중↑ (DPP_GAMMA 참조).
+    const maxScore = Math.max(...items.map((c) => c.totalScore), 1e-6);
+    const q = items.map((c) =>
+      Math.pow(Math.max(c.totalScore, 1e-6) / maxScore, DPP_GAMMA),
+    );
     const emb = items.map((c) => embMap.get(c.tmdbId)!);
     const pickedIdx = dppGreedyMAP(q, emb, k);
     const picked = pickedIdx.map((i) => items[i]);
