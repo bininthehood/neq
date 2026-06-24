@@ -323,9 +323,11 @@ function buildRankingUserPrompt(
         .map((p) => p.name)
         .slice(0, 3)
         .join("/");
+      // overview 40자로 축약 — ANN 이 이미 줄거리 의미로 정렬했으므로 rerank 엔
+      // 짧은 힌트면 충분. prompt 토큰↓ → LLM TTFT↓ (rank latency 병목 완화).
       const overview = (c.overview ?? "")
         .replace(/\s+/g, " ")
-        .slice(0, 120);
+        .slice(0, 40);
       const providersPart = providersStr ? `, ${providersStr}` : "";
       return `[ID:${c.tmdbId}] ${c.title} (${kind}, ${year}, 평점 ${rating}${providersPart}) — ${overview}`;
     })

@@ -35,8 +35,8 @@ import {
 //   stratifiedSample(상위 deterministic + 가중 random tail)로 골라 관련성 + 다양성 보존.
 //   Phase 2(나머지 30 채움)는 전체 풀을 그대로 사용 → 50건 출력 불변.
 //   완성형 다양성 선별은 P3(DPP)가 이 자리를 대체. count 변경 시 INPUT > count 유지.
-const LLM_RERANK_INPUT = 50;
-const LLM_RERANK_TOPK = 20;
+const LLM_RERANK_INPUT = 35;
+const LLM_RERANK_TOPK = 18;
 import {
   rankCandidatesLLM,
   rankCandidatesLLMStreaming,
