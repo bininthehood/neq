@@ -26,6 +26,7 @@ import {
   generateCandidates,
   stratifiedSample,
   dppDiversify,
+  fetchExplorationCandidates,
   type PersonaProfile,
   type TmdbCandidate,
 } from "./candidate-generation";
@@ -38,6 +39,9 @@ import {
 //   완성형 다양성 선별은 P3(DPP)가 이 자리를 대체. count 변경 시 INPUT > count 유지.
 const LLM_RERANK_INPUT = 35;
 const LLM_RERANK_TOPK = 18;
+
+// P3 exploration — 50장 중 예약할 epsilon 슬롯(취향 풀 밖 양질작). REC_EXPLORE_ENABLED gate.
+const EXPLORE_SLOTS = 4;
 import {
   rankCandidatesLLM,
   rankCandidatesLLMStreaming,
@@ -559,7 +563,12 @@ export async function getRecommendations(
   const phase2Pool = tmdbCandidates.filter(
     (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
   );
-  const phase2Slots = Math.max(0, 50 - results.length);
+  // P3 exploration: epsilon 슬롯 예약 (취향 풀 밖 양질작). flag off 시 0.
+  const exploreCount =
+    process.env.REC_EXPLORE_ENABLED === "true"
+      ? Math.min(EXPLORE_SLOTS, Math.max(0, 50 - results.length))
+      : 0;
+  const phase2Slots = Math.max(0, 50 - results.length - exploreCount);
   // P3 (2026-06-24): DPP 다양성 선별로 Math.random() 셔플 대체 (안티패턴 제거).
   //   best-effort → null 이면 기존 top20+셔플 fallback.
   const dppP2 =
@@ -572,12 +581,37 @@ export async function getRecommendations(
       ...phase2Pool.slice(0, 20),
       ...phase2Pool.slice(20).sort(() => Math.random() - 0.5),
     ];
+  const phase2Cap = 50 - exploreCount;
   for (const tc of phase2Ordered) {
-    if (results.length >= 50) break;
+    if (results.length >= phase2Cap) break;
     const enriched = tmdbCandidateToEnriched(tc);
     results.push(buildRecommendationObject(enriched, templateReason(enriched)));
     usedIds.add(tc.tmdbId);
     usedTitles.add(tc.title);
+  }
+  // exploration 채움 — 취향 ANN 풀 + 기노출 차단.
+  if (exploreCount > 0) {
+    const exploreExclude = Array.from(
+      new Set<number>([
+        ...(excludeIds ?? []),
+        ...tmdbCandidates.map((c) => c.tmdbId),
+        ...usedIds,
+      ]),
+    );
+    const explore = await fetchExplorationCandidates(
+      profile,
+      filter,
+      exploreExclude,
+      exploreCount + 4,
+    );
+    for (const tc of explore) {
+      if (results.length >= 50) break;
+      if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+      const enriched = tmdbCandidateToEnriched(tc);
+      results.push(buildRecommendationObject(enriched, templateReason(enriched)));
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
+    }
   }
 
   return {
@@ -918,7 +952,12 @@ export async function getRecommendationsStreaming(
   const phase2Pool = tmdbCandidates.filter(
     (tc) => !usedIds.has(tc.tmdbId) && !usedTitles.has(tc.title),
   );
-  const phase2Slots = Math.max(0, 50 - phase1Count);
+  // P3 exploration: epsilon 슬롯 예약 (취향 풀 밖 양질작). flag off 시 0.
+  const exploreCount =
+    process.env.REC_EXPLORE_ENABLED === "true"
+      ? Math.min(EXPLORE_SLOTS, Math.max(0, 50 - phase1Count))
+      : 0;
+  const phase2Slots = Math.max(0, 50 - phase1Count - exploreCount);
   // P3 (2026-06-24): DPP 다양성 선별로 Math.random() 셔플 대체 (안티패턴 제거).
   const dppP2 =
     process.env.REC_DPP_ENABLED === "true"
@@ -937,6 +976,34 @@ export async function getRecommendationsStreaming(
     phase2Recs.push(
       buildRecommendationObject(enriched, templateReason(enriched)),
     );
+    usedIds.add(tc.tmdbId);
+    usedTitles.add(tc.title);
+  }
+  // exploration 채움 — 취향 ANN 풀 + 기노출 차단.
+  if (exploreCount > 0) {
+    const exploreExclude = Array.from(
+      new Set<number>([
+        ...(excludeIds ?? []),
+        ...tmdbCandidates.map((c) => c.tmdbId),
+        ...usedIds,
+      ]),
+    );
+    const explore = await fetchExplorationCandidates(
+      profile,
+      filter,
+      exploreExclude,
+      exploreCount + 4,
+    );
+    for (const tc of explore) {
+      if (phase2Recs.length >= phase2Slots + exploreCount) break;
+      if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+      const enriched = tmdbCandidateToEnriched(tc);
+      phase2Recs.push(
+        buildRecommendationObject(enriched, templateReason(enriched)),
+      );
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
+    }
   }
 
   mark("phase2", tPhase2);

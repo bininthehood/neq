@@ -755,6 +755,85 @@ export async function dppDiversify(
   }
 }
 
+// ---------- P3 exploration (2026-06-24): epsilon 슬롯 후보 ----------
+//
+// 리서치 권고: zero-data 엔 naive Beta(1,1) Thompson 금지(약작품 과탐색) → epsilon
+//   슬롯 예약부터. 취향벡터 ANN 이 놓친 **양질작**을 소수 슬롯에 노출 → 필터버블 회피 +
+//   발굴성. 안전장치: rating 게이트 + 취향 장르 내 한정(완전 random off-taste 회피).
+
+const EXPLORE_RATING_MIN = 6.5;
+
+/**
+ * 탐색 후보 — 취향 장르 내 고평점 KR 가용작 중 ANN/취향 풀 *밖* (excludeIds 로 차단).
+ * rating DESC overfetch → OTT/origin 후처리 → rating 가중 random sample k (변동성).
+ * @param excludeIds  차단 (seen/saved + ANN 취향 풀 ids — 호출자가 합쳐 전달).
+ */
+export async function fetchExplorationCandidates(
+  profile: PersonaProfile,
+  filter: RecommendFilter,
+  excludeIds: number[],
+  k: number,
+): Promise<TmdbCandidate[]> {
+  if (k <= 0) return [];
+  const admin = supabaseAdmin();
+  const genreIds = new Set<number>([
+    ...(profile.favoriteGenreIds ?? []),
+    ...tasteGenresToIds(profile.tasteGenres),
+  ]);
+  const dateRange = yearFilterToRange(filter.year);
+  const mediaTypes: Array<"movie" | "tv"> =
+    filter.type === "movie"
+      ? ["movie"]
+      : filter.type === "series" || filter.type === "variety"
+        ? ["tv"]
+        : ["movie", "tv"];
+  const blockSet = new Set<number>([
+    ...excludeIds,
+    ...(profile.favoriteTmdbIds ?? []),
+  ]);
+  const ottNames =
+    filter.ott && filter.ott.length > 0 ? filter.ott : profile.subscribedOtt ?? [];
+  const ottSet = new Set(ottNames);
+  const wantForeign = filter.origin === "foreign";
+
+  const rows: TmdbMetadataPoolRow[] = [];
+  for (const mt of mediaTypes) {
+    let q = admin
+      .from("tmdb_metadata")
+      .select(SELECT_COLS)
+      .eq("media_type", mt)
+      .not("providers", "is", null)
+      .gte("rating", EXPLORE_RATING_MIN);
+    if (genreIds.size > 0) q = q.overlaps("genre_ids", Array.from(genreIds));
+    if (dateRange?.gte) q = q.gte("release_date", dateRange.gte);
+    if (dateRange?.lte) q = q.lte("release_date", dateRange.lte);
+    if (filter.origin === "kr") q = q.contains("country", ["KR"]);
+    if (excludeIds.length > 0) {
+      q = q.not("tmdb_id", "in", `(${excludeIds.join(",")})`);
+    }
+    const { data, error } = await q
+      .order("rating", { ascending: false })
+      .limit(k * 10);
+    if (!error && data) {
+      rows.push(...(data as unknown as TmdbMetadataPoolRow[]));
+    }
+  }
+
+  const pool: TmdbCandidate[] = [];
+  for (const row of rows) {
+    if (blockSet.has(row.tmdb_id)) continue;
+    if (ottSet.size > 0) {
+      if (!(row.providers ?? []).some((p) => ottSet.has(p.name))) continue;
+    }
+    if (wantForeign) {
+      if ((row.country ?? row.origin_country ?? []).includes("KR")) continue;
+    }
+    pool.push(rowToCandidate(row, 0)); // personaMatch 0 → totalScore = rating
+  }
+  // rating 가중 random sample k — topK=0 = 전부 가중랜덤(매 호출 변동).
+  return stratifiedSample(pool, k, 0);
+}
+
 // ---------- 메인: generateCandidates ----------
 
 /**
