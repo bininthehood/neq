@@ -1,0 +1,53 @@
+name: TMDB Embed Sync
+
+on:
+  schedule:
+    # 매일 13:00 UTC.
+    # 선행 cadence: catalog-sync 08:00(신규 ID) → bulk-crawl 12:15(신규작 metadata 적재,
+    #   timeout 30min) → 본 워크플로 13:00 이 새로 적재/변경된 metadata 를 임베딩.
+    #   embedding_text_hash 로 변경분만 재임베딩 (멱등) — 매일 돌아도 비용은 신규/변경분만.
+    #   설계: _workspace/09_p1-embedding-infra-plan-2026-06-23.md §4 (외부 GH Actions 배치)
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+    inputs:
+      embed_limit:
+        description: "처리 상한 (소량 검증용, 비우면 전체)"
+        required: false
+        default: ""
+      embed_batch:
+        description: "1 OpenAI 요청당 input 개수 (기본 200)"
+        required: false
+        default: "200"
+      dry_run:
+        description: "true 시 OpenAI 호출/upsert 없이 후보 수 + 문서 미리보기만"
+        required: false
+        default: "false"
+
+concurrency:
+  group: tmdb-embed-sync
+  cancel-in-progress: false
+
+jobs:
+  embed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --ignore-scripts
+
+      - name: Run tmdb-embed-sync
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          EMBED_LIMIT: ${{ inputs.embed_limit || '' }}
+          EMBED_BATCH: ${{ inputs.embed_batch || '200' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: npx tsx scripts/tmdb-embed-sync.ts

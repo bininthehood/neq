@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     feedback,
     exclude: rawExclude,
     excludeIds: rawExcludeIds,
+    savedTmdbIds: rawSavedTmdbIds,
     savedCount: rawSavedCount,
     onboardingCount: rawOnboardingCount,
     tasteGenres: rawTasteGenres,
@@ -72,6 +73,11 @@ export async function POST(req: NextRequest) {
   // excludeIds 검증: 숫자 배열, 최대 300개
   const excludeIds = Array.isArray(rawExcludeIds)
     ? rawExcludeIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 300)
+    : undefined;
+
+  // savedTmdbIds 검증: 숫자 배열, 최대 50개 (취향벡터 합산용 — 과다 평균 희석 방지).
+  const savedTmdbIds = Array.isArray(rawSavedTmdbIds)
+    ? rawSavedTmdbIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 50)
     : undefined;
 
   // V2 (Day 22, P0-2): tasteGenres / subscribedOtt 검증.
@@ -133,6 +139,7 @@ export async function POST(req: NextRequest) {
             tasteGenres,
             subscribedOtt,
             tasteSummary,
+            savedTmdbIds,
           );
           emit({ type: "done" });
         } catch (err) {
@@ -167,6 +174,7 @@ export async function POST(req: NextRequest) {
       tasteGenres,
       subscribedOtt,
       tasteSummary,
+      savedTmdbIds,
     );
     // 단계별 ms는 응답 body에 포함. Server-Timing 헤더는 dev tools 호환용 보존
     // (Vercel/Next.js infra가 Server-Timing 헤더를 응답에서 strip하는 동작이 관측되어 body 경유)

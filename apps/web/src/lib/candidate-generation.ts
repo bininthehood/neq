@@ -23,6 +23,7 @@
  *
  * 산출 spec: `_workspace/08_refactor-handoff-2026-06-06.md` §2 Phase B.
  */
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "./supabase-admin";
 import type { RecommendFilter } from "./types";
 
@@ -345,6 +346,494 @@ export function stratifiedSample<T extends { totalScore: number }>(
   return merged;
 }
 
+// ---------- P2 (2026-06-24): pgvector ANN retrieval ----------
+//
+// 설계 정본: _workspace/11_p2-retrieval-plan-2026-06-24.md §작업2.
+// candidate retrieval 을 mirror SQL(rating DESC) → 취향벡터 cosine NN 으로 교체.
+// 순수 additive — feature flag(REC_EMBED_RETRIEVAL_ENABLED) off 시 미진입.
+// 임베딩 신규 호출 없음 — favorites 의 *기존* DB embedding 만 사용.
+
+/**
+ * ANN top-K 상한 (RPC match_count).
+ *
+ * IVFFlat 는 대형 K 에서 planner 가 인덱스를 버리고 seq-scan + exact sort 로 전환 →
+ * 수초~수십초(8s statement_timeout 초과 → silent SQL fallback). 2026-06-24 실측 cliff:
+ *   K=150 media_type 필터 130ms / K=300 필터 7.5s (필터 결합 시 더 빨리 무너짐).
+ * 아키텍처 정본도 "pgvector ANN top~100". poolSize×3(=1500) 는 ANN 부적합 → 150 으로 캡.
+ * OTT/origin client 후처리 손실은 150 헤드룸으로 흡수(최종 picks ~10-30). 좁은 OTT
+ * 구독(1개)에서 후보 부족 시 → probes↑+K↑ 동반 튜닝 또는 OTT 를 SQL 로 이관(P3 follow-up).
+ */
+const ANN_MATCH_COUNT = 150;
+/** popularity 블렌딩 가중 — finalScore = similarity + POP_WEIGHT*(rating/10). */
+const POP_WEIGHT = 0.15;
+
+/**
+ * Supabase 가 vector(1536) 컬럼을 JSON 문자열("[...]")로 돌려줄 수 있어 정규화.
+ * scripts/tmdb-embed-sanity.ts 의 parseEmbedding 패턴 재사용.
+ */
+function parseEmbedding(e: number[] | string | null | undefined): number[] | null {
+  if (e == null) return null;
+  if (Array.isArray(e)) return e;
+  try {
+    const parsed = JSON.parse(e);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 취향벡터 빌드 — favorites 작품의 기존 embedding 을 평균 + L2 정규화.
+ *
+ * @param admin            service_role Supabase client
+ * @param favoriteTmdbIds  페르소나 favorites 의 TMDB id
+ * @returns 1536-d L2-normalized vector. 유효 embedding 0건 → null (cold-start fallback).
+ *
+ * 동작:
+ *   1. tmdb_metadata 에서 tmdb_id IN (favoriteTmdbIds) 의 embedding 일괄 select.
+ *      providers/embedding NULL 무관 — favorites 는 KR 가용 모집단 밖일 수 있음.
+ *   2. parseEmbedding 으로 number[] 정규화 (string 컬럼 방어).
+ *   3. 성분별 평균 → L2 정규화 (cosine 정합).
+ *
+ * 임베딩 신규 호출 절대 없음 — DB 의 기존 embedding 만 read.
+ */
+export async function buildTasteVector(
+  admin: SupabaseClient,
+  favoriteTmdbIds: number[],
+): Promise<number[] | null> {
+  if (!favoriteTmdbIds || favoriteTmdbIds.length === 0) return null;
+
+  const { data, error } = await admin
+    .from("tmdb_metadata")
+    .select("embedding")
+    .in("tmdb_id", favoriteTmdbIds)
+    .not("embedding", "is", null);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ embedding: number[] | string | null }>;
+  const vecs: number[][] = [];
+  let dim = 0;
+  for (const r of rows) {
+    const v = parseEmbedding(r.embedding);
+    if (v && v.length > 0) {
+      if (dim === 0) dim = v.length;
+      // 차원 불일치 row 는 skip (방어 — 정상적으로는 전부 1536-d)
+      if (v.length === dim) vecs.push(v);
+    }
+  }
+  if (vecs.length === 0 || dim === 0) return null;
+
+  // 성분별 평균
+  const mean = new Array<number>(dim).fill(0);
+  for (const v of vecs) {
+    for (let i = 0; i < dim; i++) mean[i] += v[i];
+  }
+  for (let i = 0; i < dim; i++) mean[i] /= vecs.length;
+
+  // L2 정규화 (cosine 정합 — 정규화된 벡터끼리 dot = cosine)
+  let norm = 0;
+  for (let i = 0; i < dim; i++) norm += mean[i] * mean[i];
+  norm = Math.sqrt(norm);
+  if (norm === 0) return null; // 영벡터 방어
+  for (let i = 0; i < dim; i++) mean[i] /= norm;
+
+  return mean;
+}
+
+/**
+ * match_tmdb_by_embedding RPC 반환 row (스네이크케이스 — 계약은 정본 §작업1).
+ * tmdb_metadata 미러 컬럼 + similarity.
+ */
+interface MatchEmbeddingRpcRow {
+  tmdb_id: number;
+  media_type: "movie" | "tv";
+  title: string | null;
+  title_en: string | null;
+  overview: string | null;
+  // PostgREST 가 numeric/float 을 string 으로 직렬화할 수 있음 → Number() 후처리.
+  rating: number | string | null;
+  release_date: string | null;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  director: string | null;
+  cast_names: string[] | null;
+  runtime: number | null;
+  seasons: number | null;
+  country: string[] | null;
+  origin_country: string[] | null;
+  genre_ids: number[] | null;
+  providers: Array<{
+    name: string;
+    logoUrl: string | null;
+    category?: "subscription" | "rent" | "buy";
+  }> | null;
+  watch_link: string | null;
+  similarity: number | string;
+}
+
+/**
+ * 취향벡터 cosine NN retrieval — RPC match_tmdb_by_embedding 호출 + client 후처리.
+ *
+ * 필터 매핑은 generateCandidates 의 SQL 빌드 로직과 동일 의미 (type/genre/year/origin/ott).
+ * popularity 블렌딩: finalScore = similarity + POP_WEIGHT*(rating/10) → totalScore 자리.
+ * personaMatch 는 similarity 기반 보존 (downstream 은 totalScore 만 봄).
+ * stratifiedSample 로 다양성 tail (P3 DPP 전까지 현 거동 유지).
+ */
+export async function embeddingRetrieval(
+  admin: SupabaseClient,
+  taste: number[],
+  profile: PersonaProfile,
+  filter: RecommendFilter,
+  excludeIds: number[],
+  poolSize: number,
+  topK: number,
+): Promise<TmdbCandidate[]> {
+  // ── 필터 매핑 ──
+  // ⚠️ 장르 하드필터 미적용 (2026-06-24 실측 결정): broad genre `&&` 필터는 IVFFlat planner 가
+  //   인덱스를 버리고 exact-sort 로 전환(~12K 행 cold 6~10s → statement_timeout → silent SQL
+  //   fallback). 임베딩 경로는 **취향벡터가 장르/주제를 이미 내포**하므로 프로필 장르 하드필터는
+  //   중복이자 유해. 단 variety(예능)는 format 정의 장르(reality/talk)가 좁아(=적은 행, cold도 빠름)
+  //   유지 — 이게 없으면 "tv 전체"가 되어 예능 정체성이 사라짐.
+  //   (media_type/연도/origin/providers/excludeIds 하드필터는 인덱스와 양립 → 유지.)
+  let pMediaType: "movie" | "tv" | null = null;
+  let pGenreIds: number[] | null = null;
+  if (filter.type === "movie") pMediaType = "movie";
+  else if (filter.type === "series") pMediaType = "tv";
+  else if (filter.type === "variety") {
+    pMediaType = "tv";
+    pGenreIds = [10764, 10767]; // reality/talk — 좁은 필터, 인덱스 영향 미미
+  }
+
+  const dateRange = yearFilterToRange(filter.year);
+
+  // origin: 'kr' | 'foreign' | null (RPC 가 country 기반 하드필터)
+  const pOrigin =
+    filter.origin === "kr" ? "kr" : filter.origin === "foreign" ? "foreign" : null;
+
+  // exclude: excludeIds + favoriteTmdbIds 안전망
+  const excludeSet = new Set<number>([
+    ...excludeIds,
+    ...(profile.favoriteTmdbIds ?? []),
+  ]);
+  const pExcludeIds = excludeSet.size > 0 ? Array.from(excludeSet) : null;
+
+  const { data, error } = await admin.rpc("match_tmdb_by_embedding", {
+    query_embedding: taste,
+    match_count: ANN_MATCH_COUNT,
+    p_media_type: pMediaType,
+    p_genre_ids: pGenreIds,
+    p_date_gte: dateRange?.gte ?? null,
+    p_date_lte: dateRange?.lte ?? null,
+    p_origin: pOrigin,
+    p_exclude_ids: pExcludeIds,
+  });
+  if (error) throw error;
+
+  const rows = (data ?? []) as MatchEmbeddingRpcRow[];
+
+  // ── OTT/origin client 후처리 (generateCandidates 와 동일) ──
+  const ottNames =
+    filter.ott && filter.ott.length > 0
+      ? filter.ott
+      : profile.subscribedOtt ?? [];
+  const ottSet = new Set(ottNames);
+  const wantForeign = filter.origin === "foreign";
+
+  const candidates: TmdbCandidate[] = [];
+  for (const row of rows) {
+    if (excludeSet.has(row.tmdb_id)) continue; // RPC hard filter 안전망
+    if (ottSet.size > 0) {
+      const matched = (row.providers ?? []).some((p) => ottSet.has(p.name));
+      if (!matched) continue;
+    }
+    if (wantForeign) {
+      const isKR = (row.country ?? row.origin_country ?? []).includes("KR");
+      if (isKR) continue;
+    }
+
+    // PostgREST 가 numeric/float 을 string 으로 직렬화할 수 있어 Number() 방어.
+    const rating = Number(row.rating ?? 0) || 0;
+    const similarity = Number(row.similarity ?? 0) || 0;
+    // popularity 블렌딩 — finalScore 를 totalScore 자리에 매핑.
+    const finalScore = similarity + POP_WEIGHT * (rating / 10);
+
+    candidates.push({
+      tmdbId: row.tmdb_id,
+      type: row.media_type === "tv" ? "series" : "movie",
+      title: row.title ?? row.title_en ?? "",
+      titleEn: row.title_en,
+      overview: row.overview,
+      posterPath: row.poster_path,
+      backdropPath: row.backdrop_path,
+      rating,
+      releaseDate: row.release_date,
+      genreIds: row.genre_ids ?? [],
+      country: row.country ?? [],
+      originCountry: row.origin_country ?? [],
+      runtime: row.runtime,
+      seasons: row.seasons,
+      director: row.director,
+      castNames: row.cast_names ?? [],
+      providers: row.providers ?? [],
+      watchLink: row.watch_link,
+      popularity: rating,
+      // personaMatch 는 similarity 기반 보존 (downstream 진단·향후 ranking 신호).
+      personaMatch: similarity,
+      totalScore: finalScore,
+    });
+  }
+
+  candidates.sort((a, b) => b.totalScore - a.totalScore);
+  // P3 DPP 전까지 stratifiedSample 다양성 tail 유지 (SQL 경로와 동일).
+  return stratifiedSample(candidates, poolSize, topK);
+}
+
+// ---------- P3 (2026-06-24): DPP 다양성 (greedy MAP) ----------
+//
+// 설계 정본: _workspace/08·09 + project_rec_refactor P3.
+// LLM rerank 입력 풀 선별을 stratifiedSample(셔플성) → DPP greedy MAP 로 교체.
+// 커널 L = diag(q)·CosSim·diag(q) (quality-diversity 분해, PSD 보장):
+//   - q_i = relevance(totalScore) — 대각 L_ii = q_i²
+//   - S_ij = cos(e_i, e_j) (정규화 임베딩 dot) — 유사 작품일수록 ↑ → DPP 가 동시선택 회피
+//   라이브 A/B 에서 MMR·휴리스틱 상회(YouTube Wilhelm CIKM2018 / Hulu Chen NeurIPS2018).
+//   greedy Cholesky O(K·n·dim), 60→35 sub-10ms. **셔플로 다양성 흉내 금지** — DPP 가 정공법.
+
+/** DPP 후보 상한 — embedding fetch + 거리계산 비용 bound (관련성 top N 만). */
+const DPP_POOL = 90;
+
+/**
+ * DPP quality↔diversity knob — q_i = (relevance/max)^γ.
+ *   γ=1: 관련성 그대로. γ↓: q 평탄화 → 다양성 비중↑(γ=0 = 순수 다양성).
+ *
+ * **실측 결론(2026-06-24 스윕, γ=1.0/0.5/0.25):** 다양성은 거의 불변(+5.7~6.3%, 노이즈
+ *   수준)인데 평탄화할수록 후미 평균평점만 하락(7.07→6.78). 다양성은 q 가중이 아니라
+ *   임베딩 cosine 커널+풀 구성이 지배 → **γ=1.0 이 다양성·품질 모두 최적, 기본 채택.**
+ *   knob 은 향후(interaction 데이터 후) 재튜닝용으로 보존. 환경변수 DPP_GAMMA 로 스윕.
+ */
+const DPP_GAMMA = Number(process.env.DPP_GAMMA ?? "1");
+
+/** tmdb_metadata 에서 embedding 일괄 read → L2 정규화 Map. (parseEmbedding 재사용) */
+async function fetchNormalizedEmbeddings(
+  admin: SupabaseClient,
+  ids: number[],
+): Promise<Map<number, number[]>> {
+  const map = new Map<number, number[]>();
+  if (ids.length === 0) return map;
+  const { data, error } = await admin
+    .from("tmdb_metadata")
+    .select("tmdb_id, embedding")
+    .in("tmdb_id", ids)
+    .not("embedding", "is", null);
+  if (error) throw error;
+  for (const r of (data ?? []) as Array<{
+    tmdb_id: number;
+    embedding: number[] | string | null;
+  }>) {
+    if (map.has(r.tmdb_id)) continue; // (tmdb_id, media_type) 복합 PK — 첫 행만
+    const v = parseEmbedding(r.embedding);
+    if (!v || v.length === 0) continue;
+    let norm = 0;
+    for (let i = 0; i < v.length; i++) norm += v[i] * v[i];
+    norm = Math.sqrt(norm);
+    if (norm === 0) continue;
+    map.set(
+      r.tmdb_id,
+      v.map((x) => x / norm),
+    );
+  }
+  return map;
+}
+
+/**
+ * DPP greedy MAP (Chen et al. NeurIPS2018 fast greedy).
+ * @param q   relevance (양수). 대각 커널 L_ii = q_i².
+ * @param emb L2 정규화 임베딩 (cos = dot).
+ * @param k   선택 개수.
+ * @returns 선택된 인덱스 배열 (선택 순서 = 관련성·다양성 균형 순).
+ *
+ * 매 step: 잔여 i 의 잔차분산 d_i² 갱신 → 최대 d_i² 선택. d_i² 는 "이미 선택된 것과
+ * 겹치지 않는 quality" → 관련성 높고 기존 선택과 다른 작품이 뽑힘.
+ */
+export function dppGreedyMAP(
+  q: number[],
+  emb: number[][],
+  k: number,
+): number[] {
+  const n = q.length;
+  const K = Math.min(k, n);
+  if (n === 0 || K === 0) return [];
+
+  const cis: number[][] = Array.from({ length: n }, () => []);
+  const d2 = q.map((qi) => qi * qi); // d_i² = L_ii
+  const sel = new Set<number>();
+  const order: number[] = [];
+
+  // 첫 선택 = 최대 quality
+  let j = 0;
+  for (let i = 1; i < n; i++) if (d2[i] > d2[j]) j = i;
+  sel.add(j);
+  order.push(j);
+
+  while (order.length < K) {
+    const cj = cis[j];
+    const dj = Math.sqrt(d2[j]);
+    if (!(dj > 1e-9)) break;
+    for (let i = 0; i < n; i++) {
+      if (sel.has(i) || d2[i] <= 1e-12) continue;
+      // L_ji = q_j q_i cos(e_j, e_i)
+      let cos = 0;
+      const ej = emb[j];
+      const ei = emb[i];
+      for (let t = 0; t < ej.length; t++) cos += ej[t] * ei[t];
+      const Lji = q[j] * q[i] * cos;
+      // <c_j, c_i>
+      const ciI = cis[i];
+      let cc = 0;
+      for (let t = 0; t < cj.length; t++) cc += cj[t] * ciI[t];
+      const e = (Lji - cc) / dj;
+      ciI.push(e);
+      d2[i] -= e * e;
+    }
+    let best = -1;
+    for (let i = 0; i < n; i++) {
+      if (sel.has(i) || d2[i] <= 1e-12) continue;
+      if (best < 0 || d2[i] > d2[best]) best = i;
+    }
+    if (best < 0) break;
+    j = best;
+    sel.add(j);
+    order.push(j);
+  }
+  return order;
+}
+
+/**
+ * DPP 다양성 선별 — 후보 k 개를 관련성+다양성 균형으로 고르고 **DPP greedy 순서 유지**.
+ *
+ * 배치(2026-06-24 실측 결정): LLM rerank *앞*이 아니라 **Phase 2 채움**(나머지 30장)에 적용.
+ *   rerank 앞 DPP 는 LLM 이 관련성으로 재클러스터 + 35풀→20픽 비율(1.75×)이 좁아 효과 ~0.
+ *   Phase 2 는 ~130풀→30 (여유 큼) + Math.random() 셔플(안티패턴) 대체 → 실질 다양화.
+ *   DPP 순서 = 각 픽이 이전 선택과 최대 상이 → 연속 유사작 회피(스와이프 UX).
+ *
+ * 관련성 top DPP_POOL 의 임베딩 fetch → DPP greedy.
+ * **best-effort**: 후보 부족/임베딩 부족/에러 → null (caller 가 기존 셔플 fallback).
+ */
+export async function dppDiversify(
+  candidates: TmdbCandidate[],
+  k: number,
+): Promise<TmdbCandidate[] | null> {
+  if (candidates.length === 0) return [];
+  if (candidates.length <= k) return candidates.slice();
+  try {
+    const admin = supabaseAdmin();
+    const pool = candidates.slice(0, Math.min(DPP_POOL, candidates.length));
+    const embMap = await fetchNormalizedEmbeddings(
+      admin,
+      pool.map((c) => c.tmdbId),
+    );
+    const items = pool.filter((c) => embMap.has(c.tmdbId));
+    if (items.length <= k) return null; // 부족 → caller fallback
+    // q_i = (relevance/max)^γ — γ<1 평탄화로 다양성 비중↑ (DPP_GAMMA 참조).
+    const maxScore = Math.max(...items.map((c) => c.totalScore), 1e-6);
+    const q = items.map((c) =>
+      Math.pow(Math.max(c.totalScore, 1e-6) / maxScore, DPP_GAMMA),
+    );
+    const emb = items.map((c) => embMap.get(c.tmdbId)!);
+    const pickedIdx = dppGreedyMAP(q, emb, k);
+    const picked = pickedIdx.map((i) => items[i]);
+    // DPP 가 완전중복 등으로 k 미만 반환 시 → relevance 상위 미선택분으로 top-up.
+    if (picked.length < k) {
+      const pickedSet = new Set(pickedIdx);
+      for (let i = 0; i < items.length && picked.length < k; i++) {
+        if (!pickedSet.has(i)) picked.push(items[i]);
+      }
+    }
+    return picked; // DPP 순서 유지 (relevance 재정렬 안 함 — 다양성 순서가 핵심)
+  } catch (err) {
+    console.error("[P3] DPP failed:", err);
+    return null;
+  }
+}
+
+// ---------- P3 exploration (2026-06-24): epsilon 슬롯 후보 ----------
+//
+// 리서치 권고: zero-data 엔 naive Beta(1,1) Thompson 금지(약작품 과탐색) → epsilon
+//   슬롯 예약부터. 취향벡터 ANN 이 놓친 **양질작**을 소수 슬롯에 노출 → 필터버블 회피 +
+//   발굴성. 안전장치: rating 게이트 + 취향 장르 내 한정(완전 random off-taste 회피).
+
+const EXPLORE_RATING_MIN = 6.5;
+
+/**
+ * 탐색 후보 — 취향 장르 내 고평점 KR 가용작 중 ANN/취향 풀 *밖* (excludeIds 로 차단).
+ * rating DESC overfetch → OTT/origin 후처리 → rating 가중 random sample k (변동성).
+ * @param excludeIds  차단 (seen/saved + ANN 취향 풀 ids — 호출자가 합쳐 전달).
+ */
+export async function fetchExplorationCandidates(
+  profile: PersonaProfile,
+  filter: RecommendFilter,
+  excludeIds: number[],
+  k: number,
+): Promise<TmdbCandidate[]> {
+  if (k <= 0) return [];
+  const admin = supabaseAdmin();
+  const genreIds = new Set<number>([
+    ...(profile.favoriteGenreIds ?? []),
+    ...tasteGenresToIds(profile.tasteGenres),
+  ]);
+  const dateRange = yearFilterToRange(filter.year);
+  const mediaTypes: Array<"movie" | "tv"> =
+    filter.type === "movie"
+      ? ["movie"]
+      : filter.type === "series" || filter.type === "variety"
+        ? ["tv"]
+        : ["movie", "tv"];
+  const blockSet = new Set<number>([
+    ...excludeIds,
+    ...(profile.favoriteTmdbIds ?? []),
+  ]);
+  const ottNames =
+    filter.ott && filter.ott.length > 0 ? filter.ott : profile.subscribedOtt ?? [];
+  const ottSet = new Set(ottNames);
+  const wantForeign = filter.origin === "foreign";
+
+  const rows: TmdbMetadataPoolRow[] = [];
+  for (const mt of mediaTypes) {
+    let q = admin
+      .from("tmdb_metadata")
+      .select(SELECT_COLS)
+      .eq("media_type", mt)
+      .not("providers", "is", null)
+      .gte("rating", EXPLORE_RATING_MIN);
+    if (genreIds.size > 0) q = q.overlaps("genre_ids", Array.from(genreIds));
+    if (dateRange?.gte) q = q.gte("release_date", dateRange.gte);
+    if (dateRange?.lte) q = q.lte("release_date", dateRange.lte);
+    if (filter.origin === "kr") q = q.contains("country", ["KR"]);
+    if (excludeIds.length > 0) {
+      q = q.not("tmdb_id", "in", `(${excludeIds.join(",")})`);
+    }
+    const { data, error } = await q
+      .order("rating", { ascending: false })
+      .limit(k * 10);
+    if (!error && data) {
+      rows.push(...(data as unknown as TmdbMetadataPoolRow[]));
+    }
+  }
+
+  const pool: TmdbCandidate[] = [];
+  for (const row of rows) {
+    if (blockSet.has(row.tmdb_id)) continue;
+    if (ottSet.size > 0) {
+      if (!(row.providers ?? []).some((p) => ottSet.has(p.name))) continue;
+    }
+    if (wantForeign) {
+      if ((row.country ?? row.origin_country ?? []).includes("KR")) continue;
+    }
+    pool.push(rowToCandidate(row, 0)); // personaMatch 0 → totalScore = rating
+  }
+  // rating 가중 random sample k — topK=0 = 전부 가중랜덤(매 호출 변동).
+  return stratifiedSample(pool, k, 0);
+}
+
 // ---------- 메인: generateCandidates ----------
 
 /**
@@ -380,6 +869,33 @@ export async function generateCandidates(
   topK: number = 30,
 ): Promise<TmdbCandidate[]> {
   const admin = supabaseAdmin(); // env 누락 시 throw → caller 가 fallback
+
+  // ── P2 (2026-06-24): pgvector ANN retrieval 분기 (순수 additive + flag gating) ──
+  // flag off | 취향벡터 null | RPC throw → 아래 기존 SQL rating-DESC 경로 그대로 (fallback).
+  // 기존 경로 거동은 한 줄도 바뀌지 않음 (flag off = bit-identical).
+  if (
+    process.env.REC_EMBED_RETRIEVAL_ENABLED === "true" &&
+    profile.favoriteTmdbIds &&
+    profile.favoriteTmdbIds.length > 0
+  ) {
+    try {
+      const taste = await buildTasteVector(admin, profile.favoriteTmdbIds);
+      if (taste) {
+        return await embeddingRetrieval(
+          admin,
+          taste,
+          profile,
+          filter,
+          excludeIds,
+          poolSize,
+          topK,
+        );
+      }
+    } catch (err) {
+      // RPC 실패 / 빌드 실패 → SQL fallback (정확성 보존). 진단 로그만 남김.
+      console.error("[P2] embedding retrieval failed, SQL fallback:", err);
+    }
+  }
 
   // Genre id 합산
   const favoriteGenreIds = new Set(profile.favoriteGenreIds ?? []);
