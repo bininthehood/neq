@@ -231,6 +231,12 @@ export async function getRecommendations(
    * 기존 동작 (IRON RULE REGRESSION). 정의되면 LLM 큐레이션 prompt 에 prepend.
    */
   tasteSummary?: string,
+  /**
+   * 저장한 작품의 TMDB id — 취향벡터(retrieval 코어)에만 합산(favorites ∪ saved).
+   * "저장할수록 추천이 그쪽으로 이동" 효과. LLM 프롬프트/모드/excludeIds 엔 영향 없음
+   * (저장작은 호출자가 별도로 excludeIds 에 넣어 재추천 차단). P5 의 가벼운 선행분.
+   */
+  savedTmdbIds?: number[],
 ): Promise<RecommendResult> {
   const timings: Record<string, number> = {};
   const mark = (key: string, t0: number) => {
@@ -281,7 +287,10 @@ export async function getRecommendations(
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([id]) => id),
-    favoriteTmdbIds: matched.map((m) => m.id),
+    // 취향벡터 합산: favorites ∪ saved (dedup). saved 는 retrieval 에만 영향.
+    favoriteTmdbIds: Array.from(
+      new Set<number>([...matched.map((m) => m.id), ...(savedTmdbIds ?? [])]),
+    ),
     tasteGenres,
     // B-3.1: DB providers JSONB.name 이 영문 (Netflix/TVING/wavve) 이라
     // 한글 (providerIdsToNames) 로는 매칭 0건 → 영문 변환 사용
@@ -667,6 +676,8 @@ export async function getRecommendationsStreaming(
   subscribedOtt: number[] = [],
   /** 페르소나 v2 — non-streaming 변형과 동일 정책. undefined 면 IRON RULE REGRESSION. */
   tasteSummary?: string,
+  /** 저장 작품 TMDB id — 취향벡터에만 합산 (non-streaming 변형과 동일). */
+  savedTmdbIds?: number[],
 ): Promise<void> {
   const timings: Record<string, number> = {};
   const mark = (key: string, t0: number) => {
@@ -709,7 +720,10 @@ export async function getRecommendationsStreaming(
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([id]) => id),
-    favoriteTmdbIds: matched.map((m) => m.id),
+    // 취향벡터 합산: favorites ∪ saved (dedup). saved 는 retrieval 에만 영향.
+    favoriteTmdbIds: Array.from(
+      new Set<number>([...matched.map((m) => m.id), ...(savedTmdbIds ?? [])]),
+    ),
     tasteGenres,
     subscribedOtt: providerIdsToTmdbNames(subscribedOtt),
     favoriteDecades: [],

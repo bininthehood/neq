@@ -15,6 +15,11 @@ export interface RecommendRequest {
   feedback?: WatchFeedback;
   exclude?: string[];
   excludeIds?: number[];
+  /**
+   * 저장한 작품의 TMDB id — 취향벡터(retrieval)에 합산해 "저장할수록 추천이
+   * 그쪽으로 이동". LLM 프롬프트/모드엔 영향 없음. 서버가 최대 50개로 캡.
+   */
+  savedTmdbIds?: number[];
   /** 저장한 작품 총 개수 — 모드 판정(탐색/혼합/개인화)에 signal로 사용 */
   savedCount?: number;
   /** 온보딩에서 선택한 초기 취향 작품 수 — 모드 판정 signal */

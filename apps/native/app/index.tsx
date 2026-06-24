@@ -449,6 +449,12 @@ export default function DiscoverScreen() {
           subscribedOtt: prefs.subscribedOtt,
         });
 
+        // 저장작 TMDB id — 취향벡터 합산용 (retrieval 만, 최근 50개). "저장할수록
+        // 추천이 그쪽으로 이동". excludeIds(재추천 차단) 와 별개 신호.
+        const savedTmdbIds = saved
+          .map((s) => s.recommendation.tmdbId)
+          .slice(0, 50);
+
         // 2026-05-18 — streaming 적용 (web 정합). 첫 카드 도착 시 'ready' 전환.
         // 미지원 환경 (Hermes fetch.body 미지원) 은 lib/api 가 자동 폴백 → 동일 onCard 시퀀스.
         const collected: Recommendation[] = [];
@@ -461,6 +467,7 @@ export default function DiscoverScreen() {
             favorites,
             savedCount: saved.length,
             excludeIds,
+            savedTmdbIds,
             ...v2.body,
           },
           {
@@ -514,6 +521,7 @@ export default function DiscoverScreen() {
             favorites,
             savedCount: saved.length,
             excludeIds,
+            savedTmdbIds,
             ...v2.body,
           }, controller.signal);
           if (controller.signal.aborted) return;
@@ -609,6 +617,11 @@ export default function DiscoverScreen() {
           subscribedOtt: prefs.subscribedOtt,
         });
 
+        // 저장작 TMDB id — 취향벡터 합산용 (load() 와 동일, prefetch 정합).
+        const savedTmdbIds = saved
+          .map((s) => s.recommendation.tmdbId)
+          .slice(0, 50);
+
         // 2026-06-06 (Tier 3 단기 incident 해소) — Progressive fallback.
         // 사용자 명시 "무한 스크롤" 의도 → cooldown 7→3→1→0 일 순으로 재시도.
         // 모든 tier 에서 unique=0 면 server LLM 다양성 자체 문제 → 자동 hard refresh
@@ -636,6 +649,7 @@ export default function DiscoverScreen() {
             favorites,
             savedCount: saved.length,
             excludeIds,
+            savedTmdbIds,
             ...v2.body,
           });
           const cached = consumePrefetchedRecommendations(
