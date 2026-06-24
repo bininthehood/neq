@@ -19,6 +19,19 @@
 --
 --   [A] IVFFlat (에디터 친화 — 빌드 수초, 권장 단기):
 --       25K 규모는 IVFFlat 로 충분. lists≈sqrt(N)≈160. 쿼리 시 SET ivfflat.probes = 10.
+--
+--   ⚠️ 2026-06-24 실측 — SQL Editor 로는 25K 빌드 불가, **psql 직결 필요**:
+--      (1) maintenance_work_mem gotcha: 에디터 기본 32MB < IVFFlat 요구(lists=160 ~68MB)
+--          → "ERROR 54000: memory required is 68 MB". SET LOCAL maintenance_work_mem='256MB' 로 회피.
+--      (2) 그러나 메모리 올려도 25K kmeans 빌드가 에디터 upstream(HTTP 프록시) wall-clock timeout 초과
+--          → "SQL query ran into an upstream timeout" (statement_timeout 아님 — 프록시 한도라 못 올림).
+--      ⇒ **결론: IVFFlat 도 25K 규모에선 에디터 불가. psql 직결([B] 와 동일 경로)로 빌드:**
+--          PGOPTIONS="-c maintenance_work_mem=256MB" \
+--          psql "postgresql://postgres:[PW]@db.[REF].supabase.co:5432/postgres" \
+--            -c "CREATE INDEX IF NOT EXISTS idx_metadata_embedding_ivf ON tmdb_metadata \
+--                USING ivfflat (embedding vector_cosine_ops) WITH (lists=160) WHERE providers IS NOT NULL;"
+--      (직결이면 recall 더 높은 HNSW[B] 를 바로 택하는 것도 합리적 — 둘 중 하나만 있으면 됨.)
+--      인덱스는 latency 최적화일 뿐 RPC 정확성/동작 전제조건 아님(없으면 seq-scan).
 CREATE INDEX IF NOT EXISTS idx_metadata_embedding_ivf
   ON tmdb_metadata USING ivfflat (embedding vector_cosine_ops)
   WITH (lists = 160)

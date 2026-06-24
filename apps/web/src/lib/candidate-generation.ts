@@ -23,6 +23,7 @@
  *
  * 산출 spec: `_workspace/08_refactor-handoff-2026-06-06.md` §2 Phase B.
  */
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "./supabase-admin";
 import type { RecommendFilter } from "./types";
 
@@ -345,6 +346,238 @@ export function stratifiedSample<T extends { totalScore: number }>(
   return merged;
 }
 
+// ---------- P2 (2026-06-24): pgvector ANN retrieval ----------
+//
+// 설계 정본: _workspace/11_p2-retrieval-plan-2026-06-24.md §작업2.
+// candidate retrieval 을 mirror SQL(rating DESC) → 취향벡터 cosine NN 으로 교체.
+// 순수 additive — feature flag(REC_EMBED_RETRIEVAL_ENABLED) off 시 미진입.
+// 임베딩 신규 호출 없음 — favorites 의 *기존* DB embedding 만 사용.
+
+/** OVERFETCH — RPC match_count 배율. OTT/origin client 후처리 손실 보정. */
+const EMBED_OVERFETCH = 3;
+/** popularity 블렌딩 가중 — finalScore = similarity + POP_WEIGHT*(rating/10). */
+const POP_WEIGHT = 0.15;
+
+/**
+ * Supabase 가 vector(1536) 컬럼을 JSON 문자열("[...]")로 돌려줄 수 있어 정규화.
+ * scripts/tmdb-embed-sanity.ts 의 parseEmbedding 패턴 재사용.
+ */
+function parseEmbedding(e: number[] | string | null | undefined): number[] | null {
+  if (e == null) return null;
+  if (Array.isArray(e)) return e;
+  try {
+    const parsed = JSON.parse(e);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 취향벡터 빌드 — favorites 작품의 기존 embedding 을 평균 + L2 정규화.
+ *
+ * @param admin            service_role Supabase client
+ * @param favoriteTmdbIds  페르소나 favorites 의 TMDB id
+ * @returns 1536-d L2-normalized vector. 유효 embedding 0건 → null (cold-start fallback).
+ *
+ * 동작:
+ *   1. tmdb_metadata 에서 tmdb_id IN (favoriteTmdbIds) 의 embedding 일괄 select.
+ *      providers/embedding NULL 무관 — favorites 는 KR 가용 모집단 밖일 수 있음.
+ *   2. parseEmbedding 으로 number[] 정규화 (string 컬럼 방어).
+ *   3. 성분별 평균 → L2 정규화 (cosine 정합).
+ *
+ * 임베딩 신규 호출 절대 없음 — DB 의 기존 embedding 만 read.
+ */
+export async function buildTasteVector(
+  admin: SupabaseClient,
+  favoriteTmdbIds: number[],
+): Promise<number[] | null> {
+  if (!favoriteTmdbIds || favoriteTmdbIds.length === 0) return null;
+
+  const { data, error } = await admin
+    .from("tmdb_metadata")
+    .select("embedding")
+    .in("tmdb_id", favoriteTmdbIds)
+    .not("embedding", "is", null);
+  if (error) throw error;
+
+  const rows = (data ?? []) as Array<{ embedding: number[] | string | null }>;
+  const vecs: number[][] = [];
+  let dim = 0;
+  for (const r of rows) {
+    const v = parseEmbedding(r.embedding);
+    if (v && v.length > 0) {
+      if (dim === 0) dim = v.length;
+      // 차원 불일치 row 는 skip (방어 — 정상적으로는 전부 1536-d)
+      if (v.length === dim) vecs.push(v);
+    }
+  }
+  if (vecs.length === 0 || dim === 0) return null;
+
+  // 성분별 평균
+  const mean = new Array<number>(dim).fill(0);
+  for (const v of vecs) {
+    for (let i = 0; i < dim; i++) mean[i] += v[i];
+  }
+  for (let i = 0; i < dim; i++) mean[i] /= vecs.length;
+
+  // L2 정규화 (cosine 정합 — 정규화된 벡터끼리 dot = cosine)
+  let norm = 0;
+  for (let i = 0; i < dim; i++) norm += mean[i] * mean[i];
+  norm = Math.sqrt(norm);
+  if (norm === 0) return null; // 영벡터 방어
+  for (let i = 0; i < dim; i++) mean[i] /= norm;
+
+  return mean;
+}
+
+/**
+ * match_tmdb_by_embedding RPC 반환 row (스네이크케이스 — 계약은 정본 §작업1).
+ * tmdb_metadata 미러 컬럼 + similarity.
+ */
+interface MatchEmbeddingRpcRow {
+  tmdb_id: number;
+  media_type: "movie" | "tv";
+  title: string | null;
+  title_en: string | null;
+  overview: string | null;
+  // PostgREST 가 numeric/float 을 string 으로 직렬화할 수 있음 → Number() 후처리.
+  rating: number | string | null;
+  release_date: string | null;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  director: string | null;
+  cast_names: string[] | null;
+  runtime: number | null;
+  seasons: number | null;
+  country: string[] | null;
+  origin_country: string[] | null;
+  genre_ids: number[] | null;
+  providers: Array<{
+    name: string;
+    logoUrl: string | null;
+    category?: "subscription" | "rent" | "buy";
+  }> | null;
+  watch_link: string | null;
+  similarity: number | string;
+}
+
+/**
+ * 취향벡터 cosine NN retrieval — RPC match_tmdb_by_embedding 호출 + client 후처리.
+ *
+ * 필터 매핑은 generateCandidates 의 SQL 빌드 로직과 동일 의미 (type/genre/year/origin/ott).
+ * popularity 블렌딩: finalScore = similarity + POP_WEIGHT*(rating/10) → totalScore 자리.
+ * personaMatch 는 similarity 기반 보존 (downstream 은 totalScore 만 봄).
+ * stratifiedSample 로 다양성 tail (P3 DPP 전까지 현 거동 유지).
+ */
+export async function embeddingRetrieval(
+  admin: SupabaseClient,
+  taste: number[],
+  profile: PersonaProfile,
+  filter: RecommendFilter,
+  excludeIds: number[],
+  poolSize: number,
+  topK: number,
+): Promise<TmdbCandidate[]> {
+  // ── 필터 매핑 (generateCandidates SQL 빌더와 동일 의미) ──
+  // genre 합집합: favorites + tasteGenres (variety 는 reality/talk inject).
+  const genreFilterIds = new Set<number>();
+  for (const gid of profile.favoriteGenreIds ?? []) genreFilterIds.add(gid);
+  for (const gid of tasteGenresToIds(profile.tasteGenres)) genreFilterIds.add(gid);
+
+  let pMediaType: "movie" | "tv" | null = null;
+  if (filter.type === "movie") pMediaType = "movie";
+  else if (filter.type === "series") pMediaType = "tv";
+  else if (filter.type === "variety") {
+    pMediaType = "tv";
+    genreFilterIds.add(10764);
+    genreFilterIds.add(10767);
+  }
+
+  const dateRange = yearFilterToRange(filter.year);
+
+  // origin: 'kr' | 'foreign' | null (RPC 가 country 기반 하드필터)
+  const pOrigin =
+    filter.origin === "kr" ? "kr" : filter.origin === "foreign" ? "foreign" : null;
+
+  // exclude: excludeIds + favoriteTmdbIds 안전망
+  const excludeSet = new Set<number>([
+    ...excludeIds,
+    ...(profile.favoriteTmdbIds ?? []),
+  ]);
+  const pExcludeIds = excludeSet.size > 0 ? Array.from(excludeSet) : null;
+
+  const { data, error } = await admin.rpc("match_tmdb_by_embedding", {
+    query_embedding: taste,
+    match_count: poolSize * EMBED_OVERFETCH,
+    p_media_type: pMediaType,
+    p_genre_ids: genreFilterIds.size > 0 ? Array.from(genreFilterIds) : null,
+    p_date_gte: dateRange?.gte ?? null,
+    p_date_lte: dateRange?.lte ?? null,
+    p_origin: pOrigin,
+    p_exclude_ids: pExcludeIds,
+  });
+  if (error) throw error;
+
+  const rows = (data ?? []) as MatchEmbeddingRpcRow[];
+
+  // ── OTT/origin client 후처리 (generateCandidates 와 동일) ──
+  const ottNames =
+    filter.ott && filter.ott.length > 0
+      ? filter.ott
+      : profile.subscribedOtt ?? [];
+  const ottSet = new Set(ottNames);
+  const wantForeign = filter.origin === "foreign";
+
+  const candidates: TmdbCandidate[] = [];
+  for (const row of rows) {
+    if (excludeSet.has(row.tmdb_id)) continue; // RPC hard filter 안전망
+    if (ottSet.size > 0) {
+      const matched = (row.providers ?? []).some((p) => ottSet.has(p.name));
+      if (!matched) continue;
+    }
+    if (wantForeign) {
+      const isKR = (row.country ?? row.origin_country ?? []).includes("KR");
+      if (isKR) continue;
+    }
+
+    // PostgREST 가 numeric/float 을 string 으로 직렬화할 수 있어 Number() 방어.
+    const rating = Number(row.rating ?? 0) || 0;
+    const similarity = Number(row.similarity ?? 0) || 0;
+    // popularity 블렌딩 — finalScore 를 totalScore 자리에 매핑.
+    const finalScore = similarity + POP_WEIGHT * (rating / 10);
+
+    candidates.push({
+      tmdbId: row.tmdb_id,
+      type: row.media_type === "tv" ? "series" : "movie",
+      title: row.title ?? row.title_en ?? "",
+      titleEn: row.title_en,
+      overview: row.overview,
+      posterPath: row.poster_path,
+      backdropPath: row.backdrop_path,
+      rating,
+      releaseDate: row.release_date,
+      genreIds: row.genre_ids ?? [],
+      country: row.country ?? [],
+      originCountry: row.origin_country ?? [],
+      runtime: row.runtime,
+      seasons: row.seasons,
+      director: row.director,
+      castNames: row.cast_names ?? [],
+      providers: row.providers ?? [],
+      watchLink: row.watch_link,
+      popularity: rating,
+      // personaMatch 는 similarity 기반 보존 (downstream 진단·향후 ranking 신호).
+      personaMatch: similarity,
+      totalScore: finalScore,
+    });
+  }
+
+  candidates.sort((a, b) => b.totalScore - a.totalScore);
+  // P3 DPP 전까지 stratifiedSample 다양성 tail 유지 (SQL 경로와 동일).
+  return stratifiedSample(candidates, poolSize, topK);
+}
+
 // ---------- 메인: generateCandidates ----------
 
 /**
@@ -380,6 +613,33 @@ export async function generateCandidates(
   topK: number = 30,
 ): Promise<TmdbCandidate[]> {
   const admin = supabaseAdmin(); // env 누락 시 throw → caller 가 fallback
+
+  // ── P2 (2026-06-24): pgvector ANN retrieval 분기 (순수 additive + flag gating) ──
+  // flag off | 취향벡터 null | RPC throw → 아래 기존 SQL rating-DESC 경로 그대로 (fallback).
+  // 기존 경로 거동은 한 줄도 바뀌지 않음 (flag off = bit-identical).
+  if (
+    process.env.REC_EMBED_RETRIEVAL_ENABLED === "true" &&
+    profile.favoriteTmdbIds &&
+    profile.favoriteTmdbIds.length > 0
+  ) {
+    try {
+      const taste = await buildTasteVector(admin, profile.favoriteTmdbIds);
+      if (taste) {
+        return await embeddingRetrieval(
+          admin,
+          taste,
+          profile,
+          filter,
+          excludeIds,
+          poolSize,
+          topK,
+        );
+      }
+    } catch (err) {
+      // RPC 실패 / 빌드 실패 → SQL fallback (정확성 보존). 진단 로그만 남김.
+      console.error("[P2] embedding retrieval failed, SQL fallback:", err);
+    }
+  }
 
   // Genre id 합산
   const favoriteGenreIds = new Set(profile.favoriteGenreIds ?? []);

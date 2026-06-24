@@ -7,7 +7,8 @@
  *
  * B-3 의 실제 Supabase 통합 검증은 별도 트랙.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // env stub — supabaseAdmin 평가 단계 throw 방지
 vi.hoisted(() => {
@@ -25,6 +26,7 @@ interface MockQuery extends PromiseLike<{ data: MockRow[]; error: null }> {
   select: ReturnType<typeof vi.fn>;
   eq: ReturnType<typeof vi.fn>;
   not: ReturnType<typeof vi.fn>;
+  in: ReturnType<typeof vi.fn>;
   overlaps: ReturnType<typeof vi.fn>;
   gte: ReturnType<typeof vi.fn>;
   lte: ReturnType<typeof vi.fn>;
@@ -41,6 +43,7 @@ function makeMockQuery(rows: MockRow[]): MockQuery {
     select: vi.fn(),
     eq: vi.fn(),
     not: vi.fn(),
+    in: vi.fn(),
     overlaps: vi.fn(),
     gte: vi.fn(),
     lte: vi.fn(),
@@ -55,6 +58,7 @@ function makeMockQuery(rows: MockRow[]): MockQuery {
     "select",
     "eq",
     "not",
+    "in",
     "overlaps",
     "gte",
     "lte",
@@ -97,6 +101,8 @@ import {
   generateCandidates,
   stratifiedSample,
   tasteGenresToIds,
+  buildTasteVector,
+  embeddingRetrieval,
 } from "../candidate-generation";
 
 beforeEach(() => {
@@ -398,5 +404,287 @@ describe("stratifiedSample (Phase B-3.2)", () => {
     for (let i = 0; i < out.length - 1; i++) {
       expect(out[i].totalScore).toBeGreaterThanOrEqual(out[i + 1].totalScore);
     }
+  });
+});
+
+// ---------- P2 (2026-06-24) — pgvector ANN retrieval ----------
+//
+// buildTasteVector / embeddingRetrieval 은 admin 인자를 직접 받으므로 ad-hoc mock
+// client 를 주입해 단위 테스트. generateCandidates 분기(flag gating)는 회귀 0
+// (flag off / favorites 없음 → 기존 SQL 경로 진입) 을 검증.
+
+/** ad-hoc mock: buildTasteVector 의 from().select().in().not() 체인 모사. */
+function makeTasteAdmin(rows: Array<{ embedding: number[] | string | null }>): {
+  admin: SupabaseClient;
+  errored: { value: unknown };
+} {
+  const errored = { value: null as unknown };
+  const builder = {
+    select() {
+      return this;
+    },
+    in() {
+      return this;
+    },
+    not() {
+      return Promise.resolve({ data: rows, error: errored.value });
+    },
+  };
+  const admin = {
+    from: () => builder,
+  } as unknown as SupabaseClient;
+  return { admin, errored };
+}
+
+/** ad-hoc mock: embeddingRetrieval 의 admin.rpc() 모사. capture 로 인자 검증. */
+function makeRpcAdmin(
+  rpcRows: MockRow[],
+  capture: { args?: Record<string, unknown> } = {},
+): SupabaseClient {
+  return {
+    rpc: (_name: string, params: Record<string, unknown>) => {
+      capture.args = params;
+      return Promise.resolve({ data: rpcRows, error: null });
+    },
+  } as unknown as SupabaseClient;
+}
+
+describe("buildTasteVector (P2)", () => {
+  it("평균 + L2 정규화 — 단위벡터 반환", async () => {
+    // 2-d 단순화: [3,0], [0,4] → 평균 [1.5,2] → norm 2.5 → [0.6,0.8]
+    const { admin } = makeTasteAdmin([
+      { embedding: [3, 0] },
+      { embedding: [0, 4] },
+    ]);
+    const v = await buildTasteVector(admin, [1, 2]);
+    expect(v).not.toBeNull();
+    expect(v!).toHaveLength(2);
+    expect(v![0]).toBeCloseTo(0.6, 6);
+    expect(v![1]).toBeCloseTo(0.8, 6);
+    // L2 norm == 1
+    const norm = Math.sqrt(v![0] ** 2 + v![1] ** 2);
+    expect(norm).toBeCloseTo(1, 6);
+  });
+
+  it("string 임베딩('[...]') 파싱", async () => {
+    const { admin } = makeTasteAdmin([
+      { embedding: "[3, 0]" },
+      { embedding: "[0, 4]" },
+    ]);
+    const v = await buildTasteVector(admin, [1, 2]);
+    expect(v).not.toBeNull();
+    expect(v![0]).toBeCloseTo(0.6, 6);
+    expect(v![1]).toBeCloseTo(0.8, 6);
+  });
+
+  it("유효 임베딩 0건 → null (cold-start fallback)", async () => {
+    const { admin } = makeTasteAdmin([
+      { embedding: null },
+      { embedding: "not-json" },
+    ]);
+    const v = await buildTasteVector(admin, [1, 2]);
+    expect(v).toBeNull();
+  });
+
+  it("favoriteTmdbIds 빈 배열 → null (DB 조회 없이)", async () => {
+    const { admin } = makeTasteAdmin([]);
+    expect(await buildTasteVector(admin, [])).toBeNull();
+  });
+
+  it("DB error → throw (caller 가 SQL fallback)", async () => {
+    const { admin, errored } = makeTasteAdmin([]);
+    errored.value = { message: "boom" };
+    await expect(buildTasteVector(admin, [1])).rejects.toBeDefined();
+  });
+});
+
+describe("embeddingRetrieval (P2)", () => {
+  const taste = [0.6, 0.8];
+
+  function rpcRow(over: Partial<MockRow>): MockRow {
+    return {
+      tmdb_id: 1,
+      media_type: "movie",
+      title: "X",
+      title_en: null,
+      overview: null,
+      rating: 7,
+      release_date: "2022-01-01",
+      poster_path: null,
+      backdrop_path: null,
+      director: null,
+      cast_names: null,
+      runtime: null,
+      seasons: null,
+      country: ["US"],
+      origin_country: ["US"],
+      genre_ids: [28],
+      providers: [{ name: "Netflix", logoUrl: null }],
+      watch_link: null,
+      similarity: 0.5,
+      ...over,
+    };
+  }
+
+  it("RPC 인자 매핑 — match_count = poolSize*3, 필터 전달", async () => {
+    const capture: { args?: Record<string, unknown> } = {};
+    const admin = makeRpcAdmin([], capture);
+    await embeddingRetrieval(
+      admin,
+      taste,
+      { tasteGenres: ["액션"], favoriteTmdbIds: [99] },
+      { type: "movie", year: "recent", origin: "kr" },
+      [42],
+      100,
+      30,
+    );
+    expect(capture.args?.match_count).toBe(300); // 100 * 3
+    expect(capture.args?.query_embedding).toEqual(taste);
+    expect(capture.args?.p_media_type).toBe("movie");
+    expect(capture.args?.p_origin).toBe("kr");
+    expect(capture.args?.p_date_gte).toBe("2020-01-01");
+    // exclude = excludeIds(42) + favoriteTmdbIds(99) 합집합
+    expect(capture.args?.p_exclude_ids).toEqual(
+      expect.arrayContaining([42, 99]),
+    );
+    // genre = 액션 (28, 10759)
+    expect(capture.args?.p_genre_ids).toEqual(
+      expect.arrayContaining([28, 10759]),
+    );
+  });
+
+  it("popularity 블렌딩 정렬 — similarity 높은 row 우선 (similarity + 0.15*rating/10)", async () => {
+    // A: sim 0.5, rating 10 → 0.5 + 0.15*1.0 = 0.65
+    // B: sim 0.8, rating 0  → 0.8 + 0      = 0.80  → B 우선
+    const admin = makeRpcAdmin([
+      rpcRow({ tmdb_id: 1, similarity: 0.5, rating: 10 }),
+      rpcRow({ tmdb_id: 2, similarity: 0.8, rating: 0 }),
+    ]);
+    const result = await embeddingRetrieval(
+      admin,
+      taste,
+      {},
+      {},
+      [],
+      100,
+      30,
+    );
+    expect(result).toHaveLength(2);
+    expect(result[0].tmdbId).toBe(2); // sim 0.8 우선
+    expect(result[0].totalScore).toBeCloseTo(0.8, 6);
+    expect(result[1].totalScore).toBeCloseTo(0.65, 6);
+    // personaMatch = similarity 보존
+    expect(result[0].personaMatch).toBeCloseTo(0.8, 6);
+  });
+
+  it("OTT client 후처리 — 미보유 row 제외", async () => {
+    const admin = makeRpcAdmin([
+      rpcRow({ tmdb_id: 1, providers: [{ name: "Netflix", logoUrl: null }] }),
+      rpcRow({ tmdb_id: 2, providers: [{ name: "Disney Plus", logoUrl: null }] }),
+    ]);
+    const result = await embeddingRetrieval(
+      admin,
+      taste,
+      {},
+      { ott: ["Netflix"] },
+      [],
+      100,
+      30,
+    );
+    expect(result.find((r) => r.tmdbId === 1)).toBeDefined();
+    expect(result.find((r) => r.tmdbId === 2)).toBeUndefined();
+  });
+
+  it("origin=foreign client 후처리 — KR 작품 제외", async () => {
+    const admin = makeRpcAdmin([
+      rpcRow({ tmdb_id: 1, country: ["US"] }),
+      rpcRow({ tmdb_id: 2, country: ["KR"] }),
+    ]);
+    const result = await embeddingRetrieval(
+      admin,
+      taste,
+      {},
+      { origin: "foreign" },
+      [],
+      100,
+      30,
+    );
+    expect(result.find((r) => r.tmdbId === 1)).toBeDefined();
+    expect(result.find((r) => r.tmdbId === 2)).toBeUndefined();
+  });
+
+  it("variety → p_media_type=tv + reality/talk 장르 inject", async () => {
+    const capture: { args?: Record<string, unknown> } = {};
+    const admin = makeRpcAdmin([], capture);
+    await embeddingRetrieval(admin, taste, {}, { type: "variety" }, [], 100, 30);
+    expect(capture.args?.p_media_type).toBe("tv");
+    expect(capture.args?.p_genre_ids).toEqual(
+      expect.arrayContaining([10764, 10767]),
+    );
+  });
+
+  it("RPC error → throw (caller 가 SQL fallback)", async () => {
+    const admin = {
+      rpc: () => Promise.resolve({ data: null, error: { message: "rpc boom" } }),
+    } as unknown as SupabaseClient;
+    await expect(
+      embeddingRetrieval(admin, taste, {}, {}, [], 100, 30),
+    ).rejects.toBeDefined();
+  });
+});
+
+describe("generateCandidates — P2 flag gating (회귀 0)", () => {
+  afterEach(() => {
+    delete process.env.REC_EMBED_RETRIEVAL_ENABLED;
+  });
+
+  it("flag off → 기존 SQL 경로 진입 (embedding 미진입)", async () => {
+    // flag 미설정 (default off)
+    mockMovieRows = [
+      {
+        tmdb_id: 100,
+        media_type: "movie",
+        title: "SQL 경로",
+        rating: 8,
+        release_date: "2022-01-01",
+        genre_ids: [28],
+        country: ["US"],
+        providers: [{ name: "Netflix", logoUrl: null }],
+      },
+    ];
+    mockTvRows = [];
+    const result = await generateCandidates(
+      { favoriteTmdbIds: [99] }, // favorites 있어도 flag off 면 SQL 경로
+      { type: "movie" },
+      [],
+    );
+    // 기존 SQL 경로 totalScore = rating*(1+personaMatch) 공식 (블렌딩 아님)
+    expect(result).toHaveLength(1);
+    expect(result[0].tmdbId).toBe(100);
+    // SQL 경로는 rating 기반 — totalScore > 1 (블렌딩 경로면 0~1.x)
+    expect(result[0].totalScore).toBeGreaterThan(1);
+    // SQL 빌더가 실제로 호출됨 (movie query)
+    expect(lastMovieQuery).not.toBeNull();
+  });
+
+  it("flag on + favoriteTmdbIds 없음 → SQL 경로 (embedding 미진입)", async () => {
+    process.env.REC_EMBED_RETRIEVAL_ENABLED = "true";
+    mockMovieRows = [
+      {
+        tmdb_id: 100,
+        media_type: "movie",
+        title: "SQL 경로",
+        rating: 8,
+        release_date: "2022-01-01",
+        genre_ids: [],
+        country: ["US"],
+        providers: [{ name: "Netflix", logoUrl: null }],
+      },
+    ];
+    mockTvRows = [];
+    const result = await generateCandidates({}, { type: "movie" }, []);
+    expect(result).toHaveLength(1);
+    expect(result[0].totalScore).toBeGreaterThan(1); // SQL 공식
+    expect(lastMovieQuery).not.toBeNull();
   });
 });
