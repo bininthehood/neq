@@ -12,7 +12,10 @@
  *   1. CRON_SECRET 검증 (다른 cron route 패턴과 동일)
  *   2. supabaseAdmin().from("tmdb_metadata").select("tmdb_id").limit(1)
  *      — connection pool 살리기 + mirror 테이블 query path 검증
- *   3. 200 + timings 반환 (모니터링용)
+ *   3. OpenAI models.list() — SDK TLS handshake warm
+ *   4. match_tmdb_by_embedding RPC (match_count=1) — pgvector HNSW 인덱스/embedding
+ *      페이지 hot 유지 (candidates 단계 cold 꼬리 방지)
+ *   5. 200 + timings 반환 (모니터링용)
  *
  * 운영: GitHub Actions `.github/workflows/api-warmup.yml` (5분 cron)
  */
@@ -96,11 +99,44 @@ export async function GET(req: Request) {
     console.error("[warmup] openai ping failed:", openaiError);
   }
 
+  // retrieval RPC (pgvector HNSW) warm — /api/recommend candidates 단계와 동일 경로.
+  // 위 db ping(select limit 1)은 connection 만 데우고 HNSW 인덱스·embedding 페이지는
+  // 안 데움 → cold 시 candidates ~1786ms (warm ~220ms) 꼬리. match_count=1 + 상수벡터로
+  // 인덱스/페이지만 hot 유지(결과 무의미, 비용 최소). 실패는 응답 무영향 (best-effort).
+  // ponytail: 1536 = OpenAI 임베딩 차원 하드코딩 — 모델 바뀌면 buildTasteVector 와 함께 갱신.
+  let retrievalOk = false;
+  let retrievalError: string | null = null;
+  try {
+    const tRet = Date.now();
+    const admin = supabaseAdmin();
+    const { error } = await admin.rpc("match_tmdb_by_embedding", {
+      query_embedding: new Array(1536).fill(1), // 유효 방향벡터 (cosine 정의), 값 무의미
+      match_count: 1,
+      p_media_type: null,
+      p_genre_ids: null,
+      p_date_gte: null,
+      p_date_lte: null,
+      p_origin: null,
+      p_exclude_ids: null,
+    });
+    mark("retrieval_ms", tRet);
+    if (error) {
+      retrievalError = error.message;
+      console.error("[warmup] retrieval rpc failed:", error.message);
+    } else {
+      retrievalOk = true;
+    }
+  } catch (err) {
+    retrievalError = err instanceof Error ? err.message : String(err);
+    console.error("[warmup] retrieval rpc threw:", retrievalError);
+  }
+
   const total_ms = Date.now() - startedAt;
 
   // PostHog 측정 — cold start 빈도 + warmup 효과 추적용.
   // warmup_ping event 의 db_ms 가 500ms+ 면 connection 새로 만든 cold instance.
   // openai_ms 가 500ms+ 면 OpenAI SDK cold (TLS handshake / Edge cold).
+  // retrieval_ms 가 1000ms+ 면 HNSW/embedding 페이지 cold (candidates 꼬리 유발).
   await trackWarmup({
     ok: dbOk,
     db_ms: timings.db_ms ?? null,
@@ -109,11 +145,15 @@ export async function GET(req: Request) {
     openai_ok: openaiOk,
     openai_ms: timings.openai_ms ?? null,
     openai_error: openaiError,
+    retrieval_ok: retrievalOk,
+    retrieval_ms: timings.retrieval_ms ?? null,
+    retrieval_error: retrievalError,
   });
 
   return NextResponse.json({
     ok: dbOk,
     openai_ok: openaiOk,
+    retrieval_ok: retrievalOk,
     timings,
     total_ms,
   });
