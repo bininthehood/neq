@@ -42,6 +42,100 @@ export async function searchTMDB(
   return null;
 }
 
+/**
+ * search/multi 응답의 작품 1건 raw shape (popularity 정렬용).
+ * TMDB 가 movie/tv 를 한 응답에 섞어 반환하며 각 row 에 popularity 를 포함한다.
+ */
+interface MultiWorkRaw {
+  id: number;
+  media_type: "movie" | "tv";
+  title?: string;
+  name?: string;
+  original_title?: string;
+  original_name?: string;
+  popularity?: number;
+  vote_average?: number;
+  genre_ids?: number[];
+}
+
+/** favorites 매칭 fallback 의 단건 결과 — id/type/장르 (popularity-best). */
+export interface BestMatch {
+  id: number;
+  type: "movie" | "series";
+  genreIds: number[];
+}
+
+/**
+ * 제목 → "가장 대표적인 작품" 단건 매칭 (movie+tv 통합, popularity desc).
+ *
+ * 동기 (2026-06-29 매칭 원칙화):
+ *   기존 searchTMDB 는 movie 를 *먼저* 검색해 결과가 하나라도 있으면 series 를 안 봤다 →
+ *   `오징어 게임`(인기 시리즈)을 동명의 무명 영화로 오매칭하는 latent 버그. 본 함수는
+ *   search/multi 1회로 movie+tv 를 함께 받아 **popularity desc(동률 시 vote_average)**
+ *   로 best 1건을 고른다 — movie-first 폐기, type 도 이 정렬이 결정.
+ *
+ *   popularity 는 미러 경로(tmdb_catalog.popularity)와 동일 신호 → 동명이작에서 두
+ *   경로가 갈리지 않는다 (rating 은 vote 정규화가 없어 무명 高평점에 오염 — `리틀 포레스트`
+ *   tv rating=10/vote=1 vs movie pop=2.06 정답에서 popularity 가 우월함을 실측).
+ *
+ * 폴백: ko-KR 결과 0 → en-US 재검색 (영문 전용 제목 대비).
+ *
+ * ⚠️ search/multi 는 부분 문자열 매칭(`킹덤`→`애니멀 킹덤`, `리틀 포레스트`→`리틀 포레스트:
+ *   여름과 가을`)도 반환한다. 미러 경로(정확 title 일치)와 정합시키기 위해 **정확 제목
+ *   일치 후보로 먼저 좁힌 뒤** popularity-best 를 고른다. 정확 일치가 하나도 없으면
+ *   부분매칭 전체로 폴백 (그래도 popularity 로 best — 표기 변동 흡수).
+ * @returns 후보 없으면 null (호출측에서 해당 favorite 스킵).
+ */
+export async function searchBestByPopularity(
+  title: string
+): Promise<BestMatch | null> {
+  const want = normalizeMatchTitle(title);
+  const isExact = (r: MultiWorkRaw) =>
+    [r.title, r.name, r.original_title, r.original_name]
+      .filter((t): t is string => Boolean(t))
+      .some((t) => normalizeMatchTitle(t) === want);
+
+  const pick = (works: MultiWorkRaw[]): BestMatch | null => {
+    if (works.length === 0) return null;
+    // 정확 제목 일치 후보 우선 (미러 정확매칭과 정합). 없으면 전체 부분매칭.
+    const exact = works.filter(isExact);
+    const pool = exact.length > 0 ? exact : works;
+    const best = pool.reduce((a, b) => {
+      const pa = a.popularity ?? -1;
+      const pb = b.popularity ?? -1;
+      if (pb !== pa) return pb > pa ? b : a;
+      // popularity 동률 → vote_average tie-break (그래도 동률이면 먼저 본 row 유지).
+      return (b.vote_average ?? 0) > (a.vote_average ?? 0) ? b : a;
+    });
+    return {
+      id: best.id,
+      type: best.media_type === "tv" ? "series" : "movie",
+      genreIds: best.genre_ids ?? [],
+    };
+  };
+
+  const fetchWorks = async (lang: string): Promise<MultiWorkRaw[]> => {
+    const res = await fetch(
+      `${BASE}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(title)}&language=${lang}`
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.results ?? []).filter(
+      (r: { media_type?: string }) =>
+        r.media_type === "movie" || r.media_type === "tv"
+    ) as MultiWorkRaw[];
+  };
+
+  let works = await fetchWorks("ko-KR");
+  if (works.length === 0) works = await fetchWorks("en-US");
+  return pick(works);
+}
+
+/** 매칭 비교용 제목 정규화 (match.ts normalizeTitle 와 동일 기준). */
+function normalizeMatchTitle(s: string): string {
+  return s.toLowerCase().trim().replace(/\s+/g, " ");
+}
+
 export async function searchMulti(query: string): Promise<TMDBResult[]> {
   const res = await fetch(
     `${BASE}/search/multi?api_key=${API_KEY}&query=${encodeURIComponent(query)}&language=ko-KR`
