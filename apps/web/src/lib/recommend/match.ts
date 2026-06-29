@@ -1,15 +1,17 @@
-import { searchTMDB, getTMDBRecommendations } from "../tmdb";
+import { searchTMDB, searchBestByPopularity, getTMDBRecommendations } from "../tmdb";
 import { supabaseAdmin } from "../supabase-admin";
 import type { Candidate, MatchedFavorite } from "./types";
 
 // ---------- Step 1: favorites → TMDB 매칭 ----------
 
 /**
- * 외부 searchTMDB 기반 단건 매칭 (변경 전 로직과 100% 동일).
+ * 외부 searchTMDB 기반 단건 매칭 (변경 전 prod 거동과 100% 동일).
  *
  * movie 먼저 검색 → 실패 시 series. 둘 다 실패면 null.
- * 미러-우선 경로의 fallback 으로 재사용 — 미스 favorite 만 이 함수로 resolve 하면
- * 적중 id/type/genreIds 가 변경 전과 동일하게 유지된다.
+ * ⚠️ movie-first 라 동명의 무명 영화가 인기 시리즈를 가로채는 latent 버그 보유
+ * (`오징어 게임`→무명 movie 등). 이 거동은 **flag off 경로 전용**으로만 유지 —
+ * 안전한 bit-identical 롤백 경로라 의도적으로 손대지 않는다. 개선판은 flag on 의
+ * matchOneViaPopularity 가 담당.
  */
 async function matchOneViaSearch(title: string): Promise<MatchedFavorite | null> {
   let result = await searchTMDB(title, "movie");
@@ -20,6 +22,19 @@ async function matchOneViaSearch(title: string): Promise<MatchedFavorite | null>
   }
   if (!result) return null;
   return { id: result.id, type, title, genreIds: result.genre_ids ?? [] };
+}
+
+/**
+ * 원칙화된 단건 매칭 (flag on 의 미러 미스 fallback).
+ *
+ * search/multi 1회로 movie+tv 통합 → popularity desc best (movie-first 폐기).
+ * 미러 경로(tmdb_catalog.popularity)와 동일 신호로 정렬 → 동명이작에서 미러/fallback
+ * 이 갈리지 않는다. 결과 없으면 null (해당 favorite 스킵).
+ */
+async function matchOneViaPopularity(title: string): Promise<MatchedFavorite | null> {
+  const best = await searchBestByPopularity(title);
+  if (!best) return null;
+  return { id: best.id, type: best.type, title, genreIds: best.genreIds };
 }
 
 /**
@@ -42,43 +57,48 @@ function normalizeTitle(s: string): string {
  *   resolve, **미스만 기존 searchTMDB 로 fallback** → 적중 id/type/genreIds 가
  *   변경 전과 동일하게 유지된다 (품질 회귀 0 이 1순위, latency 는 그 다음).
  *
- * 정합성 (memory project_rec_refactor):
- *   - 미러 title/title_en 와 searchTMDB 는 동일 TMDB 원천 (ko-KR 우선 + en 폴백).
- *   - genre_ids 도 동일 원천 → 적중 작품 동일하면 장르신호·자기차단 영향 0.
- *   - type: movie row 우선 (변경 전 "movie 먼저" 우선순위 보존).
+ * 매칭 원칙 (2026-06-29 원칙화 — flag on 전용):
+ *   favorite 제목 = 그 제목을 가진 작품 중 **popularity 최상위** 작품 (movie/tv 통합).
+ *   - 미러: tmdb_metadata title/title_en 매칭 → tmdb_catalog.popularity desc best
+ *     (popularity 없으면 rating desc). type 도 이 정렬이 결정 (movie-first 폐기).
+ *   - fallback (미러 미스): search/multi 1회 → popularity desc best (동일 신호로 정합).
+ *   이로써 movie-first 가 인기 시리즈를 무명 영화로 가로채던 버그를 양 경로에서 제거.
  *
- * flag off (기본) | 미러 throw / 환경변수 누락 → 전량 searchTMDB fallback
- *   (= 변경 전 거동과 bit-identical).
+ * 정합성: 미러(catalog.popularity)와 fallback(search/multi popularity)이 같은 TMDB
+ *   popularity 신호 → 동명이작에서 두 경로 best 가 일치. genre_ids 도 동일 원천.
+ *
+ * flag off (기본) | 미러 throw / 환경변수 누락 → 변경 전 searchTMDB(movie-first) 경로
+ *   (= prod 거동과 bit-identical, 안전 롤백).
  */
 export async function matchFavoritesToTMDB(favorites: string[]): Promise<MatchedFavorite[]> {
   if (favorites.length === 0) return [];
 
-  // flag off → 변경 전 경로 그대로 (전량 searchTMDB).
+  // flag off → 변경 전 prod 경로 그대로 (전량 searchTMDB, movie-first).
   if (process.env.REC_MIRROR_MATCH_ENABLED !== "true") {
     const results = await Promise.all(favorites.map((t) => matchOneViaSearch(t)));
     return results.filter((r): r is MatchedFavorite => r !== null);
   }
 
-  // ── 미러-우선 ──
-  // 1) 모든 favorite 제목을 미러 title/title_en 에 배치 조회 (1 쿼리, 서울 DB).
+  // ── 미러-우선 (원칙화) ──
+  // 1) 모든 favorite 제목을 미러 title/title_en + catalog.popularity 배치 조회.
   let mirrorByKey = new Map<string, { id: number; type: "movie" | "series"; genreIds: number[] }>();
   try {
     mirrorByKey = await resolveFavoritesFromMirror(favorites);
   } catch (err) {
-    // 미러 unavailable / 쿼리 실패 → 전량 searchTMDB fallback (정확성 보존).
-    console.warn("[match mirror] resolve failed, full searchTMDB fallback:", err);
-    const results = await Promise.all(favorites.map((t) => matchOneViaSearch(t)));
+    // 미러 unavailable / 쿼리 실패 → 전량 popularity fallback (원칙 유지).
+    console.warn("[match mirror] resolve failed, full popularity fallback:", err);
+    const results = await Promise.all(favorites.map((t) => matchOneViaPopularity(t)));
     return results.filter((r): r is MatchedFavorite => r !== null);
   }
 
-  // 2) favorite 별로 미러 히트면 즉시 채택, 미스만 searchTMDB fallback.
+  // 2) favorite 별로 미러 히트면 즉시 채택, 미스만 popularity fallback (동일 원칙).
   const results = await Promise.all(
     favorites.map(async (title): Promise<MatchedFavorite | null> => {
       const hit = mirrorByKey.get(normalizeTitle(title));
       if (hit) {
         return { id: hit.id, type: hit.type, title, genreIds: hit.genreIds };
       }
-      return matchOneViaSearch(title);
+      return matchOneViaPopularity(title);
     }),
   );
   return results.filter((r): r is MatchedFavorite => r !== null);
@@ -89,20 +109,34 @@ interface MirrorTitleRow {
   media_type: "movie" | "tv";
   title: string | null;
   title_en: string | null;
+  rating: number | null;
   genre_ids: number[] | null;
 }
 
+interface MatchCandidate {
+  id: number;
+  type: "movie" | "series";
+  genreIds: number[];
+  rating: number;
+  popularity: number; // catalog.popularity (없으면 -1 — rating·order 로만 비교)
+}
+
 /**
- * favorites 제목 배열 → 미러(`tmdb_metadata`)에서 정규화 title/title_en 매칭.
+ * favorites 제목 배열 → 미러(`tmdb_metadata` + `tmdb_catalog`)에서 popularity-best 매칭.
  *
- * @returns 정규화 제목 키 → {id,type,genreIds}. movie row 우선 (변경 전 우선순위).
+ * @returns 정규화 제목 키 → {id,type,genreIds}. 동명이작은 popularity desc 로 best 선택.
+ *
+ * 매칭 원칙 (movie-first 폐기):
+ *   같은 정규화 제목에 여러 작품(movie/tv 무관)이 걸리면 **catalog.popularity 최상위**
+ *   를 채택 (popularity 동률/부재 시 rating desc → 그래도 동률이면 먼저 본 row). type 도
+ *   이 정렬이 결정. tmdb_metadata 는 popularity 컬럼이 없어 catalog 와 별도 조회·join.
+ *   (rating 단독은 vote 정규화 부재로 무명 高평점에 오염 — `리틀 포레스트` tv rating=10/
+ *   vote=1 vs movie popularity=2.06 정답. popularity 가 대표성을 직접 반영.)
  *
  * 동작:
- *   - title / title_en 모두에 대해 `.in()` 배치 조회 (1 라운드트립).
- *   - providers 가용성 무관 (favorites 는 KR 모집단 밖일 수 있음 — 자기차단·장르신호엔
- *     가용성 무관). embedding 무관.
- *   - 같은 정규화 제목에 movie/tv 양쪽 row 존재 시 movie 우선. movie 끼리 충돌 시
- *     먼저 들어온 row 유지 (보수적 — 동명이작은 flag off 기본 + 검증 후 on).
+ *   - tmdb_metadata: title/title_en `.or(.in)` 배치 조회 (rating 포함).
+ *   - tmdb_catalog: 1단계에서 모은 (tmdb_id,media_type) 의 popularity 배치 조회.
+ *   - providers 가용성·embedding 무관 (favorites 는 KR 모집단 밖일 수 있음).
  */
 async function resolveFavoritesFromMirror(
   favorites: string[],
@@ -117,32 +151,76 @@ async function resolveFavoritesFromMirror(
   );
   if (rawTitles.length === 0) return out;
 
-  // title 또는 title_en 이 favorite 원본과 일치하는 row 일괄 조회.
-  // .or() 로 두 컬럼 .in() 결합. PostgREST .in() 은 콤마구분 + 따옴표 이스케이프 필요 —
-  // 제목에 콤마/따옴표가 있을 수 있어 supabase-js 의 .in() helper 사용 (자동 quoting).
+  // 1) title 또는 title_en 이 favorite 원본과 일치하는 row 일괄 조회 (rating 포함).
   const { data, error } = await admin
     .from("tmdb_metadata")
-    .select("tmdb_id, media_type, title, title_en, genre_ids")
+    .select("tmdb_id, media_type, title, title_en, rating, genre_ids")
     .or(
       `title.in.(${toInList(rawTitles)}),title_en.in.(${toInList(rawTitles)})`,
     );
   if (error) throw error;
-
   const rows = (data ?? []) as MirrorTitleRow[];
+
+  // 2) 후보 id 들의 catalog.popularity 배치 조회 (popularity 컬럼은 catalog 만 보유).
+  const popByIdType = await fetchCatalogPopularity(
+    admin,
+    rows.map((r) => ({ id: r.tmdb_id, type: r.media_type })),
+  );
+
+  // 3) 정규화 키별로 동명 후보를 모아 popularity desc(→rating)로 best 선택.
+  const byKey = new Map<string, MatchCandidate[]>();
   for (const row of rows) {
-    const candidateType: "movie" | "series" =
-      row.media_type === "tv" ? "series" : "movie";
-    const genreIds = row.genre_ids ?? [];
+    const candidate: MatchCandidate = {
+      id: row.tmdb_id,
+      type: row.media_type === "tv" ? "series" : "movie",
+      genreIds: row.genre_ids ?? [],
+      rating: row.rating ?? 0,
+      popularity: popByIdType.get(`${row.tmdb_id}:${row.media_type}`) ?? -1,
+    };
     for (const col of [row.title, row.title_en]) {
       if (!col) continue;
       const key = normalizeTitle(col);
       if (!wantedKeys.has(key)) continue;
-      const existing = out.get(key);
-      // movie 우선: 기존이 series 인데 movie 가 오면 교체. movie 끼리는 첫 row 유지.
-      if (!existing || (existing.type === "series" && candidateType === "movie")) {
-        out.set(key, { id: row.tmdb_id, type: candidateType, genreIds });
-      }
+      const list = byKey.get(key);
+      if (list) list.push(candidate);
+      else byKey.set(key, [candidate]);
     }
+  }
+
+  for (const [key, candidates] of byKey) {
+    const best = candidates.reduce((a, b) => {
+      if (b.popularity !== a.popularity) return b.popularity > a.popularity ? b : a;
+      if (b.rating !== a.rating) return b.rating > a.rating ? b : a;
+      return a; // 완전 동률 → 먼저 본 row 유지 (결정적).
+    });
+    out.set(key, { id: best.id, type: best.type, genreIds: best.genreIds });
+  }
+  return out;
+}
+
+/**
+ * (tmdb_id, media_type) 후보들의 catalog.popularity 배치 조회.
+ * @returns `${tmdb_id}:${media_type}` → popularity. 미존재 행은 맵 부재 (-1 로 취급).
+ */
+async function fetchCatalogPopularity(
+  admin: ReturnType<typeof supabaseAdmin>,
+  refs: Array<{ id: number; type: "movie" | "tv" }>,
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const ids = Array.from(new Set(refs.map((r) => r.id)));
+  if (ids.length === 0) return out;
+  // tmdb_id 로만 조회 후 media_type 까지 키에 포함 (movie/tv 동 id 분리).
+  const { data, error } = await admin
+    .from("tmdb_catalog")
+    .select("tmdb_id, media_type, popularity")
+    .in("tmdb_id", ids);
+  if (error) throw error;
+  for (const r of (data ?? []) as Array<{
+    tmdb_id: number;
+    media_type: "movie" | "tv";
+    popularity: number | null;
+  }>) {
+    out.set(`${r.tmdb_id}:${r.media_type}`, r.popularity ?? -1);
   }
   return out;
 }
