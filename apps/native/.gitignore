@@ -18,6 +18,11 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# Play 서비스계정 키 (eas submit -p android) — 절대 커밋 금지
+google-service-account.json
+google-services.json
+play-service-account*.json
+
 # Metro
 .metro-health-check*
 
