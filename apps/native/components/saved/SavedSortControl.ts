@@ -58,3 +58,57 @@ export function sortSavedItems(items: SavedItem[], sort: SavedSort): SavedItem[]
   // "saved" — savedAt desc (최근 저장 우선)
   return [...items].sort((a, b) => b.savedAt - a.savedAt);
 }
+
+/**
+ * 저장 시각(savedAt) 기준 연·월 섹션화. 누적 작품을 "2026년 6월" 단위로 묶어
+ * SectionList 로 렌더하기 위한 데이터 변환.
+ *
+ *  - 섹션 정렬: 최신 연·월이 위 (descending).
+ *  - 섹션 내부: savedAt desc (sortSavedItems 의 'saved' 와 동일 — 최근 저장 우선).
+ *  - title: 한국어 라벨 `YYYY년 M월` (예: `2026년 6월`).
+ *  - 같은 (year, month) 면 한 섹션.
+ *
+ * 로컬 타임존 기준 — 사용자가 인식하는 "저장한 달" 과 일치 (UTC 경계로 월이
+ * 밀리지 않도록 getFullYear/getMonth 사용).
+ */
+export function groupSavedByMonth(
+  items: SavedItem[],
+): { title: string; data: SavedItem[] }[] {
+  const buckets = new Map<number, SavedItem[]>(); // key = year*12 + month (정렬 가능한 단조 키)
+  for (const it of items) {
+    const d = new Date(it.savedAt);
+    const key = d.getFullYear() * 12 + d.getMonth();
+    const arr = buckets.get(key);
+    if (arr) arr.push(it);
+    else buckets.set(key, [it]);
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => b[0] - a[0]) // 최신 연·월 먼저
+    .map(([key, data]) => ({
+      title: `${Math.floor(key / 12)}년 ${(key % 12) + 1}월`,
+      data: data.sort((a, b) => b.savedAt - a.savedAt), // 섹션 내부 savedAt desc
+    }));
+}
+
+// ponytail: 비자명 로직(월 경계/정렬/라벨) self-check. `node -r ... ` 불필요 —
+// import 시 부작용 없게 require.main 게이트.
+if (require.main === module) {
+  const mk = (savedAt: number): SavedItem =>
+    ({ savedAt, recommendation: { tmdbId: savedAt } }) as unknown as SavedItem;
+  // 2026-06-15, 2026-06-01, 2026-05-31, 2025-06-30 (로컬). 월 경계/연 경계/동월 묶기 검증.
+  const jun15 = new Date(2026, 5, 15, 12).getTime();
+  const jun01 = new Date(2026, 5, 1, 0).getTime();
+  const may31 = new Date(2026, 4, 31, 23).getTime();
+  const lastYearJun = new Date(2025, 5, 30, 12).getTime();
+  const g = groupSavedByMonth([mk(may31), mk(jun01), mk(lastYearJun), mk(jun15)]);
+  // 섹션 3개: 2026-6 (2건), 2026-5 (1건), 2025-6 (1건). 최신 먼저.
+  console.assert(g.length === 3, `섹션 수 3 기대, got ${g.length}`);
+  console.assert(g[0].title === '2026년 6월' && g[0].data.length === 2, 'top=2026년 6월×2');
+  console.assert(g[1].title === '2026년 5월' && g[1].data.length === 1, '2nd=2026년 5월×1');
+  console.assert(g[2].title === '2025년 6월', `last=2025년 6월, got ${g[2].title}`);
+  // 동월 내부 savedAt desc — jun15 가 jun01 보다 앞.
+  console.assert(g[0].data[0].savedAt === jun15, '섹션 내부 savedAt desc');
+  // 빈 입력 → 빈 배열.
+  console.assert(groupSavedByMonth([]).length === 0, '빈 입력 → []');
+  console.log('groupSavedByMonth self-check OK');
+}

@@ -41,6 +41,8 @@ type Props = {
   setOttFilter: (v: string | null) => void;
   groupByOTT: boolean;
   setGroupByOTT: (v: boolean) => void;
+  groupByMonth: boolean;
+  setGroupByMonth: (v: boolean) => void;
   availableOTTs: { name: string; count: number }[];
   sortBy: SavedSort;
   setSortBy: (v: SavedSort) => void;
@@ -53,18 +55,22 @@ export default function SavedFilterSheet({
   setOttFilter,
   groupByOTT,
   setGroupByOTT,
+  groupByMonth,
+  setGroupByMonth,
   availableOTTs,
   sortBy,
   setSortBy,
 }: Props) {
-  const hasActive = ottFilter !== null || groupByOTT || sortBy !== 'saved';
+  const hasActive =
+    ottFilter !== null || groupByOTT || groupByMonth || sortBy !== 'saved';
   const groupDisabled = ottFilter !== null;
 
   const handleReset = useCallback(() => {
     setOttFilter(null);
     setGroupByOTT(false);
+    setGroupByMonth(false);
     setSortBy('saved');
-  }, [setOttFilter, setGroupByOTT, setSortBy]);
+  }, [setOttFilter, setGroupByOTT, setGroupByMonth, setSortBy]);
 
   return (
     <Modal
@@ -239,6 +245,34 @@ export default function SavedFilterSheet({
                   style={[
                     styles.toggleThumb,
                     groupByOTT && styles.toggleThumbActive,
+                  ]}
+                />
+              </View>
+            </Pressable>
+
+            {/* 연·월별 그룹화 — 저장한 시기로 묶기. OTT 그룹과 상호배타
+                (부모 핸들러가 처리). ottFilter 와는 공존 가능 → groupDisabled 무관. */}
+            <Pressable
+              onPress={() => setGroupByMonth(!groupByMonth)}
+              accessibilityRole="switch"
+              accessibilityLabel="연·월별로 그룹화"
+              accessibilityState={{ checked: groupByMonth }}
+              style={[styles.row, styles.rowBordered]}
+            >
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>연·월별로 그룹화</Text>
+                <Text style={styles.rowDesc}>저장한 달로 묶어 표시</Text>
+              </View>
+              <View
+                style={[
+                  styles.toggleTrack,
+                  groupByMonth && styles.toggleTrackActive,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    groupByMonth && styles.toggleThumbActive,
                   ]}
                 />
               </View>

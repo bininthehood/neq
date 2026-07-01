@@ -45,6 +45,7 @@ import {
   loadSavedSort,
   persistSavedSort,
   sortSavedItems,
+  groupSavedByMonth,
   type SavedSort,
 } from '../components/saved/SavedSortControl';
 
@@ -179,6 +180,8 @@ export default function SavedScreen() {
   const [sortBy, setSortBy] = useState<SavedSort>('saved');
   const [ottFilter, setOttFilter] = useState<string | null>(null);
   const [groupByOTT, setGroupByOTT] = useState(false);
+  // 연·월별 그룹화 (savedAt 기준). groupByOTT 와 상호배타 — 단일 그룹 모드.
+  const [groupByMonth, setGroupByMonth] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   // P2 배치 A — 카드 내 reaction 입력 ('봤어요?'). web saved/page.tsx:66 reportingId 정합.
   const [reportingId, setReportingId] = useState<number | null>(null);
@@ -226,6 +229,7 @@ export default function SavedScreen() {
   //   빈 상태 UI ("보관한 작품이 없어요") 가 일관되게 보임.
 
   // ottFilter 활성 시 OTT 그룹핑 자동 해제 (web saved/page.tsx:171-175 정합).
+  // 연·월 그룹화는 ottFilter 와 공존 가능 (OTT 좁힌 작품을 다시 시간순 섹션으로 봐도 됨).
   useEffect(() => {
     if (ottFilter && groupByOTT) {
       setGroupByOTT(false);
@@ -236,10 +240,21 @@ export default function SavedScreen() {
     setViewMode(mode);
     void persistSavedView(mode);
     track('saved_view_changed', { mode });
-    // preview 모드는 단일 hero 모델이라 OTT 그룹과 충돌 → 자동 OFF (web saved/page.tsx:116-118).
+    // preview 모드는 단일 hero 모델이라 그룹 섹션과 충돌 → 자동 OFF (web saved/page.tsx:116-118).
     if (mode === 'preview') {
       setGroupByOTT(false);
+      setGroupByMonth(false);
     }
+  }, []);
+
+  // 그룹 모드 상호배타 — OTT별 / 연·월별 동시 ON 불가. 하나 켜면 다른 하나 끔.
+  const handleSetGroupByOTT = useCallback((v: boolean) => {
+    setGroupByOTT(v);
+    if (v) setGroupByMonth(false);
+  }, []);
+  const handleSetGroupByMonth = useCallback((v: boolean) => {
+    setGroupByMonth(v);
+    if (v) setGroupByOTT(false);
   }, []);
 
   const handleSortChange = useCallback((s: SavedSort) => {
@@ -442,6 +457,20 @@ export default function SavedScreen() {
       .map(([ott, list]) => ({ ott, items: list }));
   }, [sortedItems, groupByOTT, availableOTTs]);
 
+  // 연·월별 그룹핑 — savedAt 기준 섹션 (groupSavedByMonth). ottFilter 적용된
+  // sortedItems 를 입력으로 받아 OTT 필터와 공존. 섹션은 최신 연·월 먼저,
+  // 섹션 내부 savedAt desc.
+  const monthGroups = useMemo<{ ott: string; items: SavedItem[] }[] | null>(() => {
+    if (!groupByMonth) return null;
+    return groupSavedByMonth(sortedItems).map((s) => ({
+      ott: s.title,
+      items: s.data,
+    }));
+  }, [sortedItems, groupByMonth]);
+
+  // 활성 그룹 (OTT별 또는 연·월별). 둘은 상호배타라 한쪽만 non-null.
+  const activeGroups = ottGroups ?? monthGroups;
+
   // preview 모드 hero 자동 선택 — selectedPreviewId 가 sortedItems 안에 없으면
   // 첫 작품으로 보정. viewFilter/ottFilter/sort 변경 등 목록 변경 시 자동 보정 (web 정본 정합).
   useEffect(() => {
@@ -483,7 +512,8 @@ export default function SavedScreen() {
   // P2 배치 A — "필터" 트리거 노출 조건. web saved/page.tsx:536-540 정합.
   // OTT 가 2종 이상일 때만 필터 의미 있음.
   const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
-  const hasActiveFilter = ottFilter !== null || groupByOTT || sortBy !== 'saved';
+  const hasActiveFilter =
+    ottFilter !== null || groupByOTT || groupByMonth || sortBy !== 'saved';
 
   // viewMode 토글 버튼 1개 — web saved/page.tsx 의 3-way segmented 정합.
   // active = surface-raised 면 + text-primary (2026-05-13 M1: amber 박탈).
@@ -616,7 +646,7 @@ export default function SavedScreen() {
 
       {/* P2 배치 A — 활성 필터 chip 행 (web SavedFilters 활성 chip 정합).
           OTT 또는 그룹화 적용 시에만 노출. 탭하면 즉시 제거. */}
-      {items.length > 0 && (ottFilter !== null || groupByOTT) && (
+      {items.length > 0 && (ottFilter !== null || groupByOTT || groupByMonth) && (
         <View style={styles.activeChipsRow}>
           {ottFilter !== null && (
             <Pressable
@@ -648,6 +678,17 @@ export default function SavedScreen() {
               style={styles.activeChip}
             >
               <Text style={styles.activeChipText}>OTT별 그룹화</Text>
+              <Text style={styles.activeChipX}>✕</Text>
+            </Pressable>
+          )}
+          {groupByMonth && (
+            <Pressable
+              onPress={() => setGroupByMonth(false)}
+              accessibilityRole="button"
+              accessibilityLabel="연·월별 그룹화 해제"
+              style={styles.activeChip}
+            >
+              <Text style={styles.activeChipText}>연·월별 그룹화</Text>
               <Text style={styles.activeChipX}>✕</Text>
             </Pressable>
           )}
@@ -729,17 +770,18 @@ export default function SavedScreen() {
           onSelectPreview={setSelectedPreviewId}
           onOpen={handleOpenDetail}
         />
-      ) : ottGroups ? (
-        // P2 배치 A — OTT별 그룹핑. web SavedList 의 ottGroups 분기 정합.
-        // SectionList 로 OTT 섹션 헤더 + 그룹 내 grid/list 분기.
+      ) : activeGroups ? (
+        // P2 배치 A — 그룹핑 SectionList (OTT별 또는 연·월별). web SavedList 의
+        // ottGroups 분기 일반화 — sections 데이터 소스만 교체, 헤더/렌더 동일.
+        // 연·월 그룹(groupByMonth)이면 OTT 아이콘 생략 (라벨이 시각 앵커).
         <SectionList
           key={`saved-grouped-${viewMode}`}
-          sections={ottGroups.map((g) => ({ title: g.ott, count: g.items.length, data: [g.items] }))}
+          sections={activeGroups.map((g) => ({ title: g.ott, count: g.items.length, data: [g.items] }))}
           keyExtractor={(_, index) => `group-${index}`}
           contentContainerStyle={styles.groupedContent}
           stickySectionHeadersEnabled={false}
           renderSectionHeader={({ section }) => {
-            const iconSrc = getOTTIcon(section.title);
+            const iconSrc = groupByMonth ? null : getOTTIcon(section.title);
             return (
               <View style={styles.ottSectionHeader}>
                 {iconSrc ? (
@@ -758,7 +800,9 @@ export default function SavedScreen() {
           renderItem={({ item: groupItems }) =>
             groupItems.length === 0 ? (
               <Text style={styles.ottSectionEmpty}>
-                이 OTT에는 저장된 작품이 없어요
+                {groupByMonth
+                  ? '이 달에는 저장된 작품이 없어요'
+                  : '이 OTT에는 저장된 작품이 없어요'}
               </Text>
             ) : viewMode === 'list' ? (
               <View style={styles.groupListWrap}>
@@ -904,7 +948,9 @@ export default function SavedScreen() {
         ottFilter={ottFilter}
         setOttFilter={setOttFilter}
         groupByOTT={groupByOTT}
-        setGroupByOTT={setGroupByOTT}
+        setGroupByOTT={handleSetGroupByOTT}
+        groupByMonth={groupByMonth}
+        setGroupByMonth={handleSetGroupByMonth}
         availableOTTs={availableOTTs}
         sortBy={sortBy}
         setSortBy={handleSortChange}
