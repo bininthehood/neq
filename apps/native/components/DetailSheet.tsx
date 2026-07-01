@@ -38,7 +38,7 @@ import type {
   RelatedWorksResponse,
   SearchResult,
 } from '../lib/types';
-import { getOTTLink, getOTTIcon, getPrimaryCountryName } from '@neq/core';
+import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName } from '@neq/core';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing } from '../lib/tokens';
 import { track } from '../lib/analytics';
@@ -575,32 +575,42 @@ export default function DetailSheet({
 
   async function openProvider(providerName: string, watchLink: string | null) {
     if (!rec) return;
-    // 네이티브는 항상 모바일 → 앱 딥링크 우선
-    const url =
-      getOTTLink(providerName, rec.title, true) ||
-      watchLink ||
-      `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + rec.title)}`;
+    const googleFallback = `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + rec.title)}`;
+    // 우선순위: (1) 앱 scheme(설치 시) → (2) 웹 appLink → (3) watchLink → (4) google 검색.
+    // scheme 이 없거나 canOpenURL false 면 자동으로 웹으로 떨어짐 (회귀 0).
+    const candidates = [
+      ...getOTTOpenCandidates(providerName, rec.title),
+      ...(watchLink ? [{ url: watchLink, via: 'web' as const }] : []),
+      { url: googleFallback, via: 'web' as const },
+    ];
 
-    // 클릭 이벤트는 실제 deeplink 시도 직전에 발사 (canOpenURL 결과와 무관하게 의도 측정)
+    let opened: { url: string; via: 'app' | 'web' } | null = null;
+    for (const c of candidates) {
+      try {
+        if (await Linking.canOpenURL(c.url)) {
+          opened = c;
+          break;
+        }
+      } catch {
+        // canOpenURL 거부(scheme 미등록 등) — 다음 후보로
+      }
+    }
+    // 모두 canOpenURL 실패해도 google 검색은 항상 https → 마지막 후보 강제 채택
+    if (!opened) opened = candidates[candidates.length - 1];
+
+    // 클릭 이벤트는 open 직전 발사. opened_via 로 앱/웹 경로 구분 (PR — scheme 효과 측정).
     track('ott_link_clicked', {
       tmdb_id: rec.tmdbId,
       title: rec.title,
       provider: providerName,
-      url,
+      url: opened.url,
+      opened_via: opened.via,
       providers_count: rec.providers.length,
-      // PR2 — source 는 mode 기준 분기. share UL 진입 시 native_share.
       source: mode === 'share' ? 'native_share' : 'native_detail_sheet',
     });
 
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        // 딥링크 미지원 시 google 검색으로 fallback (이미 watchLink가 fallback이지만 한 번 더 안전망)
-        const fallback = `https://www.google.com/search?q=${encodeURIComponent(providerName + ' ' + rec.title)}`;
-        await Linking.openURL(fallback);
-      }
+      await Linking.openURL(opened.url);
     } catch {
       // openURL 실패 — 무시 (사용자가 명시적으로 닫았거나 OS 거부)
     }

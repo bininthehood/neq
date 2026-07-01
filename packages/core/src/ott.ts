@@ -8,6 +8,14 @@ interface OTTProvider {
   search: (title: string) => string;
   /** 앱 딥링크 — 모바일에서 우선 사용 */
   appLink?: (title: string) => string;
+  /**
+   * 네이티브 앱 custom URL scheme (예: 'watcha://...').
+   * 설치돼 있으면 OTT 앱으로 직접 진입. canOpenURL 실패(미설치/scheme 미등록) 시
+   * 호출부가 반드시 웹(appLink/search)으로 fallback 해야 함 — scheme 자체는 보장 없음.
+   */
+  appScheme?: (title: string) => string;
+  /** appScheme 의 prefix (예: 'watcha'). app.json LSApplicationQueriesSchemes 와 일치 필수 */
+  schemePrefix?: string;
   /** 직접 지정 아이콘 — 없으면 Google S2 favicon API 사용 */
   iconOverride?: string;
 }
@@ -30,12 +38,19 @@ const providers: Record<string, OTTProvider> = {
   Watcha: {
     domain: 'watcha.com',
     search: (t) => `https://watcha.com/search?query=${enc(t)}`,
-    appLink: (t) => `watcha://search?query=${enc(t)}`,
+    // 기존 appLink 이 이미 watcha:// scheme 이었음 → 웹 fallback 으로 search 사용,
+    // scheme 은 appScheme 으로 승격 (canOpenURL 분기 대상).
+    appLink: (t) => `https://watcha.com/search?query=${enc(t)}`,
+    appScheme: (t) => `watcha://search?query=${enc(t)}`,
+    schemePrefix: 'watcha',
   },
   wavve: {
     domain: 'wavve.com',
     search: (t) => `https://www.wavve.com/search?searchWord=${enc(t)}`,
     appLink: (t) => `https://www.wavve.com/search?searchWord=${enc(t)}`,
+    // ponytail: best-effort scheme, 미확인 — 실기기 검증 필요. canOpenURL 실패 시 웹으로 자동 fallback
+    appScheme: (t) => `wavve://search?searchWord=${enc(t)}`,
+    schemePrefix: 'wavve',
     iconOverride: 'https://www.wavve.com/favicon.ico',
   },
   'Coupang Play': {
@@ -66,6 +81,9 @@ const providers: Record<string, OTTProvider> = {
     domain: 'www.tving.com',
     search: (t) => `https://www.tving.com/search?keyword=${enc(t)}`,
     appLink: (t) => `https://www.tving.com/search?keyword=${enc(t)}`,
+    // ponytail: best-effort scheme, 미확인 — 실기기 검증 필요. canOpenURL 실패 시 웹으로 자동 fallback
+    appScheme: (t) => `tving://search?keyword=${enc(t)}`,
+    schemePrefix: 'tving',
   },
   'Naver Store': {
     domain: 'serieson.naver.com',
@@ -93,6 +111,34 @@ export function getOTTAppLink(providerName: string, title: string): string | nul
   const provider = providers[providerName];
   if (!provider) return null;
   return provider.appLink ? provider.appLink(title) : provider.search(title);
+}
+
+/**
+ * 네이티브 앱 custom scheme (예: 'tving://...') — 없으면 null.
+ * 호출부는 canOpenURL 로 설치 여부 확인 후, 실패하면 웹(getOTTAppLink)으로 fallback 해야 함.
+ */
+export function getOTTAppScheme(providerName: string, title: string): string | null {
+  const provider = providers[providerName];
+  if (!provider?.appScheme) return null;
+  return provider.appScheme(title);
+}
+
+/**
+ * 네이티브 OTT open 후보를 우선순위대로 반환.
+ * [scheme?, web, search] — scheme 은 있을 때만 맨 앞. 호출부가 순서대로 canOpenURL→openURL 시도.
+ * scheme 이 없거나 막히면 web/search 로 떨어져 회귀 0 (기존 웹 열기 동작 보존).
+ */
+export function getOTTOpenCandidates(
+  providerName: string,
+  title: string,
+): { url: string; via: 'app' | 'web' }[] {
+  const provider = providers[providerName];
+  if (!provider) return [];
+  const web = provider.appLink ? provider.appLink(title) : provider.search(title);
+  const candidates: { url: string; via: 'app' | 'web' }[] = [];
+  if (provider.appScheme) candidates.push({ url: provider.appScheme(title), via: 'app' });
+  candidates.push({ url: web, via: 'web' });
+  return candidates;
 }
 
 /**

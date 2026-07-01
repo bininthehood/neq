@@ -25,6 +25,11 @@
         "CFBundleDevelopmentRegion": "ko",
         "CFBundleLocalizations": [
           "ko"
+        ],
+        "LSApplicationQueriesSchemes": [
+          "watcha",
+          "wavve",
+          "tving"
         ]
       }
     },
