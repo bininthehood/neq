@@ -77,6 +77,10 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // (feedback_swipe_ux.md 잠금: save 480ms / pass 360ms)
 const SWIPE_THRESHOLD = 70;
 const PREV_OVERLAY_TRIGGER = 0.3;
+// ponytail: 8s first-card 타임아웃, cold-start 감안. 잦은 오폴백이면 상향.
+// release/Hermes 빌드에서 reader.read() 가 에러 없이 stall 하면 스트림 await 가
+// 영영 안 끝나 SkeletonCard 영원 → 첫 카드 미도착 시 스트림 중단 + 비스트리밍 폴백.
+const FIRST_CARD_TIMEOUT_MS = 8000;
 // 03_p0-2 fix (한손 thumb flick 인식). 거리 임계는 그대로 유지 — 두 손 사용자의
 // 의도 swipe 보수성 보존. velocity 보조만 추가: 빠른 flick 이면 짧은 변위로도 trigger.
 // 좌/우/아래 모두 동일 패턴 적용 (좌·우는 velocityX, 아래는 velocityY).
@@ -467,8 +471,19 @@ export default function DiscoverScreen() {
         const collected: Recommendation[] = [];
         let firstSeen = false;
         let streamError: Error | null = null;
+        // 첫 카드 타임아웃 — 스트림 전용 controller 로 reader 만 중단.
+        // 원 controller 는 상위 load-race 취소 토큰이므로 abort 하지 않는다
+        // (abort 하면 아래 fallback fetch 가 controller.signal 로 bail 됨).
+        const streamController = new AbortController();
+        // controller(상위 load-race 취소) abort 시 스트림 reader 도 함께 중단 — 단방향.
+        // (타임아웃은 streamController 만 abort → controller 는 살아 fallback 통과. 반대 방향 X.)
+        if (controller.signal.aborted) streamController.abort();
+        else controller.signal.addEventListener('abort', () => streamController.abort(), { once: true });
+        let streamTimedOut = false;
+        let firstCardTimer: ReturnType<typeof setTimeout> | undefined;
 
-        await fetchRecommendationsStreaming(
+        await Promise.race([
+          fetchRecommendationsStreaming(
           {
             filter,
             favorites,
@@ -480,6 +495,8 @@ export default function DiscoverScreen() {
           },
           {
             onCard: (rec) => {
+              // 타임아웃 발동 후 늦게 도착한 좀비 onCard 는 폐기 (새 stack 오염 방지).
+              if (streamTimedOut) return;
               // 2026-06-06 (P0 stack 겹침) — 직전 stream 의 onCard 가 abort 후에도
               // 한두 frame 늦게 도착할 수 있어 ref 일치 가드. controller 가
               // 본 호출의 ref 와 같지 않으면 옛 호출 → 새 stack 에 안 끼임.
@@ -515,8 +532,26 @@ export default function DiscoverScreen() {
               streamError = err;
             },
           },
-          controller.signal,
-        );
+          streamController.signal,
+        ),
+          // 첫 카드가 8s 내에 안 오면 이 브랜치가 먼저 resolve → 스트림 중단 후 폴백.
+          // 첫 카드 도착(firstSeen) 시 스트림 promise 가 계속 진행하다 자연 종료하므로
+          // 타임아웃 브랜치가 이겨도 아래 firstSeen 가드로 폴백 진입이 차단됨(해피패스 불변).
+          new Promise<void>((resolve) => {
+            firstCardTimer = setTimeout(() => {
+              if (!firstSeen) {
+                streamTimedOut = true;
+                // reader.read() stall 은 signal 로 즉시 못 깨지만, best-effort 로
+                // reader 를 cancel 해 이후 iteration 이 bail 하도록 abort.
+                streamController.abort();
+              }
+              resolve();
+            }, FIRST_CARD_TIMEOUT_MS);
+          }),
+        ]);
+        // 타이머 정리 — 스트림이 8s 전에 끝나면(정상/에러) 그쪽이 race 승자가 되고
+        // 이 타이머는 pending 이므로 반드시 clear 해 좀비 abort 방지.
+        clearTimeout(firstCardTimer);
 
         // abort 후 도착한 응답은 silent return — 옛 호출이 새 호출 state 를 덮어쓰면 안 됨.
         if (controller.signal.aborted) return;
@@ -524,6 +559,17 @@ export default function DiscoverScreen() {
         if (!firstSeen) {
           // streaming 동안 카드 0건 — error 또는 빈 응답. error 우선, 아니면 non-streaming 폴백.
           if (streamError) throw streamError;
+          // 관측 — 타임아웃 폴백 발동 빈도. release/Hermes reader stall 추적용.
+          // 새 union 추가 대신 기존 recommendation_failed + reason 컨벤션 재사용(web parity).
+          if (streamTimedOut) {
+            track('recommendation_failed', {
+              reason: 'stream_timeout',
+              timeout_ms: FIRST_CARD_TIMEOUT_MS,
+              silent: !!opts?.silent,
+              origin: opts?.origin ?? 'default',
+            });
+          }
+          // 폴백 fetch 는 원 controller.signal 로 실행 — streamController(abort됨) 와 분리돼 정상 진행.
           const data = await fetchRecommendations({
             filter,
             favorites,
