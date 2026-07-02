@@ -3,6 +3,7 @@ import {
   getDetails,
   getCredits,
   getKoreanProviders,
+  filterWatchProviders,
   posterUrl,
 } from "@/lib/tmdb";
 import type { Recommendation } from "@/lib/types";
@@ -101,7 +102,7 @@ async function hydrate(
         rating: data.vote_average ?? 0,
         date,
         overview: data.overview ?? "",
-        providers: providersRes.providers,
+        providers: filterWatchProviders(providersRes.providers),
         watchLink: null,
         director: credits.director,
         cast: credits.cast,

@@ -212,6 +212,23 @@ export interface ProviderInfo {
   type: "flatrate" | "rent" | "buy";
 }
 
+/**
+ * where-to-watch 표시용 provider 필터 (표시 전용 — eligibility/추천 로직에는 미적용).
+ * - rent/buy(구매·대여, 예: Google Play Movies)는 OTT 구독 맥락에 부적합해 제외
+ * - 광고형 요금제 변종("Netflix Standard with Ads" 등)은 정규 provider와 중복 노이즈라 제외
+ * ponytail: 광고형 티어만 있고 정규 티어가 없는 작품은 해당 provider가 통째로 빠질 수 있으나,
+ *   실사용 KR flatrate엔 정규 티어가 거의 항상 동반돼 무시 가능한 케이스.
+ */
+export function filterWatchProviders<
+  T extends { name: string; category?: "subscription" | "rent" | "buy" }
+>(providers: T[]): T[] {
+  return providers.filter(
+    (p) =>
+      (!p.category || p.category === "subscription") &&
+      !/with ads/i.test(p.name)
+  );
+}
+
 export async function getKoreanProviders(
   id: number,
   type: "movie" | "series"

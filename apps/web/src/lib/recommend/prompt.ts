@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { parse as parsePartialJSON } from "partial-json";
-import { posterUrl } from "../tmdb";
+import { posterUrl, filterWatchProviders } from "../tmdb";
 import type { Recommendation, WatchFeedback } from "../types";
 import type { CuratedPick, CurationMeta, EnrichedCandidate, TokenUsage } from "./types";
 import { VARIETY_GENRE_IDS } from "../discover-types";
@@ -753,7 +753,7 @@ export function buildRecommendationObject(
     rating: candidate.item.vote_average,
     date: candidate.item.release_date ?? candidate.item.first_air_date ?? "",
     overview: candidate.item.overview ?? "",
-    providers: candidate.providers,
+    providers: filterWatchProviders(candidate.providers),
     watchLink: candidate.watchLink,
     director: candidate.credits.director,
     cast: candidate.credits.cast,

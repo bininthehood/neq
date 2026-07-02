@@ -663,7 +663,11 @@ function tmdbCandidateToEnriched(c: TmdbCandidate): EnrichedCandidate {
     item,
     frequency: 1,
     score: c.totalScore,
-    providers: c.providers.map((p) => ({ name: p.name, logoUrl: p.logoUrl })),
+    providers: c.providers.map((p) => ({
+      name: p.name,
+      logoUrl: p.logoUrl,
+      category: p.category,
+    })),
     watchLink: c.watchLink,
     credits: {
       director: c.director,

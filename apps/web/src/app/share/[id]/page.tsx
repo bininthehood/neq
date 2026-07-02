@@ -1,5 +1,5 @@
 import { Metadata } from "next";
-import { getDetails, getCredits, getKoreanProviders, posterUrl } from "@/lib/tmdb";
+import { getDetails, getCredits, getKoreanProviders, filterWatchProviders, posterUrl } from "@/lib/tmdb";
 import ShareClient from "./ShareClient";
 
 interface Props {
@@ -43,7 +43,7 @@ async function fetchWork(id: number, displayType: "movie" | "series" | "variety"
     rating: data.vote_average ?? 0,
     date,
     overview: data.overview ?? "",
-    providers,
+    providers: filterWatchProviders(providers),
     director: credits.director,
     cast: credits.cast,
     runtime: details.runtime,

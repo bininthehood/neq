@@ -22,7 +22,11 @@ export interface Candidate {
 
 /** 풍부화 완료된 후보 (OTT, credits, details 포함) */
 export interface EnrichedCandidate extends Candidate {
-  providers: Array<{ name: string; logoUrl: string | null }>;
+  providers: Array<{
+    name: string;
+    logoUrl: string | null;
+    category?: "subscription" | "rent" | "buy";
+  }>;
   watchLink: string | null;
   // 위임 J #4 — getCredits 가 director/cast 외에 directorMember/castMembers (id+profile)
   // 까지 동시 반환. tmdb 모듈 반환 시그니처와 일치시킨다.
