@@ -1,4 +1,4 @@
-import { VARIETY_GENRE_IDS } from "../discover-types";
+import { VARIETY_GENRE_IDS, isSubscriptionProvider } from "../discover-types";
 import type { RecommendFilter } from "../types";
 import type { EnrichedCandidate } from "./types";
 
@@ -33,7 +33,9 @@ export function applyFilters(
     // OTT 필터 (서버 사이드 — 클라이언트에서 부족할 때 전달됨)
     if (filter.ott && filter.ott.length > 0) {
       const ottSet = new Set(filter.ott);
-      if (!c.providers.some((p) => ottSet.has(p.name))) return false;
+      // 구독으로 볼 수 있어야 매칭 — rent/buy 전용은 "그 OTT 제공"으로 치지 않음
+      if (!c.providers.some((p) => ottSet.has(p.name) && isSubscriptionProvider(p)))
+        return false;
     }
 
     // 년도 필터

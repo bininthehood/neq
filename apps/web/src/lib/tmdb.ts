@@ -1,4 +1,5 @@
 import { getTmdbApiKey } from "./env";
+import { isSubscriptionProvider } from "./discover-types";
 
 // 모듈 평가 시 1회만 평가. tmdb.ts 사용처는 모두 server-side
 // (API routes / Server Components) 라 안전.
@@ -223,9 +224,7 @@ export function filterWatchProviders<
   T extends { name: string; category?: "subscription" | "rent" | "buy" }
 >(providers: T[]): T[] {
   return providers.filter(
-    (p) =>
-      (!p.category || p.category === "subscription") &&
-      !/with ads/i.test(p.name)
+    (p) => isSubscriptionProvider(p) && !/with ads/i.test(p.name)
   );
 }
 

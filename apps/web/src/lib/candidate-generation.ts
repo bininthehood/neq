@@ -26,6 +26,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "./supabase-admin";
 import type { RecommendFilter } from "./types";
+import { isSubscriptionProvider } from "./discover-types";
 
 // ---------- 타입 ----------
 
@@ -543,7 +544,9 @@ export async function embeddingRetrieval(
   for (const row of rows) {
     if (excludeSet.has(row.tmdb_id)) continue; // RPC hard filter 안전망
     if (ottSet.size > 0) {
-      const matched = (row.providers ?? []).some((p) => ottSet.has(p.name));
+      const matched = (row.providers ?? []).some(
+        (p) => ottSet.has(p.name) && isSubscriptionProvider(p),
+      );
       if (!matched) continue;
     }
     if (wantForeign) {
@@ -823,7 +826,12 @@ export async function fetchExplorationCandidates(
   for (const row of rows) {
     if (blockSet.has(row.tmdb_id)) continue;
     if (ottSet.size > 0) {
-      if (!(row.providers ?? []).some((p) => ottSet.has(p.name))) continue;
+      if (
+        !(row.providers ?? []).some(
+          (p) => ottSet.has(p.name) && isSubscriptionProvider(p),
+        )
+      )
+        continue;
     }
     if (wantForeign) {
       if ((row.country ?? row.origin_country ?? []).includes("KR")) continue;
@@ -1015,7 +1023,9 @@ export async function generateCandidates(
   for (const row of all) {
     if (blockSet.has(row.tmdb_id)) continue;
     if (ottSet.size > 0) {
-      const matched = (row.providers ?? []).some((p) => ottSet.has(p.name));
+      const matched = (row.providers ?? []).some(
+        (p) => ottSet.has(p.name) && isSubscriptionProvider(p),
+      );
       if (!matched) continue;
     }
     if (wantForeign) {
