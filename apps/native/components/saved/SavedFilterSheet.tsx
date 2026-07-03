@@ -4,7 +4,8 @@
  * web 정본: `apps/web/src/components/saved/SavedFilterSheet.tsx`.
  *  - OTT 섹션:   "전체" + availableOTTs 리스트 (체크 표시). 단일 선택.
  *  - 정렬 섹션:   저장순 / 가나다순 / 평점순 (SavedSortControl SORT_OPTIONS).
- *  - 보기 옵션:   OTT별로 그룹화 토글 (ottFilter 활성 시 비활성).
+ *  - 보기 옵션:   연·월별로 그룹화 토글. (OTT별 그룹화는 Track B 에서 폐기 —
+ *                OTT 필터로 충분. 묶기는 없음(flat) / 연·월 두 가지만.)
  *  - 헤더:        "필터" 제목 + (활성 시) 초기화 버튼 + 닫기.
  *
  * RN 매핑:
@@ -39,8 +40,6 @@ type Props = {
   onClose: () => void;
   ottFilter: string | null;
   setOttFilter: (v: string | null) => void;
-  groupByOTT: boolean;
-  setGroupByOTT: (v: boolean) => void;
   groupByMonth: boolean;
   setGroupByMonth: (v: boolean) => void;
   availableOTTs: { name: string; count: number }[];
@@ -53,8 +52,6 @@ export default function SavedFilterSheet({
   onClose,
   ottFilter,
   setOttFilter,
-  groupByOTT,
-  setGroupByOTT,
   groupByMonth,
   setGroupByMonth,
   availableOTTs,
@@ -62,15 +59,13 @@ export default function SavedFilterSheet({
   setSortBy,
 }: Props) {
   const hasActive =
-    ottFilter !== null || groupByOTT || groupByMonth || sortBy !== 'saved';
-  const groupDisabled = ottFilter !== null;
+    ottFilter !== null || groupByMonth || sortBy !== 'saved';
 
   const handleReset = useCallback(() => {
     setOttFilter(null);
-    setGroupByOTT(false);
     setGroupByMonth(false);
     setSortBy('saved');
-  }, [setOttFilter, setGroupByOTT, setGroupByMonth, setSortBy]);
+  }, [setOttFilter, setGroupByMonth, setSortBy]);
 
   return (
     <Modal
@@ -213,51 +208,17 @@ export default function SavedFilterSheet({
             })}
           </View>
 
-          {/* ── 보기 옵션 섹션 ── */}
+          {/* ── 보기 옵션 섹션 ──
+              Track B — OTT별 그룹화 폐기 (OTT 필터로 충분). 묶기는 연·월 하나만. */}
           <View style={[styles.section, styles.sectionTop]}>
             <Text style={styles.sectionLabel}>보기 옵션</Text>
-            <Pressable
-              onPress={() => {
-                if (groupDisabled) return;
-                setGroupByOTT(!groupByOTT);
-              }}
-              accessibilityRole="switch"
-              accessibilityLabel="OTT별로 그룹화"
-              accessibilityState={{ checked: groupByOTT, disabled: groupDisabled }}
-              style={[styles.row, { opacity: groupDisabled ? 0.5 : 1 }]}
-            >
-              <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>OTT별로 그룹화</Text>
-                <Text style={styles.rowDesc}>
-                  {groupDisabled
-                    ? 'OTT 필터 활성 시 사용 불가'
-                    : '각 OTT 섹션으로 묶어 표시'}
-                </Text>
-              </View>
-              {/* 토글 스위치 */}
-              <View
-                style={[
-                  styles.toggleTrack,
-                  groupByOTT && styles.toggleTrackActive,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    groupByOTT && styles.toggleThumbActive,
-                  ]}
-                />
-              </View>
-            </Pressable>
-
-            {/* 연·월별 그룹화 — 저장한 시기로 묶기. OTT 그룹과 상호배타
-                (부모 핸들러가 처리). ottFilter 와는 공존 가능 → groupDisabled 무관. */}
+            {/* 연·월별 그룹화 — 저장한 시기로 묶기. ottFilter 와 공존 가능. */}
             <Pressable
               onPress={() => setGroupByMonth(!groupByMonth)}
               accessibilityRole="switch"
               accessibilityLabel="연·월별로 그룹화"
               accessibilityState={{ checked: groupByMonth }}
-              style={[styles.row, styles.rowBordered]}
+              style={styles.row}
             >
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>연·월별로 그룹화</Text>
