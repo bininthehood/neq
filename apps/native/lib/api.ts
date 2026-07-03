@@ -578,25 +578,74 @@ export function __test_getPrefetchCacheSize(): number {
   return prefetchCache.size;
 }
 
+/** genres 백필 대상 항목 — tmdbId + type (media_type 분리 조회에 필요). */
+export type GenreFetchItem = { id: number; type: 'movie' | 'series' | 'variety' };
+
+const GENRE_CHUNK = 200; // route 의 .slice(0,200) 상한과 정합.
+
 /**
- * Saved 장르 백필 — tmdbId 배열 → genre_ids 매핑을 mirror 에서 1회 조회.
+ * Saved 장르 백필 — {id,type} 배열 → genre_ids 매핑을 mirror 에서 조회.
  * TMDB 재호출 없음. genres 미보유 저장분만 넘겨 호출하는 게 정상 사용.
+ *
+ * media_type 분리 — `tmdb_metadata` PK 는 (tmdb_id, media_type) 복합키. TMDB 는 movie/tv
+ * id 를 독립 할당하므로 같은 정수가 양쪽에 존재 가능 → media_type 없이 조회하면 TV 작품에
+ * 영화 장르가 붙는 오분류가 난다. type→media_type 매핑: movie→'movie', series/variety→'tv'.
+ * route 에 `?movie=...&tv=...` 로 분리 전달한다.
+ *
+ * chunking — 저장분이 200 초과여도 안전하게 200개 단위로 분할 호출 후 병합
+ * (route 의 200 상한 방어와 정합). movie/tv 각각 청크로 나눠 병렬 fetch.
  *
  * @returns { [tmdbId]: number[] }. 에러/미매칭 id 는 결과에서 빠짐 (호출자가 skip).
  */
 export async function fetchGenresForIds(
-  ids: number[],
+  items: GenreFetchItem[],
   signal?: AbortSignal,
 ): Promise<Record<number, number[]>> {
-  if (ids.length === 0) return {};
-  try {
-    const res = await fetch(
-      `${env.API_BASE_URL}/api/tmdb/genres?ids=${ids.join(',')}`,
-      { signal },
-    );
-    if (!res.ok) return {};
-    return (await res.json()) as Record<number, number[]>;
-  } catch {
-    return {};
+  if (items.length === 0) return {};
+
+  const movieIds: number[] = [];
+  const tvIds: number[] = [];
+  for (const it of items) {
+    if (it.type === 'movie') movieIds.push(it.id);
+    else tvIds.push(it.id); // series/variety → tv
   }
+
+  // movie/tv 를 각각 200개 청크로 쪼개고, 한 요청에 movie 청크 + tv 청크를 함께 실어
+  // 왕복 횟수를 줄인다 (각 배치가 route 에서 media_type 별로 분리 조회됨).
+  const chunk = (arr: number[]): number[][] => {
+    const out: number[][] = [];
+    for (let i = 0; i < arr.length; i += GENRE_CHUNK) out.push(arr.slice(i, i + GENRE_CHUNK));
+    return out;
+  };
+  const movieChunks = chunk(movieIds);
+  const tvChunks = chunk(tvIds);
+  const batches = Math.max(movieChunks.length, tvChunks.length, 1);
+
+  const merged: Record<number, number[]> = {};
+  const requests: Promise<void>[] = [];
+  for (let b = 0; b < batches; b++) {
+    const params = new URLSearchParams();
+    const mv = movieChunks[b];
+    const tv = tvChunks[b];
+    if (mv && mv.length > 0) params.set('movie', mv.join(','));
+    if (tv && tv.length > 0) params.set('tv', tv.join(','));
+    if ([...params].length === 0) continue;
+    requests.push(
+      (async () => {
+        try {
+          const res = await fetch(
+            `${env.API_BASE_URL}/api/tmdb/genres?${params.toString()}`,
+            { signal },
+          );
+          if (!res.ok) return;
+          const data = (await res.json()) as Record<number, number[]>;
+          Object.assign(merged, data);
+        } catch {
+          /* silent — 실패한 청크는 결과에서 빠짐. 호출자가 다음 로드에서 재시도. */
+        }
+      })(),
+    );
+  }
+  await Promise.all(requests);
+  return merged;
 }

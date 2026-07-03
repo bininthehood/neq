@@ -4,9 +4,13 @@
  * web 정본: `apps/web/src/components/saved/SavedFilterSheet.tsx`.
  *  - OTT 섹션:   "전체" + availableOTTs 리스트 (체크 표시). 단일 선택.
  *  - 정렬 섹션:   저장순 / 가나다순 / 평점순 (SavedSortControl SORT_OPTIONS).
- *  - 보기 옵션:   연·월별로 그룹화 토글. (OTT별 그룹화는 Track B 에서 폐기 —
+ *  - 보기 옵션:   연·월별로 그룹화 토글. (OTT별 그룹화는 native 에서 폐기 —
  *                OTT 필터로 충분. 묶기는 없음(flat) / 연·월 두 가지만.)
  *  - 헤더:        "필터" 제목 + (활성 시) 초기화 버튼 + 닫기.
+ *
+ * genreFilter 는 sheet 안에 UI 를 두지 않는다 (선택은 상단 SavedGenreChips 칩바 담당).
+ * 다만 "초기화" 는 대칭성을 위해 장르 선택도 함께 리셋한다 (칩바 '전체' 와 별개로 sheet
+ * 초기화도 장르를 해제해야 필터 도트/활성 상태가 정합) — setGenreFilter 로만 소비.
  *
  * RN 매핑:
  *  - createPortal → Modal (transparent, presentationStyle 기본).
@@ -45,6 +49,9 @@ type Props = {
   availableOTTs: { name: string; count: number }[];
   sortBy: SavedSort;
   setSortBy: (v: SavedSort) => void;
+  // genreFilter — UI 없음. "초기화" 대칭성만 위해 소비 (Issue 4).
+  genreFilter: string | null;
+  setGenreFilter: (v: string | null) => void;
 };
 
 export default function SavedFilterSheet({
@@ -57,15 +64,18 @@ export default function SavedFilterSheet({
   availableOTTs,
   sortBy,
   setSortBy,
+  genreFilter,
+  setGenreFilter,
 }: Props) {
   const hasActive =
-    ottFilter !== null || groupByMonth || sortBy !== 'saved';
+    ottFilter !== null || groupByMonth || sortBy !== 'saved' || genreFilter !== null;
 
   const handleReset = useCallback(() => {
     setOttFilter(null);
     setGroupByMonth(false);
     setSortBy('saved');
-  }, [setOttFilter, setGroupByMonth, setSortBy]);
+    setGenreFilter(null); // 칩바 '전체' 와 대칭 — 초기화도 장르 해제.
+  }, [setOttFilter, setGroupByMonth, setSortBy, setGenreFilter]);
 
   return (
     <Modal
@@ -209,7 +219,8 @@ export default function SavedFilterSheet({
           </View>
 
           {/* ── 보기 옵션 섹션 ──
-              Track B — OTT별 그룹화 폐기 (OTT 필터로 충분). 묶기는 연·월 하나만. */}
+              native 만 OTT별 그룹화 폐기 (OTT 필터로 충분). 묶기는 연·월 하나만.
+              (web SavedFilterSheet 는 이 PR 에서 미변경 — 본 정리는 native 한정.) */}
           <View style={[styles.section, styles.sectionTop]}>
             <Text style={styles.sectionLabel}>보기 옵션</Text>
             {/* 연·월별 그룹화 — 저장한 시기로 묶기. ottFilter 와 공존 가능. */}

@@ -41,8 +41,11 @@ describe('backfillSavedGenres', () => {
       { recommendation: rec(1), savedAt: 1 },
       { recommendation: rec(2, [18]), savedAt: 2 }, // 이미 보유 → 건드리지 않음
     ]);
-    const fetcher = async (ids: number[]) => {
-      expect(ids).toEqual([1]); // genres 없는 id 만 요청
+    const fetcher = async (
+      items: { id: number; type: 'movie' | 'series' | 'variety' }[],
+    ) => {
+      // genres 없는 id 만 요청 + type 함께 전달 (media_type 분리 조회).
+      expect(items).toEqual([{ id: 1, type: 'movie' }]);
       return { 1: [28, 35] };
     };
     const out = await backfillSavedGenres(fetcher);
@@ -72,5 +75,24 @@ describe('backfillSavedGenres', () => {
   it('저장분 없으면 no-op', async () => {
     const out = await backfillSavedGenres(async () => ({ 1: [1] }));
     expect(out).toEqual([]);
+  });
+
+  it('type 을 fetcher 로 그대로 전달 (media_type 분리 조회 입력)', async () => {
+    // 같은 정수 id 라도 movie/series 로 나뉘어 전달되어야 route 가 media_type 분리 조회 가능.
+    await seed([
+      { recommendation: rec(93405), savedAt: 1 }, // movie (rec() 기본 type)
+      { recommendation: { ...rec(603), type: 'series' }, savedAt: 2 },
+      { recommendation: { ...rec(710), type: 'variety' }, savedAt: 3 },
+    ]);
+    let received: { id: number; type: string }[] = [];
+    await backfillSavedGenres(async (items) => {
+      received = items;
+      return { 93405: [18], 603: [10765], 710: [10764] };
+    });
+    expect(received).toEqual([
+      { id: 93405, type: 'movie' },
+      { id: 603, type: 'series' },
+      { id: 710, type: 'variety' },
+    ]);
   });
 });
