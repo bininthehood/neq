@@ -214,15 +214,21 @@ export default function SavedScreen() {
   }, []);
 
   // Track B — genres 백필. mount 시 1회, genres 미보유 저장분만 mirror(/api/tmdb/genres)로
-  // 채워 persist 후 setItems. genres 이미 있으면 fetcher 호출 없이 no-op (backfillSavedGenres
+  // 채워 persist. genres 이미 있으면 fetcher 호출 없이 no-op (backfillSavedGenres
   // 내부에서 missing 0건이면 조기 반환). 실패해도 조용히 기존 목록 유지 (장르 필터가 '전체'만).
+  //
+  // race 방지 — 직접 setItems 하지 않고 refreshAll() 재호출로 최신 AsyncStorage 동기화.
+  // 백필은 persist 후 완료되므로 refreshAll 이 genres 포함본을 읽는다. 직접 setItems 시
+  // useFocusEffect→refreshAll(genres 없는 옛 스냅샷) 이 나중 settle 하면 칩바가 사라지는
+  // 경쟁이 발생 → refreshAll 로 단일화. refreshAll 은 useCallback([]) 로 stable 하므로
+  // dep 에 넣어도 effect 는 mount 1회만 실행.
   useEffect(() => {
     void backfillSavedGenres(fetchGenresForIds)
-      .then(setItems)
+      .then(() => refreshAll())
       .catch(() => {
         /* silent — 백필 실패 시 장르 칩바만 축소, 저장/필터 회귀 없음 */
       });
-  }, []);
+  }, [refreshAll]);
 
   // 2026-06-04 follow-up — fallback useEffect 제거.
   // 기존: archived 0 되면 'archived' 탭 hide → 'all' 로 자동 fallback (W5 Task F).
@@ -474,7 +480,7 @@ export default function SavedScreen() {
   // OTT 가 2종 이상일 때만 필터 의미 있음.
   const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
   const hasActiveFilter =
-    ottFilter !== null || groupByMonth || sortBy !== 'saved';
+    ottFilter !== null || groupByMonth || sortBy !== 'saved' || genreFilter !== null;
 
   // viewMode 토글 버튼 1개 — web saved/page.tsx 의 3-way segmented 정합.
   // active = surface-raised 면 + text-primary (2026-05-13 M1: amber 박탈).
@@ -879,7 +885,9 @@ export default function SavedScreen() {
         }}
       />
 
-      {/* 필터 sheet. OTT 선택 + 정렬 + 연·월 그룹화 (Track B — OTT별 그룹화 폐기). */}
+      {/* 필터 sheet. OTT 선택 + 정렬 + 연·월 그룹화 (Track B — OTT별 그룹화 폐기).
+          genreFilter 는 칩바 '전체' 로도 해제되지만, sheet 의 "초기화" 도 대칭적으로
+          장르를 함께 리셋해야 하므로 setGenreFilter 를 전달 (Issue 4). */}
       <SavedFilterSheet
         open={filterSheetOpen}
         onClose={() => setFilterSheetOpen(false)}
@@ -890,6 +898,8 @@ export default function SavedScreen() {
         availableOTTs={availableOTTs}
         sortBy={sortBy}
         setSortBy={handleSortChange}
+        genreFilter={genreFilter}
+        setGenreFilter={setGenreFilter}
       />
     </SafeAreaView>
   );

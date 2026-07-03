@@ -102,13 +102,21 @@ export async function toggleSaved(rec: Recommendation): Promise<boolean> {
  * @returns 갱신된 SavedItem[] (호출자가 state 로 바로 사용).
  */
 export async function backfillSavedGenres(
-  fetcher: (ids: number[]) => Promise<Record<number, number[]>>,
+  fetcher: (
+    items: { id: number; type: 'movie' | 'series' | 'variety' }[],
+  ) => Promise<Record<number, number[]>>,
 ): Promise<SavedItem[]> {
   const saved = await getSaved();
   const missing = saved.filter((s) => s.recommendation.genres === undefined);
   if (missing.length === 0) return saved;
 
-  const genresById = await fetcher(missing.map((s) => s.recommendation.tmdbId));
+  // media_type 분리 조회를 위해 tmdbId + type 를 함께 전달 (movie/tv id 충돌 방어).
+  const genresById = await fetcher(
+    missing.map((s) => ({
+      id: s.recommendation.tmdbId,
+      type: s.recommendation.type,
+    })),
+  );
   if (Object.keys(genresById).length === 0) return saved;
 
   let changed = false;
