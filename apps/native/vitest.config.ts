@@ -23,6 +23,11 @@ export default defineConfig({
         __dirname,
         './lib/__tests__/_mocks/async-storage.ts',
       ),
+      // expo-crypto native module → in-memory mock (store.ts randomUUID)
+      'expo-crypto': path.resolve(
+        __dirname,
+        './lib/__tests__/_mocks/expo-crypto.ts',
+      ),
     },
   },
   resolve: {
