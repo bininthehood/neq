@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Rect, Line, Path, Polyline } from 'react-native-svg';
+import Svg, { Rect, Line, Polyline } from 'react-native-svg';
 import { getOTTIcon } from '@neq/core';
 import {
   getSaved,
@@ -29,16 +29,21 @@ import {
   archiveItem,
   unarchiveItem,
   getWatchStats,
+  backfillSavedGenres,
 } from '../lib/store';
+import { fetchGenresForIds } from '../lib/api';
 import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
 import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
 import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
-import SavedHero from '../components/SavedHero';
 import { IconSearch, IconArchive } from '../components/Icons';
 import SavedFilterSheet from '../components/saved/SavedFilterSheet';
+import SavedGenreChips, {
+  genreLabelsByFrequency,
+  itemHasGenre,
+} from '../components/saved/SavedGenreChips';
 import ReactionOverlay from '../components/saved/ReactionOverlay';
 import ReactionLabel from '../components/saved/ReactionLabel';
 import {
@@ -54,13 +59,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - spacing.md * (COLS + 1)) / COLS;
 
 /**
- * Saved 뷰 모드 (web `SavedList.tsx` SavedViewMode 동기화).
+ * Saved 뷰 모드.
  *  - "grid":    기본 2열 그리드
  *  - "list":    1열 가로 카드 (포스터 60×90 + 제목/메타)
- *  - "preview": Coverflow — 큰 hero 1개 + 하단 가로 carousel (SavedHero)
+ * Track B — "preview"(Coverflow/SavedHero) 폐기. 그리드/리스트만.
  * 키: 'neq_saved_view' — web localStorage 키와 동일.
  */
-type SavedViewMode = 'grid' | 'list' | 'preview';
+type SavedViewMode = 'grid' | 'list';
 const SAVED_VIEW_KEY = 'neq_saved_view';
 
 /**
@@ -80,7 +85,8 @@ type ViewFilter = 'all' | 'unwatched' | 'watched' | 'archived';
 async function loadSavedView(): Promise<SavedViewMode> {
   try {
     const v = await AsyncStorage.getItem(SAVED_VIEW_KEY);
-    if (v === 'list' || v === 'grid' || v === 'preview') return v;
+    // Track B — 'preview' 폐기. 과거 저장값이면 grid 로 fallback.
+    if (v === 'list' || v === 'grid') return v;
   } catch {
     /* ignore */
   }
@@ -96,7 +102,7 @@ async function persistSavedView(mode: SavedViewMode): Promise<void> {
 }
 
 /**
- * IconGrid/IconList/IconPreview (web Icons.tsx 와 시각 정합).
+ * IconGrid/IconList (web Icons.tsx 와 시각 정합).
  * 16×16 viewBox + stroke 1.4 + linecap square. 색상은 props.
  * (native components/Icons.tsx 는 별도 트랙에서 관리 — 토글 전용 로컬 정의.)
  */
@@ -120,19 +126,6 @@ function IconList({ size = 14, color }: { size?: number; color: string }) {
   );
 }
 /**
- * IconPreview — Coverflow(미리보기) 토글 아이콘. web `Icons.tsx` IconPreview 정합.
- * 가운데 큰 사각형 + 좌우 작은 사각형 = 단일 hero + carousel 메타포.
- */
-function IconPreview({ size = 14, color }: { size?: number; color: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 16 16" fill="none">
-      <Rect x="5" y="3" width="6" height="10" stroke={color} strokeWidth={1.4} strokeLinecap="square" />
-      <Path d="M2.5 5 v6" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
-      <Path d="M13.5 5 v6" stroke={color} strokeWidth={1.4} strokeLinecap="round" />
-    </Svg>
-  );
-}
-/**
  * IconChevronDown — "필터" 트리거의 ▾ 표시. web SavedFilters 의 polyline 정합.
  */
 function IconChevronDown({ size = 10, color }: { size?: number; color: string }) {
@@ -147,8 +140,6 @@ export default function SavedScreen() {
   const [items, setItems] = useState<SavedItem[]>([]);
   // 뷰 모드. 첫 mount 시 AsyncStorage 에서 복원.
   const [viewMode, setViewMode] = useState<SavedViewMode>('grid');
-  // preview 모드 hero 작품 id. 카드 탭으로 변경. 첫 진입 시 첫 작품 자동 선택 (effect 처리).
-  const [selectedPreviewId, setSelectedPreviewId] = useState<number | null>(null);
   // W5 Task E — Saved DetailSheet 진입 (web `openDetailFor` 정합).
   // 카드 onPress → DetailSheet open + `detail_opened` source: 'saved_tap'.
   const [detailRec, setDetailRec] = useState<Recommendation | null>(null);
@@ -176,11 +167,12 @@ export default function SavedScreen() {
     meh: 0,
     dropped: 0,
   });
-  // P2 배치 A — 정렬 / OTT 필터 / OTT별 그룹화 (web saved/page.tsx 정합).
+  // P2 배치 A — 정렬 / OTT 필터 (web saved/page.tsx 정합).
   const [sortBy, setSortBy] = useState<SavedSort>('saved');
   const [ottFilter, setOttFilter] = useState<string | null>(null);
-  const [groupByOTT, setGroupByOTT] = useState(false);
-  // 연·월별 그룹화 (savedAt 기준). groupByOTT 와 상호배타 — 단일 그룹 모드.
+  // Track B — 장르 필터 (1차 필터). 한국어 라벨 단일 선택. null = 전체.
+  const [genreFilter, setGenreFilter] = useState<string | null>(null);
+  // 연·월별 그룹화 (savedAt 기준). Track B — OTT별 그룹화 폐기, 유일한 그룹 모드.
   const [groupByMonth, setGroupByMonth] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   // P2 배치 A — 카드 내 reaction 입력 ('봤어요?'). web saved/page.tsx:66 reportingId 정합.
@@ -221,6 +213,17 @@ export default function SavedScreen() {
     void loadSavedSort().then(setSortBy);
   }, []);
 
+  // Track B — genres 백필. mount 시 1회, genres 미보유 저장분만 mirror(/api/tmdb/genres)로
+  // 채워 persist 후 setItems. genres 이미 있으면 fetcher 호출 없이 no-op (backfillSavedGenres
+  // 내부에서 missing 0건이면 조기 반환). 실패해도 조용히 기존 목록 유지 (장르 필터가 '전체'만).
+  useEffect(() => {
+    void backfillSavedGenres(fetchGenresForIds)
+      .then(setItems)
+      .catch(() => {
+        /* silent — 백필 실패 시 장르 칩바만 축소, 저장/필터 회귀 없음 */
+      });
+  }, []);
+
   // 2026-06-04 follow-up — fallback useEffect 제거.
   // 기존: archived 0 되면 'archived' 탭 hide → 'all' 로 자동 fallback (W5 Task F).
   // 현재: archived 탭이 항상 노출 (위 viewFilters useMemo L591 의 archivedCount 가드 제거).
@@ -228,33 +231,10 @@ export default function SavedScreen() {
   //   "탭은 노출하지만 클릭하면 자동 이탈" 인 충돌 동작이 됨. fallback 제거 →
   //   빈 상태 UI ("보관한 작품이 없어요") 가 일관되게 보임.
 
-  // ottFilter 활성 시 OTT 그룹핑 자동 해제 (web saved/page.tsx:171-175 정합).
-  // 연·월 그룹화는 ottFilter 와 공존 가능 (OTT 좁힌 작품을 다시 시간순 섹션으로 봐도 됨).
-  useEffect(() => {
-    if (ottFilter && groupByOTT) {
-      setGroupByOTT(false);
-    }
-  }, [ottFilter, groupByOTT]);
-
   const handleViewModeChange = useCallback((mode: SavedViewMode) => {
     setViewMode(mode);
     void persistSavedView(mode);
     track('saved_view_changed', { mode });
-    // preview 모드는 단일 hero 모델이라 그룹 섹션과 충돌 → 자동 OFF (web saved/page.tsx:116-118).
-    if (mode === 'preview') {
-      setGroupByOTT(false);
-      setGroupByMonth(false);
-    }
-  }, []);
-
-  // 그룹 모드 상호배타 — OTT별 / 연·월별 동시 ON 불가. 하나 켜면 다른 하나 끔.
-  const handleSetGroupByOTT = useCallback((v: boolean) => {
-    setGroupByOTT(v);
-    if (v) setGroupByMonth(false);
-  }, []);
-  const handleSetGroupByMonth = useCallback((v: boolean) => {
-    setGroupByMonth(v);
-    if (v) setGroupByOTT(false);
   }, []);
 
   const handleSortChange = useCallback((s: SavedSort) => {
@@ -410,10 +390,33 @@ export default function SavedScreen() {
     );
   }, [filteredItems, ottFilter]);
 
-  // P2 배치 A — 정렬 적용. web saved/page.tsx:148-151 sortedSaved 정합.
+  // Track B — 장르 칩 목록. tab ∩ OTT 필터 적용된 작품(ottFilteredItems)에서
+  // 실제 존재하는 장르만 빈도 내림차순. 칩바가 소비 + genreFilter 유효성 가드에 사용.
+  const genreLabels = useMemo(
+    () => genreLabelsByFrequency(ottFilteredItems),
+    [ottFilteredItems],
+  );
+
+  // 상위 필터(tab/OTT) 변경으로 현재 선택 장르가 목록에서 사라지면 '전체'로 자동 복귀.
+  // (예: watched 탭엔 있던 '코미디' 저장분이 unwatched 탭엔 없을 때 stale 선택 방지.)
+  useEffect(() => {
+    if (genreFilter !== null && !genreLabels.includes(genreFilter)) {
+      setGenreFilter(null);
+    }
+  }, [genreFilter, genreLabels]);
+
+  // Track B — 장르 필터 적용 (1차 필터, tab ∩ OTT 다음). 선택 장르를 genres 에
+  // 포함한 저장분만 (다중장르 friendly — 교집합 아님). genres 미보유(백필 미스)
+  // 항목은 특정 장르 선택 시 자연히 제외 (itemHasGenre → false).
+  const genreFilteredItems = useMemo(() => {
+    if (!genreFilter) return ottFilteredItems;
+    return ottFilteredItems.filter((s) => itemHasGenre(s, genreFilter));
+  }, [ottFilteredItems, genreFilter]);
+
+  // P2 배치 A — 정렬 적용 (필터 파이프라인: tab ∩ OTT ∩ 장르 → 정렬).
   const sortedItems = useMemo(
-    () => sortSavedItems(ottFilteredItems, sortBy),
-    [ottFilteredItems, sortBy],
+    () => sortSavedItems(genreFilteredItems, sortBy),
+    [genreFilteredItems, sortBy],
   );
 
   // P2 배치 A — 저장 작품에서 사용 가능한 OTT 목록 (작품 수 많은 순).
@@ -430,59 +433,17 @@ export default function SavedScreen() {
       .map(([name, count]) => ({ name, count }));
   }, [filteredItems]);
 
-  // P2 배치 A — OTT별 그룹핑. web saved/page.tsx:194-218 ottGroups 정합.
-  // 작품이 여러 OTT 제공 시 각 그룹에 중복 노출. providers 빈 작품은 "기타".
-  // ottFilter 활성 시엔 그룹화 자동 해제되므로 여기선 ottFilter 분기 불필요.
-  const ottGroups = useMemo<{ ott: string; items: SavedItem[] }[] | null>(() => {
-    if (!groupByOTT) return null;
-    const groups: Record<string, SavedItem[]> = {};
-    for (const { name } of availableOTTs) {
-      groups[name] = [];
-    }
-    for (const s of sortedItems) {
-      const providers = s.recommendation.providers;
-      if (!providers || providers.length === 0) {
-        if (!groups['기타']) groups['기타'] = [];
-        groups['기타'].push(s);
-        continue;
-      }
-      for (const p of providers) {
-        if (!groups[p.name]) groups[p.name] = [];
-        groups[p.name].push(s);
-      }
-    }
-    // 작품 수 많은 OTT 먼저.
-    return Object.entries(groups)
-      .sort((a, b) => b[1].length - a[1].length)
-      .map(([ott, list]) => ({ ott, items: list }));
-  }, [sortedItems, groupByOTT, availableOTTs]);
-
-  // 연·월별 그룹핑 — savedAt 기준 섹션 (groupSavedByMonth). ottFilter 적용된
-  // sortedItems 를 입력으로 받아 OTT 필터와 공존. 섹션은 최신 연·월 먼저,
-  // 섹션 내부 savedAt desc.
-  const monthGroups = useMemo<{ ott: string; items: SavedItem[] }[] | null>(() => {
+  // 연·월별 그룹핑 — savedAt 기준 섹션 (groupSavedByMonth). Track B — OTT별
+  // 그룹 폐기 후 유일한 그룹 모드. 필터 파이프라인(tab ∩ OTT ∩ 장르)이 적용된
+  // sortedItems 를 입력. 섹션은 최신 연·월 먼저, 섹션 내부 savedAt desc.
+  // (섹션 데이터 구조의 `ott` 키명은 SectionList 렌더 재사용을 위해 유지 — 값은 연·월 라벨.)
+  const activeGroups = useMemo<{ ott: string; items: SavedItem[] }[] | null>(() => {
     if (!groupByMonth) return null;
     return groupSavedByMonth(sortedItems).map((s) => ({
       ott: s.title,
       items: s.data,
     }));
   }, [sortedItems, groupByMonth]);
-
-  // 활성 그룹 (OTT별 또는 연·월별). 둘은 상호배타라 한쪽만 non-null.
-  const activeGroups = ottGroups ?? monthGroups;
-
-  // preview 모드 hero 자동 선택 — selectedPreviewId 가 sortedItems 안에 없으면
-  // 첫 작품으로 보정. viewFilter/ottFilter/sort 변경 등 목록 변경 시 자동 보정 (web 정본 정합).
-  useEffect(() => {
-    if (viewMode !== 'preview') return;
-    if (sortedItems.length === 0) return;
-    const exists =
-      selectedPreviewId !== null &&
-      sortedItems.some((s) => s.recommendation.tmdbId === selectedPreviewId);
-    if (!exists) {
-      setSelectedPreviewId(sortedItems[0].recommendation.tmdbId);
-    }
-  }, [viewMode, sortedItems, selectedPreviewId]);
 
   // ViewFilter 탭 정의. 카운트는 archived 제외한 활성 작품 기준 (web 정본 동일).
   const viewFilters = useMemo(() => {
@@ -513,7 +474,7 @@ export default function SavedScreen() {
   // OTT 가 2종 이상일 때만 필터 의미 있음.
   const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
   const hasActiveFilter =
-    ottFilter !== null || groupByOTT || groupByMonth || sortBy !== 'saved';
+    ottFilter !== null || groupByMonth || sortBy !== 'saved';
 
   // viewMode 토글 버튼 1개 — web saved/page.tsx 의 3-way segmented 정합.
   // active = surface-raised 면 + text-primary (2026-05-13 M1: amber 박탈).
@@ -581,7 +542,6 @@ export default function SavedScreen() {
             >
               {renderViewModeBtn('grid', '그리드 보기', IconGrid)}
               {renderViewModeBtn('list', '리스트 보기', IconList)}
-              {renderViewModeBtn('preview', '미리보기', IconPreview)}
             </View>
           </View>
         ) : null}
@@ -644,9 +604,21 @@ export default function SavedScreen() {
         </View>
       )}
 
+      {/* Track B — 장르 필터 칩바 (1차 필터). tab ∩ OTT 필터 적용된 작품에서
+          실제 존재하는 장르만 빈도 내림차순 + 맨 앞 '전체'. 단일 선택.
+          칩 목록이 '전체' 하나뿐(장르 정보 0)이면 컴포넌트가 자체 null 렌더. */}
+      {items.length > 0 && (
+        <SavedGenreChips
+          items={ottFilteredItems}
+          selected={genreFilter}
+          onSelect={setGenreFilter}
+        />
+      )}
+
       {/* P2 배치 A — 활성 필터 chip 행 (web SavedFilters 활성 chip 정합).
-          OTT 또는 그룹화 적용 시에만 노출. 탭하면 즉시 제거. */}
-      {items.length > 0 && (ottFilter !== null || groupByOTT || groupByMonth) && (
+          OTT 또는 연·월 그룹 적용 시에만 노출. 탭하면 즉시 제거.
+          (장르 필터 해제는 칩바 자체의 '전체' 로 처리 — 여기 중복 노출 안 함.) */}
+      {items.length > 0 && (ottFilter !== null || groupByMonth) && (
         <View style={styles.activeChipsRow}>
           {ottFilter !== null && (
             <Pressable
@@ -667,17 +639,6 @@ export default function SavedScreen() {
                 ) : null;
               })()}
               <Text style={styles.activeChipText}>{ottFilter}</Text>
-              <Text style={styles.activeChipX}>✕</Text>
-            </Pressable>
-          )}
-          {groupByOTT && (
-            <Pressable
-              onPress={() => setGroupByOTT(false)}
-              accessibilityRole="button"
-              accessibilityLabel="OTT별 그룹화 해제"
-              style={styles.activeChip}
-            >
-              <Text style={styles.activeChipText}>OTT별 그룹화</Text>
               <Text style={styles.activeChipX}>✕</Text>
             </Pressable>
           )}
@@ -739,7 +700,7 @@ export default function SavedScreen() {
         // web saved/page.tsx:679-705 의 빈 상태 분기 카피 정합.
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>
-            {ottFilter
+            {ottFilter || genreFilter
               ? '이 조건엔 아무것도'
               : viewFilter === 'archived'
                 ? '보관한 작품이 없어요'
@@ -750,7 +711,7 @@ export default function SavedScreen() {
                     : '표시할 작품이 없어요'}
           </Text>
           <Text style={styles.emptyHint}>
-            {ottFilter
+            {ottFilter || genreFilter
               ? '필터를 조금만 느슨해 보세요'
               : viewFilter === 'archived'
                 ? '시청한 작품을 보관 아이콘으로 정리할 수 있어요'
@@ -761,48 +722,25 @@ export default function SavedScreen() {
                     : 'Discover에서 아래로 스와이프하거나 하트 버튼으로 담아보세요'}
           </Text>
         </View>
-      ) : viewMode === 'preview' ? (
-        // Preview(Coverflow) 뷰 — 큰 hero + 하단 가로 carousel.
-        <SavedHero
-          items={sortedItems}
-          selectedPreviewId={selectedPreviewId}
-          reports={reports}
-          onSelectPreview={setSelectedPreviewId}
-          onOpen={handleOpenDetail}
-        />
       ) : activeGroups ? (
-        // P2 배치 A — 그룹핑 SectionList (OTT별 또는 연·월별). web SavedList 의
-        // ottGroups 분기 일반화 — sections 데이터 소스만 교체, 헤더/렌더 동일.
-        // 연·월 그룹(groupByMonth)이면 OTT 아이콘 생략 (라벨이 시각 앵커).
+        // 연·월별 그룹핑 SectionList (Track B — 유일한 그룹 모드).
+        // 연·월 라벨이 시각 앵커 — OTT 아이콘 없음.
         <SectionList
           key={`saved-grouped-${viewMode}`}
           sections={activeGroups.map((g) => ({ title: g.ott, count: g.items.length, data: [g.items] }))}
           keyExtractor={(_, index) => `group-${index}`}
           contentContainerStyle={styles.groupedContent}
           stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => {
-            const iconSrc = groupByMonth ? null : getOTTIcon(section.title);
-            return (
-              <View style={styles.ottSectionHeader}>
-                {iconSrc ? (
-                  <Image
-                    source={{ uri: iconSrc }}
-                    style={styles.ottSectionIcon}
-                    contentFit="contain"
-                    transition={0}
-                  />
-                ) : null}
-                <Text style={styles.ottSectionTitle}>{section.title}</Text>
-                <Text style={styles.ottSectionCount}>{section.count}</Text>
-              </View>
-            );
-          }}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.ottSectionHeader}>
+              <Text style={styles.ottSectionTitle}>{section.title}</Text>
+              <Text style={styles.ottSectionCount}>{section.count}</Text>
+            </View>
+          )}
           renderItem={({ item: groupItems }) =>
             groupItems.length === 0 ? (
               <Text style={styles.ottSectionEmpty}>
-                {groupByMonth
-                  ? '이 달에는 저장된 작품이 없어요'
-                  : '이 OTT에는 저장된 작품이 없어요'}
+                이 달에는 저장된 작품이 없어요
               </Text>
             ) : viewMode === 'list' ? (
               <View style={styles.groupListWrap}>
@@ -941,16 +879,14 @@ export default function SavedScreen() {
         }}
       />
 
-      {/* P2 배치 A — 필터 sheet. OTT 선택 + 정렬 + OTT별 그룹화 토글 (web SavedFilterSheet 정합). */}
+      {/* 필터 sheet. OTT 선택 + 정렬 + 연·월 그룹화 (Track B — OTT별 그룹화 폐기). */}
       <SavedFilterSheet
         open={filterSheetOpen}
         onClose={() => setFilterSheetOpen(false)}
         ottFilter={ottFilter}
         setOttFilter={setOttFilter}
-        groupByOTT={groupByOTT}
-        setGroupByOTT={handleSetGroupByOTT}
         groupByMonth={groupByMonth}
-        setGroupByMonth={handleSetGroupByMonth}
+        setGroupByMonth={setGroupByMonth}
         availableOTTs={availableOTTs}
         sortBy={sortBy}
         setSortBy={handleSortChange}
@@ -1665,11 +1601,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: spacing.sm,
-  },
-  ottSectionIcon: {
-    width: 20,
-    height: 20,
-    borderRadius: radius.sm,
   },
   ottSectionTitle: {
     fontSize: 14,
