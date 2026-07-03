@@ -34,6 +34,10 @@ const providers: Record<string, OTTProvider> = {
     domain: 'www.disneyplus.com',
     search: (t) => `https://www.disneyplus.com/ko-kr/search?q=${enc(t)}`,
     appLink: (t) => `https://www.disneyplus.com/ko-kr/search?q=${enc(t)}`,
+    // 2026-07-03 실기기 probe 확정: `disneyplus://` 등록됨. search path 는 best-effort
+    // (미지원 시 앱 홈으로 열림 — 웹보다 우선). canOpenURL 실패 시 웹 fallback.
+    appScheme: (t) => `disneyplus://search?q=${enc(t)}`,
+    schemePrefix: 'disneyplus',
   },
   Watcha: {
     domain: 'watcha.com',
@@ -48,9 +52,9 @@ const providers: Record<string, OTTProvider> = {
     domain: 'wavve.com',
     search: (t) => `https://www.wavve.com/search?searchWord=${enc(t)}`,
     appLink: (t) => `https://www.wavve.com/search?searchWord=${enc(t)}`,
-    // ponytail: best-effort scheme, 미확인 — 실기기 검증 필요. canOpenURL 실패 시 웹으로 자동 fallback
-    appScheme: (t) => `wavve://search?searchWord=${enc(t)}`,
-    schemePrefix: 'wavve',
+    // 2026-07-03 실기기 probe: wavve 앱(kr.co.captv.pooqV2)이 custom scheme 미등록
+    // (wavve/pooq/oksusu/captv/pooqv2 등 20개 후보 전부 canOpenURL false).
+    // → app scheme 없음, 웹/Universal Link fallback 만 사용. appScheme 미정의.
     iconOverride: 'https://www.wavve.com/favicon.ico',
   },
   'Coupang Play': {
@@ -81,9 +85,10 @@ const providers: Record<string, OTTProvider> = {
     domain: 'www.tving.com',
     search: (t) => `https://www.tving.com/search?keyword=${enc(t)}`,
     appLink: (t) => `https://www.tving.com/search?keyword=${enc(t)}`,
-    // ponytail: best-effort scheme, 미확인 — 실기기 검증 필요. canOpenURL 실패 시 웹으로 자동 fallback
-    appScheme: (t) => `tving://search?keyword=${enc(t)}`,
-    schemePrefix: 'tving',
+    // 2026-07-03 실기기 probe 확정: TVING 실제 scheme 은 `tvingapp://` (`tving://` 는 미등록 → false).
+    // search path 는 best-effort (미지원 시 앱 홈으로 열림). canOpenURL 실패 시 웹 fallback.
+    appScheme: (t) => `tvingapp://search?keyword=${enc(t)}`,
+    schemePrefix: 'tvingapp',
   },
   'Naver Store': {
     domain: 'serieson.naver.com',
