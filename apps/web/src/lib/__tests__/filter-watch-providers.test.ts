@@ -31,4 +31,13 @@ describe("filterWatchProviders", () => {
     const input = [{ name: "TVING", logoUrl: null }];
     expect(filterWatchProviders(input)).toHaveLength(1);
   });
+
+  it("앱 미지원 provider(Crunchyroll·MUBI 등 TMDB 잡음)는 제외", () => {
+    const input = [
+      { name: "Netflix", logoUrl: null, category: "subscription" as const },
+      { name: "Crunchyroll", logoUrl: null, category: "subscription" as const },
+      { name: "MUBI", logoUrl: null, category: "subscription" as const },
+    ];
+    expect(filterWatchProviders(input).map((p) => p.name)).toEqual(["Netflix"]);
+  });
 });

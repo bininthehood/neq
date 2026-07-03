@@ -1,5 +1,5 @@
 import { getTmdbApiKey } from "./env";
-import { isSubscriptionProvider } from "./discover-types";
+import { isSubscriptionProvider, OTT_OPTIONS } from "./discover-types";
 
 // 모듈 평가 시 1회만 평가. tmdb.ts 사용처는 모두 server-side
 // (API routes / Server Components) 라 안전.
@@ -213,18 +213,23 @@ export interface ProviderInfo {
   type: "flatrate" | "rent" | "buy";
 }
 
+// 앱이 지원하는 KR OTT allowlist (OTT_OPTIONS = 온보딩/필터 단일 소스).
+// TMDB KR provider 목록은 36종(Crunchyroll·MUBI·Plex 등 미출시/비주류 다수)이라
+// 원본을 그대로 노출하면 "where to watch"에 부적합 provider가 샌다.
+const SUPPORTED_OTTS = new Set<string>(OTT_OPTIONS);
+
 /**
  * where-to-watch 표시용 provider 필터 (표시 전용 — eligibility/추천 로직에는 미적용).
- * - rent/buy(구매·대여, 예: Google Play Movies)는 OTT 구독 맥락에 부적합해 제외
- * - 광고형 요금제 변종("Netflix Standard with Ads" 등)은 정규 provider와 중복 노이즈라 제외
- * ponytail: 광고형 티어만 있고 정규 티어가 없는 작품은 해당 provider가 통째로 빠질 수 있으나,
- *   실사용 KR flatrate엔 정규 티어가 거의 항상 동반돼 무시 가능한 케이스.
+ * - 앱 지원 OTT(OTT_OPTIONS)만 표시 — Crunchyroll(한국 미출시) 등 TMDB 잡음 제거.
+ *   정확 이름 매칭이라 "Netflix Standard with Ads" 같은 변종도 자동 제외.
+ * - rent/buy(구매·대여)는 OTT 구독 맥락에 부적합해 제외 (allowlist OTT라도 rent/buy면 컷).
+ * ponytail: 지원 OTT 확장은 OTT_OPTIONS 만 늘리면 됨 (필터·표시 동시 반영).
  */
 export function filterWatchProviders<
   T extends { name: string; category?: "subscription" | "rent" | "buy" }
 >(providers: T[]): T[] {
   return providers.filter(
-    (p) => isSubscriptionProvider(p) && !/with ads/i.test(p.name)
+    (p) => SUPPORTED_OTTS.has(p.name) && isSubscriptionProvider(p)
   );
 }
 
