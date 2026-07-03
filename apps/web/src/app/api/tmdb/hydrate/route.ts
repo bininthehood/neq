@@ -112,6 +112,7 @@ async function hydrate(
         seasons: details.seasons,
         country: details.country,
         backdrop: details.backdrop,
+        genres: genreIds,
       };
     } catch {
       return null;

@@ -63,6 +63,12 @@ export interface Recommendation {
   country: string[];
   backdrop: string | null;
   originCountry?: string[];
+  /**
+   * TMDB genre_ids (보통 1~3개). Saved 장르 필터 칩바(Track B)가 이 값을
+   * getGenreLabels 로 라벨화. optional — 백필 전 기존 저장분 호환.
+   * 영화/TV 는 id 체계가 일부 다름 (genres.ts 참조).
+   */
+  genres?: number[];
 }
 
 export interface SavedItem {

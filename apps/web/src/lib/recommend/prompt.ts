@@ -766,6 +766,8 @@ export function buildRecommendationObject(
     country: candidate.details.country,
     backdrop: candidate.details.backdrop,
     originCountry: candidate.details.country,
+    // Saved 장르 필터용 — mirror candidate.item.genre_ids 그대로 (TMDB 재호출 없음).
+    genres: candidate.item.genre_ids ?? [],
   };
 }
 

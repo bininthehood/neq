@@ -577,3 +577,26 @@ export function invalidatePrefetchCache(): void {
 export function __test_getPrefetchCacheSize(): number {
   return prefetchCache.size;
 }
+
+/**
+ * Saved 장르 백필 — tmdbId 배열 → genre_ids 매핑을 mirror 에서 1회 조회.
+ * TMDB 재호출 없음. genres 미보유 저장분만 넘겨 호출하는 게 정상 사용.
+ *
+ * @returns { [tmdbId]: number[] }. 에러/미매칭 id 는 결과에서 빠짐 (호출자가 skip).
+ */
+export async function fetchGenresForIds(
+  ids: number[],
+  signal?: AbortSignal,
+): Promise<Record<number, number[]>> {
+  if (ids.length === 0) return {};
+  try {
+    const res = await fetch(
+      `${env.API_BASE_URL}/api/tmdb/genres?ids=${ids.join(',')}`,
+      { signal },
+    );
+    if (!res.ok) return {};
+    return (await res.json()) as Record<number, number[]>;
+  } catch {
+    return {};
+  }
+}

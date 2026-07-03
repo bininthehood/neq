@@ -87,6 +87,43 @@ export async function toggleSaved(rec: Recommendation): Promise<boolean> {
   return true;
 }
 
+/**
+ * Saved 장르 백필 — genres 미보유 저장분에 mirror genre_ids 를 채워 persist.
+ *
+ * Track B(UI): Saved 화면 최초 로드 시 1회 호출하면 됨. 예:
+ *   useEffect(() => { backfillSavedGenres().then(setSaved); }, []);
+ * 훅 지점 권고: apps/native 의 Saved 화면 컴포넌트 mount effect (getSaved 직후).
+ *
+ * - genres 없는 항목이 0개면 아무것도 안 하고 현재 저장분 반환 (이후 호출 no-op).
+ * - fetchGenresForIds 는 실패 시 {} 반환 → 미매칭 id 는 그대로 남고 다음 로드에서 재시도.
+ * - genres 를 빈 배열([])이라도 채운 항목은 "백필 완료"로 간주 (재조회 안 함).
+ *
+ * @param fetcher DI — 기본은 api.fetchGenresForIds. 테스트에서 주입.
+ * @returns 갱신된 SavedItem[] (호출자가 state 로 바로 사용).
+ */
+export async function backfillSavedGenres(
+  fetcher: (ids: number[]) => Promise<Record<number, number[]>>,
+): Promise<SavedItem[]> {
+  const saved = await getSaved();
+  const missing = saved.filter((s) => s.recommendation.genres === undefined);
+  if (missing.length === 0) return saved;
+
+  const genresById = await fetcher(missing.map((s) => s.recommendation.tmdbId));
+  if (Object.keys(genresById).length === 0) return saved;
+
+  let changed = false;
+  const next = saved.map((s) => {
+    if (s.recommendation.genres !== undefined) return s;
+    const g = genresById[s.recommendation.tmdbId];
+    if (g === undefined) return s; // mirror 미매칭 → 다음 로드에서 재시도
+    changed = true;
+    return { ...s, recommendation: { ...s.recommendation, genres: g } };
+  });
+
+  if (changed) await AsyncStorage.setItem(SAVED_KEY, JSON.stringify(next));
+  return next;
+}
+
 // ---------- watch reports ----------
 
 export async function getWatchReports(): Promise<WatchReport[]> {
