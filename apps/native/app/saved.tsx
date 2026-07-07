@@ -514,11 +514,11 @@ export default function SavedScreen() {
   // P2 배치 A — "필터" 트리거 노출 조건. web saved/page.tsx:536-540 정합.
   // OTT 가 2종 이상일 때만 필터 의미 있음.
   const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
-  // #6 — 연·월은 sheet 밖 in-screen 토글로 이동. 필터 dot 은 sheet 내 필터(OTT/정렬)
-  // + 장르 + 선택된 월만 셈 (monthMode on 자체는 필터 아님 — 단일 월 선택 시에만 활성).
+  // #6 — 연·월은 sheet 밖 in-screen 스크러버로 관리. "필터" dot 은 sheet(SavedFilterSheet)가
+  // 다루는 필터(OTT/정렬/장르)만 셈. selectedMonth 는 스크러버 칩 자체가 활성 표시이고
+  // sheet 는 월을 모르므로(초기화 불가) dot 에서 제외 — 안 그러면 sheet 열어도 해제 못하는 dead-end.
   const hasActiveFilter =
     ottFilter !== null ||
-    selectedMonth !== null ||
     sortBy !== 'saved' ||
     genreFilter !== null;
 
@@ -644,7 +644,9 @@ export default function SavedScreen() {
           >
             <IconCalendar
               size={16}
-              color={monthMode ? colors.accent : colors.textSecondary}
+              // monthMode ON 활성색은 non-amber(textPrimary) — Saved amber 예산(DESIGN.md L33 ≤4)
+              // 보호. OTT dot + activeChip + loved bg 와 동시 노출 시 amber 초과 방지.
+              color={monthMode ? colors.textPrimary : colors.textSecondary}
             />
           </Pressable>
           {/* "필터 ▾" 트리거 — OTT 선택 + 정렬을 sheet 안으로 격하 (연·월은 위 토글로 분리).
