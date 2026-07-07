@@ -47,6 +47,7 @@ import Animated, {
   interpolate,
   Extrapolation,
   Easing,
+  cancelAnimation,
 } from 'react-native-reanimated';
 import {
   resolveSearchUiState,
@@ -137,6 +138,13 @@ export default function SearchSheet({
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<TextInput>(null);
   const translateY = useSharedValue(SHEET_MAX_HEIGHT);
+
+  // Reanimated 4 Fabric crash 메모리 정합 (feedback_reanimated_fabric_crash) —
+  // unmount 시 in-flight withTiming worklet 취소. dismiss 애니메이션 도중 언마운트
+  // 되면 완료 콜백이 stale tree 를 건드릴 수 있어 cancelAnimation 으로 차단.
+  useEffect(() => {
+    return () => cancelAnimation(translateY);
+  }, [translateY]);
 
   // ─────────────────────────────────────────────────────
   // grouped fetch — AbortController 로 빠른 입력 시 이전 fetch 취소.
@@ -349,12 +357,23 @@ export default function SearchSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialQuery]);
 
-  // pan-down 으로 sheet 닫기
+  // pan-down 으로 sheet 닫기. GestureDetector 는 상단 header(handle+search row)
+  // 영역에만 부착 — body 의 idle ScrollView / 가로 카로셀 FlatList 와 세로 드래그가
+  // 충돌하지 않도록. (DetailSheet 은 단일 ScrollView 라 scrollY 가드로 충분하지만
+  // SearchSheet body 는 이질적 스크롤 컨테이너 다수 → 핸들 영역 한정이 가장 안전.)
+  //
+  // 임계 충돌 회피 (feedback_pan_gesture_offset_conflict): activeOffsetY 단일 하한(8)
+  // 만 두고 failOffsetY 는 두지 않는다 — 범위가 겹치면 activate 전에 fail. downward
+  // 8px+ 만 pan 진입, 수평 이동은 failOffsetX 로 차단(제목 등 미세 흔들림 무시).
   const pan = Gesture.Pan()
+    .activeOffsetY(8)
+    .failOffsetX([-20, 20])
     .onUpdate((e) => {
+      'worklet';
       if (e.translationY > 0) translateY.value = e.translationY;
     })
     .onEnd((e) => {
+      'worklet';
       if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
         translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 220 }, () => {
           runOnJS(onClose)();
@@ -402,8 +421,11 @@ export default function SearchSheet({
           />
         </Animated.View>
 
-        <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
+            {/* pan-down dismiss 는 상단 header(handle+search row) 에만 부착 —
+                아래 body 의 스크롤 콘텐츠와 세로 드래그 충돌 방지. */}
+            <GestureDetector gesture={pan}>
+              <View>
             {/* handle */}
             <View style={styles.handleRow}>
               <View style={styles.handleBar} />
@@ -463,6 +485,8 @@ export default function SearchSheet({
                 <Text style={styles.cancelText}>취소</Text>
               </Pressable>
             </View>
+              </View>
+            </GestureDetector>
 
             {/* body */}
             <View style={styles.body}>
@@ -594,7 +618,6 @@ export default function SearchSheet({
               )}
             </View>
           </Animated.View>
-        </GestureDetector>
       </View>
     </Modal>
   );
