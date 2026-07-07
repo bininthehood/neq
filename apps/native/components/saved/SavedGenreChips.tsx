@@ -58,6 +58,9 @@ export default function SavedGenreChips({ items, selected, onSelect }: Props) {
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.row}
+      // flexGrow/flexShrink:0 — column 부모(Saved)에서 가로 ScrollView가 세로 남는 공간을
+      // 흡수해 칩이 stretch(249px) 되는 문제 방지. 자기 콘텐츠 높이만 차지. (cf. saved.tsx viewFilterScroll)
+      style={{ flexGrow: 0, flexShrink: 0 }}
       accessibilityRole="tablist"
       accessibilityLabel="장르 필터"
     >
