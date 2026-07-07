@@ -511,6 +511,18 @@ export default function DetailSheet({
     //   onUpdate / onEnd 안 scrollY > 0 가드 유지 — 스크롤 중간 swipe 차단.
     .activeOffsetY(8)
     .failOffsetX([-20, 20])
+    // 2026-07-07 build 42 실기기 fix ② — flick(빠른) swipe-down 미응답:
+    //   내부 Animated.ScrollView 의 네이티브 스크롤 recognizer 가 하향 flick 을
+    //   선점해 pan 이 activate 못함(느린 드래그만 통과). blocksExternalGesture 로
+    //   pan 을 scroll 보다 우선 판정 → flick 도 dismiss.
+    //   단, dismiss 자체는 아래 scrollY<=0 가드로 콘텐츠 최상단일 때만 발동(스크롤
+    //   중엔 translateY 안 건드림) → 스크롤 회귀 없음. blocksExternalGesture(우선판정)
+    //   + scrollY 가드(발동조건) 는 직교 — 조합해도 서로 간섭 없음.
+    // scrollRef 는 ScrollView instance ref(scrollTo 용) — RNGH 는 런타임에 native
+    // handler tag 만 읽어 동작하나, 선언 타입(RefObject<ComponentType>) 과 어긋나 캐스트.
+    .blocksExternalGesture(
+      scrollRef as unknown as React.RefObject<React.ComponentType>,
+    )
     .onUpdate((e) => {
       'worklet';
       if (scrollY.value > 0) return;

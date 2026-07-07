@@ -19,7 +19,7 @@
  *  - OTT 아이콘은 expo-image `<Image>`.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -27,12 +27,32 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Dimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { getOTTIcon } from '@neq/core';
+import { easings } from '@neq/design';
 import { colors, radius, spacing, fontsV2 } from '../../lib/tokens';
 import { IconClose } from '../Icons';
 import { SORT_OPTIONS, type SavedSort } from './SavedSortControl';
+
+// pan-down 닫기 상수 — SearchSheet 와 동일 기준(임계 30% / velocity 1000 / 진입 곡선).
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const SHEET_MAX_HEIGHT = SCREEN_HEIGHT * 0.78; // sheet maxHeight 78% 와 정합 (완전 오프스크린 보장)
+const CLOSE_THRESHOLD = SHEET_MAX_HEIGHT * 0.3;
+const SHEET_ENTER_BEZIER = Easing.bezier(...easings.spring);
+const SHEET_ENTER_MS = 300;
 
 /** web IconCheck 정합 — checkmark SVG 대신 텍스트 폴백 회피용 인라인 컴포넌트. */
 function CheckMark({ color }: { color: string }) {
@@ -73,48 +93,115 @@ export default function SavedFilterSheet({
     setGenreFilter(null); // 칩바 '전체' 와 대칭 — 초기화도 장르 해제.
   }, [setOttFilter, setSortBy, setGenreFilter]);
 
+  // 2026-07-07 build 42 실기기 fix ③ — pan-down 닫기 이식 (PR #37 에서 누락).
+  // SearchSheet 패턴 정본: Modal animationType="none" + translateY sharedValue 로
+  // 진입/퇴장 직접 구동, GestureDetector 는 header(grabber+제목 row) 한정으로 body
+  // ScrollView 세로 스크롤과 충돌 회피.
+  const translateY = useSharedValue(SHEET_MAX_HEIGHT);
+
+  // Reanimated 4 Fabric crash 정합 — unmount 시 worklet 취소.
+  useEffect(() => {
+    return () => cancelAnimation(translateY);
+  }, [translateY]);
+
+  // open 토글 — 열릴 때 up(0), 닫힐 때 down(오프스크린). Modal 은 애니메이션 안 함
+  // (animationType="none") → translateY 로 슬라이드.
+  useEffect(() => {
+    translateY.value = withTiming(open ? 0 : SHEET_MAX_HEIGHT, {
+      duration: open ? SHEET_ENTER_MS : 220,
+      easing: SHEET_ENTER_BEZIER,
+    });
+  }, [open, translateY]);
+
+  // 임계 충돌 회피(feedback_pan_gesture_offset_conflict): activeOffsetY 단일 하한(8)
+  // 만, failOffsetY 미설정 — 범위 겹치면 activate 전 fail. 수평은 failOffsetX 로 차단.
+  const pan = Gesture.Pan()
+    .activeOffsetY(8)
+    .failOffsetX([-20, 20])
+    .onUpdate((e) => {
+      'worklet';
+      if (e.translationY > 0) translateY.value = e.translationY;
+    })
+    .onEnd((e) => {
+      'worklet';
+      if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
+        translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 220 }, () => {
+          runOnJS(onClose)();
+        });
+      } else {
+        translateY.value = withTiming(0, {
+          duration: SHEET_ENTER_MS,
+          easing: SHEET_ENTER_BEZIER,
+        });
+      }
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateY.value,
+      [0, SHEET_MAX_HEIGHT],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+
   return (
     <Modal
       visible={open}
       transparent
-      animationType="slide"
+      animationType="none"
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      {/* dim backdrop — 탭하면 닫힘. */}
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="필터 닫기" />
-      <View style={styles.sheet}>
-        {/* grabber */}
-        <View style={styles.grabberWrap} pointerEvents="none">
-          <View style={styles.grabber} />
-        </View>
+      {/* dim backdrop — 탭하면 닫힘. translateY 연동 opacity. */}
+      <Animated.View style={[styles.backdrop, dimStyle]}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityLabel="필터 닫기"
+        />
+      </Animated.View>
+      <Animated.View style={[styles.sheet, sheetStyle]}>
+        {/* pan-down dismiss 는 header(grabber+제목 row) 에만 부착 — 아래 body
+            ScrollView 세로 드래그와 충돌 방지. */}
+        <GestureDetector gesture={pan}>
+          <View>
+            {/* grabber */}
+            <View style={styles.grabberWrap}>
+              <View style={styles.grabber} />
+            </View>
 
-        {/* 헤더 — 제목 / (활성 시) 초기화 / 닫기 */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>필터</Text>
-          <View style={styles.headerActions}>
-            {hasActive && (
-              <Pressable
-                onPress={handleReset}
-                style={styles.resetBtn}
-                accessibilityRole="button"
-                accessibilityLabel="필터 초기화"
-                hitSlop={6}
-              >
-                <Text style={styles.resetText}>초기화</Text>
-              </Pressable>
-            )}
-            <Pressable
-              onPress={onClose}
-              style={styles.closeBtn}
-              accessibilityRole="button"
-              accessibilityLabel="필터 닫기"
-              hitSlop={6}
-            >
-              <IconClose size={18} color={colors.textMuted} />
-            </Pressable>
+            {/* 헤더 — 제목 / (활성 시) 초기화 / 닫기 */}
+            <View style={styles.header}>
+              <Text style={styles.headerTitle}>필터</Text>
+              <View style={styles.headerActions}>
+                {hasActive && (
+                  <Pressable
+                    onPress={handleReset}
+                    style={styles.resetBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="필터 초기화"
+                    hitSlop={6}
+                  >
+                    <Text style={styles.resetText}>초기화</Text>
+                  </Pressable>
+                )}
+                <Pressable
+                  onPress={onClose}
+                  style={styles.closeBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="필터 닫기"
+                  hitSlop={6}
+                >
+                  <IconClose size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            </View>
           </View>
-        </View>
+        </GestureDetector>
 
         <ScrollView
           style={styles.body}
@@ -214,7 +301,7 @@ export default function SavedFilterSheet({
             })}
           </View>
         </ScrollView>
-      </View>
+      </Animated.View>
     </Modal>
   );
 }
