@@ -40,7 +40,7 @@ import type {
 } from '../lib/types';
 import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName } from '@neq/core';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
-import { colors, radius, spacing } from '../lib/tokens';
+import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env } from '../lib/env';
 import { isSaved, toggleSaved } from '../lib/store';
@@ -1830,10 +1830,13 @@ const styles = StyleSheet.create({
     borderColor: colors.accent,
     minHeight: 48,
   },
-  // 저장됨 상태 — PWA 정합: surface-raised + accent-border + accent text (L243~246).
+  // 저장됨 상태 — #5: 배경 투명 + accent text/icon 유지 → "떠 있는" 느낌.
+  // solid pill(surface-raised) 제거, accent-border 로만 윤곽. subtle shadow 로 부양감.
+  // amber 카운트 제외 (Save = 브랜드 닻, DESIGN.md L37).
   ctaPrimarySaved: {
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: 'transparent',
     borderColor: colors.accentBorder,
+    ...shadowsNative.sm,
   },
   ctaPrimaryText: {
     color: colors.textInverse,
