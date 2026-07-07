@@ -90,6 +90,36 @@ export function groupSavedByMonth(
     }));
 }
 
+/**
+ * #6 인스크린 캘린더 스크러버 — 월 버킷을 SectionList 데이터가 아니라 "칩 목록 +
+ * 단일 월 필터" 로 소비하기 위한 얇은 헬퍼.
+ *
+ *  - monthKeyOf: 한 저장 항목의 연·월 키 (year*12+month, 로컬 타임존). 필터 predicate 용.
+ *  - monthLabelOf: 키 → 한국어 라벨 `YYYY년 M월`.
+ *  - monthOptionsOf: 저장 목록에 실제 존재하는 월을 최신 먼저 정렬한 {key,label}[].
+ *    (groupSavedByMonth 의 버킷/정렬 규칙과 동일 — 라벨 렌더는 SectionList 대신 스크러버.)
+ *
+ * monthKeyOf/monthLabelOf 로 필터·라벨을 분리해 groupSavedByMonth 를 재구현하지 않는다.
+ */
+export function monthKeyOf(item: SavedItem): number {
+  const d = new Date(item.savedAt);
+  return d.getFullYear() * 12 + d.getMonth();
+}
+
+export function monthLabelOf(key: number): string {
+  return `${Math.floor(key / 12)}년 ${(key % 12) + 1}월`;
+}
+
+export function monthOptionsOf(
+  items: SavedItem[],
+): { key: number; label: string }[] {
+  const keys = new Set<number>();
+  for (const it of items) keys.add(monthKeyOf(it));
+  return Array.from(keys)
+    .sort((a, b) => b - a) // 최신 연·월 먼저
+    .map((key) => ({ key, label: monthLabelOf(key) }));
+}
+
 // ponytail: 비자명 로직(월 경계/정렬/라벨) self-check. `node -r ... ` 불필요 —
 // import 시 부작용 없게 require.main 게이트.
 if (require.main === module) {
@@ -110,5 +140,16 @@ if (require.main === module) {
   console.assert(g[0].data[0].savedAt === jun15, '섹션 내부 savedAt desc');
   // 빈 입력 → 빈 배열.
   console.assert(groupSavedByMonth([]).length === 0, '빈 입력 → []');
+
+  // #6 monthOptionsOf / monthKeyOf / monthLabelOf — 스크러버용 헬퍼.
+  const opts = monthOptionsOf([mk(may31), mk(jun01), mk(lastYearJun), mk(jun15)]);
+  console.assert(opts.length === 3, `월 옵션 3개(중복 병합), got ${opts.length}`);
+  console.assert(opts[0].label === '2026년 6월', `최신 먼저=2026년 6월, got ${opts[0].label}`);
+  console.assert(opts[2].label === '2025년 6월', `마지막=2025년 6월, got ${opts[2].label}`);
+  // 동월 항목은 같은 key → 필터가 정확히 그 달만 통과.
+  console.assert(monthKeyOf(mk(jun15)) === monthKeyOf(mk(jun01)), '동월 = 동일 key');
+  console.assert(monthKeyOf(mk(jun15)) !== monthKeyOf(mk(may31)), '월 경계 = 다른 key');
+  console.assert(monthLabelOf(monthKeyOf(mk(jun15))) === '2026년 6월', 'key→라벨 round-trip');
+  console.assert(monthOptionsOf([]).length === 0, '빈 입력 월옵션 → []');
   console.log('groupSavedByMonth self-check OK');
 }

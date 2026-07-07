@@ -44,8 +44,6 @@ type Props = {
   onClose: () => void;
   ottFilter: string | null;
   setOttFilter: (v: string | null) => void;
-  groupByMonth: boolean;
-  setGroupByMonth: (v: boolean) => void;
   availableOTTs: { name: string; count: number }[];
   sortBy: SavedSort;
   setSortBy: (v: SavedSort) => void;
@@ -59,23 +57,21 @@ export default function SavedFilterSheet({
   onClose,
   ottFilter,
   setOttFilter,
-  groupByMonth,
-  setGroupByMonth,
   availableOTTs,
   sortBy,
   setSortBy,
   genreFilter,
   setGenreFilter,
 }: Props) {
+  // #6 — 연·월 그룹 토글 제거. sheet 는 OTT + 정렬 + (초기화 대칭용) 장르만.
   const hasActive =
-    ottFilter !== null || groupByMonth || sortBy !== 'saved' || genreFilter !== null;
+    ottFilter !== null || sortBy !== 'saved' || genreFilter !== null;
 
   const handleReset = useCallback(() => {
     setOttFilter(null);
-    setGroupByMonth(false);
     setSortBy('saved');
     setGenreFilter(null); // 칩바 '전체' 와 대칭 — 초기화도 장르 해제.
-  }, [setOttFilter, setGroupByMonth, setSortBy, setGenreFilter]);
+  }, [setOttFilter, setSortBy, setGenreFilter]);
 
   return (
     <Modal
@@ -216,39 +212,6 @@ export default function SavedFilterSheet({
                 </Pressable>
               );
             })}
-          </View>
-
-          {/* ── 보기 옵션 섹션 ──
-              native 만 OTT별 그룹화 폐기 (OTT 필터로 충분). 묶기는 연·월 하나만.
-              (web SavedFilterSheet 는 이 PR 에서 미변경 — 본 정리는 native 한정.) */}
-          <View style={[styles.section, styles.sectionTop]}>
-            <Text style={styles.sectionLabel}>보기 옵션</Text>
-            {/* 연·월별 그룹화 — 저장한 시기로 묶기. ottFilter 와 공존 가능. */}
-            <Pressable
-              onPress={() => setGroupByMonth(!groupByMonth)}
-              accessibilityRole="switch"
-              accessibilityLabel="연·월별로 그룹화"
-              accessibilityState={{ checked: groupByMonth }}
-              style={styles.row}
-            >
-              <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>연·월별로 그룹화</Text>
-                <Text style={styles.rowDesc}>저장한 달로 묶어 표시</Text>
-              </View>
-              <View
-                style={[
-                  styles.toggleTrack,
-                  groupByMonth && styles.toggleTrackActive,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    groupByMonth && styles.toggleThumbActive,
-                  ]}
-                />
-              </View>
-            </Pressable>
           </View>
         </ScrollView>
       </View>
@@ -392,29 +355,5 @@ const styles = StyleSheet.create({
   check: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  // 토글 스위치 — web SavedFilterSheet 의 36×22 track 정합.
-  toggleTrack: {
-    width: 36,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleTrackActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
-  toggleThumb: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-  },
-  toggleThumbActive: {
-    alignSelf: 'flex-end',
   },
 });

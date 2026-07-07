@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Pressable,
   FlatList,
-  SectionList,
   Dimensions,
   ScrollView,
   ActionSheetIOS,
@@ -50,13 +49,19 @@ import {
   loadSavedSort,
   persistSavedSort,
   sortSavedItems,
-  groupSavedByMonth,
+  monthKeyOf,
   type SavedSort,
 } from '../components/saved/SavedSortControl';
+import SavedMonthScrubber from '../components/saved/SavedMonthScrubber';
 
-const COLS = 2;
+// #2 — 3열 그리드. 간격은 gap(spacing.md) × (열수+1) 을 화면폭에서 빼고 균등 분할.
+const COLS = 3;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_W = (SCREEN_WIDTH - spacing.md * (COLS + 1)) / COLS;
+// 3열 카드는 폭이 좁아 240/200 고정 높이가 과도하게 세로로 길어짐. 포스터 2:3
+// 비율(height = width × 3/2)로 높이를 폭에 연동 — 비대칭(tall)은 유지하되 비율 기반.
+const CARD_H = Math.round(CARD_W * 1.5); // 2:3 포스터
+const CARD_H_TALL = Math.round(CARD_W * 1.6); // 살짝 긴 변주 (Pinterest 식 비대칭 보존)
 
 /**
  * Saved 뷰 모드.
@@ -135,6 +140,21 @@ function IconChevronDown({ size = 10, color }: { size?: number; color: string })
     </Svg>
   );
 }
+/**
+ * IconCalendar — #6 연·월 모드 in-screen 토글. DESIGN.md Iconography 5원칙 정합:
+ * uniform stroke 1.5 + round terminal + single-form. 프레임 + 상단 두 링(바인딩) +
+ * 헤더 구분선. 색상은 props (currentColor 위임 패턴).
+ */
+function IconCalendar({ size = 16, color }: { size?: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="3.5" y="5" width="17" height="15" rx="2" stroke={color} strokeWidth={1.5} />
+      <Line x1="3.5" y1="9.5" x2="20.5" y2="9.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      <Line x1="8" y1="3" x2="8" y2="6.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+      <Line x1="16" y1="3" x2="16" y2="6.5" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
 
 export default function SavedScreen() {
   const [items, setItems] = useState<SavedItem[]>([]);
@@ -172,8 +192,11 @@ export default function SavedScreen() {
   const [ottFilter, setOttFilter] = useState<string | null>(null);
   // Track B — 장르 필터 (1차 필터). 한국어 라벨 단일 선택. null = 전체.
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
-  // 연·월별 그룹화 (savedAt 기준). Track B — OTT별 그룹화 폐기, 유일한 그룹 모드.
-  const [groupByMonth, setGroupByMonth] = useState(false);
+  // #6 — 연·월 스크러버. 필터 sheet 토글에서 in-screen 토글 + 가로 스크러버로 재설계.
+  //  - monthMode: 연·월 모드 on/off (헤더 캘린더 버튼). off 면 월 필터 미적용.
+  //  - selectedMonth: 스크러버에서 탭한 단일 월 key(year*12+month) 또는 null(=전체 월).
+  const [monthMode, setMonthMode] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   // P2 배치 A — 카드 내 reaction 입력 ('봤어요?'). web saved/page.tsx:66 reportingId 정합.
   const [reportingId, setReportingId] = useState<number | null>(null);
@@ -419,10 +442,17 @@ export default function SavedScreen() {
     return ottFilteredItems.filter((s) => itemHasGenre(s, genreFilter));
   }, [ottFilteredItems, genreFilter]);
 
-  // P2 배치 A — 정렬 적용 (필터 파이프라인: tab ∩ OTT ∩ 장르 → 정렬).
+  // #6 — 연·월 필터 (파이프라인: tab ∩ OTT ∩ 장르 ∩ 연·월). monthMode off 이거나
+  // selectedMonth 미선택(=전체 월)이면 미적용. 선택 시 그 달 저장분만 통과.
+  const monthFilteredItems = useMemo(() => {
+    if (!monthMode || selectedMonth === null) return genreFilteredItems;
+    return genreFilteredItems.filter((s) => monthKeyOf(s) === selectedMonth);
+  }, [genreFilteredItems, monthMode, selectedMonth]);
+
+  // P2 배치 A — 정렬 적용 (필터 파이프라인: tab ∩ OTT ∩ 장르 ∩ 연·월 → 정렬).
   const sortedItems = useMemo(
-    () => sortSavedItems(genreFilteredItems, sortBy),
-    [genreFilteredItems, sortBy],
+    () => sortSavedItems(monthFilteredItems, sortBy),
+    [monthFilteredItems, sortBy],
   );
 
   // P2 배치 A — 저장 작품에서 사용 가능한 OTT 목록 (작품 수 많은 순).
@@ -439,17 +469,22 @@ export default function SavedScreen() {
       .map(([name, count]) => ({ name, count }));
   }, [filteredItems]);
 
-  // 연·월별 그룹핑 — savedAt 기준 섹션 (groupSavedByMonth). Track B — OTT별
-  // 그룹 폐기 후 유일한 그룹 모드. 필터 파이프라인(tab ∩ OTT ∩ 장르)이 적용된
-  // sortedItems 를 입력. 섹션은 최신 연·월 먼저, 섹션 내부 savedAt desc.
-  // (섹션 데이터 구조의 `ott` 키명은 SectionList 렌더 재사용을 위해 유지 — 값은 연·월 라벨.)
-  const activeGroups = useMemo<{ ott: string; items: SavedItem[] }[] | null>(() => {
-    if (!groupByMonth) return null;
-    return groupSavedByMonth(sortedItems).map((s) => ({
-      ott: s.title,
-      items: s.data,
-    }));
-  }, [sortedItems, groupByMonth]);
+  // #6 — 연·월 모드 off 전이 시 선택 월 리셋 (stale 선택 방지).
+  useEffect(() => {
+    if (!monthMode && selectedMonth !== null) setSelectedMonth(null);
+  }, [monthMode, selectedMonth]);
+
+  // #6 — 상위 필터(tab/OTT/장르) 변경으로 선택한 월이 더 이상 존재하지 않으면
+  // '전체 월'로 자동 복귀. (장르 필터 stale 복귀 useEffect L… 와 동형 가드.)
+  useEffect(() => {
+    if (
+      monthMode &&
+      selectedMonth !== null &&
+      !genreFilteredItems.some((s) => monthKeyOf(s) === selectedMonth)
+    ) {
+      setSelectedMonth(null);
+    }
+  }, [monthMode, selectedMonth, genreFilteredItems]);
 
   // ViewFilter 탭 정의. 카운트는 archived 제외한 활성 작품 기준 (web 정본 동일).
   const viewFilters = useMemo(() => {
@@ -479,8 +514,13 @@ export default function SavedScreen() {
   // P2 배치 A — "필터" 트리거 노출 조건. web saved/page.tsx:536-540 정합.
   // OTT 가 2종 이상일 때만 필터 의미 있음.
   const showFilterTrigger = items.length > 0 && availableOTTs.length > 1;
+  // #6 — 연·월은 sheet 밖 in-screen 토글로 이동. 필터 dot 은 sheet 내 필터(OTT/정렬)
+  // + 장르 + 선택된 월만 셈 (monthMode on 자체는 필터 아님 — 단일 월 선택 시에만 활성).
   const hasActiveFilter =
-    ottFilter !== null || groupByMonth || sortBy !== 'saved' || genreFilter !== null;
+    ottFilter !== null ||
+    selectedMonth !== null ||
+    sortBy !== 'saved' ||
+    genreFilter !== null;
 
   // viewMode 토글 버튼 1개 — web saved/page.tsx 의 3-way segmented 정합.
   // active = surface-raised 면 + text-primary (2026-05-13 M1: amber 박탈).
@@ -591,7 +631,23 @@ export default function SavedScreen() {
               );
             })}
           </ScrollView>
-          {/* "필터 ▾" 트리거 — OTT 선택 + 정렬 + 그룹화 토글을 모두 sheet 안으로 격하.
+          {/* #6 — 연·월 모드 in-screen 토글 (캘린더 아이콘). ON 이면 아래 가로 스크러버
+              노출. 필터 sheet 밖으로 꺼내 직관적 접근. active = accent 색(단순 아이콘 색
+              — 면/칩 amber 아님, 카운트 영향 최소). */}
+          <Pressable
+            onPress={() => setMonthMode((v) => !v)}
+            accessibilityRole="switch"
+            accessibilityLabel="연·월별 보기"
+            accessibilityState={{ checked: monthMode }}
+            style={styles.monthToggle}
+            hitSlop={4}
+          >
+            <IconCalendar
+              size={16}
+              color={monthMode ? colors.accent : colors.textSecondary}
+            />
+          </Pressable>
+          {/* "필터 ▾" 트리거 — OTT 선택 + 정렬을 sheet 안으로 격하 (연·월은 위 토글로 분리).
               web SavedFilters 의 sheet 트리거 정합. 활성 시 accent dot 표시. */}
           {showFilterTrigger && (
             <Pressable
@@ -610,6 +666,17 @@ export default function SavedScreen() {
         </View>
       )}
 
+      {/* #6 — 연·월 가로 스크러buer. monthMode ON 일 때만. 저장에 존재하는 연·월만
+          최신 먼저 (탭=단일 월 필터 / 가로 스와이프=이동). 장르 칩바와 동일 패턴.
+          월이 1개 이하면 컴포넌트가 자체 null 렌더(선택할 게 없음). */}
+      {items.length > 0 && monthMode && (
+        <SavedMonthScrubber
+          items={genreFilteredItems}
+          selected={selectedMonth}
+          onSelect={setSelectedMonth}
+        />
+      )}
+
       {/* Track B — 장르 필터 칩바 (1차 필터). tab ∩ OTT 필터 적용된 작품에서
           실제 존재하는 장르만 빈도 내림차순 + 맨 앞 '전체'. 단일 선택.
           칩 목록이 '전체' 하나뿐(장르 정보 0)이면 컴포넌트가 자체 null 렌더. */}
@@ -621,44 +688,31 @@ export default function SavedScreen() {
         />
       )}
 
-      {/* P2 배치 A — 활성 필터 chip 행 (web SavedFilters 활성 chip 정합).
-          OTT 또는 연·월 그룹 적용 시에만 노출. 탭하면 즉시 제거.
-          (장르 필터 해제는 칩바 자체의 '전체' 로 처리 — 여기 중복 노출 안 함.) */}
-      {items.length > 0 && (ottFilter !== null || groupByMonth) && (
+      {/* P2 배치 A — 활성 OTT 필터 chip (web SavedFilters 활성 chip 정합).
+          OTT 적용 시에만 노출. 탭하면 즉시 제거.
+          (장르 해제는 칩바 '전체', 연·월 해제는 스크러버 재탭으로 처리 — 여기 중복 안 함.) */}
+      {items.length > 0 && ottFilter !== null && (
         <View style={styles.activeChipsRow}>
-          {ottFilter !== null && (
-            <Pressable
-              onPress={() => setOttFilter(null)}
-              accessibilityRole="button"
-              accessibilityLabel={`${ottFilter} 필터 제거`}
-              style={styles.activeChip}
-            >
-              {(() => {
-                const iconSrc = getOTTIcon(ottFilter);
-                return iconSrc ? (
-                  <Image
-                    source={{ uri: iconSrc }}
-                    style={styles.activeChipIcon}
-                    contentFit="contain"
-                    transition={0}
-                  />
-                ) : null;
-              })()}
-              <Text style={styles.activeChipText}>{ottFilter}</Text>
-              <Text style={styles.activeChipX}>✕</Text>
-            </Pressable>
-          )}
-          {groupByMonth && (
-            <Pressable
-              onPress={() => setGroupByMonth(false)}
-              accessibilityRole="button"
-              accessibilityLabel="연·월별 그룹화 해제"
-              style={styles.activeChip}
-            >
-              <Text style={styles.activeChipText}>연·월별 그룹화</Text>
-              <Text style={styles.activeChipX}>✕</Text>
-            </Pressable>
-          )}
+          <Pressable
+            onPress={() => setOttFilter(null)}
+            accessibilityRole="button"
+            accessibilityLabel={`${ottFilter} 필터 제거`}
+            style={styles.activeChip}
+          >
+            {(() => {
+              const iconSrc = getOTTIcon(ottFilter);
+              return iconSrc ? (
+                <Image
+                  source={{ uri: iconSrc }}
+                  style={styles.activeChipIcon}
+                  contentFit="contain"
+                  transition={0}
+                />
+              ) : null;
+            })()}
+            <Text style={styles.activeChipText}>{ottFilter}</Text>
+            <Text style={styles.activeChipX}>✕</Text>
+          </Pressable>
         </View>
       )}
 
@@ -701,12 +755,13 @@ export default function SavedScreen() {
             Discover에서 마음에 드는 걸{'\n'}하나씩 담아 보세요
           </Text>
         </View>
-      ) : ottFilteredItems.length === 0 ? (
-        // view filter / OTT filter 적용 후 결과 0.
-        // web saved/page.tsx:679-705 의 빈 상태 분기 카피 정합.
+      ) : sortedItems.length === 0 ? (
+        // view filter / OTT / 장르 / 연·월 필터 적용 후 결과 0.
+        // web saved/page.tsx:679-705 의 빈 상태 분기 카피 정합 + #6 연·월 분기 추가.
+        // (ottFilteredItems 대신 sortedItems 기준 — 월 필터로만 0 이 되는 경우도 포함.)
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>
-            {ottFilter || genreFilter
+            {ottFilter || genreFilter || selectedMonth !== null
               ? '이 조건엔 아무것도'
               : viewFilter === 'archived'
                 ? '보관한 작품이 없어요'
@@ -717,7 +772,7 @@ export default function SavedScreen() {
                     : '표시할 작품이 없어요'}
           </Text>
           <Text style={styles.emptyHint}>
-            {ottFilter || genreFilter
+            {ottFilter || genreFilter || selectedMonth !== null
               ? '필터를 조금만 느슨해 보세요'
               : viewFilter === 'archived'
                 ? '시청한 작품을 보관 아이콘으로 정리할 수 있어요'
@@ -728,68 +783,6 @@ export default function SavedScreen() {
                     : 'Discover에서 아래로 스와이프하거나 하트 버튼으로 담아보세요'}
           </Text>
         </View>
-      ) : activeGroups ? (
-        // 연·월별 그룹핑 SectionList (Track B — 유일한 그룹 모드).
-        // 연·월 라벨이 시각 앵커 — OTT 아이콘 없음.
-        <SectionList
-          key={`saved-grouped-${viewMode}`}
-          sections={activeGroups.map((g) => ({ title: g.ott, count: g.items.length, data: [g.items] }))}
-          keyExtractor={(_, index) => `group-${index}`}
-          contentContainerStyle={styles.groupedContent}
-          stickySectionHeadersEnabled={false}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.ottSectionHeader}>
-              <Text style={styles.ottSectionTitle}>{section.title}</Text>
-              <Text style={styles.ottSectionCount}>{section.count}</Text>
-            </View>
-          )}
-          renderItem={({ item: groupItems }) =>
-            groupItems.length === 0 ? (
-              <Text style={styles.ottSectionEmpty}>
-                이 달에는 저장된 작품이 없어요
-              </Text>
-            ) : viewMode === 'list' ? (
-              <View style={styles.groupListWrap}>
-                {groupItems.map((s) => (
-                  <ListCard
-                    key={s.recommendation.tmdbId}
-                    item={s}
-                    report={reports[s.recommendation.tmdbId]}
-                    isReporting={reportingId === s.recommendation.tmdbId}
-                    isArchived={archivedIds.has(s.recommendation.tmdbId)}
-                    onPress={handleOpenDetail}
-                    onLongPress={handleLongPress}
-                    onStartReport={setReportingId}
-                    onReport={handleReport}
-                    onUndoReport={handleUndoReport}
-                    onCancelReport={() => setReportingId(null)}
-                    onArchiveToggle={handleArchiveToggle}
-                  />
-                ))}
-              </View>
-            ) : (
-              <View style={styles.groupGridWrap}>
-                {groupItems.map((s, i) => (
-                  <PosterCard
-                    key={s.recommendation.tmdbId}
-                    item={s}
-                    index={i}
-                    report={reports[s.recommendation.tmdbId]}
-                    isReporting={reportingId === s.recommendation.tmdbId}
-                    isArchived={archivedIds.has(s.recommendation.tmdbId)}
-                    onPress={handleOpenDetail}
-                    onLongPress={handleLongPress}
-                    onStartReport={setReportingId}
-                    onReport={handleReport}
-                    onUndoReport={handleUndoReport}
-                    onCancelReport={() => setReportingId(null)}
-                    onArchiveToggle={handleArchiveToggle}
-                  />
-                ))}
-              </View>
-            )
-          }
-        />
       ) : viewMode === 'list' ? (
         // List 뷰 — 1열 가로 카드 (60×90 포스터).
         // key 로 grid FlatList 와 별개 인스턴스 강제 — numColumns on-the-fly 변경 invariant 회피.
@@ -885,7 +878,7 @@ export default function SavedScreen() {
         }}
       />
 
-      {/* 필터 sheet. OTT 선택 + 정렬 + 연·월 그룹화 (Track B — OTT별 그룹화 폐기).
+      {/* 필터 sheet. OTT 선택 + 정렬만 (#6 — 연·월은 in-screen 토글+스크러버로 이동).
           genreFilter 는 칩바 '전체' 로도 해제되지만, sheet 의 "초기화" 도 대칭적으로
           장르를 함께 리셋해야 하므로 setGenreFilter 를 전달 (Issue 4). */}
       <SavedFilterSheet
@@ -893,8 +886,6 @@ export default function SavedScreen() {
         onClose={() => setFilterSheetOpen(false)}
         ottFilter={ottFilter}
         setOttFilter={setOttFilter}
-        groupByMonth={groupByMonth}
-        setGroupByMonth={setGroupByMonth}
         availableOTTs={availableOTTs}
         sortBy={sortBy}
         setSortBy={handleSortChange}
@@ -946,7 +937,7 @@ function PosterCard({
     // 별개 a11y element 가 되도록 병합 해제 (iOS 가 자식 Pressable 을 부모로
     // 흡수하는 것 방지). 카드 탭 a11y 는 하단 label View 에 명시 부여.
     <Pressable
-      style={[styles.card, { width: CARD_W, height: tall ? 240 : 200 }]}
+      style={[styles.card, { width: CARD_W, height: tall ? CARD_H_TALL : CARD_H }]}
       // W5 Task E — 카드 탭 = DetailSheet 진입.
       // W5 Task F — long-press = ActionSheet [상세/아카이브/삭제] 메뉴.
       onPress={() => onPress(rec)}
@@ -1600,42 +1591,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.accent,
   },
-  // OTT 그룹핑 (SectionList) 스타일 — web SavedList ottGroups 정합.
-  groupedContent: {
-    paddingBottom: spacing.lg,
-  },
-  ottSectionHeader: {
-    flexDirection: 'row',
+  // #6 — 연·월 모드 in-screen 토글 (캘린더 아이콘 버튼). filterTrigger 와 나란히.
+  monthToggle: {
+    width: 44,
+    minHeight: 44,
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
-  },
-  ottSectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
-  ottSectionCount: {
-    fontSize: 11,
-    color: colors.textMuted,
-    fontFamily: fontsV2.data,
-  },
-  ottSectionEmpty: {
-    fontSize: 12,
-    color: colors.textMuted,
-    paddingHorizontal: spacing.lg,
-  },
-  groupListWrap: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-  },
-  groupGridWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    paddingHorizontal: spacing.md,
-    gap: spacing.md,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
   },
   // 배치 H — Watch Stats 카드. web saved/page.tsx:554-590 정합.
   // mx-5 mt-2 mb-3 + p-3 + surface 배경 + 미세 그림자.
