@@ -124,6 +124,10 @@ export type NekoEvent =
   | 'card_not_interested'
   | 'detail_opened'
   | 'detail_related_clicked'
+  // 2026-07-08 — Native Seeded Mix MVP (Discover 카드 MIX 버튼).
+  // native 선행 도입 — web parity 작업 시 web analytics.ts 에도 추가 필요.
+  | 'mix_started'
+  | 'mix_item_clicked'
   // 2026-06-15 (build 27) — DetailSheet history navigation (← / →)
   | 'detail_history_back'
   | 'detail_history_forward'
