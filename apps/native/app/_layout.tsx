@@ -34,7 +34,7 @@ import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
-import { IconDiscover, IconBookmark, IconUser } from '../components/Icons';
+import { IconDiscover, IconBookmark, IconUser, IconMix } from '../components/Icons';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // 2026-06-01 splash → Welcome (Lottie frame 0) 자연 연결.
@@ -241,6 +241,22 @@ function TabsWithGuard() {
                   <TabItem
                     icon={({ color, active }) => <IconDiscover color={color} active={active} />}
                     label="발견"
+                    focused={focused}
+                  />
+                ),
+              }}
+            />
+            {/* 2026-07-08 Seeded Mix 2차 — Mix 탭 신설 (테마 믹스 제안 → Discover 덱 주입).
+                가시 탭 lazy:false 정합 — startup pre-mount 로 첫 진입 layout 갭 차단. */}
+            <Tabs.Screen
+              name="mix"
+              options={{
+                lazy: false,
+                tabBarAccessibilityLabel: '믹스',
+                tabBarIcon: ({ focused }) => (
+                  <TabItem
+                    icon={({ color, active }) => <IconMix color={color} active={active} />}
+                    label="믹스"
                     focused={focused}
                   />
                 ),

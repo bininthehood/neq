@@ -260,3 +260,39 @@ export function IconUser({ size = 20, color = '#000' }: IconProps) {
     </Svg>
   );
 }
+
+// 2026-07-08 Seeded Mix 2차 — 카드 케밥(세로 3점) 메뉴 버튼.
+export function IconMoreVertical({ size = 16, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill={color}>
+      <Circle cx="10" cy="4.5" r="1.6" />
+      <Circle cx="10" cy="10" r="1.6" />
+      <Circle cx="10" cy="15.5" r="1.6" />
+    </Svg>
+  );
+}
+
+// 2026-07-08 Seeded Mix 2차 — Mix 탭 아이콘 (셔플 화살표, Quiet Ink stroke 계열).
+// active 시 IconBookmark 패턴 정합 — stroke 유지 + 옅은 fill 대신 굵기 동일 (선형 아이콘).
+export function IconMix({ size = 20, color = '#000', active = false }: IconProps & { active?: boolean }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M3 6h3.2c4.6 0 5 8 9.6 8H18"
+        stroke={color}
+        strokeWidth={active ? 1.7 : 1.5}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <Path
+        d="M3 14h3.2c1.6 0 2.7-1 3.7-2.4M12.4 8.2C13.4 6.9 14.4 6 15.8 6H18"
+        stroke={color}
+        strokeWidth={active ? 1.7 : 1.5}
+        strokeLinecap="round"
+        fill="none"
+      />
+      <Path d="M16 4l2.2 2L16 8" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <Path d="M16 12l2.2 2-2.2 2" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}

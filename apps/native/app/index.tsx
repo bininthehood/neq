@@ -27,14 +27,14 @@ import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar, { ACTION_BAR_HEIGHT } from '../components/ActionBar';
-import { IconArchive, IconRefresh } from '../components/Icons';
+import { IconArchive, IconRefresh, IconMoreVertical } from '../components/Icons';
 import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
 import SearchSheet from '../components/SearchSheet';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
-import MixPanel from '../components/MixPanel';
-import { buildSeededMixItems } from '../lib/mix-utils';
+import { buildSeededMixItems, mixLabelOf } from '../lib/mix-utils';
+import { consumePendingMixSeed, type MixStartSource } from '../lib/mix-bridge';
 import { env } from '../lib/env';
 import {
   fetchRecommendations,
@@ -319,6 +319,27 @@ export default function DiscoverScreen() {
     }
   }, [tutorialStep, tutorialStepSV]);
 
+  // 2026-07-08 — Seeded Mix 2차: 덱 주입.
+  // 1차(후보 패널) 를 승격 — 믹스 시작 시 카드 덱이 seed 기반 후보로 교체된다.
+  // 설계: 기존 recs/topIdx 는 손대지 않고 mixDeck/mixTopIdx 별도 상태로 분리 —
+  //   load() abort 파이프라인·prefetch·필터와 격리, 해제 시 원 덱/위치 자동 복원.
+  // hydrate 는 lazy — 후보(RelatedWork) 큐에서 top 앞 3장 유지분만 순차 hydrate
+  //   (12건 선-hydrate 시 /api/tmdb/hydrate 12연발 + 대부분 미노출 낭비).
+  const [mixSeed, setMixSeed] = useState<Recommendation | null>(null);
+  const [mixDeck, setMixDeck] = useState<Recommendation[]>([]);
+  const [mixTopIdx, setMixTopIdx] = useState(0);
+  // 후보 fetch 완료 플래그 — 소진 판정이 "큐가 아직 안 채워진 초기" 를 소진으로
+  // 오인하지 않게 가드.
+  const [mixCandidatesLoaded, setMixCandidatesLoaded] = useState(false);
+  // hydrate pump 재평가 트리거 — hydrate 1건 완료마다 +1 (ref 는 재렌더를 못 일으킴).
+  const [mixPump, setMixPump] = useState(0);
+  const mixQueueRef = useRef<RelatedWork[]>([]);
+  const mixHydratingRef = useRef(false);
+  const mixFetchAbortRef = useRef<AbortController | null>(null);
+  const inMix = mixSeed !== null;
+  // 카드 케밥(⋮) 인라인 메뉴 — 1차 MIX 칩이 "별점 밑 chip 같다" 는 피드백으로 교체.
+  const [cardMenuOpen, setCardMenuOpen] = useState(false);
+
   // 2026-06-10 swipe anim v3 — dismissCardIdSV 안전 리셋.
   // topIdx 변경 시 (좌 swipe advance / prev / 기타 진입) React commit + paint 후
   // 본 effect 발화. 그 시점에 옛 top 은 이미 unmount → 옛 top 의 worklet 평가
@@ -329,20 +350,13 @@ export default function DiscoverScreen() {
     if (dismissCardIdSV.value !== -1) {
       dismissCardIdSV.value = -1;
     }
+    // 2026-07-08 Seeded Mix 2차 — mix 덱 advance (mixTopIdx) 도 동일 리셋 경로.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [topIdx]);
+  }, [topIdx, mixTopIdx]);
 
   const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-
-  // 2026-07-08 — Seeded Mix MVP. MIX 탭 → seed 고정 + related 기반 후보 패널.
-  // 덱 주입 대신 MixPanel(stack 영역 absolute fill) 표시 — 기획 문서 5단계 대안 경로.
-  // mixItems null = 로딩 중, [] = 후보 없음 (Discover 흐름 무손상 — 패널 닫으면 원상복귀).
-  const [mixSeed, setMixSeed] = useState<Recommendation | null>(null);
-  const [mixItems, setMixItems] = useState<RelatedWork[] | null>(null);
-  const [mixHydrating, setMixHydrating] = useState(false);
-  const mixFetchAbortRef = useRef<AbortController | null>(null);
 
   // 2026-06-11 사용자 피드백 #1 — shared 링크 진입 시 DetailSheet stacking race fix.
   // 진단: share/[id] 자체는 P0-#1 fix (DetailSheet.tsx:413) 로 Modal 우회 풀스크린
@@ -981,8 +995,19 @@ export default function DiscoverScreen() {
   const filteredRecs = filterRating === 'all'
     ? recs
     : recs.filter((r) => r.rating >= parseFloat(filterRating));
-  const currentRec = filteredRecs[topIdx];
-  const prevRec = topIdx > 0 ? filteredRecs[topIdx - 1] : null;
+  // 2026-07-08 Seeded Mix 2차 — mix 모드 시 덱 스왑. currentRec/prevRec/cardsToShow
+  // 가 전부 이 파생값을 따르므로 제스처/DetailSheet/save 등 기존 인터랙션이 mix 덱
+  // 에서도 동일 동작. rating 클라이언트 필터는 일반 덱 전용 (mix 는 후보 12 이하).
+  const activeDeck = inMix ? mixDeck : filteredRecs;
+  const activeTopIdx = inMix ? mixTopIdx : topIdx;
+  const currentRec = activeDeck[activeTopIdx];
+  const prevRec = activeTopIdx > 0 ? activeDeck[activeTopIdx - 1] : null;
+
+  /** mix 모드 인지 top advance — 일반/믹스 덱 각자의 topIdx 만 이동. */
+  function advanceTop() {
+    if (inMix) setMixTopIdx((i) => Math.min(i + 1, mixDeck.length));
+    else setTopIdx((i) => Math.min(i + 1, recs.length));
+  }
 
   /**
    * 사이클 2 통일 매핑 (web `vibrate(...)` 와 인지 강도 정합):
@@ -999,7 +1024,7 @@ export default function DiscoverScreen() {
 
   function toNext() {
     hapticLight();
-    setTopIdx((i) => Math.min(i + 1, recs.length));
+    advanceTop();
   }
 
   /**
@@ -1025,8 +1050,8 @@ export default function DiscoverScreen() {
    * slide-out 진행과 무관하게 위치 0 유지 → 깜빡임 0.
    */
   function handleSwipeLeftAnim() {
-    if (!recs[topIdx]) return;
-    const curId = recs[topIdx].tmdbId;
+    if (!activeDeck[activeTopIdx]) return;
+    const curId = activeDeck[activeTopIdx].tmdbId;
     // 빠른 연속 swipe: 직전 보간/타이머 정리.
     cancelAnimation(dragX);
     cancelAnimation(dragY);
@@ -1064,7 +1089,7 @@ export default function DiscoverScreen() {
     //   대신 아래 useEffect(topIdx) 가 React commit + paint 후 발화 → 옛 top
     //   이미 unmount → 평가 트리거 없음 → 깜빡임 0.
     passAdvanceTimer.current = setTimeout(() => {
-      setTopIdx((i) => Math.min(i + 1, recs.length));
+      advanceTop();
       passAdvanceTimer.current = null;
     }, 360);
   }
@@ -1072,7 +1097,8 @@ export default function DiscoverScreen() {
   function toPrev() {
     // 사이클 2 통일 매핑: prev card 진입 = medium (web vibrate('medium')=14ms 와 정합)
     hapticMedium();
-    setTopIdx((i) => Math.max(i - 1, 0));
+    if (inMix) setMixTopIdx((i) => Math.max(i - 1, 0));
+    else setTopIdx((i) => Math.max(i - 1, 0));
     // W5 Task B — TutorialFlow v3: 우 스와이프(prev overlay) 신호 emit.
     // rewind 버튼은 setTopIdx(0) 으로 직접 호출하므로 본 카운터에 안 잡힘 (web 정본 정합).
     setRightSwipeCount((c) => c + 1);
@@ -1154,7 +1180,7 @@ export default function DiscoverScreen() {
     setTimeout(() => {
       setSaveAbsorbing(false);
       setSaveTargetPoint(null);
-      setTopIdx((i) => Math.min(i + 1, recs.length));
+      advanceTop();
       dragX.value = 0;
       dragY.value = 0;
     }, SAVE_ABSORB_MS);
@@ -1227,24 +1253,47 @@ export default function DiscoverScreen() {
       runOnJS(handleCardTap)();
     });
 
-  // 2026-07-08 — Seeded Mix MVP. MIX 버튼은 GestureDetector 바깥 absolute overlay
-  // (ActionBar 패턴) — tap 제스처 선점/DetailSheet 오픈과 원천 분리.
-  function handleMixPress() {
+  // 2026-07-08 — Seeded Mix 2차: 케밥 메뉴 → 믹스 시작 (덱 주입).
+  // 케밥/메뉴는 GestureDetector 바깥 absolute overlay (1차 검증 구조) — tap 제스처
+  // 선점/DetailSheet 오픈과 원천 분리.
+  function handleCardMenuPress() {
     // 튜토리얼 진행 중엔 silent ignore — handleCardTap 의 step 가드와 정합.
     if (tutorialActive && tutorialStep !== null) return;
     if (!currentRec) return;
-    const seed = currentRec;
-    track('mix_started', {
-      tmdb_id: seed.tmdbId,
-      title: seed.title,
-      source: 'native_discover_card',
-    });
     hapticLight();
-    setMixSeed(seed);
-    setMixItems(null);
+    setCardMenuOpen(true);
+  }
+
+  function handleMixStart(seed: Recommendation, source: MixStartSource) {
+    if (tutorialActive && tutorialStep !== null) return;
+    if (saveAbsorbing) return;
+    setCardMenuOpen(false);
+    track('mix_started', { tmdb_id: seed.tmdbId, title: seed.title, source });
+    hapticLight();
     mixFetchAbortRef.current?.abort();
     const controller = new AbortController();
     mixFetchAbortRef.current = controller;
+
+    // mix 상태 초기화 + 진행 중 제스처/타이머 잔재 정리 (덱 스왑 시 시각 잔재 방지).
+    // 원 덱 (recs/topIdx) 은 건드리지 않음 — 해제 시 자동 복원.
+    setMixSeed(seed);
+    setMixDeck([]);
+    setMixTopIdx(0);
+    setMixCandidatesLoaded(false);
+    mixQueueRef.current = [];
+    mixHydratingRef.current = false;
+    if (passAdvanceTimer.current) {
+      clearTimeout(passAdvanceTimer.current);
+      passAdvanceTimer.current = null;
+    }
+    cancelAnimation(dragX);
+    cancelAnimation(dragY);
+    dragX.value = 0;
+    dragY.value = 0;
+    prevOverlayX.value = -SCREEN_WIDTH;
+    setPrevActive(false);
+    setIsDragging(false);
+
     // DetailSheet 의 related fetch 패턴 재사용 — variety 는 TMDB TV(series) 매핑.
     const type = seed.type === 'movie' ? 'movie' : 'series';
     fetch(`${env.API_BASE_URL}/api/tmdb/related?work_id=${seed.tmdbId}&type=${type}`, {
@@ -1253,47 +1302,115 @@ export default function DiscoverScreen() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data: RelatedWorksResponse | null) => {
         if (controller.signal.aborted) return;
-        setMixItems(data ? buildSeededMixItems(seed, data) : []);
+        mixQueueRef.current = data ? buildSeededMixItems(seed, data) : [];
+        setMixCandidatesLoaded(true);
+        setMixPump((p) => p + 1);
       })
       .catch(() => {
-        // abort/네트워크 실패 — 빈 후보 안내로 fallback, Discover 흐름 무손상.
+        // 네트워크 실패 — 빈 후보로 처리 → 아래 소진 effect 가 안내 + 자동 복귀.
         if (controller.signal.aborted) return;
-        setMixItems([]);
+        mixQueueRef.current = [];
+        setMixCandidatesLoaded(true);
+        setMixPump((p) => p + 1);
       });
   }
 
-  function handleMixClose() {
+  /** 믹스 해제 — 원 덱/topIdx 는 그대로라 자동 복원. */
+  function handleMixRelease() {
     mixFetchAbortRef.current?.abort();
     mixFetchAbortRef.current = null;
+    if (passAdvanceTimer.current) {
+      clearTimeout(passAdvanceTimer.current);
+      passAdvanceTimer.current = null;
+    }
+    mixQueueRef.current = [];
+    mixHydratingRef.current = false;
     setMixSeed(null);
-    setMixItems(null);
+    setMixDeck([]);
+    setMixTopIdx(0);
+    setMixCandidatesLoaded(false);
+    cancelAnimation(dragX);
+    cancelAnimation(dragY);
+    dragX.value = 0;
+    dragY.value = 0;
+    prevOverlayX.value = -SCREEN_WIDTH;
+    setPrevActive(false);
+    setIsDragging(false);
   }
 
-  // 후보 탭 → 기존 관련작 클릭 경로 재사용 (hydrate → DetailSheet).
-  // searchSelectedRec 우선순위 (`searchSelectedRec ?? currentRec`) 로 DetailSheet 에
-  // hydrated rec 표시 — 닫으면 자동 null 복원, MixPanel 은 아래에 유지.
-  async function handleMixItemPress(work: RelatedWork) {
-    if (!mixSeed || mixHydrating) return;
-    track('mix_item_clicked', {
-      source_tmdb_id: mixSeed.tmdbId,
-      target_tmdb_id: work.id,
-      source: 'native_seeded_mix',
-    });
-    setMixHydrating(true);
-    try {
-      const t = work.mediaType === 'tv' ? 'series' : 'movie';
-      const res = await fetch(`${env.API_BASE_URL}/api/tmdb/hydrate?id=${work.id}&type=${t}`);
-      if (res.ok) {
-        const next: Recommendation = await res.json();
-        setSearchSelectedRec(next);
-        setDetailOpen(true);
-      }
-    } catch {
-      // hydrate 실패 — 패널 유지, silent
-    } finally {
-      setMixHydrating(false);
+  // lazy hydrate pump — mix 덱을 top 앞 3장까지만 유지, 큐에서 1건씩 순차 hydrate.
+  // 12건 선-hydrate 금지 (미노출 카드 낭비). 실패 항목은 skip 하고 다음으로.
+  // mixPump 카운터가 완료마다 재평가 트리거 (ref 는 재렌더 불가).
+  useEffect(() => {
+    if (!mixSeed) return;
+    if (mixDeck.length - mixTopIdx >= 3) return;
+    if (mixHydratingRef.current) return;
+    const work = mixQueueRef.current[0];
+    if (!work) return;
+    const controller = mixFetchAbortRef.current;
+    if (!controller || controller.signal.aborted) return;
+    mixHydratingRef.current = true;
+    mixQueueRef.current.shift();
+    const t = work.mediaType === 'tv' ? 'series' : 'movie';
+    fetch(`${env.API_BASE_URL}/api/tmdb/hydrate?id=${work.id}&type=${t}`, {
+      signal: controller.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((next: Recommendation | null) => {
+        if (controller.signal.aborted || !next) return;
+        setMixDeck((prev) =>
+          // tmdbId 는 React key/dismiss 식별자 — movie/tv id 충돌 항목은 뒤 항목 drop.
+          prev.some((r) => r.tmdbId === next.tmdbId) ? prev : [...prev, next],
+        );
+        // 재노출 방지 — mix 노출 카드도 recHistory 기록 (일반 덱 배치 기록과 동일 의미).
+        void addRecHistory([
+          { title: next.title, tmdbId: next.tmdbId, posterUrl: next.posterUrl, type: next.type },
+        ]);
+      })
+      .catch(() => {
+        /* 실패 항목 skip — finally 의 pump 재트리거가 다음 항목 진행 */
+      })
+      .finally(() => {
+        if (controller.signal.aborted) return; // 해제 후 좀비 재트리거 방지
+        mixHydratingRef.current = false;
+        setMixPump((p) => p + 1);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mixSeed, mixDeck.length, mixTopIdx, mixPump]);
+
+  // mix 소진/빈 후보 판정 — 안내 toast + 원 덱 자동 복귀 (EmptyState 재도입 금지).
+  // mixCandidatesLoaded 가드: 후보 fetch 전 "큐가 빈 초기 상태" 를 소진으로 오인 방지.
+  useEffect(() => {
+    if (!mixSeed || !mixCandidatesLoaded) return;
+    if (mixQueueRef.current.length > 0 || mixHydratingRef.current) return;
+    if (mixDeck.length === 0) {
+      toast.show('info', { ctx: { message: '이어볼 후보를 찾지 못했어요' }, duration: 1800 });
+      handleMixRelease();
+      return;
     }
-  }
+    if (mixTopIdx >= mixDeck.length) {
+      toast.show('info', { ctx: { message: '믹스를 다 봤어요' }, duration: 1800 });
+      handleMixRelease();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mixSeed, mixCandidatesLoaded, mixDeck.length, mixTopIdx, mixPump]);
+
+  // top 카드 변경(swipe/load/모드 전환) 시 케밥 메뉴 자동 닫기 — 메뉴가 옛 카드
+  // 제목을 들고 있는 stale 상태 방지.
+  useEffect(() => {
+    setCardMenuOpen(false);
+  }, [currentRec?.tmdbId]);
+
+  // Mix 탭 → 믹스 시작 브리지. 탭에서 setPendingMixSeed 후 router.push('/') →
+  // focus 시 1회 consume. ref 로 최신 handleMixStart 참조 (stale closure 방지).
+  const handleMixStartRef = useRef(handleMixStart);
+  handleMixStartRef.current = handleMixStart;
+  useFocusEffect(
+    useCallback(() => {
+      const pending = consumePendingMixSeed();
+      if (pending) handleMixStartRef.current(pending.seed, pending.source);
+    }, []),
+  );
 
   function handleSwipeDown() {
     if (currentRec) {
@@ -1555,7 +1672,7 @@ export default function DiscoverScreen() {
       }
     });
 
-  const cardsToShow = filteredRecs.slice(topIdx, topIdx + 3);
+  const cardsToShow = activeDeck.slice(activeTopIdx, activeTopIdx + 3);
   const isLiked = currentRec ? savedIds.has(currentRec.tmdbId) : false;
   // 2026-06-06 (Tier 3 단기 incident 해소) — EmptyState UI 자체 페기.
   // 무한 스크롤이 의도 → "오늘은 여기까지" 화면 자체가 없어야 함 (사용자 명시).
@@ -1691,24 +1808,44 @@ export default function DiscoverScreen() {
         }}
       />
 
-      <FilterChips
-        filterType={filterType}
-        filterOrigin={filterOrigin}
-        filterYear={filterYear}
-        filterRating={filterRating}
-        filterOTTs={filterOTTs}
-        availableOTTs={availableOTTs}
-        disabled={state === 'loading'}
-        onFilterChange={(t, o) => applyFilterChange({ type: t, origin: o })}
-        onYearChange={(y) => applyFilterChange({ year: y })}
-        onRatingChange={(r) => applyFilterChange({ rating: r })}
-        onOTTChange={(otts) => applyFilterChange({ otts })}
-        // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — FilterChips leftmost 신규.
-        myOTTToggle={myOTTToggle}
-        myOTTAvailable={subscribedOtt.length > 0}
-        onMyOTTToggle={handleMyOTTToggle}
-        onMyOTTSetupNavigate={handleMyOTTSetupNavigate}
-      />
+      {/* 2026-07-08 Seeded Mix 2차 — 믹스 중엔 FilterChips 대신 믹스 라벨 바.
+          필터는 일반 덱 전용 (mix 덱은 후보 12 이하 고정 셋이라 서버 필터 무의미). */}
+      {inMix && mixSeed ? (
+        <View style={styles.mixBar} testID="mix-bar">
+          <Text style={styles.mixBarTitle} numberOfLines={1}>
+            {mixLabelOf(mixSeed.title)}
+          </Text>
+          <Pressable
+            style={styles.mixBarRelease}
+            onPress={handleMixRelease}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="믹스 해제"
+            testID="mix-release"
+          >
+            <Text style={styles.mixBarReleaseText}>해제</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <FilterChips
+          filterType={filterType}
+          filterOrigin={filterOrigin}
+          filterYear={filterYear}
+          filterRating={filterRating}
+          filterOTTs={filterOTTs}
+          availableOTTs={availableOTTs}
+          disabled={state === 'loading'}
+          onFilterChange={(t, o) => applyFilterChange({ type: t, origin: o })}
+          onYearChange={(y) => applyFilterChange({ year: y })}
+          onRatingChange={(r) => applyFilterChange({ rating: r })}
+          onOTTChange={(otts) => applyFilterChange({ otts })}
+          // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — FilterChips leftmost 신규.
+          myOTTToggle={myOTTToggle}
+          myOTTAvailable={subscribedOtt.length > 0}
+          onMyOTTToggle={handleMyOTTToggle}
+          onMyOTTSetupNavigate={handleMyOTTSetupNavigate}
+        />
+      )}
 
       <View
         style={styles.stackWrap}
@@ -1718,7 +1855,7 @@ export default function DiscoverScreen() {
             refresh = 사용자 새로고침 → ApertureBreathLoader (중앙 호흡) 유지.
             default = 첫 진입 / 필터 변경 → SkeletonCard (카드 윤곽) 로 빈 화면 제거.
             PWA StatusScreens origin 분기 정합. */}
-        {state === 'loading' && loadOrigin === 'refresh' && (
+        {state === 'loading' && loadOrigin === 'refresh' && !inMix && (
           <View
             style={styles.centered}
             accessibilityLiveRegion="polite"
@@ -1728,7 +1865,7 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {state === 'loading' && loadOrigin !== 'refresh' && (
+        {state === 'loading' && loadOrigin !== 'refresh' && !inMix && (
           // dual a11y label 회피 (memory feedback_native_a11y_e2e_patterns §2):
           // 라벨/role 은 SkeletonCard root(progressbar + "추천을 준비하고 있어요")가
           // 단일 보유. wrapper 는 liveRegion 만 — 중복 라벨 제거. E2E 라벨 검출은
@@ -1764,7 +1901,18 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {state === 'ready' && cardsToShow.length === 0 && (
+        {/* 2026-07-08 Seeded Mix 2차 — mix 덱 로딩 (후보 fetch + 첫 hydrate 대기). */}
+        {inMix && cardsToShow.length === 0 && (
+          <View
+            style={styles.centered}
+            accessibilityLiveRegion="polite"
+            accessibilityLabel="믹스 후보를 고르고 있어요"
+          >
+            <ApertureBreathLoader size={72} message="믹스 후보를 고르고 있어요" />
+          </View>
+        )}
+
+        {state === 'ready' && !inMix && cardsToShow.length === 0 && (
           // 2026-06-06 (Tier 3 단기 incident 해소) — 빈 응답 시점 fallback loader.
           // recs.length===0 또는 topIdx 가 끝 도달 → cardsToShow=0. EmptyState UI 페기
           // 했으므로 stack 영역도 안 보이는 빈 화면 회귀 방지. progressive fallback +
@@ -1778,7 +1926,7 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {state === 'ready' && cardsToShow.length > 0 && (
+        {(state === 'ready' || inMix) && cardsToShow.length > 0 && (
           <GestureDetector gesture={Gesture.Exclusive(tap, pan)}>
             <Animated.View style={styles.stack}>
               {/* 2026-05-20 prev overlay 통합 — PrevCardOverlay 별도 컴포넌트 폐기.
@@ -1837,31 +1985,46 @@ export default function DiscoverScreen() {
             시점은 위 fallback loader 가 처리. Tier 3 Phase A~D 완료 후 본 영역
             재설계 가능 (`_workspace/07_refactor-master-plan-2026-06-06.md`). */}
 
-        {/* 2026-07-08 — Seeded Mix MVP. MIX 버튼은 GestureDetector 바깥 sibling
-            absolute overlay — top 카드 우측상단(RatingChip 아래)에 정렬. Pressable 이
-            터치를 소비하므로 tap 제스처(DetailSheet 진입)와 원천 분리. 조건이
-            currentRec(=top 카드) 기준 단일 렌더라 뒤 카드/EmptyState 노출 자체가 없음. */}
-        {state === 'ready' && cardsToShow.length > 0 && !mixSeed && (
+        {/* 2026-07-08 Seeded Mix 2차 — 카드 케밥(⋮) 메뉴. GestureDetector 바깥 sibling
+            absolute overlay (1차 검증 구조) — top 카드 우측상단(RatingChip 아래) 정렬.
+            Pressable 이 터치를 소비하므로 tap 제스처(DetailSheet 진입)와 원천 분리.
+            currentRec(=top 카드) 기준 단일 렌더라 뒤 카드/EmptyState 노출 자체가 없음.
+            믹스 중엔 숨김 (중첩 믹스는 후속 과제). */}
+        {state === 'ready' && cardsToShow.length > 0 && !inMix && (
           <Pressable
-            style={styles.mixBtn}
-            onPress={handleMixPress}
+            style={styles.cardMenuBtn}
+            onPress={handleCardMenuPress}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="믹스 시작"
-            testID="mix-button"
+            accessibilityLabel="카드 메뉴"
+            testID="card-menu-button"
           >
-            <Text style={styles.mixBtnText}>MIX</Text>
+            <IconMoreVertical size={15} color={colors.textPrimary} />
           </Pressable>
         )}
 
-        {mixSeed && (
-          <MixPanel
-            seed={mixSeed}
-            items={mixItems}
-            hydrating={mixHydrating}
-            onClose={handleMixClose}
-            onItemPress={handleMixItemPress}
-          />
+        {cardMenuOpen && currentRec && (
+          <>
+            {/* 투명 backdrop — 메뉴 밖 탭 시 닫기 (stack 영역 한정). */}
+            <Pressable
+              style={styles.cardMenuBackdrop}
+              onPress={() => setCardMenuOpen(false)}
+              accessibilityLabel="메뉴 닫기"
+              testID="card-menu-backdrop"
+            />
+            <View style={styles.cardMenu} testID="card-menu">
+              <Pressable
+                style={({ pressed }) => [styles.cardMenuItem, pressed && styles.cardMenuItemPressed]}
+                onPress={() => handleMixStart(currentRec, 'native_card_menu')}
+                accessibilityRole="button"
+                testID="card-menu-mix"
+              >
+                <Text style={styles.cardMenuItemText} numberOfLines={1}>
+                  {currentRec.title} 믹스 시작
+                </Text>
+              </Pressable>
+            </View>
+          </>
         )}
       </View>
 
@@ -1876,16 +2039,16 @@ export default function DiscoverScreen() {
           상태의 ActionBar 가 항상 렌더 — 구조상 jank 가 없다. native 는 같은
           SafeAreaView 안에서 분기하므로 slot 고정으로 동등 효과를 만든다.) */}
       <View style={styles.actionBarSlot}>
-        {/* 믹스 패널 열림 중엔 ActionBar 숨김 — 아래 깔린 top 카드에 save/share 가
-            적용되는 오조작 방지. slot 높이는 불변이라 layout jank 없음. */}
-        {state === 'ready' && currentRec && !mixSeed && (
+        {/* 2026-07-08 Seeded Mix 2차 — mix 덱에서도 ActionBar 동작 (save/share/detail).
+            rewind 는 활성 덱 처음으로, refresh 는 믹스 해제 후 일반 새로고침. */}
+        {(state === 'ready' || inMix) && currentRec && (
           <ActionBar
             ref={saveBtnRef}
             isSaved={isLiked}
-            canRewind={topIdx > 0}
+            canRewind={activeTopIdx > 0}
             saveFlash={saveFlash}
             savePulling={savePulling && isDragging}
-            onRewind={() => setTopIdx(0)}
+            onRewind={() => (inMix ? setMixTopIdx(0) : setTopIdx(0))}
             onShare={handleShare}
             onOpenDetail={() => {
               // W5 Task C 7.1 — ActionBar Detail 버튼은 web 정본 source='action_bar'.
@@ -1900,7 +2063,11 @@ export default function DiscoverScreen() {
               // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
               setDetailOpenCount((c) => c + 1);
             }}
-            onRefresh={handleRefresh}
+            onRefresh={() => {
+              // 믹스 중 새로고침 = 믹스 해제 + 일반 hard refresh (새 콘텐츠 기대 정합).
+              if (inMix) handleMixRelease();
+              void handleRefresh();
+            }}
             onToggleSave={toggleLike}
           />
         )}
@@ -2002,25 +2169,80 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   stack: { flex: 1, position: 'relative' },
-  // Seeded Mix — top 카드 우측상단 (카드 right inset 12 + 내부 14 = 26, RatingChip
-  // top 14 + 높이 ~23 + gap 9 = 46). RatingChip 과 동일 칩 계열 (overlay bg + radius.sm),
-  // amber 미사용 (DESIGN.md anti-slop #13 — 과한 CTA 금지).
-  mixBtn: {
+  // Seeded Mix 2차 — 케밥(⋮) 버튼. top 카드 우측상단 (카드 right inset 12 + 내부 14
+  // = 26, RatingChip top 14 + 높이 ~23 + gap 9 = 46). RatingChip 과 동일 칩 계열
+  // (overlay bg + radius.sm), amber 미사용 (DESIGN.md anti-slop #13 — 과한 CTA 금지).
+  cardMenuBtn: {
     position: 'absolute',
     top: 46,
     right: 26,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    width: 28,
+    height: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: radius.sm,
     backgroundColor: colors.overlay,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  mixBtnText: {
+  // 인라인 메뉴 — 케밥 바로 아래 anchor. surface + border, Quiet Ink (그림자/amber 無).
+  cardMenuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+  },
+  cardMenu: {
+    position: 'absolute',
+    top: 78,
+    right: 26,
+    minWidth: 180,
+    maxWidth: 260,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: 4,
+  },
+  cardMenuItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  cardMenuItemPressed: {
+    backgroundColor: colors.overlayLight,
+  },
+  cardMenuItemText: {
     color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // 믹스 라벨 바 — FilterChips 자리 대체. 칩 row 와 유사 footprint (minHeight 44).
+  mixBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  mixBarTitle: {
+    flex: 1,
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  // Ghost variant — 배경 투명 + 보더 (DESIGN.md §Buttons).
+  mixBarRelease: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  mixBarReleaseText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '500',
   },
   centered: {
     flex: 1,

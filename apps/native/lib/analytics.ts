@@ -128,6 +128,9 @@ export type NekoEvent =
   // native 선행 도입 — web parity 작업 시 web analytics.ts 에도 추가 필요.
   | 'mix_started'
   | 'mix_item_clicked'
+  // 2026-07-08 — Seeded Mix 2차 (Mix 탭 신설). native 선행 — web parity 시 동기화 필요.
+  | 'mix_tab_viewed'
+  | 'mix_theme_clicked'
   // 2026-06-15 (build 27) — DetailSheet history navigation (← / →)
   | 'detail_history_back'
   | 'detail_history_forward'
