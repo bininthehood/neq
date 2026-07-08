@@ -9,6 +9,7 @@ import {
   type LayoutRectangle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -33,8 +34,12 @@ import TutorialFlow, {
 } from '../components/TutorialFlow';
 import SearchSheet from '../components/SearchSheet';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
-import { buildSeededMixItems, mixLabelOf } from '../lib/mix-utils';
-import { consumePendingMixSeed, type MixStartSource } from '../lib/mix-bridge';
+import { buildSeededMixItems, mergeGenreQueueItems, mixLabelOf } from '../lib/mix-utils';
+import {
+  consumePendingMixSeed,
+  type MixStartSource,
+  type MixThemeInfo,
+} from '../lib/mix-bridge';
 import { env } from '../lib/env';
 import {
   fetchRecommendations,
@@ -72,7 +77,7 @@ import type {
   RelatedWorksResponse,
 } from '../lib/types';
 import { colors, spacing, radius } from '../lib/tokens';
-import { easings, durations } from '@neq/design';
+import { easings, durations, fontsV2 } from '@neq/design';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 // Stage 4 D1 (swipe-stack.jsx) / G1-A (Handoff v2 Phase B+C):
@@ -326,6 +331,9 @@ export default function DiscoverScreen() {
   // hydrate 는 lazy — 후보(RelatedWork) 큐에서 top 앞 3장 유지분만 순차 hydrate
   //   (12건 선-hydrate 시 /api/tmdb/hydrate 12연발 + 대부분 미노출 낭비).
   const [mixSeed, setMixSeed] = useState<Recommendation | null>(null);
+  // 3차 — 테마 큐 정보 (장르/감독/최근 저장작). null = 작품 큐 (케밥/DetailSheet 진입).
+  // 큐 바 라벨 분기 (테마 title vs seed 작품명) + 장르 하이브리드 후보 조회에 사용.
+  const [mixTheme, setMixTheme] = useState<MixThemeInfo | null>(null);
   const [mixDeck, setMixDeck] = useState<Recommendation[]>([]);
   const [mixTopIdx, setMixTopIdx] = useState(0);
   // 후보 fetch 완료 플래그 — 소진 판정이 "큐가 아직 안 채워진 초기" 를 소진으로
@@ -1264,11 +1272,21 @@ export default function DiscoverScreen() {
     setCardMenuOpen(true);
   }
 
-  function handleMixStart(seed: Recommendation, source: MixStartSource) {
+  function handleMixStart(seed: Recommendation, source: MixStartSource, theme?: MixThemeInfo) {
     if (tutorialActive && tutorialStep !== null) return;
     if (saveAbsorbing) return;
     setCardMenuOpen(false);
-    track('mix_started', { tmdb_id: seed.tmdbId, title: seed.title, source });
+    // 3차 — 테마 큐 payload 확장 (theme_kind + 장르 큐의 genre_id).
+    // 작품 큐 (케밥/DetailSheet) 는 기존 payload 그대로.
+    track('mix_started', {
+      tmdb_id: seed.tmdbId,
+      title: seed.title,
+      source,
+      ...(theme && {
+        theme_kind: theme.kind,
+        ...(theme.genreId != null && { genre_id: theme.genreId }),
+      }),
+    });
     hapticLight();
     mixFetchAbortRef.current?.abort();
     const controller = new AbortController();
@@ -1277,6 +1295,7 @@ export default function DiscoverScreen() {
     // mix 상태 초기화 + 진행 중 제스처/타이머 잔재 정리 (덱 스왑 시 시각 잔재 방지).
     // 원 덱 (recs/topIdx) 은 건드리지 않음 — 해제 시 자동 복원.
     setMixSeed(seed);
+    setMixTheme(theme ?? null);
     setMixDeck([]);
     setMixTopIdx(0);
     setMixCandidatesLoaded(false);
@@ -1296,23 +1315,63 @@ export default function DiscoverScreen() {
 
     // DetailSheet 의 related fetch 패턴 재사용 — variety 는 TMDB TV(series) 매핑.
     const type = seed.type === 'movie' ? 'movie' : 'series';
-    fetch(`${env.API_BASE_URL}/api/tmdb/related?work_id=${seed.tmdbId}&type=${type}`, {
-      signal: controller.signal,
-    })
+    const relatedPromise: Promise<RelatedWork[]> = fetch(
+      `${env.API_BASE_URL}/api/tmdb/related?work_id=${seed.tmdbId}&type=${type}`,
+      { signal: controller.signal },
+    )
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: RelatedWorksResponse | null) => {
-        if (controller.signal.aborted) return;
-        mixQueueRef.current = data ? buildSeededMixItems(seed, data) : [];
-        setMixCandidatesLoaded(true);
-        setMixPump((p) => p + 1);
-      })
-      .catch(() => {
-        // 네트워크 실패 — 빈 후보로 처리 → 아래 소진 effect 가 안내 + 자동 복귀.
-        if (controller.signal.aborted) return;
-        mixQueueRef.current = [];
-        setMixCandidatesLoaded(true);
-        setMixPump((p) => p + 1);
-      });
+      .then((data: RelatedWorksResponse | null) => (data ? buildSeededMixItems(seed, data) : []))
+      .catch(() => []);
+
+    // 3차 — 장르 큐 하이브리드: mirror 대표작(genre-top) + seed related 를
+    // 2:1 교차 병합. mirror fetch 실패 시 mergeGenreQueueItems 가 자연히
+    // related-only 로 동작 (Discover 흐름 무손상 fallback).
+    const isGenreQueue = theme?.kind === 'genre' && theme.genreId != null;
+    const finalize = (items: RelatedWork[]) => {
+      if (controller.signal.aborted) return;
+      mixQueueRef.current = items;
+      setMixCandidatesLoaded(true);
+      setMixPump((p) => p + 1);
+    };
+    if (isGenreQueue) {
+      const mirrorPromise: Promise<RelatedWork[]> = fetch(
+        `${env.API_BASE_URL}/api/tmdb/genre-top?genre=${theme.genreId}`,
+        { signal: controller.signal },
+      )
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: RelatedWork[] | null) => (Array.isArray(data) ? data : []))
+        .catch(() => []);
+      // 제외 셋 — saved + recHistory 활성(7일) + seed 자신.
+      // recHistory 활성 id 는 mediaType 미보유 → movie/tv 양쪽 키로 제외
+      // (id 충돌 시 과잉 제외 가능하지만 희귀 — 재노출 방지가 우선).
+      const excludePromise: Promise<Set<string>> = Promise.all([
+        getSaved(),
+        getActiveExcludeIds({ cooldownDays: 7 }),
+      ])
+        .then(([saved, hist]) => {
+          const ex = new Set<string>();
+          for (const s of saved) {
+            const mt = s.recommendation.type === 'movie' ? 'movie' : 'tv';
+            ex.add(`${mt}:${s.recommendation.tmdbId}`);
+          }
+          for (const id of hist) {
+            ex.add(`movie:${id}`);
+            ex.add(`tv:${id}`);
+          }
+          ex.add(`${seed.type === 'movie' ? 'movie' : 'tv'}:${seed.tmdbId}`);
+          return ex;
+        })
+        .catch(() => new Set<string>());
+      Promise.all([mirrorPromise, relatedPromise, excludePromise]).then(
+        ([mirror, rel, exclude]) => {
+          const merged = mergeGenreQueueItems(mirror, rel, exclude);
+          // 병합 결과가 전멸(전부 제외)이면 related 원본 fallback — 빈 큐 즉시 종료 방지.
+          finalize(merged.length > 0 ? merged : rel);
+        },
+      );
+    } else {
+      relatedPromise.then(finalize);
+    }
   }
 
   /** 믹스 해제 — 원 덱/topIdx 는 그대로라 자동 복원. */
@@ -1326,6 +1385,7 @@ export default function DiscoverScreen() {
     mixQueueRef.current = [];
     mixHydratingRef.current = false;
     setMixSeed(null);
+    setMixTheme(null);
     setMixDeck([]);
     setMixTopIdx(0);
     setMixCandidatesLoaded(false);
@@ -1389,7 +1449,7 @@ export default function DiscoverScreen() {
       return;
     }
     if (mixTopIdx >= mixDeck.length) {
-      toast.show('info', { ctx: { message: '믹스를 다 봤어요' }, duration: 1800 });
+      toast.show('info', { ctx: { message: '큐를 다 봤어요' }, duration: 1800 });
       handleMixRelease();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1408,7 +1468,7 @@ export default function DiscoverScreen() {
   useFocusEffect(
     useCallback(() => {
       const pending = consumePendingMixSeed();
-      if (pending) handleMixStartRef.current(pending.seed, pending.source);
+      if (pending) handleMixStartRef.current(pending.seed, pending.source, pending.theme);
     }, []),
   );
 
@@ -1673,6 +1733,9 @@ export default function DiscoverScreen() {
     });
 
   const cardsToShow = activeDeck.slice(activeTopIdx, activeTopIdx + 3);
+  // 3차 — 큐 진행 카운트 총량. mixQueueRef 는 ref 지만 mixPump 가 hydrate 1건마다
+  // 리렌더를 일으켜 렌더 시점 값이 최신 (pump effect 참조).
+  const mixTotal = inMix ? mixDeck.length + mixQueueRef.current.length : 0;
   const isLiked = currentRec ? savedIds.has(currentRec.tmdbId) : false;
   // 2026-06-06 (Tier 3 단기 incident 해소) — EmptyState UI 자체 페기.
   // 무한 스크롤이 의도 → "오늘은 여기까지" 화면 자체가 없어야 함 (사용자 명시).
@@ -1808,22 +1871,39 @@ export default function DiscoverScreen() {
         }}
       />
 
-      {/* 2026-07-08 Seeded Mix 2차 — 믹스 중엔 FilterChips 대신 믹스 라벨 바.
-          필터는 일반 덱 전용 (mix 덱은 후보 12 이하 고정 셋이라 서버 필터 무의미). */}
+      {/* 2026-07-08 Seeded Mix 2차 — 큐 중엔 FilterChips 대신 큐 바.
+          필터는 일반 덱 전용 (큐 덱은 후보 12 이하 고정 셋이라 서버 필터 무의미).
+          3차 업스케일 — seed 미니 포스터(작품 큐만) + display 위계 라벨 + 진행 카운트.
+          테마 큐는 포스터 생략 + 테마 title (seed 작품 비노출 정책 — 2차 확정 유지). */}
       {inMix && mixSeed ? (
         <View style={styles.mixBar} testID="mix-bar">
-          <Text style={styles.mixBarTitle} numberOfLines={1}>
-            {mixLabelOf(mixSeed.title)}
-          </Text>
+          {!mixTheme && mixSeed.posterUrl ? (
+            <Image
+              source={{ uri: mixSeed.posterUrl }}
+              style={styles.mixBarPoster}
+              contentFit="cover"
+              transition={0}
+            />
+          ) : null}
+          <View style={styles.mixBarLabelGroup}>
+            <Text style={styles.mixBarTitle} numberOfLines={1}>
+              {mixTheme ? mixTheme.title : mixLabelOf(mixSeed.title)}
+            </Text>
+            {mixCandidatesLoaded && mixTotal > 0 ? (
+              <Text style={styles.mixBarCount} testID="mix-count">
+                {Math.min(mixTopIdx + 1, mixTotal)} / {mixTotal}
+              </Text>
+            ) : null}
+          </View>
           <Pressable
             style={styles.mixBarRelease}
             onPress={handleMixRelease}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="믹스 해제"
+            accessibilityLabel="큐 종료"
             testID="mix-release"
           >
-            <Text style={styles.mixBarReleaseText}>해제</Text>
+            <Text style={styles.mixBarReleaseText}>종료</Text>
           </Pressable>
         </View>
       ) : (
@@ -1848,11 +1928,13 @@ export default function DiscoverScreen() {
       )}
 
       <View
-        // 2026-07-08 Seeded Mix 2차 피드백 — mix 중 카피 영역(mixBar)부터 카드
-        // 테두리까지 이어지는 하이라이트 배경 (라벨 단독 노출이 조악하다는 피드백).
-        style={[styles.stackWrap, inMix && styles.mixHighlight]}
+        style={styles.stackWrap}
         onLayout={(e) => setStackRect(e.nativeEvent.layout)}
       >
+        {/* 3차 — 큐 하이라이트: 각진 풀블리드 폐기 → 카드 인셋(12) 정합 라운드 프레임.
+            mixBar(위, top radius) 와 이 플레이트(bottom radius) 가 한 덩어리 라운드
+            면으로 읽힘. 카드가 위에 얹혀 카드 radius 코너 틈으로도 같은 면이 보임. */}
+        {inMix && <View style={styles.mixFrame} pointerEvents="none" />}
         {/* 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
             refresh = 사용자 새로고침 → ApertureBreathLoader (중앙 호흡) 유지.
             default = 첫 진입 / 필터 변경 → SkeletonCard (카드 윤곽) 로 빈 화면 제거.
@@ -1903,14 +1985,14 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {/* 2026-07-08 Seeded Mix 2차 — mix 덱 로딩 (후보 fetch + 첫 hydrate 대기). */}
+        {/* 2026-07-08 Seeded Mix 2차 — 큐 덱 로딩 (후보 fetch + 첫 hydrate 대기). */}
         {inMix && cardsToShow.length === 0 && (
           <View
             style={styles.centered}
             accessibilityLiveRegion="polite"
-            accessibilityLabel="믹스 후보를 고르고 있어요"
+            accessibilityLabel="큐를 채우고 있어요"
           >
-            <ApertureBreathLoader size={72} message="믹스 후보를 고르고 있어요" />
+            <ApertureBreathLoader size={72} message="큐를 채우고 있어요" />
           </View>
         )}
 
@@ -2001,7 +2083,7 @@ export default function DiscoverScreen() {
             accessibilityLabel="카드 메뉴"
             testID="card-menu-button"
           >
-            <IconMoreVertical size={15} color={colors.textPrimary} />
+            <IconMoreVertical size={18} color={colors.textPrimary} />
           </Pressable>
         )}
 
@@ -2022,7 +2104,7 @@ export default function DiscoverScreen() {
                 testID="card-menu-mix"
               >
                 <Text style={styles.cardMenuItemText} numberOfLines={1}>
-                  {currentRec.title} 믹스 시작
+                  {currentRec.title} 큐 시작
                 </Text>
               </Pressable>
             </View>
@@ -2102,6 +2184,16 @@ export default function DiscoverScreen() {
           setSearchOpen(true);
           setReturnToDetailAfterSearch(true);
         }}
+        // 3차 Phase E — DetailSheet '큐 시작'. 시트 닫고 (검색/복귀 플래그 클리어 —
+        // 큐 시작 의도가 복귀 흐름보다 우선) 현재 표시 rec 을 seed 로 덱 주입.
+        // Discover 는 이미 focus 상태라 브리지 불필요 — 직접 호출.
+        onStartMix={(mixRec) => {
+          setDetailOpen(false);
+          setSearchSelectedRec(null);
+          setReturnToSearchAfterDetail(false);
+          setReturnToDetailAfterSearch(false);
+          handleMixStart(mixRec, 'native_detail_sheet');
+        }}
       />
 
       <SearchSheet
@@ -2171,21 +2263,19 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   stack: { flex: 1, position: 'relative' },
-  // Seeded Mix 2차 — 케밥(⋮) 버튼. top 카드 우측상단 (카드 right inset 12 + 내부 14
-  // = 26, RatingChip top 14 + 높이 ~23 + gap 9 = 46). RatingChip 과 동일 칩 계열
-  // (overlay bg + radius.sm), amber 미사용 (DESIGN.md anti-slop #13 — 과한 CTA 금지).
+  // 3차 — 케밥(⋮) 버튼. DetailSheet topNavBtn 정본 계열 (44×44 원형, surfaceRaised).
+  // top 14 = 카드 내부 상단 인셋 — SwipeCard topRow(minHeight 44 center) 필 2개와
+  // 수직 중심 정렬. right 26 = 카드 인셋 12 + 내부 14.
   cardMenuBtn: {
     position: 'absolute',
-    top: 46,
+    top: 14,
     right: 26,
-    width: 28,
-    height: 26,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.sm,
-    backgroundColor: colors.overlay,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.surfaceRaised,
   },
   // 인라인 메뉴 — 케밥 바로 아래 anchor. surface + border, Quiet Ink (그림자/amber 無).
   cardMenuBackdrop: {
@@ -2194,7 +2284,7 @@ const styles = StyleSheet.create({
   },
   cardMenu: {
     position: 'absolute',
-    top: 78,
+    top: 66,
     right: 26,
     minWidth: 180,
     maxWidth: 260,
@@ -2216,30 +2306,58 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
-  // 믹스 라벨 바 — FilterChips 자리 대체. 칩 row 와 유사 footprint (minHeight 44).
-  // 배경은 아래 stackWrap 의 mixHighlight 와 이어져 "카피 → 카드 테두리" 한 덩어리로
-  // mix 모드를 표시 (2026-07-08 사용자 피드백).
+  // 큐 바 — FilterChips 자리 대체. 3차 업스케일: 카드 인셋(12) 정합 마진 + 상단
+  // radius.xl → 아래 mixFrame 플레이트와 한 덩어리 라운드 면. accentDim 은 기존
+  // 1건 예산 그대로 (anti-slop #13 — 큐 모드 한정 transient 표면).
   mixBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 44,
+    minHeight: 56,
+    marginHorizontal: 12,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
     backgroundColor: colors.accentDim,
   },
-  // mix 모드 하이라이트 — accent-dim 12% 면. amber 동시 노출 카운트 1건
-  // (anti-slop #13 예산 내 — mix 모드 한정 transient 표면).
-  mixHighlight: {
+  // 큐 하이라이트 플레이트 — stackWrap 안 absolute. 카드(left/right 12, bottom 8)
+  // 뒤에 깔려 카드 radius 코너/하단 8px 스트립으로 노출. 하단 radius.xl 로 마감.
+  mixFrame: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    top: 0,
+    bottom: 0,
+    borderBottomLeftRadius: radius.xl,
+    borderBottomRightRadius: radius.xl,
     backgroundColor: colors.accentDim,
   },
-  mixBarTitle: {
+  // seed 미니 포스터 (작품 큐만) — 2:3 비율 28×42, 카드 radius 계열 sm.
+  mixBarPoster: {
+    width: 28,
+    height: 42,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+  },
+  mixBarLabelGroup: {
     flex: 1,
+    gap: 1,
+  },
+  // display 폰트 위계 업스케일 (구 15/700 body → 17 display).
+  mixBarTitle: {
     color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: -0.3,
+    fontSize: 17,
+    fontFamily: fontsV2.display,
+    fontWeight: '500',
+    letterSpacing: -0.34,
+  },
+  // 진행 카운트 — 데이터 위계 (Geist Mono, textMuted).
+  mixBarCount: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+    letterSpacing: 0.2,
   },
   // Ghost variant — 배경 투명 + 보더 (DESIGN.md §Buttons).
   mixBarRelease: {

@@ -252,11 +252,11 @@ function TabsWithGuard() {
               name="mix"
               options={{
                 lazy: false,
-                tabBarAccessibilityLabel: '믹스',
+                tabBarAccessibilityLabel: '큐',
                 tabBarIcon: ({ focused }) => (
                   <TabItem
                     icon={({ color, active }) => <IconMix color={color} active={active} />}
-                    label="믹스"
+                    label="큐"
                     focused={focused}
                   />
                 ),

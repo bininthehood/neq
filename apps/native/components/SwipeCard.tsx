@@ -14,7 +14,6 @@ import type { Recommendation } from '../lib/types';
 import { getOTTIcon } from '@neq/core';
 import { fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, shadowsNative } from '../lib/tokens';
-import { IconStar } from './Icons';
 
 // 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
 //   - dismissX / isDismissing prop 폐기. dragX 단일 SharedValue 로 PWA 정합.
@@ -23,19 +22,6 @@ import { IconStar } from './Icons';
 //   - worklet 의 dismissRaw/dismissActive/effectiveDragX 폐기 → `tx = isTop ? dragX.value : 0`.
 //   - zIndex 는 depth prop 직접 사용 (Math.round(10 - depth)).
 //   - PWA `apps/web/src/hooks/useSwipeGesture.ts:205-208` + `SwipeCard.tsx:68-89` 1:1 포팅.
-
-/**
- * hex(#RRGGBB) → rgba 문자열 변환. CatChip 보더의 25% alpha 처리용.
- * web CatChip 은 `color-mix(in srgb, ${color} 25%, transparent)` 를 쓰지만 RN 은
- * color-mix 미지원 → 카테고리 색을 직접 alpha 적용. (2026-05-19 정합 audit)
- */
-function hexAlpha(hex: string, alpha: number): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 
 interface Props {
   rec: Recommendation;
@@ -122,45 +108,6 @@ const CAT_LABEL: Record<CardCategory, string> = {
   series: '시리즈',
   variety: '예능',
 };
-const CAT_COLOR: Record<CardCategory, string> = {
-  movie: colors.catMovie,
-  series: colors.catSeries,
-  variety: colors.catVariety,
-};
-
-/** 카테고리 칩 — bg-overlay solid + cat 색 텍스트 + 1px 보더(cat 색 25% alpha).
- *  2026-06-10 (Phase C #3) — BlurView intensity=20 폐기, DESIGN.md L142
- *  `--bg-overlay` (rgba(18,17,14,0.7) "뱃지, 태그, 힌트 배경") 정본 회귀.
- *  worst-case 베이지/금색/라벤더/코랄 포스터 위에서도 effective bg ≈ #12110E 근사 →
- *  text-primary/카테고리 hue 대비비 AA 이상 보장. PWA `parts.tsx` L36 정합. */
-function CatChip({ type }: { type: CardCategory }) {
-  const color = CAT_COLOR[type];
-  return (
-    <View style={styles.catChip}>
-      <Text
-        style={[
-          styles.catChipText,
-          { color, borderColor: hexAlpha(color, 0.25) },
-        ]}
-      >
-        {CAT_LABEL[type]}
-      </Text>
-    </View>
-  );
-}
-
-/** 평점 칩 — bg-overlay solid + IconStar amber + 평점 text-primary.
- *  2026-06-10 (Phase C #3) — BlurView 폐기, `--bg-overlay` 정본 회귀.
- *  텍스트는 text-primary (#EDEDEF) 로, IconStar 만 amber 유지 (anti-slop #13
- *  amber 누적 분배 — Rating 별 1개 = 평점 위계 신호, 숫자는 데이터). */
-function RatingChip({ value }: { value: number }) {
-  return (
-    <View style={styles.ratingChip}>
-      <IconStar size={11} color={colors.accent} />
-      <Text style={styles.ratingText}>{value.toFixed(1)}</Text>
-    </View>
-  );
-}
 
 export default function SwipeCard({
   rec,
@@ -351,13 +298,20 @@ export function CardInner({
 
       {depth <= 1 && (
         <>
-          {/* top row — cat chip(좌) + rating chip(우) */}
+          {/* top row — 3차 (2026-07-08): DetailSheet heroBadges 정본과 동일 필 2개
+              (★평점 amber → 구분) 를 좌측상단 나란히. 우측은 케밥(44px 원형, index.tsx
+              overlay) 자리 — right 인셋으로 겹침 회피. minHeight 44 center 로 케밥과
+              수직 중심 정렬. */}
           <View
             style={[styles.topRow, { opacity: infoVisible ? 1 : 0 }]}
             pointerEvents="none"
           >
-            <CatChip type={type} />
-            <RatingChip value={rec.rating} />
+            <View style={styles.ratingPill}>
+              <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
+            </View>
+            <View style={styles.typePill}>
+              <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
+            </View>
           </View>
 
           {/* bottom — year·titleEn / title / reason / otts */}
@@ -421,50 +375,44 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 48,
   },
-  // top row — CardVariantA: top/left/right 14, space-between, align-items flex-start
+  // top row — 3차: 좌측 정렬 필 2개. right 74 = 케밥 44 + 카드 인셋(14) + gap(16) 회피.
+  // minHeight 44 + center = 케밥 원형(44px)과 수직 중심 일치.
   topRow: {
     position: 'absolute',
     top: 14,
     left: 14,
-    right: 14,
+    right: 74,
+    minHeight: 44,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  // CatChip — padding 4×10, radius-sm, bg-overlay solid (DESIGN.md L142 "뱃지, 태그, 힌트 배경"),
-  // text-xs 600. 2026-06-10 BlurView 폐기.
-  catChip: {
-    borderRadius: radius.sm,
-    backgroundColor: colors.overlay,
-    overflow: 'hidden',
-  },
-  catChipText: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: -0.05,
-    borderWidth: 1,
-    borderRadius: radius.sm,
-  },
-  // Rating 칩 — padding 4×10, radius-sm, bg-overlay solid (DESIGN.md L142). 2026-06-10 BlurView 폐기.
-  ratingChip: {
-    flexDirection: 'row',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    gap: 3,
+    gap: 6,
+  },
+  // DetailSheet heroBadges 정본 (DetailSheet.tsx styles.ratingPill/typePill 동일값):
+  // bg rgba(0,0,0,0.5), radius-sm, padding 10×4, fontSize 11, Geist Mono, ls 0.2.
+  ratingPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.sm,
-    backgroundColor: colors.overlay,
-    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
-  ratingText: {
-    fontFamily: fontsV2.data, // Geist Mono tabular-nums (web Rating 정합)
-    // 2026-06-10 (Phase C #3) — anti-slop #13 amber 누적 분배. text-primary 로
-    // 강등하고 IconStar 만 amber 유지 (별 = 평점 위계 신호, 숫자 = 데이터).
+  ratingPillText: {
+    color: colors.accent,
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+    letterSpacing: 0.2,
+  },
+  typePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  typePillText: {
     color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontFamily: fontsV2.data,
+    letterSpacing: 0.2,
   },
   // bottom info — CardVariantA: left/right 18, bottom 16
   bottomInfo: {

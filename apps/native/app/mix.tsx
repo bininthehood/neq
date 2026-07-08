@@ -53,21 +53,28 @@ export default function MixScreen() {
       theme_kind: theme.kind,
       seed_tmdb_id: theme.seed.tmdbId,
       seed_title: theme.seed.title,
+      ...(theme.genreId != null && { genre_id: theme.genreId }),
     });
-    setPendingMixSeed(theme.seed, 'native_mix_tab');
+    // 3차 — theme 동반 전달: 큐 바 라벨(테마 title) + 장르 큐 하이브리드 후보 조회 키.
+    setPendingMixSeed(theme.seed, 'native_mix_tab', {
+      kind: theme.kind,
+      title: theme.title,
+      genreId: theme.genreId,
+    });
     router.push('/');
   }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Mix</Text>
+        {/* 3차 — 영문 display 관례 (Saved 정합): Mix → Cue */}
+        <Text style={styles.title}>Cue</Text>
       </View>
 
       {empty ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyTitle}>저장작이 아직 없어요</Text>
-          <Text style={styles.emptyHint}>작품을 저장하면 테마 믹스를 제안해요</Text>
+          <Text style={styles.emptyHint}>작품을 저장하면 테마 큐를 제안해요</Text>
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>

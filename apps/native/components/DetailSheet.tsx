@@ -92,6 +92,12 @@ interface Props {
    * PR2 — 'detail' (default) | 'share'. Share UL 진입은 'share' 로 마운트.
    */
   mode?: DetailMode;
+  /**
+   * 3차 (2026-07-08) — sticky CTA '큐 시작'. 현재 표시 중인 작품(관련작 history
+   * 탐색 포함)을 seed 로 호출. 미지정 또는 share mode 면 버튼 미노출 —
+   * 호스트(Discover 직접 시작 / Saved 브리지+router)가 이행 책임.
+   */
+  onStartMix?: (rec: Recommendation) => void;
 }
 
 function metaInfo(r: Recommendation): string {
@@ -112,6 +118,7 @@ export default function DetailSheet({
   onClose,
   onSearchPerson,
   mode = 'detail',
+  onStartMix,
 }: Props) {
   const insets = useSafeAreaInsets();
   // PR2 — translateY 는 swipe-down dismiss 변위. 평소 0, drag 중 양수.
@@ -1016,14 +1023,29 @@ export default function DetailSheet({
                     <Text style={styles.ctaGhostText}>추천 더 보기</Text>
                   </Pressable>
                 ) : (
-                  <Pressable
-                    style={styles.ctaGhostSquare}
-                    onPress={handleShare}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${rec.title} 공유하기`}
-                  >
-                    <IconShare size={16} color={colors.textSecondary} />
-                  </Pressable>
+                  <>
+                    {/* 3차 — '큐 시작' ghost (amber 위계 침범 없음). share mode 제외.
+                        rec = history 현재 작품 — 관련작 탐색 깊이에서도 그 작품이 seed. */}
+                    {onStartMix ? (
+                      <Pressable
+                        style={styles.ctaGhost}
+                        onPress={() => onStartMix(rec)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${rec.title} 큐 시작`}
+                        testID="detail-mix-start"
+                      >
+                        <Text style={styles.ctaGhostText}>큐 시작</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      style={styles.ctaGhostSquare}
+                      onPress={handleShare}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${rec.title} 공유하기`}
+                    >
+                      <IconShare size={16} color={colors.textSecondary} />
+                    </Pressable>
+                  </>
                 )}
               </View>
             </View>

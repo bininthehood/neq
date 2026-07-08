@@ -124,7 +124,7 @@ try {
     await (await b.$('~card-menu-button')).click();
     const gotMenu = await waitFor(b, async () => (await src(b)).includes('name="card-menu"'), 5000);
     s = await src(b);
-    const hasItem = s.includes(`${seedTitle} 믹스 시작`);
+    const hasItem = s.includes(`${seedTitle} 큐 시작`);
     const detailLeak1 = s.includes('공유하기');
     await cap(b, '02-card-menu');
     // backdrop 탭 (메뉴 밖 좌하단 좌표) — 투명 Pressable 이 흡수해 메뉴 닫힘 +
@@ -137,7 +137,7 @@ try {
       kebabCount === 1 && gotMenu >= 0 && hasItem && closed >= 0 && !detailLeak1 && !detailLeak2
         ? 'PASS'
         : 'FAIL',
-      `케밥${kebabCount}개 메뉴열림=${gotMenu >= 0} 항목("${seedTitle} 믹스 시작")=${hasItem} 닫힘=${closed >= 0} detail누출=${detailLeak1 || detailLeak2}`,
+      `케밥${kebabCount}개 메뉴열림=${gotMenu >= 0} 항목("${seedTitle} 큐 시작")=${hasItem} 닫힘=${closed >= 0} detail누출=${detailLeak1 || detailLeak2}`,
     );
   }
 
@@ -153,17 +153,27 @@ try {
     const injected = await waitFor(b, async () => {
       const s = await src(b);
       const top = topTitleOf(s);
-      return s.includes(`${seedTitle} 믹스`) && s.includes('name="mix-release"') && top && top !== seedTitle;
+      return s.includes(`${seedTitle} 큐`) && s.includes('name="mix-release"') && top && top !== seedTitle;
     }, 20000);
     const s1 = await src(b);
     mark(
       'deck_injection',
       injected >= 0 ? 'PASS' : 'FAIL',
       injected >= 0
-        ? `"${seedTitle} 믹스" 라벨 + top="${topTitleOf(s1)}" 교체 ${injected}ms`
+        ? `"${seedTitle} 큐" 라벨 + top="${topTitleOf(s1)}" 교체 ${injected}ms`
         : `라벨/덱 교체 미확인 (top=${topTitleOf(s1)})`,
     );
     await cap(b, '03-mix-deck');
+
+    // ── 2b. 3차 큐 바 업스케일 — '종료' 카피 + 진행 카운트 + '해제' 잔재 0
+    const hasEnd = s1.includes('큐 종료') || s1.includes('>종료<') || /label="종료"/.test(s1);
+    const hasCount = s1.includes('name="mix-count"');
+    const noOldRelease = !/label="믹스 해제"|label="해제"/.test(s1);
+    mark(
+      'queue_bar_upscale',
+      hasEnd && hasCount && noOldRelease ? 'PASS' : 'FAIL',
+      `종료=${hasEnd} 카운트=${hasCount} 구'해제'잔재無=${noOldRelease}`,
+    );
   }
 
   // ── 3. mix 덱 인터랙션 — 좌/우/탭Detail/아래save
@@ -219,9 +229,46 @@ try {
     await cap(b, '05-released');
   }
 
+  // ── 4b. 3차 Phase E — DetailSheet '큐 시작' (Discover 경유)
+  {
+    const s0 = await src(b);
+    const detailSeed = topTitleOf(s0);
+    await tapAt(b, 200, 420); // 탭 → Detail
+    const opened = await waitFor(b, async () => (await src(b)).includes('공유하기'), 8000);
+    let ok = false;
+    let note = 'Detail 미오픈';
+    if (opened >= 0) {
+      const btn = await b.$('~detail-mix-start');
+      try {
+        await btn.waitForExist({ timeout: 4000 });
+        await btn.click();
+        const started = await waitFor(b, async () => {
+          const s = await src(b);
+          return (
+            !s.includes('공유하기') && // 시트 닫힘
+            s.includes('name="mix-release"') &&
+            s.includes(`${detailSeed} 큐`)
+          );
+        }, 20000);
+        ok = started >= 0;
+        note = ok ? `"${detailSeed} 큐" 주입 ${started}ms` : '시트닫힘/덱주입 미확인';
+      } catch {
+        note = 'detail-mix-start 버튼 미발견';
+        await closeDetail(b);
+      }
+    }
+    mark('detail_sheet_mix_start', ok ? 'PASS' : 'FAIL', note);
+    await cap(b, '05b-detail-mix-start');
+    // 다음 섹션 위해 해제
+    if (ok) {
+      await (await b.$('~mix-release')).click();
+      await waitFor(b, async () => !(await src(b)).includes('name="mix-release"'), 8000);
+    }
+  }
+
   // ── 5. Mix 탭 — 테마 섹션 ≥2종
   {
-    await (await b.$('~믹스')).click();
+    await (await b.$('~큐')).click();
     const gotTab = await waitFor(b, async () => {
       const s = await src(b);
       return s.includes('최근 저장작으로') || s.includes('저장작이 아직 없어요');
@@ -245,7 +292,7 @@ try {
     await (await b.$('~mix-theme-recent-0')).click();
     const linked = await waitFor(b, async () => {
       const s = await src(b);
-      return s.includes('name="mix-release"') && s.includes('믹스');
+      return s.includes('name="mix-release"') && s.includes('큐');
     }, 20000);
     const s1 = await src(b);
     const cardShown = await waitFor(b, async () => !!topTitleOf(await src(b)), 20000);
@@ -273,7 +320,7 @@ try {
         await waitFor(b, async () => !(await src(b)).includes('name="mix-release"'), 8000);
       }
       for (let i = 0; i < 10; i++) {
-        await (await b.$('~믹스')).click();
+        await (await b.$('~큐')).click();
         await b.pause(250);
         await (await b.$('~발견')).click();
         await b.pause(250);

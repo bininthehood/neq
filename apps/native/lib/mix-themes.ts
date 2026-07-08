@@ -13,8 +13,10 @@ export type MixThemeKind = 'recent_saved' | 'genre' | 'director';
 
 export interface MixTheme {
   kind: MixThemeKind;
-  /** 표시 제목 — 예: "인셉션 믹스" / "스릴러 믹스" / "봉준호 믹스" */
+  /** 표시 제목 — 예: "인셉션 큐" / "스릴러 큐" / "봉준호 큐" */
   title: string;
+  /** 장르 테마 전용 — TMDB 장르 id. 하이브리드 후보(genre-top mirror API) 조회 키. */
+  genreId?: number;
   /**
    * 보조 설명 — 예: "최근 저장작" / "저장작 3편".
    * 기반 작품명은 노출하지 않음 (사용자 피드백 2026-07-08 — 알고리즘 개선 여지를
@@ -45,7 +47,7 @@ export function buildRecentSavedThemes(saved: SavedItem[], max = MIX_THEME_RECEN
     .slice(0, max)
     .map((s) => ({
       kind: 'recent_saved' as const,
-      title: `${s.recommendation.title} 믹스`,
+      title: `${s.recommendation.title} 큐`,
       subtitle: '최근 저장작',
       seed: s.recommendation,
       imageUrl: s.recommendation.posterUrl,
@@ -82,7 +84,8 @@ export function buildGenreThemes(saved: SavedItem[], max = MIX_THEME_GENRE_MAX):
       usedSeeds.add(`${seedItem.recommendation.type}:${seedItem.recommendation.tmdbId}`);
       return {
         kind: 'genre' as const,
-        title: `${getGenreLabels([genreId])[0]} 믹스`,
+        title: `${getGenreLabels([genreId])[0]} 큐`,
+        genreId,
         subtitle: `저장작 ${items.length}편`,
         seed: seedItem.recommendation,
         imageUrl: seedItem.recommendation.backdrop ?? seedItem.recommendation.posterUrl,
@@ -112,7 +115,7 @@ export function buildDirectorThemes(saved: SavedItem[], max = MIX_THEME_DIRECTOR
       const seedItem = latestByDirector.get(director)!;
       return {
         kind: 'director' as const,
-        title: `${director} 믹스`,
+        title: `${director} 큐`,
         subtitle: `저장작 ${n}편`,
         seed: seedItem.recommendation,
         imageUrl: profileByDirector.get(director) ?? null,

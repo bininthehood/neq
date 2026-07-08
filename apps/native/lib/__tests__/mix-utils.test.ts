@@ -6,6 +6,7 @@ import {
   mixCaptionOf,
   dedupeMixItems,
   buildSeededMixItems,
+  mergeGenreQueueItems,
   MIX_MAX_ITEMS,
 } from '../mix-utils';
 
@@ -38,10 +39,10 @@ describe('koreanInstrumentalParticle', () => {
     expect(koreanInstrumentalParticle('Her')).toBe('로');
     expect(koreanInstrumentalParticle('1917')).toBe('로');
   });
-  it('라벨/캡션 조합', () => {
-    expect(mixLabelOf('인셉션')).toBe('인셉션 믹스');
-    expect(mixCaptionOf('인셉션')).toBe('인셉션으로 시작한 믹스');
-    expect(mixCaptionOf('토르')).toBe('토르로 시작한 믹스');
+  it('라벨/캡션 조합 — 3차 용어 전환 (믹스 → 큐)', () => {
+    expect(mixLabelOf('인셉션')).toBe('인셉션 큐');
+    expect(mixCaptionOf('인셉션')).toBe('인셉션으로 시작한 큐');
+    expect(mixCaptionOf('토르')).toBe('토르로 시작한 큐');
   });
 });
 
@@ -106,5 +107,39 @@ describe('buildSeededMixItems', () => {
 
   it('빈 related → 빈 배열 (Discover 흐름 무손상 fallback 은 호출부 책임)', () => {
     expect(buildSeededMixItems(seed, related({}))).toEqual([]);
+  });
+});
+
+describe('mergeGenreQueueItems (3차 — 장르 큐 하이브리드)', () => {
+  const key = (x: RelatedWork) => `${x.mediaType}:${x.id}`;
+
+  it('mirror 2 : related 1 교차 (mirror 우세)', () => {
+    const mirror = [w(1), w(2), w(3), w(4)];
+    const rel = [w(101), w(102)];
+    const out = mergeGenreQueueItems(mirror, rel, new Set());
+    expect(out.map((x) => x.id)).toEqual([1, 2, 101, 3, 4, 102]);
+  });
+
+  it('exclude 키 (saved/history/seed) 제외 + mediaType:id dedupe', () => {
+    const mirror = [w(1), w(2), w(2), w(3, 'tv')];
+    const rel = [w(2), w(101)];
+    const out = mergeGenreQueueItems(mirror, rel, new Set(['movie:1']));
+    expect(out.map(key)).toEqual(['movie:2', 'tv:3', 'movie:101']);
+  });
+
+  it('mirror 빈 배열 (fetch 실패) → related-only fallback', () => {
+    const out = mergeGenreQueueItems([], [w(101), w(102)], new Set());
+    expect(out.map((x) => x.id)).toEqual([101, 102]);
+  });
+
+  it('related 빈 배열 → mirror-only', () => {
+    const out = mergeGenreQueueItems([w(1), w(2), w(3)], [], new Set());
+    expect(out.map((x) => x.id)).toEqual([1, 2, 3]);
+  });
+
+  it('최대 12개 캡', () => {
+    const mirror = Array.from({ length: 20 }, (_, i) => w(i + 1));
+    const rel = Array.from({ length: 20 }, (_, i) => w(i + 101));
+    expect(mergeGenreQueueItems(mirror, rel, new Set())).toHaveLength(MIX_MAX_ITEMS);
   });
 });

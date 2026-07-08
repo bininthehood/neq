@@ -34,12 +34,12 @@ function item(tmdbId: number, savedAt: number, over: Partial<Recommendation> = {
 }
 
 describe('buildRecentSavedThemes', () => {
-  it('savedAt desc 상위 N, 라벨 = "<제목> 믹스"', () => {
+  it('savedAt desc 상위 N, 라벨 = "<제목> 큐"', () => {
     const themes = buildRecentSavedThemes(
       [item(1, 100, { title: '옛날' }), item(2, 300, { title: '최신' }), item(3, 200)],
       2,
     );
-    expect(themes.map((t) => t.title)).toEqual(['최신 믹스', 't3 믹스']);
+    expect(themes.map((t) => t.title)).toEqual(['최신 큐', 't3 큐']);
     expect(themes[0].seed.tmdbId).toBe(2);
     expect(themes[0].kind).toBe('recent_saved');
   });
@@ -56,9 +56,9 @@ describe('buildGenreThemes', () => {
       item(2, 200, { genres: [28, 53] }),
       item(3, 300, { genres: [28] }),
     ]);
-    expect(themes[0].title).toBe('액션 믹스'); // 3편 > 1편
+    expect(themes[0].title).toBe('액션 큐'); // 3편 > 1편
     expect(themes[0].seed.tmdbId).toBe(3); // 액션 최신 = savedAt 300
-    expect(themes[1].title).toBe('스릴러 믹스');
+    expect(themes[1].title).toBe('스릴러 큐');
     expect(themes[1].seed.tmdbId).toBe(2);
     // 기반 작품명 비노출 (사용자 피드백) — 편수만.
     expect(themes[0].subtitle).toBe('저장작 3편');
@@ -74,9 +74,9 @@ describe('buildGenreThemes', () => {
       item(4, 250, { genres: [28] }),
     ]);
     const seedOf = (title: string) => themes.find((t) => t.title === title)!.seed.tmdbId;
-    expect(seedOf('액션 믹스')).toBe(3); // 첫 테마 = 최신 그대로
-    expect(seedOf('가족 믹스')).toBe(2); // 3 은 사용됨 → 다음 최신
-    expect(seedOf('코미디 믹스')).toBe(3); // 대안 없음 → 유지
+    expect(seedOf('액션 큐')).toBe(3); // 첫 테마 = 최신 그대로
+    expect(seedOf('가족 큐')).toBe(2); // 3 은 사용됨 → 다음 최신
+    expect(seedOf('코미디 큐')).toBe(3); // 대안 없음 → 유지
   });
 
   it('이미지 = seed backdrop 우선, 없으면 poster', () => {
@@ -112,7 +112,7 @@ describe('buildDirectorThemes', () => {
       item(3, 200, { director: '박찬욱' }),
       item(4, 400), // director null
     ]);
-    expect(themes.map((t) => t.title)).toEqual(['봉준호 믹스', '박찬욱 믹스']);
+    expect(themes.map((t) => t.title)).toEqual(['봉준호 큐', '박찬욱 큐']);
     expect(themes[0].seed.tmdbId).toBe(2); // 봉준호 최신 = 300
     // 기반 작품명 비노출 (사용자 피드백) — 편수만.
     expect(themes[0].subtitle).toBe('저장작 2편');

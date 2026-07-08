@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Rect, Line, Polyline } from 'react-native-svg';
 import { getOTTIcon } from '@neq/core';
@@ -35,6 +35,7 @@ import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
 import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
 import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
+import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
 import { IconSearch, IconArchive } from '../components/Icons';
@@ -860,6 +861,14 @@ export default function SavedScreen() {
           setDetailOpen(false);
           setSearchInitialQuery(name);
           setSearchOpen(true);
+        }}
+        // 3차 Phase E — Saved 경유 '큐 시작': 시트 닫고 (검색 복귀 플래그 클리어)
+        // 브리지에 seed 적재 → Discover 로 이동. focus 시 consume 되어 덱 주입.
+        onStartMix={(mixRec) => {
+          setDetailOpen(false);
+          setReturnToSearchAfterDetail(false);
+          setPendingMixSeed(mixRec, 'native_detail_sheet');
+          router.push('/');
         }}
       />
 

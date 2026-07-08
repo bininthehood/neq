@@ -23,12 +23,13 @@ export function koreanInstrumentalParticle(word: string): '으로' | '로' {
   return '로';
 }
 
+// 3차 (2026-07-08) — 사용자 노출 용어 '믹스' → '큐'. 내부 심볼/이벤트명은 mix 유지.
 export function mixLabelOf(seedTitle: string): string {
-  return `${seedTitle} 믹스`;
+  return `${seedTitle} 큐`;
 }
 
 export function mixCaptionOf(seedTitle: string): string {
-  return `${seedTitle}${koreanInstrumentalParticle(seedTitle)} 시작한 믹스`;
+  return `${seedTitle}${koreanInstrumentalParticle(seedTitle)} 시작한 큐`;
 }
 
 /** dedupe key — tmdb id 는 movie/tv 공간이 독립이라 id 단독 비교 금지 (media_type PK 정합). */
@@ -65,4 +66,57 @@ export function buildSeededMixItems(
     ...related.directorWorks,
   ].filter((w) => !(w.id === seed.tmdbId && w.mediaType === seedMediaType));
   return dedupeMixItems(merged).slice(0, max);
+}
+
+/**
+ * 장르 큐 하이브리드 병합 (3차, 2026-07-08) — mirror 대표작 2 : seed related 1 교차.
+ *
+ * "애니만 saved 면 SF 큐도 애니만 나옴" (related-only 편향) 과 "대표작 일변도"
+ * (mirror-only) 둘 다 방지. mirror 우세 비율인 이유: 장르 큐의 기대는 "그 장르의
+ * 대표작 발견" 이고, related 는 개인 맥락(저장작 인접) 양념.
+ *
+ * excludeKeys: `${mediaType}:${id}` — saved + recHistory 활성 + seed 자신.
+ * 한쪽이 비면 자연히 다른 쪽만으로 채움 (mirror fetch 실패 = related-only fallback).
+ */
+export function mergeGenreQueueItems(
+  mirror: RelatedWork[],
+  related: RelatedWork[],
+  excludeKeys: Set<string>,
+  max: number = MIX_MAX_ITEMS,
+): RelatedWork[] {
+  const seen = new Set(excludeKeys);
+  const out: RelatedWork[] = [];
+  const takeFrom = (list: RelatedWork[], idx: number): [RelatedWork | null, number] => {
+    while (idx < list.length) {
+      const w = list[idx++];
+      const k = `${w.mediaType}:${w.id}`;
+      if (!seen.has(k)) {
+        seen.add(k);
+        return [w, idx];
+      }
+    }
+    return [null, idx];
+  };
+  let mi = 0;
+  let ri = 0;
+  while (out.length < max) {
+    let progressed = false;
+    for (let n = 0; n < 2 && out.length < max; n++) {
+      const [w, ni] = takeFrom(mirror, mi);
+      mi = ni;
+      if (!w) break;
+      out.push(w);
+      progressed = true;
+    }
+    if (out.length < max) {
+      const [w, ni] = takeFrom(related, ri);
+      ri = ni;
+      if (w) {
+        out.push(w);
+        progressed = true;
+      }
+    }
+    if (!progressed) break;
+  }
+  return out;
 }
