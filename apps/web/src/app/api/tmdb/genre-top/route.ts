@@ -78,17 +78,18 @@ export async function GET(req: NextRequest) {
       const chunks: Promise<void>[] = [];
       for (let i = 0; i < ids.length; i += CHUNK) {
         const slice = ids.slice(i, i + CHUNK);
+        // supabase-js 빌더는 PromiseLike — Promise<void>[] 에 담기 위해 async 래핑.
         chunks.push(
-          admin
-            .from("tmdb_catalog")
-            .select("tmdb_id, popularity")
-            .eq("media_type", mt)
-            .in("tmdb_id", slice)
-            .then(({ data }) => {
-              for (const row of (data ?? []) as { tmdb_id: number; popularity: number | null }[]) {
-                popByKey.set(`${mt}:${row.tmdb_id}`, Number(row.popularity ?? 0));
-              }
-            }),
+          (async () => {
+            const { data } = await admin
+              .from("tmdb_catalog")
+              .select("tmdb_id, popularity")
+              .eq("media_type", mt)
+              .in("tmdb_id", slice);
+            for (const row of (data ?? []) as { tmdb_id: number; popularity: number | null }[]) {
+              popByKey.set(`${mt}:${row.tmdb_id}`, Number(row.popularity ?? 0));
+            }
+          })(),
         );
       }
       return chunks;
