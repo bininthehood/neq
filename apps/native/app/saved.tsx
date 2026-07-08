@@ -668,9 +668,9 @@ export default function SavedScreen() {
         </View>
       )}
 
-      {/* #6 — 연·월 가로 스크러buer. monthMode ON 일 때만. 저장에 존재하는 연·월만
-          최신 먼저 (탭=단일 월 필터 / 가로 스와이프=이동). 장르 칩바와 동일 패턴.
-          월이 1개 이하면 컴포넌트가 자체 null 렌더(선택할 게 없음). */}
+      {/* #6 — 연·월 룰러 스크러버. monthMode ON 일 때만. 첫 저장 월~현재 월 연속
+          눈금 + 중앙 인디케이터 스냅 = 단일 월 필터, 우측 '전체' 존 = 해제.
+          저장이 비어있을 때만 컴포넌트가 자체 null 렌더. */}
       {items.length > 0 && monthMode && (
         <SavedMonthScrubber
           items={genreFilteredItems}
@@ -692,7 +692,7 @@ export default function SavedScreen() {
 
       {/* P2 배치 A — 활성 OTT 필터 chip (web SavedFilters 활성 chip 정합).
           OTT 적용 시에만 노출. 탭하면 즉시 제거.
-          (장르 해제는 칩바 '전체', 연·월 해제는 스크러버 재탭으로 처리 — 여기 중복 안 함.) */}
+          (장르 해제는 칩바 '전체', 연·월 해제는 스크러버 '전체' 존으로 처리 — 여기 중복 안 함.) */}
       {items.length > 0 && ottFilter !== null && (
         <View style={styles.activeChipsRow}>
           <Pressable

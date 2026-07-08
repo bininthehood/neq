@@ -150,11 +150,12 @@ async function main() {
     }
 
     // ── 5. 3열 그리드 ────────────────────────────────────────────
-    // 뷰 모드 전환 탭 (list → grid 토글/사이클)
+    // '그리드 보기' 버튼 직접 탭 — 세그먼트 컨테이너('뷰 모드 전환') 중심 탭은
+    // 항상 리스트 버튼에 명중하는 아티팩트 (2026-07-08 수정).
     let gridOk = false;
     let gridNote = '';
     for (let attempt = 0; attempt < 3 && !gridOk; attempt++) {
-      await tapLabel(b, '뷰 모드 전환', 3000);
+      (await tapLabel(b, '그리드 보기', 3000)) || (await tapLabel(b, '뷰 모드 전환', 2000));
       await b.pause(1500);
       const cells = await rects(b, '상세보기');
       const xs = [...new Set(cells.map((c) => c.x))].sort((a, z) => a - z);
@@ -200,7 +201,9 @@ async function main() {
       await b.pause(2000);
       await cap(b, 'detail-sheet');
       const src = await b.getPageSource();
-      const savedBtn = src.includes('저장됨') || src.includes('저장하기');
+      // '저장됨/저장하기' Text 는 accessible Pressable 자식이라 평탄화 —
+      // 버튼 a11y 레이블(`${title} 저장` / `${title} 저장 해제`)로 검출 (2026-07-08 수정).
+      const savedBtn = /name="[^"]+ 저장( 해제)?"/.test(src);
       mark('saved_btn_visible', savedBtn ? 'PASS' : 'FAIL', 'transparent bg 는 screenshot 시각 확인');
 
       // OTT 딥링크 smoke — provider 칩 tap → 외부 오픈 시도 → 앱 복귀

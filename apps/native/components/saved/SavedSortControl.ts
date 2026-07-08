@@ -120,6 +120,67 @@ export function monthOptionsOf(
     .map((key) => ({ key, label: monthLabelOf(key) }));
 }
 
+/**
+ * #6 룰러 스크러버 — 첫 저장 월 ~ 현재 월을 월 단위 연속 눈금으로.
+ * 빈 달도 슬롯에 포함(hasData=false, 시각적으로 흐리게) — 시간축의 연속성 유지.
+ * yearLabel 은 연 경계(1월) 및 첫 슬롯에만.
+ */
+export type RulerSlot = {
+  key: number; // year*12+month (monthKeyOf 와 동일 좌표계)
+  month: number; // 1..12
+  yearLabel: string | null;
+  hasData: boolean;
+  label: string; // 'YYYY년 M월'
+};
+
+export function rulerSlotsOf(items: SavedItem[], nowKey: number): RulerSlot[] {
+  if (items.length === 0) return [];
+  const dataKeys = new Set<number>();
+  let min = Infinity;
+  let max = nowKey;
+  for (const it of items) {
+    const k = monthKeyOf(it);
+    dataKeys.add(k);
+    if (k < min) min = k;
+    if (k > max) max = k;
+  }
+  const slots: RulerSlot[] = [];
+  for (let k = min; k <= max; k++) {
+    const month = (k % 12) + 1;
+    slots.push({
+      key: k,
+      month,
+      yearLabel: month === 1 || k === min ? String(Math.floor(k / 12)) : null,
+      hasData: dataKeys.has(k),
+      label: monthLabelOf(k),
+    });
+  }
+  return slots;
+}
+
+/**
+ * 스냅 정지 인덱스를 유효 정지점으로 해석. 인덱스 slots.length = '전체'(해제) 존.
+ * 빈 달은 정지점이 아님 — 부모(saved.tsx)의 stale 가드가 빈 달 선택을 즉시 null 로
+ * 되돌려 스크러버가 튕기므로, 여기서 가장 가까운 데이터 월(동거리면 전체 존 포함
+ * 물리 거리 비교)로 선해석해 왕복을 차단한다.
+ */
+export function resolveSnapIndex(slots: RulerSlot[], rawIndex: number): number {
+  const allIdx = slots.length;
+  const idx = Math.max(0, Math.min(allIdx, Math.round(rawIndex)));
+  if (idx === allIdx || slots[idx].hasData) return idx;
+  let best = allIdx;
+  let bestDist = allIdx - idx; // '전체' 존까지 거리도 후보
+  for (let i = 0; i < slots.length; i++) {
+    if (!slots[i].hasData) continue;
+    const d = Math.abs(i - idx);
+    if (d < bestDist || (d === bestDist && i > best)) {
+      best = i;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
 // ponytail: 비자명 로직(월 경계/정렬/라벨) self-check. `node -r ... ` 불필요 —
 // import 시 부작용 없게 require.main 게이트.
 if (require.main === module) {
@@ -151,5 +212,31 @@ if (require.main === module) {
   console.assert(monthKeyOf(mk(jun15)) !== monthKeyOf(mk(may31)), '월 경계 = 다른 key');
   console.assert(monthLabelOf(monthKeyOf(mk(jun15))) === '2026년 6월', 'key→라벨 round-trip');
   console.assert(monthOptionsOf([]).length === 0, '빈 입력 월옵션 → []');
+
+  // #6 룰러 — rulerSlotsOf / resolveSnapIndex.
+  // 데이터: 2026-5, 2026-7(현재) — 6월은 빈 눈금. nowKey = 2026-7.
+  const may = new Date(2026, 4, 10).getTime();
+  const jul = new Date(2026, 6, 5).getTime();
+  const nowKey = 2026 * 12 + 6; // 2026-7
+  const slots = rulerSlotsOf([mk(jul), mk(may)], nowKey);
+  console.assert(slots.length === 3, `연속 슬롯 3개(5·6·7월), got ${slots.length}`);
+  console.assert(
+    slots[0].hasData && !slots[1].hasData && slots[2].hasData,
+    '빈 6월 hasData=false',
+  );
+  console.assert(slots[0].yearLabel === '2026' && slots[1].yearLabel === null, '연 라벨 첫 슬롯만');
+  console.assert(slots[1].label === '2026년 6월', '빈 슬롯도 라벨 보유');
+  // 연 경계: 2025-12 ~ 2026-1 → 1월 슬롯에 연 라벨.
+  const dec = new Date(2025, 11, 3).getTime();
+  const janSlots = rulerSlotsOf([mk(dec)], 2026 * 12 + 0);
+  console.assert(janSlots[1].yearLabel === '2026', '1월 슬롯 연 라벨');
+  console.assert(rulerSlotsOf([], nowKey).length === 0, '빈 입력 룰러 → []');
+  // 스냅 해석: 빈 6월(idx 1) 정지 → 동거리 5월(idx 0) vs 7월(idx 2) 중 최신 7월.
+  console.assert(resolveSnapIndex(slots, 1) === 2, '빈 달 → 최신 데이터 월');
+  console.assert(resolveSnapIndex(slots, 0) === 0, '데이터 월 그대로');
+  console.assert(resolveSnapIndex(slots, 3) === 3, "'전체' 존 그대로");
+  console.assert(resolveSnapIndex(slots, 9.7) === 3, '범위 밖 → 전체 존 클램프');
+  console.assert(resolveSnapIndex(slots, -2) === 0, '음수 클램프');
+
   console.log('groupSavedByMonth self-check OK');
 }
