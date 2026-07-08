@@ -88,8 +88,11 @@ export default function SavedMonthScrubber({ items, selected, onSelect }: Props)
 
   return (
     <View style={styles.wrap}>
-      {/* 중앙 고정 인디케이터 — 스냅 기준선. ScrollView 아래(z-order) = 라벨이 선 위. */}
-      <View pointerEvents="none" style={[styles.indicator, { left: width / 2 - 1 }]} />
+      {/* 중앙 스냅 바늘 — 스크롤 영역 밖(위) 별도 행. 눈금/라벨을 가리지 않고
+          아래 눈금을 가리킨다. */}
+      <View pointerEvents="none" style={styles.needleRow}>
+        <View style={styles.needle} />
+      </View>
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -232,11 +235,13 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontWeight: '600',
   },
-  indicator: {
-    position: 'absolute',
-    top: spacing.xs + 13 + 2, // 연 라벨 행 아래부터
+  needleRow: {
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  needle: {
     width: 2,
-    height: 30,
+    height: 8,
     borderRadius: 1,
     backgroundColor: colors.textPrimary,
     opacity: 0.85,
