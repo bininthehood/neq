@@ -202,10 +202,12 @@ async function main() {
     check('R3', clearCount === fullCount, `전체 복귀 → visible ${clearCount} (기대 ${fullCount})`);
     console.log('screenshot:', await shot(b, 'r3-clear-all'));
 
-    // ── R4 빈 달 스냅 해석 ──
-    // 전체(idx3)에서 오른쪽 2.0칸(+슬롭 감안 release ≈ 1.2칸) → snap idx1(빈 달)
-    // → resolveSnapIndex 가 인접 데이터 달(최신 쪽)로 보정.
-    await dragH(b, cx, cy, Math.round(TICK_W * 2.0));
+    // ── R4 빈 달 해석 ──
+    // 드래그 velocity 는 Appium 에서 비결정적 (snapToOffsets 는 관성 방향 다음
+    // 오프셋을 타깃) → 빈 눈금 '탭'으로 결정적 검증. 탭도 settle 과 동일하게
+    // resolveSnapIndex 를 통과 — 빈 달은 필터 상태가 될 수 없다는 불변식 확인.
+    const emptyTick = (await rects(b, '저장 없음'))[0];
+    await tap(b, emptyTick.x + emptyTick.w / 2, emptyTick.y + emptyTick.h / 2);
     await b.pause(2500);
     const resolvedCount = (await rects(b, '상세보기')).length;
     const expectCur = Math.min(total - 1, fullCount);
