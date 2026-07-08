@@ -45,7 +45,7 @@ type Props = {
 const TICK_W = 44; // 월 눈금 간격
 const DIVIDER_W = 25; // 월 축 ↔ '전체' 존 사이 구분 슬롯
 const ALL_W = 56; // '전체' 존 폭
-const NEEDLE_H = 16; // 바늘 행 높이 (fade top 기준)
+const NEEDLE_H = 12; // 바늘 행 높이 (fade top 기준)
 const FLASH_MS = 320;
 
 export default function SavedMonthScrubber({ items, selected, onSelect }: Props) {
@@ -172,7 +172,7 @@ export default function SavedMonthScrubber({ items, selected, onSelect }: Props)
         {slots.map((slot, i) => {
           const isLive = live === slot.key;
           const isYear = slot.yearLabel !== null;
-          const tickH = isYear ? 16 : isLive ? 12 : slot.hasData ? 8 : 6;
+          const tickH = isYear ? 11 : isLive ? 9 : slot.hasData ? 6 : 4;
           const tickColor = isLive
             ? colors.textPrimary
             : isYear
@@ -259,7 +259,8 @@ export default function SavedMonthScrubber({ items, selected, onSelect }: Props)
   );
 }
 
-const SLOT_H = 64; // 13(연) + 13(도트) + 20(눈금) + 18(라벨)
+// 2026-07-08 높이 압축 (사용자 피드백 — 스코프 영역 과대): 64 → 49
+const SLOT_H = 49; // 11(연) + 9(도트) + 14(눈금) + 15(라벨)
 
 const styles = StyleSheet.create({
   wrap: {
@@ -291,18 +292,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   yearLabel: {
-    height: 13,
+    height: 11,
     fontFamily: fontsV2.data,
     fontSize: 9,
-    lineHeight: 13,
+    lineHeight: 11,
     letterSpacing: 0.7,
     color: colors.textSecondary,
   },
   dotRow: {
-    height: 13,
+    height: 9,
     justifyContent: 'flex-end',
     alignItems: 'center',
-    paddingBottom: 4,
+    paddingBottom: 3,
   },
   dot: {
     width: 4,
@@ -311,7 +312,7 @@ const styles = StyleSheet.create({
   },
   // 연속 베이스라인 — 모든 월 슬롯 상단을 가로지르는 1px 라인, 눈금이 아래로 매달림.
   tickRow: {
-    height: 20,
+    height: 14,
     width: '100%',
     alignItems: 'center',
     borderTopWidth: 1,
@@ -321,7 +322,7 @@ const styles = StyleSheet.create({
     width: 2,
   },
   labelRow: {
-    height: 18,
+    height: 15,
     justifyContent: 'center',
   },
   monthLabel: {
@@ -343,11 +344,11 @@ const styles = StyleSheet.create({
     width: DIVIDER_W,
     height: SLOT_H,
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: 13,
   },
   dividerLine: {
     width: 1,
-    height: 34,
+    height: 26,
     backgroundColor: colors.border,
   },
   allSlot: {
@@ -355,7 +356,7 @@ const styles = StyleSheet.create({
     height: SLOT_H,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 13,
+    paddingTop: 9,
   },
   allLabel: {
     fontSize: 13,
