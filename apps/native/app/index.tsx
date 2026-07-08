@@ -1848,7 +1848,9 @@ export default function DiscoverScreen() {
       )}
 
       <View
-        style={styles.stackWrap}
+        // 2026-07-08 Seeded Mix 2차 피드백 — mix 중 카피 영역(mixBar)부터 카드
+        // 테두리까지 이어지는 하이라이트 배경 (라벨 단독 노출이 조악하다는 피드백).
+        style={[styles.stackWrap, inMix && styles.mixHighlight]}
         onLayout={(e) => setStackRect(e.nativeEvent.layout)}
       >
         {/* 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
@@ -2215,6 +2217,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   // 믹스 라벨 바 — FilterChips 자리 대체. 칩 row 와 유사 footprint (minHeight 44).
+  // 배경은 아래 stackWrap 의 mixHighlight 와 이어져 "카피 → 카드 테두리" 한 덩어리로
+  // mix 모드를 표시 (2026-07-08 사용자 피드백).
   mixBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2223,6 +2227,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
+    backgroundColor: colors.accentDim,
+  },
+  // mix 모드 하이라이트 — accent-dim 12% 면. amber 동시 노출 카운트 1건
+  // (anti-slop #13 예산 내 — mix 모드 한정 transient 표면).
+  mixHighlight: {
+    backgroundColor: colors.accentDim,
   },
   mixBarTitle: {
     flex: 1,

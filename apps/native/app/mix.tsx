@@ -12,7 +12,6 @@ import {
   buildDirectorThemes,
   type MixTheme,
 } from '../lib/mix-themes';
-import { IconChevronRight } from '../components/Icons';
 import type { SavedItem } from '../lib/types';
 import { colors, spacing, radius } from '../lib/tokens';
 import { fontsV2 } from '@neq/design';
@@ -104,18 +103,22 @@ export default function MixScreen() {
           {genreThemes.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>장르 테마</Text>
-              {genreThemes.map((t, i) => (
-                <ThemeRow key={`g-${t.title}`} theme={t} testID={`mix-theme-genre-${i}`} onPress={handleThemePress} />
-              ))}
+              <View style={styles.grid}>
+                {genreThemes.map((t, i) => (
+                  <ThemeCard key={`g-${t.title}`} theme={t} testID={`mix-theme-genre-${i}`} onPress={handleThemePress} />
+                ))}
+              </View>
             </View>
           )}
 
           {directorThemes.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>감독 테마</Text>
-              {directorThemes.map((t, i) => (
-                <ThemeRow key={`d-${t.title}`} theme={t} testID={`mix-theme-director-${i}`} onPress={handleThemePress} />
-              ))}
+              <View style={styles.grid}>
+                {directorThemes.map((t, i) => (
+                  <ThemeCard key={`d-${t.title}`} theme={t} testID={`mix-theme-director-${i}`} onPress={handleThemePress} />
+                ))}
+              </View>
             </View>
           )}
         </ScrollView>
@@ -124,7 +127,11 @@ export default function MixScreen() {
   );
 }
 
-function ThemeRow({
+/**
+ * 2열 격자 테마 카드 (사용자 피드백 2026-07-08) — 장르: seed 작품 스틸컷(backdrop),
+ * 감독: 프로필 사진. 이미지 전무 시 이니셜 fallback. 기반 작품명은 비노출.
+ */
+function ThemeCard({
   theme,
   testID,
   onPress,
@@ -135,21 +142,25 @@ function ThemeRow({
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      style={({ pressed }) => [styles.themeCard, pressed && styles.rowPressed]}
       onPress={() => onPress(theme)}
       accessibilityRole="button"
       accessibilityLabel={`${theme.title} 시작`}
       testID={testID}
     >
-      <View style={styles.rowText}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {theme.title}
-        </Text>
-        <Text style={styles.rowSubtitle} numberOfLines={1}>
-          {theme.subtitle}
-        </Text>
-      </View>
-      <IconChevronRight size={16} color={colors.textMuted} />
+      {theme.imageUrl ? (
+        <Image source={{ uri: theme.imageUrl }} style={styles.themeImage} contentFit="cover" transition={0} />
+      ) : (
+        <View style={[styles.themeImage, styles.themeImageFallback]}>
+          <Text style={styles.themeImageFallbackText}>{theme.title.slice(0, 1)}</Text>
+        </View>
+      )}
+      <Text style={styles.rowTitle} numberOfLines={1}>
+        {theme.title}
+      </Text>
+      <Text style={styles.rowSubtitle} numberOfLines={1}>
+        {theme.subtitle}
+      </Text>
     </Pressable>
   );
 }
@@ -198,16 +209,29 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginTop: 6,
   },
-  row: {
+  // 2열 격자 — 카드 2개 + gap 이 가로 패딩 안에 정확히 분할되도록 % 대신 flexBasis.
+  grid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 4,
-    gap: spacing.sm,
+    columnGap: spacing.sm,
+    rowGap: spacing.md,
   },
-  rowPressed: { backgroundColor: colors.overlayLight },
-  rowText: { flex: 1 },
-  rowTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: '500' },
+  themeCard: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    borderRadius: radius.md,
+  },
+  themeImage: {
+    width: '100%',
+    aspectRatio: 16 / 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  themeImageFallback: { alignItems: 'center', justifyContent: 'center' },
+  themeImageFallbackText: { color: colors.textMuted, fontSize: 24, fontWeight: '600' },
+  rowPressed: { opacity: 0.7 },
+  rowTitle: { color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginTop: 8 },
   rowSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
   emptyContainer: {
     flex: 1,

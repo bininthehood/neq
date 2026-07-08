@@ -15,10 +15,19 @@ export interface MixTheme {
   kind: MixThemeKind;
   /** 표시 제목 — 예: "인셉션 믹스" / "스릴러 믹스" / "봉준호 믹스" */
   title: string;
-  /** 보조 설명 — 예: "최근 저장작" / "저장작 3편 기반" */
+  /**
+   * 보조 설명 — 예: "최근 저장작" / "저장작 3편".
+   * 기반 작품명은 노출하지 않음 (사용자 피드백 2026-07-08 — 알고리즘 개선 여지를
+   * 위해 seed 작품은 내부 정보로만 유지).
+   */
   subtitle: string;
-  /** 믹스 seed (기존 seeded mix 로 연결) */
+  /** 믹스 seed (기존 seeded mix 로 연결) — UI 비노출, 내부용 */
   seed: Recommendation;
+  /**
+   * 카드 이미지 — 장르: seed 작품 스틸컷(backdrop, 없으면 poster),
+   * 감독: 프로필 사진 (없으면 null → 이니셜 fallback), 최근 저장작: poster.
+   */
+  imageUrl: string | null;
 }
 
 export const MIX_THEME_RECENT_MAX = 6;
@@ -39,6 +48,7 @@ export function buildRecentSavedThemes(saved: SavedItem[], max = MIX_THEME_RECEN
       title: `${s.recommendation.title} 믹스`,
       subtitle: '최근 저장작',
       seed: s.recommendation,
+      imageUrl: s.recommendation.posterUrl,
     }));
 }
 
@@ -49,25 +59,33 @@ export function buildRecentSavedThemes(saved: SavedItem[], max = MIX_THEME_RECEN
  */
 export function buildGenreThemes(saved: SavedItem[], max = MIX_THEME_GENRE_MAX): MixTheme[] {
   const recent = byRecency(saved);
-  const count = new Map<number, number>();
-  const latestByGenre = new Map<number, SavedItem>();
+  const itemsByGenre = new Map<number, SavedItem[]>();
   for (const s of recent) {
     for (const g of s.recommendation.genres ?? []) {
       if (!(g in TMDB_GENRE_NAMES_KO)) continue; // 미매핑 id 잡음 제거
-      count.set(g, (count.get(g) ?? 0) + 1);
-      if (!latestByGenre.has(g)) latestByGenre.set(g, s); // recent 순회라 첫 등장 = 최신
+      const list = itemsByGenre.get(g);
+      if (list) list.push(s);
+      else itemsByGenre.set(g, [s]); // recency 순 유지
     }
   }
-  return [...count.entries()]
-    .sort((a, b) => b[1] - a[1])
+  // seed 분산 — 인접 테마가 같은 최신 저장작을 공유하면 이미지/후보가 반복되므로
+  // 이미 쓰인 seed 는 피해 그 장르의 다음 최신작 선택 (전부 겹치면 최신작 유지).
+  const usedSeeds = new Set<string>();
+  return [...itemsByGenre.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
     .slice(0, max)
-    .map(([genreId, n]) => {
-      const seedItem = latestByGenre.get(genreId)!;
+    .map(([genreId, items]) => {
+      const seedItem =
+        items.find(
+          (s) => !usedSeeds.has(`${s.recommendation.type}:${s.recommendation.tmdbId}`),
+        ) ?? items[0];
+      usedSeeds.add(`${seedItem.recommendation.type}:${seedItem.recommendation.tmdbId}`);
       return {
         kind: 'genre' as const,
         title: `${getGenreLabels([genreId])[0]} 믹스`,
-        subtitle: `저장작 ${n}편 기반 · ${seedItem.recommendation.title}`,
+        subtitle: `저장작 ${items.length}편`,
         seed: seedItem.recommendation,
+        imageUrl: seedItem.recommendation.backdrop ?? seedItem.recommendation.posterUrl,
       };
     });
 }
@@ -77,11 +95,15 @@ export function buildDirectorThemes(saved: SavedItem[], max = MIX_THEME_DIRECTOR
   const recent = byRecency(saved);
   const count = new Map<string, number>();
   const latestByDirector = new Map<string, SavedItem>();
+  // 프로필 사진 — 최신작에 없어도 그 감독의 다른 저장작에서 확보 (5/7 보유 실측).
+  const profileByDirector = new Map<string, string>();
   for (const s of recent) {
     const d = s.recommendation.director;
     if (!d) continue;
     count.set(d, (count.get(d) ?? 0) + 1);
     if (!latestByDirector.has(d)) latestByDirector.set(d, s);
+    const profile = s.recommendation.directorMember?.profileUrl;
+    if (profile && !profileByDirector.has(d)) profileByDirector.set(d, profile);
   }
   return [...count.entries()]
     .sort((a, b) => b[1] - a[1])
@@ -91,8 +113,9 @@ export function buildDirectorThemes(saved: SavedItem[], max = MIX_THEME_DIRECTOR
       return {
         kind: 'director' as const,
         title: `${director} 믹스`,
-        subtitle: `저장작 ${n}편 · ${seedItem.recommendation.title}`,
+        subtitle: `저장작 ${n}편`,
         seed: seedItem.recommendation,
+        imageUrl: profileByDirector.get(director) ?? null,
       };
     });
 }
