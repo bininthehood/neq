@@ -26,9 +26,9 @@ type Props = {
 
 export default function SavedMonthScrubber({ items, selected, onSelect }: Props) {
   const options = monthOptionsOf(items);
-  // 월이 하나뿐이거나 0개면 스크러버 의미 없음(선택할 게 없음) → 숨김.
-  // (부모가 연·월 모드 토글은 별개로 노출 — 여기선 칩만 조건부.)
-  if (options.length <= 1) return null;
+  // 빈 목록일 때만 숨김. 월이 1개여도 노출 — 토글 ON 의 시각 피드백 + 기능 인지
+  // (칩 탭=월 필터 / 재탭=해제 멘탈모델을 저장이 쌓이기 전부터 학습).
+  if (options.length === 0) return null;
 
   return (
     <ScrollView
