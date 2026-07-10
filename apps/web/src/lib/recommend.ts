@@ -62,13 +62,14 @@ export type { RecommendResult, StreamingCallbacks, TokenUsage };
  * Cold start reason — favorites 없을 때(LLM 미호출) 카드의 추천 이유.
  *
  * 의도: 추천 "이유" 설명 (왜 이 작품이 후보인지). 사용자에게 평가를 요청하는 톤(폐기됨)이 아니라,
- * `templateReason`과 동일한 톤(작품의 매력 한 가지를 짚는 해요체)으로 통일한다.
+ * `templateReason`과 동일한 톤으로 통일한다.
  *
  * 과거 안: 온보딩 페이지 배제 + 최초 10개 메가 히트작으로 취향 수집.
  *   → "봤다면 하트, 안 봤다면 넘겨주세요" / "이 작품 좋아하세요? 알려주세요" 등 평가 요청형 카피
  *   → 온보딩 V2 도입(welcome/hello/taste/ott/notify)으로 폐기. 취향 수집은 onboarding step에서 담당.
  *
- * 현재: cold start도 일반 추천과 동일한 "추천 이유 설명" 톤. `templateReason`을 그대로 재사용.
+ * 현재: cold start도 일반 추천과 동일 톤 — 2026-07-10 톤 개편 이후 "담백한 관찰형
+ * 설명 + 가벼운 명사 종결" (prompt.ts [reason 톤 원칙] 참조). `templateReason` 재사용.
  */
 function coldStartReason(c: EnrichedCandidate): string {
   return templateReason(c);
