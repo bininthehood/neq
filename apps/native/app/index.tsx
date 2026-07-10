@@ -16,6 +16,7 @@ import Animated, {
   useAnimatedReaction,
   runOnJS,
   withTiming,
+  withSequence,
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
@@ -257,9 +258,8 @@ export default function DiscoverScreen() {
   const dismissCardIdSV = useSharedValue<number>(-1);
   // 배치 G — 첫 카드 힌트 worklet 측 1회 게이트 (0=미발사, 1=발사됨).
   const firstCardHintGate = useSharedValue(0);
-  // 2026-07-10 — hold(long-press) 눌림 램프 + 가드 (게스처 정의는 아래 longPress).
+  // 2026-07-10 — hold(long-press) 활성화 펄스 (게스처 정의는 아래 longPress).
   const holdSV = useSharedValue(0);
-  const holdEnabledSV = useSharedValue(1);
   // TutorialFlow step whitelist worklet 가드용 — pan.onEnd 안에서 React state
   // 직접 참조 불가 (worklet 컨텍스트). state(`tutorialStep`) 와 useEffect 동기화.
   // 인코딩: 0=null(비활성), 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
@@ -1272,38 +1272,27 @@ export default function DiscoverScreen() {
       runOnJS(handleCardTap)();
     });
 
-  // 2026-07-10 — hold(long-press) = 케밥 메뉴 열기 (사용자 피드백: hold 액션 +
-  // active 효과). holdSV 는 hold 진행 램프 (top 카드 scale 시각 피드백, SwipeCard
-  // worklet 소비 — 선언은 상단 SharedValue 클러스터). 큐/튜토리얼 중엔 비활성.
-  useEffect(() => {
-    holdEnabledSV.value = !inMix && !(tutorialActive && tutorialStep !== null) ? 1 : 0;
-  }, [inMix, tutorialActive, tutorialStep, holdEnabledSV]);
-
+  // 2026-07-10 — hold(long-press) = 케밥 메뉴 열기. holdSV 는 활성화 순간 펄스
+  // (SwipeCard worklet 소비 — 선언은 상단 SharedValue 클러스터).
   function handleHoldMenuOpen() {
     if (inMix) return; // 중첩 큐 금지 — 큐 중 hold 메뉴 없음 (케밥 버튼과 동일 규칙)
     handleCardMenuPress();
   }
 
+  // 2026-07-10 v2 — active 효과 단순화 (사용자 결정). 사전 램프(onBegin 시작)는
+  // 모든 터치에서 시작돼 tap→Modal / 슬로우 스와이프 등에서 in-flight 애니메이션
+  // 중단 → 축소 잔존이 반복 재발. 활성화 순간의 단발 펄스(눌림→복귀, 자기 종결형)
+  // 로 교체 — 지속 상태가 없어 잔존 자체가 구조적으로 불가.
   const longPress = Gesture.LongPress()
     .minDuration(450)
     .maxDistance(12)
-    .onBegin(() => {
-      'worklet';
-      if (holdEnabledSV.value === 0) return;
-      // hold 대기 동안 서서히 눌림 — minDuration 과 동일 시간으로 램프.
-      holdSV.value = withTiming(1, { duration: 450 });
-    })
     .onStart(() => {
       'worklet';
-      holdSV.value = withTiming(0, { duration: 200 });
+      holdSV.value = withSequence(
+        withTiming(1, { duration: 110 }),
+        withTiming(0, { duration: 190 }),
+      );
       runOnJS(handleHoldMenuOpen)();
-    })
-    .onFinalize(() => {
-      'worklet';
-      // 성공/실패 무관 무조건 리셋 — 탭이 Modal(DetailSheet) 을 열면 finalize 가
-      // 늦거나 삼켜져 램프가 1 에 잔존하는 케이스 방어 (2026-07-10 시뮬 보고:
-      // 다음 카드가 눌린 채 등장). 아래 topIdx effect 의 하드 리셋과 이중 안전망.
-      holdSV.value = withTiming(0, { duration: 150 });
     });
 
   // 2026-07-08 — Seeded Mix 2차: 케밥 메뉴 → 믹스 시작 (덱 주입).
