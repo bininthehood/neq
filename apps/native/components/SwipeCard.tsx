@@ -310,17 +310,17 @@ export function CardInner({
               {year ? `${year} · ${titleEn}` : titleEn}
             </Text>
             {/* 2026-06-06 B-3 — refresh-race spec testID 정확 매칭 (root 와 동일 tmdbId). */}
-            <View style={styles.titleRow}>
-              <Text style={styles.title} testID={`swipe-card-title-${rec.tmdbId}`}>
-                {rec.title}
-              </Text>
-              <View style={styles.badgeRow}>
-                <View style={styles.ratingPill}>
-                  <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
-                </View>
-                <View style={styles.typePill}>
-                  <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
-                </View>
+            <Text style={styles.title} testID={`swipe-card-title-${rec.tmdbId}`}>
+              {rec.title}
+            </Text>
+            {/* 4차-3 (2026-07-10) — 필을 타이틀 아래 고정 row 로. 인라인(A안)은 제목
+                길이에 따라 필 위치가 요동쳐 폐기 (사용자 피드백). */}
+            <View style={styles.badgeRow}>
+              <View style={styles.ratingPill}>
+                <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
+              </View>
+              <View style={styles.typePill}>
+                <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
               </View>
             </View>
             <Text style={styles.reason} numberOfLines={3}>
@@ -372,18 +372,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 48,
   },
-  // 타이틀 + 배지 인라인 row — 배지는 타이틀 마지막 줄 우측 하단 정렬.
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    marginBottom: 10,
-  },
+  // 배지 row — 타이틀 아래 고정 (제목 길이와 무관한 일정 위치).
   badgeRow: {
     flexDirection: 'row',
     gap: 6,
-    // 타이틀 lineHeight 32 의 디센더 보정 — 필을 baseline 에 시각 정렬.
-    marginBottom: 5,
+    marginTop: 8,
+    marginBottom: 10,
   },
   // DetailSheet heroBadges 정본 (DetailSheet.tsx styles.ratingPill/typePill 동일값):
   // bg rgba(0,0,0,0.5), radius-sm, padding 10×4, fontSize 11, Geist Mono, ls 0.2.
@@ -436,8 +430,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.7,
     lineHeight: 32,
-    // 인라인 배지 대응 — 긴 제목은 Text 내부 줄바꿈 (배지가 밀려나지 않게 shrink).
-    flexShrink: 1,
   },
   // reason — font-body 400, text-sm(13), rgba(237,237,239,0.85), lineHeight 1.4, maxWidth 85%
   reason: {
