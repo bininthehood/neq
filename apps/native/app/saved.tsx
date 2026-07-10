@@ -1269,7 +1269,8 @@ function PosterCard({
 
       {/* 2026-05-20 — 우상단 아카이브 토글 (PWA SavedList 정합). report 있거나 이미
           archived 일 때만 노출. long-press ActionSheet 와 동시 제공 — 명시적 UI 진입로. */}
-      {!isReporting && (report || isArchived) && (
+      {/* 2026-07-10 — 리포트 작성작의 아카이브 진입로는 ✓ 관리 시트로 통합. 칩은 archived 해제 전용. */}
+      {!isReporting && isArchived && (
         <Pressable
           onPress={() => onArchiveToggle(rec.tmdbId)}
           accessibilityRole="button"
@@ -1418,7 +1419,8 @@ function ListCard({
 
       {/* 2026-05-20 — ListCard 우상단 archive 토글 (PWA SavedList 정합). report 있거나
           이미 archived 일 때만 노출. long-press ActionSheet 와 동시 제공. */}
-      {!isReporting && (report || isArchived) && (
+      {/* 2026-07-10 — 리포트 작성작의 아카이브 진입로는 ✓ 관리 시트로 통합. 칩은 archived 해제 전용. */}
+      {!isReporting && isArchived && (
         <Pressable
           onPress={() => onArchiveToggle(rec.tmdbId)}
           accessibilityRole="button"
