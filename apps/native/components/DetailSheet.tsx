@@ -220,8 +220,10 @@ export default function DetailSheet({
       translateY.value = 0;
       // W5 Task C 7.1 — `detail_opened` 발사는 호출처가 담당.
     } else {
-      // sheet 닫힘 → state reset. translateY 다시 0으로 (다음 진입 대비).
-      translateY.value = 0;
+      // 2026-07-10 — 닫힘 시 translateY 리셋 금지 (닫힘 모션 2회 재생 회귀).
+      // swipe-down 으로 SCREEN_HEIGHT 까지 보낸 직후 여기서 0 으로 되돌리면 Modal
+      // 의 slide 퇴장 애니메이션이 아직 재생 중이라 시트가 복귀한 채 한 번 더
+      // 내려가는 게 보인다. 리셋은 다음 open (visible=true 분기) 이 담당.
       // 2026-06-15 (build 27) — history 도 초기화. 다음 진입 시 clean state.
       setHistory([]);
       setCurrentIndex(0);

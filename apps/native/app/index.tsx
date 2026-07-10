@@ -257,6 +257,9 @@ export default function DiscoverScreen() {
   const dismissCardIdSV = useSharedValue<number>(-1);
   // 배치 G — 첫 카드 힌트 worklet 측 1회 게이트 (0=미발사, 1=발사됨).
   const firstCardHintGate = useSharedValue(0);
+  // 2026-07-10 — hold(long-press) 눌림 램프 + 가드 (게스처 정의는 아래 longPress).
+  const holdSV = useSharedValue(0);
+  const holdEnabledSV = useSharedValue(1);
   // TutorialFlow step whitelist worklet 가드용 — pan.onEnd 안에서 React state
   // 직접 참조 불가 (worklet 컨텍스트). state(`tutorialStep`) 와 useEffect 동기화.
   // 인코딩: 0=null(비활성), 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
@@ -360,6 +363,8 @@ export default function DiscoverScreen() {
     if (dismissCardIdSV.value !== -1) {
       dismissCardIdSV.value = -1;
     }
+    // 2026-07-10 — hold 램프 하드 리셋 (top 전환 시 잔존 방어 — onFinalize 이중 안전망).
+    holdSV.value = 0;
     // 2026-07-08 Seeded Mix 2차 — mix 덱 advance (mixTopIdx) 도 동일 리셋 경로.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, mixTopIdx]);
@@ -1265,9 +1270,7 @@ export default function DiscoverScreen() {
 
   // 2026-07-10 — hold(long-press) = 케밥 메뉴 열기 (사용자 피드백: hold 액션 +
   // active 효과). holdSV 는 hold 진행 램프 (top 카드 scale 시각 피드백, SwipeCard
-  // worklet 소비). 큐/튜토리얼 중엔 비활성 — holdEnabledSV 로 worklet 측 가드.
-  const holdSV = useSharedValue(0);
-  const holdEnabledSV = useSharedValue(1);
+  // worklet 소비 — 선언은 상단 SharedValue 클러스터). 큐/튜토리얼 중엔 비활성.
   useEffect(() => {
     holdEnabledSV.value = !inMix && !(tutorialActive && tutorialStep !== null) ? 1 : 0;
   }, [inMix, tutorialActive, tutorialStep, holdEnabledSV]);
@@ -1291,9 +1294,12 @@ export default function DiscoverScreen() {
       holdSV.value = withTiming(0, { duration: 200 });
       runOnJS(handleHoldMenuOpen)();
     })
-    .onFinalize((_e, success) => {
+    .onFinalize(() => {
       'worklet';
-      if (!success) holdSV.value = withTiming(0, { duration: 150 });
+      // 성공/실패 무관 무조건 리셋 — 탭이 Modal(DetailSheet) 을 열면 finalize 가
+      // 늦거나 삼켜져 램프가 1 에 잔존하는 케이스 방어 (2026-07-10 시뮬 보고:
+      // 다음 카드가 눌린 채 등장). 아래 topIdx effect 의 하드 리셋과 이중 안전망.
+      holdSV.value = withTiming(0, { duration: 150 });
     });
 
   // 2026-07-08 — Seeded Mix 2차: 케밥 메뉴 → 믹스 시작 (덱 주입).
