@@ -38,7 +38,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector, type NativeGesture } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -252,6 +252,7 @@ export default function SearchSheet({
   // PWA SearchSheet 와 동일 곡선 — 큰 오버슈트 없는 짧은 진입.
   useEffect(() => {
     if (visible) {
+      bodyScrollY.value = 0;
       translateY.value = withTiming(0, {
         duration: SHEET_ENTER_MS,
         easing: SHEET_ENTER_BEZIER,
@@ -357,23 +358,30 @@ export default function SearchSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, initialQuery]);
 
-  // pan-down 으로 sheet 닫기. GestureDetector 는 상단 header(handle+search row)
-  // 영역에만 부착 — body 의 idle ScrollView / 가로 카로셀 FlatList 와 세로 드래그가
-  // 충돌하지 않도록. (DetailSheet 은 단일 ScrollView 라 scrollY 가드로 충분하지만
-  // SearchSheet body 는 이질적 스크롤 컨테이너 다수 → 핸들 영역 한정이 가장 안전.)
+  // pan-down 으로 sheet 닫기 — 2026-07-10 v2: 헤더 한정 → 시트 전체 부착
+  // (사용자 피드백: body 에서도 자연스럽게 닫혀야). DetailSheet 정석 구조 정합:
+  //   1) 수직 스크롤 2곳 (idle / 결과) 을 Gesture.Native 로 RNGH 에 편입
+  //   2) pan.simultaneousWithExternalGesture 로 병행 인식
+  //   3) bounces=false + bodyScrollY<=0 가드 — 최상단에서만 시트가 드래그를 따라옴
+  // 가로 카로셀 FlatList 는 failOffsetX 로 원천 차단 (수평 이동 시 pan 미진입).
   //
   // 임계 충돌 회피 (feedback_pan_gesture_offset_conflict): activeOffsetY 단일 하한(8)
-  // 만 두고 failOffsetY 는 두지 않는다 — 범위가 겹치면 activate 전에 fail. downward
-  // 8px+ 만 pan 진입, 수평 이동은 failOffsetX 로 차단(제목 등 미세 흔들림 무시).
+  // 만 두고 failOffsetY 는 두지 않는다 — 범위가 겹치면 activate 전에 fail.
+  const bodyScrollY = useSharedValue(0);
+  const nativeIdle = Gesture.Native();
+  const nativeOk = Gesture.Native();
   const pan = Gesture.Pan()
     .activeOffsetY(8)
     .failOffsetX([-20, 20])
+    .simultaneousWithExternalGesture(nativeIdle, nativeOk)
     .onUpdate((e) => {
       'worklet';
+      if (bodyScrollY.value > 0) return;
       if (e.translationY > 0) translateY.value = e.translationY;
     })
     .onEnd((e) => {
       'worklet';
+      if (bodyScrollY.value > 0) return;
       if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
         translateY.value = withTiming(SHEET_MAX_HEIGHT, { duration: 220 }, () => {
           runOnJS(onClose)();
@@ -421,11 +429,10 @@ export default function SearchSheet({
           />
         </Animated.View>
 
+          <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
-            {/* pan-down dismiss 는 상단 header(handle+search row) 에만 부착 —
-                아래 body 의 스크롤 콘텐츠와 세로 드래그 충돌 방지. */}
-            <GestureDetector gesture={pan}>
-              <View>
+            {/* 2026-07-10 v2 — pan 은 시트 전체 (헤더 한정 폐기). */}
+            <View>
             {/* handle */}
             <View style={styles.handleRow}>
               <View style={styles.handleBar} />
@@ -486,12 +493,15 @@ export default function SearchSheet({
               </Pressable>
             </View>
               </View>
-            </GestureDetector>
 
             {/* body */}
             <View style={styles.body}>
               {uiState === 'idle' && (
                 <IdleContent
+                  scrollGesture={nativeIdle}
+                  onVerticalOffset={(y) => {
+                    bodyScrollY.value = y;
+                  }}
                   recents={recents}
                   trending={trending}
                   onApplyQuery={handleInput}
@@ -554,8 +564,14 @@ export default function SearchSheet({
               )}
 
               {uiState === 'ok' && data && (
+                <GestureDetector gesture={nativeOk}>
                 <ScrollView
                   style={styles.okScroll}
+                  bounces={false}
+                  scrollEventThrottle={16}
+                  onScroll={(e) => {
+                    bodyScrollY.value = e.nativeEvent.contentOffset.y;
+                  }}
                   contentContainerStyle={styles.okContent}
                   keyboardShouldPersistTaps="handled"
                 >
@@ -615,9 +631,11 @@ export default function SearchSheet({
                     </View>
                   ))}
                 </ScrollView>
+                </GestureDetector>
               )}
             </View>
           </Animated.View>
+          </GestureDetector>
       </View>
     </Modal>
   );
@@ -632,11 +650,16 @@ export default function SearchSheet({
 // ─────────────────────────────────────────────────────
 
 function IdleContent({
+  scrollGesture,
+  onVerticalOffset,
   recents,
   trending,
   onApplyQuery,
   onRemoveRecent,
 }: {
+  /** 2026-07-10 — pan-down dismiss 병행 인식용 (부모 pan 과 simultaneous 관계). */
+  scrollGesture: NativeGesture;
+  onVerticalOffset: (y: number) => void;
   recents: RecentSearch[];
   trending: TrendingItem[];
   onApplyQuery: (q: string) => void;
@@ -650,11 +673,15 @@ function IdleContent({
     );
   }
   return (
+    <GestureDetector gesture={scrollGesture}>
     <ScrollView
       style={styles.idleScroll}
       contentContainerStyle={styles.idleContent}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
+      bounces={false}
+      scrollEventThrottle={16}
+      onScroll={(e) => onVerticalOffset(e.nativeEvent.contentOffset.y)}
     >
       {recents.length > 0 && (
         <View accessibilityLabel="최근 검색어">
@@ -694,6 +721,7 @@ function IdleContent({
         </View>
       )}
     </ScrollView>
+    </GestureDetector>
   );
 }
 

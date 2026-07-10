@@ -528,6 +528,9 @@ export default function DetailSheet({
     [handleRelatedClick, subScreen],
   );
 
+  // 2026-07-10 — 내부 스크롤을 RNGH 에 편입 (pan 과의 simultaneous 관계용).
+  const nativeScroll = Gesture.Native();
+
   const pan = Gesture.Pan()
     // 2026-05-29 v2 — v1 회귀 fix (build 12):
     //   v1: activeOffsetY([8, 9999]) + failOffsetY([-1, 7]) 의 임계가 충돌 —
@@ -540,18 +543,17 @@ export default function DetailSheet({
     //   onUpdate / onEnd 안 scrollY > 0 가드 유지 — 스크롤 중간 swipe 차단.
     .activeOffsetY(8)
     .failOffsetX([-20, 20])
-    // 2026-07-07 build 42 실기기 fix ② — flick(빠른) swipe-down 미응답:
-    //   내부 Animated.ScrollView 의 네이티브 스크롤 recognizer 가 하향 flick 을
-    //   선점해 pan 이 activate 못함(느린 드래그만 통과). blocksExternalGesture 로
-    //   pan 을 scroll 보다 우선 판정 → flick 도 dismiss.
-    //   단, dismiss 자체는 아래 scrollY<=0 가드로 콘텐츠 최상단일 때만 발동(스크롤
-    //   중엔 translateY 안 건드림) → 스크롤 회귀 없음. blocksExternalGesture(우선판정)
-    //   + scrollY 가드(발동조건) 는 직교 — 조합해도 서로 간섭 없음.
-    // scrollRef 는 ScrollView instance ref(scrollTo 용) — RNGH 는 런타임에 native
-    // handler tag 만 읽어 동작하나, 선언 타입(RefObject<ComponentType>) 과 어긋나 캐스트.
-    .blocksExternalGesture(
-      scrollRef as unknown as React.RefObject<React.ComponentType>,
-    )
+    // 2026-07-10 재수정 v2 — swipe-down dismiss 불응답 (사용자 실기기 + 시뮬 재현).
+    //   build 42 의 blocksExternalGesture(scrollRef) 는 무효였다: RN Animated.ScrollView
+    //   는 RNGH 미등록 컴포넌트라 관계 설정이 조용히 no-op → 네이티브 스크롤
+    //   recognizer 가 하향 드래그를 선점해 pan 이 activate 못함 (bounces=false 만으로도
+    //   불충분 — 시뮬 실측). 정석 구조로 재편:
+    //   1) ScrollView 를 GestureDetector(Gesture.Native()) 로 감싸 RNGH 시스템에 편입
+    //   2) pan.simultaneousWithExternalGesture(nativeScroll) — 둘이 병행 인식
+    //   3) bounces=false → 최상단에서 하향 드래그 시 scroll offset 이 0 에 고정되고
+    //      pan 의 scrollY<=0 가드가 통과 → 시트가 드래그를 따라옴
+    //   스크롤 중간에선 scrollY>0 가드로 시트 불변 (스크롤만 동작).
+    .simultaneousWithExternalGesture(nativeScroll)
     .onUpdate((e) => {
       'worklet';
       if (scrollY.value > 0) return;
@@ -691,6 +693,9 @@ export default function DetailSheet({
     >
       <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
+            {/* 2026-07-10 — Gesture.Native 래핑: 스크롤 recognizer 를 RNGH 에 편입해
+                pan(simultaneousWithExternalGesture) 과 병행 인식 (pan 정의 주석 참조). */}
+            <GestureDetector gesture={nativeScroll}>
             <Animated.ScrollView
               ref={scrollRef as React.RefObject<Animated.ScrollView>}
               style={styles.body}
@@ -702,6 +707,9 @@ export default function DetailSheet({
               // 2026-05-29 — scrollY 추적 → pan gesture 가 scrollY > 0 이면 swipe-down 차단.
               onScroll={scrollHandler}
               scrollEventThrottle={16}
+              // 2026-07-10 — swipe-down dismiss 활성화 핵심: top bounce 가 하향
+              // 드래그를 선점하면 pan 이 activate 못함 (pan 정의 주석 참조).
+              bounces={false}
             >
               {/* PR2 Hero 440px — 풀폭 + 3-stop gradient + title overlay */}
               <View style={styles.hero}>
@@ -937,6 +945,7 @@ export default function DetailSheet({
                 </>
               )}
             </Animated.ScrollView>
+            </GestureDetector>
 
             {/* TopNav — 좌측 ← / → (build 27 history), 우측 X (build 22 닫기).
                 hero 위 absolute, 모든 버튼 44×44 터치 타겟.

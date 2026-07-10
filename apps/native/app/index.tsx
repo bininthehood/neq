@@ -1263,6 +1263,39 @@ export default function DiscoverScreen() {
       runOnJS(handleCardTap)();
     });
 
+  // 2026-07-10 — hold(long-press) = 케밥 메뉴 열기 (사용자 피드백: hold 액션 +
+  // active 효과). holdSV 는 hold 진행 램프 (top 카드 scale 시각 피드백, SwipeCard
+  // worklet 소비). 큐/튜토리얼 중엔 비활성 — holdEnabledSV 로 worklet 측 가드.
+  const holdSV = useSharedValue(0);
+  const holdEnabledSV = useSharedValue(1);
+  useEffect(() => {
+    holdEnabledSV.value = !inMix && !(tutorialActive && tutorialStep !== null) ? 1 : 0;
+  }, [inMix, tutorialActive, tutorialStep, holdEnabledSV]);
+
+  function handleHoldMenuOpen() {
+    if (inMix) return; // 중첩 큐 금지 — 큐 중 hold 메뉴 없음 (케밥 버튼과 동일 규칙)
+    handleCardMenuPress();
+  }
+
+  const longPress = Gesture.LongPress()
+    .minDuration(450)
+    .maxDistance(12)
+    .onBegin(() => {
+      'worklet';
+      if (holdEnabledSV.value === 0) return;
+      // hold 대기 동안 서서히 눌림 — minDuration 과 동일 시간으로 램프.
+      holdSV.value = withTiming(1, { duration: 450 });
+    })
+    .onStart(() => {
+      'worklet';
+      holdSV.value = withTiming(0, { duration: 200 });
+      runOnJS(handleHoldMenuOpen)();
+    })
+    .onFinalize((_e, success) => {
+      'worklet';
+      if (!success) holdSV.value = withTiming(0, { duration: 150 });
+    });
+
   // 2026-07-08 — Seeded Mix 2차: 케밥 메뉴 → 믹스 시작 (덱 주입).
   // 케밥/메뉴는 GestureDetector 바깥 absolute overlay (1차 검증 구조) — tap 제스처
   // 선점/DetailSheet 오픈과 원천 분리.
@@ -2031,7 +2064,9 @@ export default function DiscoverScreen() {
         )}
 
         {(state === 'ready' || inMix) && cardsToShow.length > 0 && (
-          <GestureDetector gesture={Gesture.Exclusive(tap, pan)}>
+          // 2026-07-10 — longPress 는 Simultaneous 병행: tap(≤300ms)/pan(이동)과
+          // 시간·거리 조건이 자연 배타라 우선순위 대기 없이 공존.
+          <GestureDetector gesture={Gesture.Simultaneous(Gesture.Exclusive(tap, pan), longPress)}>
             <Animated.View style={[styles.stack, inMix && styles.mixStackInset]}>
               {/* 2026-05-20 prev overlay 통합 — PrevCardOverlay 별도 컴포넌트 폐기.
                   prev card 를 stack render 의 마지막(=가장 위)에 prepend 해서
@@ -2076,6 +2111,8 @@ export default function DiscoverScreen() {
                       // tmdbId 매칭으로 옛 top 만 dismissX 적용 → 새 top / 비탑 영향 0.
                       dismissX={dismissX}
                       dismissCardIdSV={dismissCardIdSV}
+                      // 2026-07-10 — hold 눌림 램프 (top 카드만 worklet 에서 반영).
+                      holdSV={holdSV}
                     />
                   );
                 });

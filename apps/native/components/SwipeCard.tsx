@@ -87,6 +87,11 @@ interface Props {
   dismissX?: SharedValue<number>;
   /** dismiss 진행 중인 카드의 tmdbId. -1 = idle. SharedValue 라 race 0. */
   dismissCardIdSV?: SharedValue<number>;
+  /**
+   * 2026-07-10 — hold(long-press) 눌림 램프 (0~1). top 카드만 scale 로 반영 —
+   * hold 대기 450ms 동안 서서히 눌리는 active 피드백 (케밥 메뉴 오픈 예고).
+   */
+  holdSV?: SharedValue<number>;
 }
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -124,6 +129,7 @@ export default function SwipeCard({
   prevOverlayX,
   dismissX,
   dismissCardIdSV,
+  holdSV,
 }: Props) {
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
@@ -186,6 +192,10 @@ export default function SwipeCard({
     let opacity = 1;
     if (isTop && dragYSafe > 30) {
       scale = Math.max(0.94, 1 - (dragYSafe - 30) * 0.0008);
+    }
+    // 2026-07-10 — hold 눌림 램프: top 카드가 hold 대기 동안 최대 4% 축소.
+    if (isTop && holdSV !== undefined) {
+      scale = scale * (1 - 0.04 * safe(holdSV.value));
     }
 
     // 흡수 모션 활성: 카드 중심 → save 버튼 좌표로 보간
