@@ -7,11 +7,9 @@ import {
   FlatList,
   Dimensions,
   ScrollView,
-  ActionSheetIOS,
-  Alert,
-  Platform,
+  Modal,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -205,6 +203,8 @@ export default function SavedScreen() {
 
   // 배치 G — 카드 삭제 시 undo toast (데이터 손실 방지).
   const toast = useToast();
+  // 2026-07-10 — long-press 바텀 시트 하단 safe-area 패딩용.
+  const insets = useSafeAreaInsets();
 
   const refreshAll = useCallback(async () => {
     // 2026-06-06 (P2 history 제거) — getRecHistory 호출 삭제.
@@ -361,41 +361,21 @@ export default function SavedScreen() {
   // handleResave / handleHistoryPress 전체 삭제. 데이터 레이어 `getRecHistory` 는
   // `apps/native/app/index.tsx` P1 다양성 의존성으로 보존.
 
-  // W5 Task F — long-press → ActionSheet [상세보기 / 아카이브(또는 해제) / 삭제 / 취소].
-  // long-press 단일 entry point 유지 + 메뉴 분기로 자연스러운 패턴.
-  // iOS: native ActionSheetIOS. Android: Alert (3 버튼 + 취소).
-  const handleLongPress = useCallback(
-    (rec: Recommendation) => {
-      const isArchived = archivedIds.has(rec.tmdbId);
-      const archiveLabel = isArchived ? '아카이브 해제' : '아카이브';
-
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
-          {
-            options: ['취소', '상세보기', archiveLabel, '삭제'],
-            cancelButtonIndex: 0,
-            destructiveButtonIndex: 3,
-            title: rec.title,
-          },
-          (idx) => {
-            if (idx === 1) handleOpenDetail(rec);
-            else if (idx === 2) void handleArchiveToggle(rec.tmdbId);
-            else if (idx === 3) void handleRemove(rec.tmdbId);
-          },
-        );
-      } else {
-        // Android — Alert 3 버튼 fallback.
-        Alert.alert(rec.title, undefined, [
-          { text: '상세보기', onPress: () => handleOpenDetail(rec) },
-          { text: archiveLabel, onPress: () => void handleArchiveToggle(rec.tmdbId) },
-          { text: '삭제', style: 'destructive', onPress: () => void handleRemove(rec.tmdbId) },
-          { text: '취소', style: 'cancel' },
-        ]);
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [archivedIds, handleOpenDetail, handleArchiveToggle],
-  );
+  // W5 Task F → 2026-07-10 재작성: long-press → 자체 bottom sheet
+  // [상세보기 / 아카이브(또는 해제) / 삭제 / 취소]. OS ActionSheetIOS/Alert 를
+  // 앱 디자인 언어의 하단 시트로 교체 (사용자 피드백 — SavedFilterSheet 시각 계열).
+  const [menuRec, setMenuRec] = useState<Recommendation | null>(null);
+  const handleLongPress = useCallback((rec: Recommendation) => {
+    setMenuRec(rec);
+  }, []);
+  /**
+   * 시트 닫은 뒤 액션 실행 — 상세보기는 또 다른 Modal(DetailSheet) 을 열므로
+   * 두 Modal 전환이 겹치면 iOS 가 뒤 Modal 을 드랍할 수 있어 350ms 지연.
+   */
+  const runMenuAction = useCallback((action: () => void) => {
+    setMenuRec(null);
+    setTimeout(action, 350);
+  }, []);
 
   // W5 Task F — view filter 적용. web saved/page.tsx:123-138 의 filteredSaved 와 정합.
   // archived: 아카이브된 작품만 노출
@@ -785,7 +765,7 @@ export default function SavedScreen() {
                 : viewFilter === 'unwatched'
                   ? 'Discover에서 새로운 작품을 찾아보세요'
                   : viewFilter === 'watched'
-                    ? "Saved의 작품에서 '봤어요?' 버튼을 눌러보세요"
+                    ? '저장 작품의 노란 느낌표(!)를 눌러 시청 여부를 알려주세요'
                     : 'Discover에서 아래로 스와이프하거나 하트 버튼으로 담아보세요'}
           </Text>
         </View>
@@ -852,6 +832,10 @@ export default function SavedScreen() {
         visible={detailOpen}
         onClose={() => {
           setDetailOpen(false);
+          // 2026-07-10 — 시트 안에서 저장 해제/리포트 변경이 일어날 수 있으므로
+          // 닫을 때 목록 재동기화 (해제한 작품이 Saved 에서 자연스럽게 사라짐).
+          // useFocusEffect 는 Modal 닫힘으로는 재발화하지 않아 명시 호출 필요.
+          void refreshAll();
           // 2026-05-29 — Discover 정합. SearchSheet 결과 클릭으로 진입한
           // DetailSheet 라면 닫을 때 SearchSheet 자동 복귀 + 검색 컨텍스트 보존.
           if (returnToSearchAfterDetail) {
@@ -874,6 +858,88 @@ export default function SavedScreen() {
           router.push('/');
         }}
       />
+
+      {/* 2026-07-10 — long-press 액션 시트 (하단). OS ActionSheetIOS 대체 —
+          SavedFilterSheet 시각 계열 (surface + 상단 radius + grabber). */}
+      <Modal
+        visible={menuRec !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setMenuRec(null)}
+      >
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setMenuRec(null)}
+          // accessible={false} — wrap a11y 흡수 트랩 (memory feedback_native_a11y_e2e_patterns):
+          // 라벨 보유 backdrop 이 시트 row 들을 단일 element 로 흡수해 VoiceOver/E2E 접근 차단.
+          // 닫기는 터치(backdrop)·취소 row·onRequestClose 3경로로 충분.
+          accessible={false}
+        >
+          <Pressable
+            style={[styles.menuSheet, { paddingBottom: insets.bottom + spacing.md }]}
+            onPress={() => {}}
+            accessible={false}
+          >
+            <View style={styles.menuGrabber} />
+            <Text style={styles.menuTitle} numberOfLines={1}>
+              {menuRec?.title}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+              onPress={() => {
+                const r = menuRec;
+                if (r) runMenuAction(() => handleOpenDetail(r));
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="상세보기"
+              testID="saved-menu-detail"
+            >
+              <Text style={styles.menuRowText}>상세보기</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+              onPress={() => {
+                const r = menuRec;
+                if (r) runMenuAction(() => void handleArchiveToggle(r.tmdbId));
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                menuRec && archivedIds.has(menuRec.tmdbId) ? '아카이브 해제' : '아카이브'
+              }
+              testID="saved-menu-archive"
+            >
+              <Text style={styles.menuRowText}>
+                {menuRec && archivedIds.has(menuRec.tmdbId) ? '아카이브 해제' : '아카이브'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+              onPress={() => {
+                const r = menuRec;
+                if (r) runMenuAction(() => void handleRemove(r.tmdbId));
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="삭제"
+              testID="saved-menu-remove"
+            >
+              <Text style={[styles.menuRowText, styles.menuRowDanger]}>삭제</Text>
+            </Pressable>
+            <Pressable
+              style={({ pressed }) => [
+                styles.menuRow,
+                styles.menuCancel,
+                pressed && styles.menuRowPressed,
+              ]}
+              onPress={() => setMenuRec(null)}
+              accessibilityRole="button"
+              accessibilityLabel="취소"
+              testID="saved-menu-cancel"
+            >
+              <Text style={styles.menuCancelText}>취소</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는
           DetailSheet Cast 클릭으로 진입 (web saved/page.tsx 정합).
@@ -951,9 +1017,15 @@ function PosterCard({
     // 별개 a11y element 가 되도록 병합 해제 (iOS 가 자식 Pressable 을 부모로
     // 흡수하는 것 방지). 카드 탭 a11y 는 하단 label View 에 명시 부여.
     <Pressable
-      style={[styles.card, { width: CARD_W, height: tall ? CARD_H_TALL : CARD_H }]}
+      // 2026-07-10 — hold(long-press) active 피드백: pressed 동안 살짝 눌린 시각
+      // (ListCard 기존 pressed 패턴 정합). long-press 인식 순간까지 유지된다.
+      style={({ pressed }) => [
+        styles.card,
+        { width: CARD_W, height: tall ? CARD_H_TALL : CARD_H },
+        pressed && styles.cardPressed,
+      ]}
       // W5 Task E — 카드 탭 = DetailSheet 진입.
-      // W5 Task F — long-press = ActionSheet [상세/아카이브/삭제] 메뉴.
+      // W5 Task F — long-press = 하단 액션 시트 [상세/아카이브/삭제] 메뉴.
       onPress={() => onPress(rec)}
       onLongPress={() => onLongPress(rec)}
       accessible={false}
@@ -1014,16 +1086,17 @@ function PosterCard({
         </View>
       </View>
 
-      {/* 좌상단 reaction 입력 버튼 — '봤어요?' 또는 '시청'(해제). web PosterCard 정합. */}
+      {/* 좌상단 reaction 입력 버튼 — 노란 느낌표(!) 배지 (2026-07-10, 구 '봤어요?'
+          텍스트 칩 대체 — amber 글리프로 탭 유도). '시청'(해제)은 텍스트 유지. */}
       {!isReporting && !report && (
         <Pressable
           onPress={() => onStartReport(rec.tmdbId)}
           accessibilityRole="button"
           accessibilityLabel={`${rec.title} 시청 리포트 작성`}
-          style={styles.reportChip}
-          hitSlop={4}
+          style={[styles.reportBang, styles.reportBangFloat]}
+          hitSlop={8}
         >
-          <Text style={styles.reportChipText}>봤어요?</Text>
+          <Text style={styles.reportBangText}>!</Text>
         </Pressable>
       )}
       {!isReporting && report && (
@@ -1177,10 +1250,10 @@ function ListCard({
               onPress={() => onStartReport(rec.tmdbId)}
               accessibilityRole="button"
               accessibilityLabel={`${rec.title} 시청 리포트 작성`}
-              style={styles.listReportChip}
-              hitSlop={4}
+              style={styles.reportBang}
+              hitSlop={8}
             >
-              <Text style={styles.listReportChipText}>봤어요?</Text>
+              <Text style={styles.reportBangText}>!</Text>
             </Pressable>
           ) : (
             <Pressable
@@ -1435,6 +1508,65 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
+  // 2026-07-10 — hold(long-press) active 피드백 (ListCard pressed 정합).
+  cardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
+  },
+  // 2026-07-10 — long-press 하단 액션 시트 (SavedFilterSheet 시각 계열).
+  menuBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: colors.overlayHeavy,
+  },
+  menuSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  menuGrabber: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    marginBottom: spacing.sm,
+  },
+  menuTitle: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  menuRow: {
+    minHeight: 52,
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.sm,
+  },
+  menuRowPressed: {
+    backgroundColor: colors.overlayLight,
+  },
+  menuRowText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  menuRowDanger: {
+    color: colors.danger,
+  },
+  menuCancel: {
+    marginTop: spacing.xs,
+    alignItems: 'center',
+  },
+  menuCancelText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '500',
+  },
   cardDim: {
     backgroundColor: colors.overlay,
     opacity: 0.35,
@@ -1492,10 +1624,26 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.overlay,
   },
-  reportChipText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.textSecondary,
+  // 2026-07-10 — 시청 리포트 유도 배지: '봤어요?' 텍스트 칩 → 노란 느낌표(!).
+  // overlay 원형 위 amber 글리프 — 포스터 위에서 시선을 끌되 카피 점유 없음.
+  reportBang: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.overlay,
+  },
+  reportBangFloat: {
+    position: 'absolute',
+    top: spacing.xs,
+    left: spacing.xs,
+  },
+  reportBangText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.accent,
+    lineHeight: 18,
   },
   reportChipDone: {
     fontSize: 11,
