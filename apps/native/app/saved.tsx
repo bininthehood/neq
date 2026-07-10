@@ -37,13 +37,23 @@ import { displayProviders } from '../lib/providers';
 import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
-import { IconSearch, IconArchive } from '../components/Icons';
+import { IconSearch, IconArchive, IconBang } from '../components/Icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  cancelAnimation,
+  interpolate,
+  Extrapolation,
+  Easing,
+} from 'react-native-reanimated';
+import { easings } from '@neq/design';
 import SavedFilterSheet from '../components/saved/SavedFilterSheet';
 import SavedGenreChips, {
   genreLabelsByFrequency,
   itemHasGenre,
 } from '../components/saved/SavedGenreChips';
-import ReactionOverlay from '../components/saved/ReactionOverlay';
+import { REACTION_OPTIONS } from '../components/saved/ReactionOverlay';
 import ReactionLabel from '../components/saved/ReactionLabel';
 import {
   loadSavedSort,
@@ -323,6 +333,12 @@ export default function SavedScreen() {
       return next;
     });
   }, []);
+
+  // 2026-07-10 — 리포트 시트 타이틀용 현재 대상 (reportingId → Recommendation).
+  const reportingRec =
+    reportingId != null
+      ? items.find((s) => s.recommendation.tmdbId === reportingId)?.recommendation ?? null
+      : null;
 
   // W5 Task E — DetailSheet 진입. web `apps/web/src/app/saved/page.tsx:335-342`
   // 의 `openDetailFor` 와 1:1 정합. source 는 'saved_tap' 고정.
@@ -787,9 +803,7 @@ export default function SavedScreen() {
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
               onStartReport={setReportingId}
-              onReport={handleReport}
               onUndoReport={handleUndoReport}
-              onCancelReport={() => setReportingId(null)}
               onArchiveToggle={handleArchiveToggle}
             />
           )}
@@ -814,9 +828,7 @@ export default function SavedScreen() {
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
               onStartReport={setReportingId}
-              onReport={handleReport}
               onUndoReport={handleUndoReport}
-              onCancelReport={() => setReportingId(null)}
               onArchiveToggle={handleArchiveToggle}
             />
           )}
@@ -859,87 +871,114 @@ export default function SavedScreen() {
         }}
       />
 
-      {/* 2026-07-10 — long-press 액션 시트 (하단). OS ActionSheetIOS 대체 —
-          SavedFilterSheet 시각 계열 (surface + 상단 radius + grabber). */}
-      <Modal
-        visible={menuRec !== null}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setMenuRec(null)}
+      {/* 2026-07-10 — long-press 액션 시트 (하단). OS ActionSheetIOS 대체.
+          공용 셸 SavedActionSheet — backdrop fade 와 시트 슬라이드 분리
+          (Modal slide 가 backdrop 까지 밀어올리는 어색함 제거, 사용자 피드백). */}
+      <SavedActionSheet
+        open={menuRec !== null}
+        onClose={() => setMenuRec(null)}
+        paddingBottom={insets.bottom + spacing.md}
       >
+        <Text style={styles.menuTitle} numberOfLines={1}>
+          {menuRec?.title}
+        </Text>
         <Pressable
-          style={styles.menuBackdrop}
-          onPress={() => setMenuRec(null)}
-          // accessible={false} — wrap a11y 흡수 트랩 (memory feedback_native_a11y_e2e_patterns):
-          // 라벨 보유 backdrop 이 시트 row 들을 단일 element 로 흡수해 VoiceOver/E2E 접근 차단.
-          // 닫기는 터치(backdrop)·취소 row·onRequestClose 3경로로 충분.
-          accessible={false}
+          style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+          onPress={() => {
+            const r = menuRec;
+            if (r) runMenuAction(() => handleOpenDetail(r));
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="상세보기"
+          testID="saved-menu-detail"
         >
-          <Pressable
-            style={[styles.menuSheet, { paddingBottom: insets.bottom + spacing.md }]}
-            onPress={() => {}}
-            accessible={false}
-          >
-            <View style={styles.menuGrabber} />
-            <Text style={styles.menuTitle} numberOfLines={1}>
-              {menuRec?.title}
-            </Text>
-            <Pressable
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-              onPress={() => {
-                const r = menuRec;
-                if (r) runMenuAction(() => handleOpenDetail(r));
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="상세보기"
-              testID="saved-menu-detail"
-            >
-              <Text style={styles.menuRowText}>상세보기</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-              onPress={() => {
-                const r = menuRec;
-                if (r) runMenuAction(() => void handleArchiveToggle(r.tmdbId));
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={
-                menuRec && archivedIds.has(menuRec.tmdbId) ? '아카이브 해제' : '아카이브'
-              }
-              testID="saved-menu-archive"
-            >
-              <Text style={styles.menuRowText}>
-                {menuRec && archivedIds.has(menuRec.tmdbId) ? '아카이브 해제' : '아카이브'}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
-              onPress={() => {
-                const r = menuRec;
-                if (r) runMenuAction(() => void handleRemove(r.tmdbId));
-              }}
-              accessibilityRole="button"
-              accessibilityLabel="삭제"
-              testID="saved-menu-remove"
-            >
-              <Text style={[styles.menuRowText, styles.menuRowDanger]}>삭제</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.menuRow,
-                styles.menuCancel,
-                pressed && styles.menuRowPressed,
-              ]}
-              onPress={() => setMenuRec(null)}
-              accessibilityRole="button"
-              accessibilityLabel="취소"
-              testID="saved-menu-cancel"
-            >
-              <Text style={styles.menuCancelText}>취소</Text>
-            </Pressable>
-          </Pressable>
+          <Text style={styles.menuRowText}>상세보기</Text>
         </Pressable>
-      </Modal>
+        <Pressable
+          style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+          onPress={() => {
+            const r = menuRec;
+            if (r) runMenuAction(() => void handleArchiveToggle(r.tmdbId));
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            menuRec && archivedIds.has(menuRec.tmdbId) ? '아카이브 해제' : '아카이브'
+          }
+          testID="saved-menu-archive"
+        >
+          <Text style={styles.menuRowText}>
+            {menuRec && archivedIds.has(menuRec.tmdbId) ? '아카이브 해제' : '아카이브'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+          onPress={() => {
+            const r = menuRec;
+            if (r) runMenuAction(() => void handleRemove(r.tmdbId));
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="삭제"
+          testID="saved-menu-remove"
+        >
+          <Text style={[styles.menuRowText, styles.menuRowDanger]}>삭제</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.menuRow,
+            styles.menuCancel,
+            pressed && styles.menuRowPressed,
+          ]}
+          onPress={() => setMenuRec(null)}
+          accessibilityRole="button"
+          accessibilityLabel="취소"
+          testID="saved-menu-cancel"
+        >
+          <Text style={styles.menuCancelText}>취소</Text>
+        </Pressable>
+      </SavedActionSheet>
+
+      {/* 2026-07-10 — 시청 리포트 입력 하단 시트 (구 카드 위 ReactionOverlay 대체). */}
+      <SavedActionSheet
+        open={reportingId !== null}
+        onClose={() => setReportingId(null)}
+        paddingBottom={insets.bottom + spacing.md}
+      >
+        <Text style={styles.menuTitle} numberOfLines={1}>
+          {reportingRec?.title ?? ''}
+        </Text>
+        <Text style={styles.reportSheetHeadline}>어땠는지 알려주세요</Text>
+        {REACTION_OPTIONS.map((o) => (
+          <Pressable
+            key={o.key}
+            style={({ pressed }) => [
+              styles.reportOption,
+              { backgroundColor: o.bg, borderColor: o.border },
+              pressed && { opacity: 0.8 },
+            ]}
+            onPress={() => {
+              const id = reportingId;
+              if (id != null) void handleReport(id, o.key);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={o.label}
+            testID={`report-${o.key}`}
+          >
+            <Text style={[styles.reportOptionText, { color: o.color }]}>{o.label}</Text>
+          </Pressable>
+        ))}
+        <Pressable
+          style={({ pressed }) => [
+            styles.menuRow,
+            styles.menuCancel,
+            pressed && styles.menuRowPressed,
+          ]}
+          onPress={() => setReportingId(null)}
+          accessibilityRole="button"
+          accessibilityLabel="취소"
+        >
+          <Text style={styles.menuCancelText}>취소</Text>
+        </Pressable>
+      </SavedActionSheet>
 
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는
           DetailSheet Cast 클릭으로 진입 (web saved/page.tsx 정합).
@@ -982,6 +1021,58 @@ export default function SavedScreen() {
  * P2 배치 A — reaction 입력 경로: 좌상단 '봤어요?' / reaction 있으면 '시청' 토글 +
  * isReporting 시 ReactionOverlay.
  */
+/**
+ * 2026-07-10 — Saved 하단 시트 공용 셸 (long-press 메뉴 / 시청 리포트).
+ * Modal animationType="slide" 는 backdrop 까지 통째로 슬라이드해 "오버레이가 시트에
+ * 붙어 올라오는" 인상 (사용자 피드백) → SavedFilterSheet 정본 패턴: Modal none +
+ * 시트만 translateY 슬라이드, backdrop 은 translateY 연동 fade. grabber 포함.
+ * Reanimated cleanup (cancelAnimation) — feedback_reanimated_fabric_crash 정합.
+ */
+const SHEET_SLIDE_RANGE = 480; // 오프스크린 기준 — 시트 실높이(<=420)보다 크게
+
+function SavedActionSheet({
+  open,
+  onClose,
+  paddingBottom,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  paddingBottom: number;
+  children: React.ReactNode;
+}) {
+  const translateY = useSharedValue(SHEET_SLIDE_RANGE);
+  useEffect(() => {
+    return () => cancelAnimation(translateY);
+  }, [translateY]);
+  useEffect(() => {
+    translateY.value = withTiming(open ? 0 : SHEET_SLIDE_RANGE, {
+      duration: open ? 280 : 220,
+      easing: Easing.bezier(...easings.enter),
+    });
+  }, [open, translateY]);
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(translateY.value, [0, SHEET_SLIDE_RANGE], [1, 0], Extrapolation.CLAMP),
+  }));
+  return (
+    <Modal visible={open} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      {/* backdrop — 시트와 분리된 fade. 탭 = 닫기 (accessible=false: wrap a11y 흡수 트랩). */}
+      <Animated.View style={[styles.menuBackdrop, dimStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
+      </Animated.View>
+      <Animated.View style={[styles.menuSheetWrap, sheetStyle]} pointerEvents="box-none">
+        <View style={[styles.menuSheet, { paddingBottom }]}>
+          <View style={styles.menuGrabber} />
+          {children}
+        </View>
+      </Animated.View>
+    </Modal>
+  );
+}
+
 function PosterCard({
   item,
   index,
@@ -991,9 +1082,7 @@ function PosterCard({
   onPress,
   onLongPress,
   onStartReport,
-  onReport,
   onUndoReport,
-  onCancelReport,
   onArchiveToggle,
 }: {
   item: SavedItem;
@@ -1004,9 +1093,7 @@ function PosterCard({
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
   onStartReport: (tmdbId: number) => void;
-  onReport: (tmdbId: number, reaction: WatchReaction) => void;
   onUndoReport: (tmdbId: number) => void;
-  onCancelReport: () => void;
   onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
@@ -1096,7 +1183,7 @@ function PosterCard({
           style={[styles.reportBang, styles.reportBangFloat]}
           hitSlop={8}
         >
-          <Text style={styles.reportBangText}>!</Text>
+          <View style={styles.reportBangTilt}><IconBang size={15} color={colors.accent} /></View>
         </Pressable>
       )}
       {!isReporting && report && (
@@ -1132,14 +1219,7 @@ function PosterCard({
         </Pressable>
       )}
 
-      {/* isReporting 시 reaction 선택 overlay — 카드 전체 덮음. */}
-      {isReporting && (
-        <ReactionOverlay
-          tmdbId={rec.tmdbId}
-          onReport={onReport}
-          onCancel={onCancelReport}
-        />
-      )}
+      {/* 2026-07-10 — reaction 입력은 하단 시트로 이동 (saved.tsx 리포트 시트). */}
     </Pressable>
   );
 }
@@ -1158,9 +1238,7 @@ function ListCard({
   onPress,
   onLongPress,
   onStartReport,
-  onReport,
   onUndoReport,
-  onCancelReport,
   onArchiveToggle,
 }: {
   item: SavedItem;
@@ -1170,9 +1248,7 @@ function ListCard({
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
   onStartReport: (tmdbId: number) => void;
-  onReport: (tmdbId: number, reaction: WatchReaction) => void;
   onUndoReport: (tmdbId: number) => void;
-  onCancelReport: () => void;
   onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
@@ -1253,7 +1329,7 @@ function ListCard({
               style={styles.reportBang}
               hitSlop={8}
             >
-              <Text style={styles.reportBangText}>!</Text>
+              <View style={styles.reportBangTilt}><IconBang size={15} color={colors.accent} /></View>
             </Pressable>
           ) : (
             <Pressable
@@ -1290,15 +1366,7 @@ function ListCard({
         </Pressable>
       )}
 
-      {/* isReporting 시 reaction 선택 overlay — 카드 전체 덮음 (compact 모드). */}
-      {isReporting && (
-        <ReactionOverlay
-          tmdbId={rec.tmdbId}
-          onReport={onReport}
-          onCancel={onCancelReport}
-          compact
-        />
-      )}
+      {/* 2026-07-10 — reaction 입력은 하단 시트로 이동 (saved.tsx 리포트 시트). */}
     </Pressable>
   );
 }
@@ -1515,9 +1583,14 @@ const styles = StyleSheet.create({
   },
   // 2026-07-10 — long-press 하단 액션 시트 (SavedFilterSheet 시각 계열).
   menuBackdrop: {
-    flex: 1,
-    justifyContent: 'flex-end',
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.overlayHeavy,
+  },
+  menuSheetWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   menuSheet: {
     backgroundColor: colors.surface,
@@ -1566,6 +1639,26 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
+  },
+  // 2026-07-10 — 시청 리포트 시트 (ReactionOverlay 옵션 팔레트 재사용).
+  reportSheetHeadline: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  reportOption: {
+    minHeight: 52,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginBottom: spacing.sm,
+  },
+  reportOptionText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   cardDim: {
     backgroundColor: colors.overlay,
@@ -1626,24 +1719,22 @@ const styles = StyleSheet.create({
   },
   // 2026-07-10 — 시청 리포트 유도 배지: '봤어요?' 텍스트 칩 → 노란 느낌표(!).
   // overlay 원형 위 amber 글리프 — 포스터 위에서 시선을 끌되 카피 점유 없음.
+  // Discover 케밥 정본 계열 (surfaceRaised 진한 원) + amber 글리프 8도 기울임 (pop).
   reportBang: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.overlay,
+    backgroundColor: colors.surfaceRaised,
   },
   reportBangFloat: {
     position: 'absolute',
     top: spacing.xs,
     left: spacing.xs,
   },
-  reportBangText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: colors.accent,
-    lineHeight: 18,
+  reportBangTilt: {
+    transform: [{ rotate: '8deg' }],
   },
   reportChipDone: {
     fontSize: 11,

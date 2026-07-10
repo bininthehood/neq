@@ -17,6 +17,17 @@ interface IconProps {
   color?: string;
 }
 
+// 2026-07-10 — Saved 시청 리포트 유도 배지 (!). 위가 도톰한 테이퍼 바 + 도트로
+// 만화 느낌표 인상 (pop). 기울임은 소비처 wrapper transform 에서.
+export function IconBang({ size = 16, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill={color}>
+      <Path d="M10 2.4c1.6 0 2.6 1.1 2.4 2.7l-.8 6.3c-.1 1-.7 1.6-1.6 1.6s-1.5-.6-1.6-1.6l-.8-6.3C7.4 3.5 8.4 2.4 10 2.4z" />
+      <Circle cx="10" cy="16.6" r="1.9" />
+    </Svg>
+  );
+}
+
 export function IconRewind({ size = 20, color = '#000' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>

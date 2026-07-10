@@ -16,8 +16,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import type { WatchReaction } from '../../lib/types';
 import { colors, radius, spacing, fontsV2 } from '../../lib/tokens';
 
-/** web SavedList 의 isReporting overlay 버튼 정합 — 라벨/색/배경. */
-const REACTION_OPTIONS: {
+/** web SavedList 의 isReporting overlay 버튼 정합 — 라벨/색/배경.
+ *  2026-07-10 — export: 리포트 입력이 하단 시트 (saved.tsx) 로 이동하며 옵션 공유.
+ *  본 오버레이 컴포넌트는 시트 전환 후 미사용 (재도입 대비 보존). */
+export const REACTION_OPTIONS: {
   key: WatchReaction;
   label: string;
   bg: string;
