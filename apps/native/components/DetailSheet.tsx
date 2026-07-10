@@ -40,7 +40,7 @@ import type {
   RelatedWorksResponse,
   SearchResult,
 } from '../lib/types';
-import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName } from '@neq/core';
+import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels } from '@neq/core';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
 import { track } from '../lib/analytics';
@@ -727,6 +727,13 @@ export default function DetailSheet({
                     <View style={styles.typePill}>
                       <Text style={styles.typePillText}>{typeBadge}</Text>
                     </View>
+                    {/* 4차-4 (2026-07-10) — 장르 필 상위 2개 (SwipeCard badgeRow 정합).
+                        genres 미보유 데이터는 자연 생략. */}
+                    {getGenreLabels(rec.genres).slice(0, 2).map((g) => (
+                      <View key={g} style={styles.typePill}>
+                        <Text style={styles.typePillText}>{g}</Text>
+                      </View>
+                    ))}
                   </View>
                   <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>
                     {rec.title}

@@ -11,7 +11,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
-import { getOTTIcon } from '@neq/core';
+import { getOTTIcon, getGenreLabels } from '@neq/core';
 import { fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, shadowsNative } from '../lib/tokens';
 
@@ -314,7 +314,9 @@ export function CardInner({
               {rec.title}
             </Text>
             {/* 4차-3 (2026-07-10) — 필을 타이틀 아래 고정 row 로. 인라인(A안)은 제목
-                길이에 따라 필 위치가 요동쳐 폐기 (사용자 피드백). */}
+                길이에 따라 필 위치가 요동쳐 폐기 (사용자 피드백).
+                4차-4 — 장르 필 추가 (상위 2개, DetailSheet 동일). genres 미보유
+                구 데이터는 자연 생략. */}
             <View style={styles.badgeRow}>
               <View style={styles.ratingPill}>
                 <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
@@ -322,6 +324,11 @@ export function CardInner({
               <View style={styles.typePill}>
                 <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
               </View>
+              {getGenreLabels(rec.genres).slice(0, 2).map((g) => (
+                <View key={g} style={styles.typePill}>
+                  <Text style={styles.typePillText}>{g}</Text>
+                </View>
+              ))}
             </View>
             <Text style={styles.reason} numberOfLines={3}>
               {rec.reason}
