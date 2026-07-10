@@ -25,6 +25,7 @@ import InsightSections from "@/components/profile/InsightSections";
 import NewPersonaSheet from "@/components/profile/NewPersonaSheet";
 import SubscribedOttSection from "@/components/profile/SubscribedOttSection";
 import PersonaSurveyController from "@/components/onboarding/PersonaSurveyController";
+import { buildProfilePersonasForDisplay } from "./profile-display";
 
 const PERSONA_SURVEY_V2_ENABLED =
   process.env.NEXT_PUBLIC_PERSONA_SURVEY_V2_ENABLED === "true";
@@ -75,6 +76,14 @@ export default function ProfilePage() {
   const typeDist = useMemo(() => calcTypeDistribution(savedRaw), [savedRaw]);
   const ottDist = useMemo(() => calcOTTDistribution(savedRaw), [savedRaw]);
   const monthly = useMemo(() => calcMonthlyWatch(reportsRaw), [reportsRaw]);
+  const personasForDisplay = useMemo(
+    () => buildProfilePersonasForDisplay({
+      personas: persona.personas,
+      tasteItems,
+      savedItems: savedRaw,
+    }),
+    [persona.personas, tasteItems, savedRaw],
+  );
 
   useEffect(() => {
     if (trackedRef.current) return;
@@ -112,9 +121,9 @@ export default function ProfilePage() {
         <h1
           className="font-display"
           style={{
-            fontSize: 20,
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
+            fontSize: 28,
+            fontWeight: 500,
+            letterSpacing: "-0.025em",
             color: "var(--text-primary)",
             lineHeight: 1,
           }}
@@ -138,7 +147,7 @@ export default function ProfilePage() {
       <div className="flex-1 min-h-0 overflow-y-auto">
 
         <PersonaSection
-          personas={persona.personas}
+          personas={personasForDisplay}
           activePersonaId={persona.activePersonaId}
           onSwitch={(id) => {
             persona.switchPersona(id);
