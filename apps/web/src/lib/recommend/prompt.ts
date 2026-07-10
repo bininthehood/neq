@@ -41,8 +41,9 @@ const REASON_CUT_FLOOR = 60; // truncate 시 최소 보존 길이 (너무 짧게
  * LLM 산 reason 안전망. 시스템 프롬프트가 35~80자를 강제하지만 LLM 변동성으로
  * 위반 케이스 발생 가능 — 코드 단에서 명백한 위반만 컷한다.
  * (2026-07-10 톤 개편 — 기존 15/30 경계를 25/90 으로 상향. 상세 위 상수 주석.)
+ * export 는 reason-tone 테스트용 — 런타임 소비처는 본 모듈 내부 2곳.
  */
-function normalizeReason(raw: string): string | null {
+export function normalizeReason(raw: string): string | null {
   const trimmed = raw.trim();
   if (trimmed.length < REASON_MIN_DISCARD) return null;
   if (trimmed.length <= REASON_MAX) return trimmed;
