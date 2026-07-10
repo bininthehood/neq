@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { prefetchPosters } from '../lib/image-prefetch';
+import { getRelatedCached, putRelatedCache } from '../lib/data-prefetch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -305,16 +306,25 @@ export default function DetailSheet({
       return;
     }
     let cancelled = false;
-    setRelatedLoading(true);
-    setRelated(null);
     // 2026-05-20 — variety 는 TMDB 에서 TV(series). movie 외 모두 series 로 매핑.
     const type = rec.type === 'movie' ? 'movie' : 'series';
+    // 2026-07-10 — 선행 fetch 캐시 히트 시 즉시 렌더 (Discover dwell 선-fetch /
+    // 재오픈 / history 복귀). related 실측 0.7~1.8s 스켈레톤 구간 제거.
+    const cached = getRelatedCached(rec.tmdbId, type);
+    if (cached) {
+      setRelated(cached);
+      setRelatedLoading(false);
+      return;
+    }
+    setRelatedLoading(true);
+    setRelated(null);
     fetch(`${env.API_BASE_URL}/api/tmdb/related?work_id=${rec.tmdbId}&type=${type}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: RelatedWorksResponse | null) => {
         if (cancelled) return;
         // 렌더 전에 포스터 캐시 적재 — 관련작 행 노출 시 팝인 방지 (2026-07-10)
         if (data) {
+          putRelatedCache(rec.tmdbId, type, data);
           prefetchPosters(
             [
               ...(data.collection?.works ?? []),

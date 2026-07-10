@@ -36,6 +36,7 @@ import TutorialFlow, {
 import SearchSheet from '../components/SearchSheet';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
 import { buildSeededMixItems, mergeGenreQueueItems, mixLabelOf } from '../lib/mix-utils';
+import { prefetchRelated } from '../lib/data-prefetch';
 import {
   consumePendingMixSeed,
   type MixStartSource,
@@ -1521,6 +1522,19 @@ export default function DiscoverScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailOpen, searchOpen, cardMenuOpen]);
+
+  // 2026-07-10 — top 카드 1.5s dwell 시 related 선-fetch (DetailSheet 관련작
+  // 스켈레톤 0.7~1.8s 구간 제거). 빠른 스와이프는 타이머가 리셋돼 스킵 —
+  // dwell 한 카드만 호출 (TMDB 호출 낭비 방지). 캐시는 lib/data-prefetch LRU.
+  useEffect(() => {
+    if (!currentRec || detailOpen) return;
+    const rec = currentRec;
+    const t = setTimeout(() => {
+      prefetchRelated(rec.tmdbId, rec.type === 'movie' ? 'movie' : 'series');
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRec?.tmdbId, detailOpen]);
 
   // Mix 탭 → 믹스 시작 브리지. 탭에서 setPendingMixSeed 후 router.push('/') →
   // focus 시 1회 consume. ref 로 최신 handleMixStart 참조 (stale closure 방지).

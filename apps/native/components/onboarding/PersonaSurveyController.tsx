@@ -23,6 +23,7 @@ import {
   clearProgress,
   saveProgress,
 } from '../../lib/survey-storage';
+import { warmTrending } from '../../lib/data-prefetch';
 import PersonaContextSelector from './PersonaContextSelector';
 import TasteSummaryPreview from './TasteSummaryPreview';
 import TasteSurveyFavoritesPicker, {
@@ -145,6 +146,9 @@ export default function PersonaSurveyController({
       options?: { additionalContentTypes?: PersonaContext['contentType'][] },
     ) => {
       setContext(picked);
+      // 2026-07-10 — favorites 스텝 (3-step 뒤) 의 trending 풀 선행 warm.
+      // 실측 0.5~1.0s 를 설문 진행 시간에 흡수 → 스텝 진입 즉시 렌더.
+      warmTrending();
       // 2026-07-10 — resume modal 폐기 (사용자 결정: 온보딩은 초기 1회/초기화 후라
       // "이어서 하시겠어요?" 프롬프트가 어느 경우에도 맥락에 안 맞음). stale 진행분은
       // 조용히 비우고 항상 처음부터.

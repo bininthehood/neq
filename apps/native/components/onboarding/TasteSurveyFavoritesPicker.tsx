@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
 import { env } from '../../lib/env';
+import { getTrendingCached } from '../../lib/data-prefetch';
 import { FALLBACK_FAVORITES } from '@neq/core';
 
 /**
@@ -57,6 +58,16 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
   const scrollRef = useRef<ScrollView>(null);
 
   const fetchTrending = useCallback(async (scrollAfter = false) => {
+    // 2026-07-10 — 초기 mount 는 설문 시작 시점의 warm 캐시 우선 (즉시 렌더).
+    // '다른 작품 보기' (scrollAfter=true) 는 갱신 의도라 네트워크 강제.
+    if (!scrollAfter) {
+      const cached = getTrendingCached();
+      if (cached && cached.length > 0) {
+        setSuggestions(cached as FavoritePickItem[]);
+        setLoadingSuggestions(false);
+        return;
+      }
+    }
     setLoadingSuggestions(true);
     try {
       const res = await fetch(`${env.API_BASE_URL}/api/trending`);
