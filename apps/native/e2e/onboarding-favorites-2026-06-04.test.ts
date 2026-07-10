@@ -75,24 +75,24 @@ async function reachFavoritesPick(): Promise<boolean> {
   await browser.pause(300);
   if (!(await tapByLabel('다음'))) return false;
 
-  // 3a. resume modal 처리
+  // 4. 설문 step 진행 — 2026-07-10 갱신: 6/6 정적 풀 승격으로 3-step 고정
+  //    (구 spec 은 2-step 가정이라 step 3/3 에서 좌초 — stale). favorites 신호가
+  //    나올 때까지 옵션 선택 + "다음" 반복 (상한 4 — 미래 step 수 변동 방어).
   await browser.pause(800);
-  if (await pageSourceContains('이어서 하시겠어요')) {
-    await tapByLabel('처음부터');
-    await browser.pause(500);
+  for (let s = 0; s < 4; s++) {
+    if (
+      (await pageSourceContains('좋아하는 작품')) ||
+      (await pageSourceContains('이런 작품은 어때요')) ||
+      (await waitForLabel('건너뛰기', 1500))
+    ) {
+      return true;
+    }
+    const opt = await waitForRadioOption(25000);
+    if (!opt) return false;
+    if (!(await tapByLabel(opt))) return false;
+    if (!(await tapByLabel('다음'))) return false;
+    await browser.pause(600);
   }
-
-  // 4. step 1 — LLM 옵션 + 다음
-  const o1 = await waitForRadioOption(25000);
-  if (!o1) return false;
-  if (!(await tapByLabel(o1))) return false;
-  if (!(await tapByLabel('다음'))) return false;
-
-  // 5. step 2 — LLM 옵션 + 다음
-  const o2 = await waitForRadioOption(25000);
-  if (!o2) return false;
-  if (!(await tapByLabel(o2))) return false;
-  if (!(await tapByLabel('다음'))) return false;
 
   // 6. favorites_pick step mount 대기 — heading 또는 "건너뛰기" 노출이 안정적 신호.
   // TasteSurveyFavoritesPicker line 132: "좋아하는 작품도 알려주세요"

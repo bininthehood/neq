@@ -184,9 +184,24 @@ export async function tapWithRetry(
  *   true  — Discover 도달 (또는 진입 시점에 이미 onboarded)
  *   false — 도중 실패. 호출 spec 의 before hook 에서 throw 권장.
  */
+/**
+ * 2026-07-10 — TutorialFlow v3 잔재 처리. 온보딩 직후 첫 Discover 에서 튜토리얼이
+ * 활성화되면 가이드 잠금이 카드 탭/비가이드 스와이프를 차단 → P1/S4 류 "카드 탭 →
+ * DetailSheet" 케이스가 원인 불명 실패 (2026-07-10 QA 에서 확정). onboarded 상태
+ * 진입/완료 양쪽에서 호출해 스위트 순서 의존을 제거한다.
+ */
+export async function skipTutorialIfActive(): Promise<void> {
+  if (!(await pageSourceContains('튜토리얼 건너뛰기'))) return;
+  await tapByLabel('튜토리얼 건너뛰기', { timeout: 3000 });
+  await browser.pause(600);
+}
+
 export async function ensureOnboardedOrSkip(): Promise<boolean> {
-  // 이미 Discover (또는 다른 onboarded 화면) 면 no-op.
-  if (!(await pageSourceContains('시작하기'))) return true;
+  // 이미 Discover (또는 다른 onboarded 화면) 면 튜토리얼 잔재만 정리 후 no-op.
+  if (!(await pageSourceContains('시작하기'))) {
+    await skipTutorialIfActive();
+    return true;
+  }
 
   // (1) Welcome → hello
   if (!(await tapWithRetry('시작하기', '님'))) {
@@ -194,36 +209,31 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
     return false;
   }
 
-  // (2) Hello — 이름 입력 후 키보드 return/done 키 직접 tap.
-  // 화면 "다음" 버튼이 키보드에 가려져 직접 tap 불가. OnboardingStepHello 는
-  // returnKeyType="done" + onSubmitEditing → submit() — 키보드 return key 가 "다음" 동등.
-  // mobile:hideKeyboard {keys:['done']} 는 일부 환경에서 noop 이라 키 element 직접 tap 로 처리.
-  // 한국어 IME 활성 시 키 라벨은 한글 ("확인" / "완료" / "개행"), 영문은 "Return" / "Done".
+  // (2) Hello — 2026-07-10 재작성 (시뮬 한국어 IME 트랩).
+  // 배경: TextField 자동 포커스로 키보드가 하단('이름 없이 시작' 포함)을 가리고,
+  // 한국어 키보드의 완료 키(✓)는 done/Return/완료 등 어떤 이름 매칭에도 안 걸림.
+  // 해법: setValue 끝에 '\n' — XCUITest typeText 가 IME 레이아웃과 무관하게
+  // return 키를 눌러 onSubmitEditing → submit() 발화. (빈 이름은 submit 이
+  // hasValue 가드로 막혀 있어 이름 입력이 선행 필수.)
   await browser.pause(500);
   const inputs = await $$('//XCUIElementTypeTextField');
   if (inputs.length > 0) {
-    await inputs[0].setValue('E2E');
-    await browser.pause(300);
+    await inputs[0].setValue('E2E\n');
+    await browser.pause(800);
   }
-  // 키보드 return key tap (predicate 다중 라벨) → mobile:keys '\n' → 화면 버튼 순 fallback.
-  const submitOk =
-    (await tapByPredicate(
-      `name == "Return" OR name == "Done" OR name == "다음" OR name == "완료" OR name == "확인" OR name == "개행"`,
-      { timeout: 2000 },
-    )) ||
-    (await (async () => {
-      try {
-        await browser.execute('mobile: keys', { keys: [{ key: '\n' }] });
-        return true;
-      } catch {
-        return false;
-      }
-    })()) ||
-    (await tapByLabel('다음', { timeout: 1500 })) ||
-    (await tapByLabel('이름 없이 시작', { timeout: 1500 }));
-  if (!submitOk) {
-    console.warn('ensureOnboarded: Hello 단계 submit 실패 — 키보드 return key 미발견');
-    return false;
+  // 아직 hello 에 머물러 있으면 fallback (키보드 내려간 상태 가정) — 스킵/다음.
+  if (await pageSourceContains('어떻게 부를까요')) {
+    const submitOk =
+      (await tapByLabel('이름 없이 시작', { timeout: 2000 })) ||
+      (await tapByLabel('다음', { timeout: 1500 })) ||
+      (await tapByPredicate(
+        `name == "Return" OR name == "Done" OR name == "완료" OR name == "확인" OR name == "개행"`,
+        { timeout: 2000 },
+      ));
+    if (!submitOk) {
+      console.warn('ensureOnboarded: Hello 단계 진행 실패 — return/스킵 전부 미발견');
+      return false;
+    }
   }
   await browser.pause(800);
 
@@ -340,8 +350,15 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
 
   // (11) Discover 도달 확인
   await browser.pause(3000);
-  return (
+  const reached =
     (await pageSourceContains('발견')) ||
-    (await pageSourceContains('discover'))
-  );
+    (await pageSourceContains('discover'));
+
+  // (12) TutorialFlow v3 skip — 온보딩 직후 Discover 에서 활성화되면 카드 탭이
+  // 가이드 잠금에 차단되므로 후속 spec 진입 전 반드시 정리.
+  if (reached) {
+    await browser.pause(1200);
+    await skipTutorialIfActive();
+  }
+  return reached;
 }

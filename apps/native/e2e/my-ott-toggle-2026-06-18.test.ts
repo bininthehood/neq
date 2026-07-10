@@ -124,27 +124,18 @@ describe("'내 OTT 만 보기' Discover 토글 (1.0.3 train)", () => {
     // 본 케이스는 setup 자체가 다단계 — 사용자 환경에서 사전 onboarding 시점에
     // OTT 선택을 마치고 진입한 경우만 의미가 있다. 자동 setup helper 가 없으면
     // SKIP 처리 (helper 추가 시 활성화).
-    const ottAvailable = await (async () => {
-      try {
-        const el = await $('~내 OTT 만 보기');
-        await el.waitForExist({ timeout: 1500 });
-        const value = await el.getAttribute('value');
-        // checked === undefined or 0 → 미가용 또는 OFF. accessibilityState.disabled
-        // 도 검사 — XCUITest 의 enabled 속성으로 직렬화.
-        const enabled = await el.getAttribute('enabled');
-        return enabled !== 'false';
-      } catch {
-        return false;
-      }
-    })();
-    if (!ottAvailable) {
-      console.log('T2 SKIP — subscribedOtt 0건 (T1 정합). Profile 사전 setup 필요');
-      return;
-    }
-    const before = await isMyOTTToggleOn();
-    expect(before).toBe(false);
+    // 2026-07-10 — 가용성 판정 재작성. 칩은 subscribedOtt 0건이어도 disabled prop
+    // 없이 탭 시 "내 OTT 설정" Alert 로 안내하는 구조라 enabled attr 검사가 무의미
+    // (항상 true → 클린 온보딩 상태에서 SKIP 대신 FAIL). 실제 탭 후 Alert 노출
+    // 여부가 유일한 신뢰 신호 — Alert 뜨면 취소 후 SKIP (T1 정합).
     await tapByLabel('내 OTT 만 보기', { timeout: 2000 });
     await browser.pause(800);
+    if (await pageSourceContains('내 OTT 설정')) {
+      await tapByLabel('취소');
+      await browser.pause(400);
+      console.log('T2 SKIP — subscribedOtt 0건 (설정 Alert 노출, T1 정합). Profile 사전 setup 필요');
+      return;
+    }
     const after = await isMyOTTToggleOn();
     await capture('myott-02-on');
     expect(after).toBe(true);
@@ -180,24 +171,16 @@ describe("'내 OTT 만 보기' Discover 토글 (1.0.3 train)", () => {
   // T4 — 토글 ON 상태에서 OTT dropdown 으로 OTT 변경 → 토글 자동 OFF
   // ─────────────────────────────────────────────────────────
   it('T4 — 토글 ON → OTT dropdown 으로 OTT 변경 → 토글 자동 OFF', async () => {
-    // 사전: 토글 ON 상태 만들기 (T2 와 동일 setup 필요).
-    const ottAvailable = await (async () => {
-      try {
-        const el = await $('~내 OTT 만 보기');
-        const enabled = await el.getAttribute('enabled');
-        return enabled !== 'false';
-      } catch {
-        return false;
-      }
-    })();
-    if (!ottAvailable) {
-      console.log('T4 SKIP — subscribedOtt 0건');
-      return;
-    }
-    // 토글 ON
+    // 사전: 토글 ON 상태 만들기 — 2026-07-10: T2 와 동일하게 Alert 노출 = SKIP.
     if (!(await isMyOTTToggleOn())) {
       await tapByLabel('내 OTT 만 보기', { timeout: 2000 });
       await browser.pause(800);
+      if (await pageSourceContains('내 OTT 설정')) {
+        await tapByLabel('취소');
+        await browser.pause(400);
+        console.log('T4 SKIP — subscribedOtt 0건 (설정 Alert 노출)');
+        return;
+      }
     }
     expect(await isMyOTTToggleOn()).toBe(true);
     // OTT dropdown 열고 임의 OTT 선택 (Netflix).

@@ -183,24 +183,22 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
     }
 
     // === Hello (2/9) ===
+    // 2026-07-10 재작성 (시뮬 한국어 IME 트랩): 키보드가 하단 버튼을 가리고 한국어
+    // 완료 키(✓)는 이름 매칭 불가 → setValue 끝 '\n' 으로 return 키를 IME 무관
+    // 타이핑 (onSubmitEditing → submit). _helpers.ts (2) Hello 와 동일 패턴.
     await browser.pause(500);
     const inputs = await $$('//XCUIElementTypeTextField');
     if (inputs.length > 0) {
-      await inputs[0].setValue('Tester');
-      await browser.pause(300);
-      // OnboardingStepHello: returnKeyType="done" + onSubmitEditing → submit().
-      // 화면 "다음" 버튼이 키보드에 가려져 직접 tap 안 됨. 키보드 "done" 키 =
-      // "다음" 동등 (onSubmitEditing 트리거). hideKeyboard pressKey done 으로
-      // 자연 진행.
-      try { await browser.execute('mobile: hideKeyboard', { keys: ['done'] }); }
-      catch { /* iOS 일부 환경 — pause + tap fallback */ }
-      await browser.pause(500);
+      await inputs[0].setValue('E2E\n');
+      await browser.pause(800);
     }
     await capture('hybrid-03-hello');
-    // done 키로 hello 통과했을 수 있어 "다음" 부재 가능. 안전 fallback:
-    if (!(await tapByLabel('다음', { timeout: 1500 }))) {
-      if (!(await tapByLabel('이름 없이 시작', { timeout: 1500 }))) {
-        // 이미 Genre 단계로 이동했다고 가정 — 다음 검증으로 진행
+    if (await pageSourceContains('어떻게 부를까요')) {
+      // 아직 hello — fallback: 스킵/다음.
+      if (!(await tapByLabel('이름 없이 시작', { timeout: 2000 }))) {
+        if (!(await tapByLabel('다음', { timeout: 1500 }))) {
+          // 이미 Genre 단계로 이동했다고 가정 — 다음 검증으로 진행
+        }
       }
     }
 
@@ -235,41 +233,38 @@ describe('Hybrid Onboarding — v0.3.3.0 PR #14', () => {
     await browser.pause(300);
     if (!(await tapByLabel('다음'))) throw new Error('persona context "다음" tap 실패');
 
-    // resume modal 처리 — 이전 cancel 한 progress 잔재 가능 (sim leak)
+    // === Persona — 정적 3-step (2026-07-10 spec 갱신) ===
+    // 구 '취향 만들기 건너뛰기' X + Alert 분기는 6/6 정적 풀 승격 때 UI 자체가
+    // 제거됨 (memory: project_persona_survey_static_pool — 건너뛰기 UI 제거).
+    // 본 spec 이 미갱신 상태로 남아 stale 실패 → 현행 경로(정적 3-step +
+    // favorites 건너뛰기 + summary 맞아요)로 재작성. _helpers.ts (5)~(9) 정합.
+    for (const opt of ['빠르게 몰입', '명쾌한 마무리', '무거운 주제']) {
+      if (!(await waitForLabel(opt, 8000))) {
+        throw new Error(`persona 정적 step 옵션 "${opt}" 미노출`);
+      }
+      await tapByLabel(opt);
+      await browser.pause(400);
+      if (!(await tapByLabel('다음'))) {
+        throw new Error(`persona step "${opt}" 후 "다음" tap 실패`);
+      }
+      await browser.pause(600);
+    }
+    await capture('hybrid-06-persona-steps');
+
+    // Favorites picker — 0개 선택 "건너뛰기" → Summary "맞아요"
+    if (!(await waitForLabel('건너뛰기', 8000))) {
+      throw new Error('favorites picker "건너뛰기" 미노출');
+    }
+    await tapByLabel('건너뛰기');
     await browser.pause(800);
-    if (await pageSourceContains('이어서 하시겠어요')) {
-      console.log('resume modal — 처음부터 선택');
-      await tapByLabel('처음부터');
-      await browser.pause(500);
+    if (!(await waitForLabel('맞아요', 8000))) {
+      throw new Error('summary "맞아요" 미노출');
     }
-
-    // === Persona — subStep ≥ 2 (step_loading + 우상단 X 검증) ===
-    // 우상단 X (페르소나 만들기 건너뛰기) 가 mount 됐는지 확인. PR #14 P0#1 fix.
-    if (!(await waitForLabel('취향 만들기 건너뛰기', 8000))) {
-      throw new Error(
-        'PR #14 P0#1 회귀: subStep≥2 에서 우상단 X "취향 만들기 건너뛰기" 미노출 — trap 차단 실패',
-      );
-    }
-    await capture('hybrid-06-persona-skip-button');
-
-    // X 탭 → Alert.alert "건너뛰기" 확인 → OTT 으로 advance
-    if (!(await tapByLabel('취향 만들기 건너뛰기'))) {
-      throw new Error('우상단 X tap 실패');
-    }
-    await browser.pause(1000);
-
-    // Alert.alert 의 "건너뛰기" 버튼. iOS native alert 라 predicate 로 접근.
-    const alertOk =
-      (await tapByPredicate(`label == "건너뛰기"`, { timeout: 5000 })) ||
-      (await tapByLabel('건너뛰기'));
-    if (!alertOk) {
-      throw new Error('Alert.alert "건너뛰기" 버튼 tap 실패 — P0#2 confirm 분기 검증 실패');
-    }
+    await tapByLabel('맞아요');
     await browser.pause(1500);
-    await capture('hybrid-07-after-skip-confirm');
+    await capture('hybrid-07-after-summary');
 
-    // === OTT (9/9, 최종 단계) ===
-    // persona skip 후 step=4 (ott) 으로 advance. OTT 가 최종 단계 — CTA "시작하기".
+    // === OTT (최종 단계) ===
     // 2026-06-16: notify 단계 제거. OTT 완료 → 곧바로 Discover 진입.
     const ottReached =
       (await waitForLabel('Netflix', 8000)) ||
