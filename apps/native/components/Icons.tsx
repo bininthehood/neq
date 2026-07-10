@@ -28,6 +28,22 @@ export function IconBang({ size = 16, color = '#000' }: IconProps) {
   );
 }
 
+// 2026-07-10 — IconBang 짝꿍 체크 (시청 리포트 완료 배지). 동일한 pop 인상 —
+// 굵은 라운드 스트로크. 기울임은 소비처 wrapper 에서 (배지 공통 8deg).
+export function IconCheckPop({ size = 16, color = '#000' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <Polyline
+        points="4.5 10.5 8.5 14.5 15.5 5.5"
+        stroke={color}
+        strokeWidth={3.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function IconRewind({ size = 20, color = '#000' }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>

@@ -37,7 +37,7 @@ import { displayProviders } from '../lib/providers';
 import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
-import { IconSearch, IconArchive, IconBang } from '../components/Icons';
+import { IconSearch, IconArchive, IconBang, IconCheckPop } from '../components/Icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -333,6 +333,13 @@ export default function SavedScreen() {
       return next;
     });
   }, []);
+
+  // 2026-07-10 — 완료(✓) 배지 탭 → 관리 시트 (리포트 취소 / 아카이브) 대상.
+  const [doneSheetId, setDoneSheetId] = useState<number | null>(null);
+  const doneSheetRec =
+    doneSheetId != null
+      ? items.find((s) => s.recommendation.tmdbId === doneSheetId)?.recommendation ?? null
+      : null;
 
   // 2026-07-10 — 리포트 시트 타이틀용 현재 대상 (reportingId → Recommendation).
   const reportingRec =
@@ -803,7 +810,7 @@ export default function SavedScreen() {
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
               onStartReport={setReportingId}
-              onUndoReport={handleUndoReport}
+              onDoneBadgePress={setDoneSheetId}
               onArchiveToggle={handleArchiveToggle}
             />
           )}
@@ -828,7 +835,7 @@ export default function SavedScreen() {
               onPress={handleOpenDetail}
               onLongPress={handleLongPress}
               onStartReport={setReportingId}
-              onUndoReport={handleUndoReport}
+              onDoneBadgePress={setDoneSheetId}
               onArchiveToggle={handleArchiveToggle}
             />
           )}
@@ -980,6 +987,63 @@ export default function SavedScreen() {
         </Pressable>
       </SavedActionSheet>
 
+      {/* 2026-07-10 — 완료(✓) 배지 관리 시트: 리포트 취소 / 아카이브. */}
+      <SavedActionSheet
+        open={doneSheetId !== null}
+        onClose={() => setDoneSheetId(null)}
+        paddingBottom={insets.bottom + spacing.md}
+      >
+        <Text style={styles.menuTitle} numberOfLines={1}>
+          {doneSheetRec?.title ?? ''}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+          onPress={() => {
+            const id = doneSheetId;
+            setDoneSheetId(null);
+            if (id != null) void handleUndoReport(id);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="리포트 취소"
+          testID="done-sheet-undo"
+        >
+          <Text style={styles.menuRowText}>리포트 취소</Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.menuRow, pressed && styles.menuRowPressed]}
+          onPress={() => {
+            const id = doneSheetId;
+            setDoneSheetId(null);
+            if (id != null) void handleArchiveToggle(id);
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={
+            doneSheetId != null && archivedIds.has(doneSheetId)
+              ? '아카이브 해제'
+              : '아카이브에 보관'
+          }
+          testID="done-sheet-archive"
+        >
+          <Text style={styles.menuRowText}>
+            {doneSheetId != null && archivedIds.has(doneSheetId)
+              ? '아카이브 해제'
+              : '아카이브에 보관'}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [
+            styles.menuRow,
+            styles.menuCancel,
+            pressed && styles.menuRowPressed,
+          ]}
+          onPress={() => setDoneSheetId(null)}
+          accessibilityRole="button"
+          accessibilityLabel="취소"
+        >
+          <Text style={styles.menuCancelText}>취소</Text>
+        </Pressable>
+      </SavedActionSheet>
+
       {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는
           DetailSheet Cast 클릭으로 진입 (web saved/page.tsx 정합).
           2026-05-20 — 작품 탭 → 기존 saved 의 detailRec 영역에 표시 (handleOpenDetail).
@@ -1082,7 +1146,7 @@ function PosterCard({
   onPress,
   onLongPress,
   onStartReport,
-  onUndoReport,
+  onDoneBadgePress,
   onArchiveToggle,
 }: {
   item: SavedItem;
@@ -1093,7 +1157,7 @@ function PosterCard({
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
   onStartReport: (tmdbId: number) => void;
-  onUndoReport: (tmdbId: number) => void;
+  onDoneBadgePress: (tmdbId: number) => void;
   onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
@@ -1186,16 +1250,20 @@ function PosterCard({
           <View style={styles.reportBangTilt}><IconBang size={15} color={colors.accent} /></View>
         </Pressable>
       )}
+      {/* 2026-07-10 — 완료 배지: '✓ 시청' 칩 → 느낌표 배지와 동형 원형 ✓.
+          탭 = 관리 시트 (리포트 취소 / 아카이브). */}
       {!isReporting && report && (
         <Pressable
-          onPress={() => onUndoReport(rec.tmdbId)}
+          onPress={() => onDoneBadgePress(rec.tmdbId)}
           accessibilityRole="button"
-          accessibilityLabel={`${rec.title} 시청 리포트 취소`}
+          accessibilityLabel={`${rec.title} 시청 리포트 관리`}
           accessibilityState={{ selected: true }}
-          style={styles.reportChip}
-          hitSlop={4}
+          style={[styles.reportBang, styles.reportBangFloat]}
+          hitSlop={8}
         >
-          <Text style={styles.reportChipDone}>✓ 시청</Text>
+          <View style={styles.reportBangTilt}>
+            <IconCheckPop size={14} color={colors.accent} />
+          </View>
         </Pressable>
       )}
 
@@ -1238,7 +1306,7 @@ function ListCard({
   onPress,
   onLongPress,
   onStartReport,
-  onUndoReport,
+  onDoneBadgePress,
   onArchiveToggle,
 }: {
   item: SavedItem;
@@ -1248,7 +1316,7 @@ function ListCard({
   onPress: (rec: Recommendation) => void;
   onLongPress: (rec: Recommendation) => void;
   onStartReport: (tmdbId: number) => void;
-  onUndoReport: (tmdbId: number) => void;
+  onDoneBadgePress: (tmdbId: number) => void;
   onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
@@ -1333,14 +1401,16 @@ function ListCard({
             </Pressable>
           ) : (
             <Pressable
-              onPress={() => onUndoReport(rec.tmdbId)}
+              onPress={() => onDoneBadgePress(rec.tmdbId)}
               accessibilityRole="button"
-              accessibilityLabel={`${rec.title} 시청 리포트 취소`}
+              accessibilityLabel={`${rec.title} 시청 리포트 관리`}
               accessibilityState={{ selected: true }}
-              style={styles.listReportChip}
-              hitSlop={4}
+              style={styles.reportBang}
+              hitSlop={8}
             >
-              <Text style={styles.listReportChipDone}>✓</Text>
+              <View style={styles.reportBangTilt}>
+                <IconCheckPop size={14} color={colors.accent} />
+              </View>
             </Pressable>
           )}
         </View>
@@ -1705,18 +1775,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
   },
   // 좌상단 reaction 입력 칩 — web PosterCard 의 '봤어요?' 버튼 정합.
-  reportChip: {
-    position: 'absolute',
-    top: spacing.xs,
-    left: spacing.xs,
-    minHeight: 32,
-    minWidth: 44,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    backgroundColor: colors.overlay,
-  },
   // 2026-07-10 — 시청 리포트 유도 배지: '봤어요?' 텍스트 칩 → 노란 느낌표(!).
   // overlay 원형 위 amber 글리프 — 포스터 위에서 시선을 끌되 카피 점유 없음.
   // Discover 케밥 정본 계열 (surfaceRaised 진한 원) + amber 글리프 8도 기울임 (pop).
@@ -1735,11 +1793,6 @@ const styles = StyleSheet.create({
   },
   reportBangTilt: {
     transform: [{ rotate: '8deg' }],
-  },
-  reportChipDone: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.accent,
   },
   // 2026-05-20 — 우상단 archive 토글 칩 (PWA SavedList 정합).
   archiveChip: {
@@ -1830,24 +1883,10 @@ const styles = StyleSheet.create({
   listTrailing: {
     flexShrink: 0,
   },
-  listReportChip: {
-    minHeight: 36,
-    minWidth: 44,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    backgroundColor: colors.surfaceRaised,
-  },
   listReportChipText: {
     fontSize: 12,
     fontWeight: '500',
     color: colors.textSecondary,
-  },
-  listReportChipDone: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.accent,
   },
   // #6 — 연·월 모드 in-screen 토글 (캘린더 아이콘 버튼). filterTrigger 와 나란히.
   monthToggle: {
