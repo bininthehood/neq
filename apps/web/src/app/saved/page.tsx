@@ -33,13 +33,15 @@ import {
   type SavedViewMode,
 } from "@/components/saved/SavedList";
 import { SavedHero } from "@/components/saved/SavedHero";
-import { SavedFilters, type ViewFilter, type ViewFilterDef } from "@/components/saved/SavedFilters";
+import { SavedFilters, buildSavedViewFilters, type ViewFilter, type ViewFilterDef } from "@/components/saved/SavedFilters";
 import {
   loadSavedSort,
+  monthKeyOf,
   persistSavedSort,
   sortSavedItems,
   type SavedSort,
 } from "@/components/saved/SavedSortControl";
+import { SavedMonthScrubber } from "@/components/saved/SavedMonthScrubber";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
 import { track } from "@/lib/analytics";
 import { useToast } from "@neq/design";
@@ -64,6 +66,8 @@ export default function SavedPage() {
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
   const [groupByOTT, setGroupByOTT] = useState(false);
+  const [monthMode, setMonthMode] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const [ottFilter, setOttFilter] = useState<string | null>(null);
   const [archivedIds, setArchivedIds] = useState<Set<number>>(new Set());
   // 2026-06-06 (P2 history 제거) — history state 삭제. 데이터 레이어
@@ -113,9 +117,11 @@ export default function SavedPage() {
     setViewMode(mode);
     persistSavedView(mode);
     track("saved_view_changed", { mode });
-    // preview 모드는 단일 hero 모델이라 OTT 그룹과 충돌 → 자동 OFF.
+    // preview 모드는 단일 hero 모델이라 OTT 그룹/month scrubber와 충돌 → 자동 OFF.
     if (mode === "preview") {
       setGroupByOTT(false);
+      setMonthMode(false);
+      setSelectedMonth(null);
     }
   }, []);
 
@@ -146,9 +152,14 @@ export default function SavedPage() {
     );
   }, [filteredSaved, ottFilter]);
 
+  const monthFilteredSaved = useMemo(() => {
+    if (!monthMode || selectedMonth === null) return ottFilteredSaved;
+    return ottFilteredSaved.filter((item) => monthKeyOf(item) === selectedMonth);
+  }, [ottFilteredSaved, monthMode, selectedMonth]);
+
   const sortedSaved = useMemo(
-    () => sortSavedItems(ottFilteredSaved, sortBy),
-    [ottFilteredSaved, sortBy],
+    () => sortSavedItems(monthFilteredSaved, sortBy),
+    [monthFilteredSaved, sortBy],
   );
 
   const handleSortChange = useCallback((s: SavedSort) => {
@@ -178,6 +189,20 @@ export default function SavedPage() {
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [ottFilter, groupByOTT]);
+
+  useEffect(() => {
+    if (!monthMode && selectedMonth !== null) setSelectedMonth(null);
+  }, [monthMode, selectedMonth]);
+
+  useEffect(() => {
+    if (
+      monthMode &&
+      selectedMonth !== null &&
+      !ottFilteredSaved.some((item) => monthKeyOf(item) === selectedMonth)
+    ) {
+      setSelectedMonth(null);
+    }
+  }, [monthMode, selectedMonth, ottFilteredSaved]);
 
   // Saved 작품에서 사용 가능한 OTT 목록 추출 (작품 수 많은 순)
   const availableOTTs = useMemo(() => {
@@ -366,13 +391,13 @@ export default function SavedPage() {
   const watchedCount = activeItems.filter((s) => reports[s.recommendation.tmdbId]).length;
   const unwatchedCount = activeItems.length - watchedCount;
 
-  // 2026-06-06 (P2 history 제거) — '히스토리' VIEW_FILTER 항목 삭제.
-  const VIEW_FILTERS: ViewFilterDef[] = [
-    { key: "all", label: "전체", count: activeItems.length },
-    { key: "unwatched", label: "안 본 작품", count: unwatchedCount },
-    { key: "watched", label: "시청 완료", count: watchedCount },
-    ...(archivedCount > 0 ? [{ key: "archived" as ViewFilter, label: "아카이브", count: archivedCount }] : []),
-  ];
+  // 2026-07-05 parity — native처럼 아카이브 탭은 0개여도 항상 노출.
+  const VIEW_FILTERS: ViewFilterDef[] = buildSavedViewFilters({
+    activeCount: activeItems.length,
+    unwatchedCount,
+    watchedCount,
+    archivedCount,
+  });
 
   return (
     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -442,6 +467,22 @@ export default function SavedPage() {
             </button>
           </div>
         )}
+        {saved.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setMonthMode((value) => !value)}
+            role="switch"
+            aria-checked={monthMode}
+            aria-label="연·월별 보기"
+            className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
+            style={{ color: monthMode ? "var(--text-primary)" : "var(--text-muted)" }}
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="square" aria-hidden>
+              <rect x="4" y="5" width="16" height="15" rx="2" />
+              <path d="M8 3v4M16 3v4M4 10h16" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -478,6 +519,14 @@ export default function SavedPage() {
           onClearOttFilter={() => setOttFilter(null)}
           onClearGroupByOTT={() => setGroupByOTT(false)}
           showActiveChips={ottFilter !== null || groupByOTT}
+        />
+      )}
+
+      {saved.length > 0 && monthMode && viewMode !== "preview" && (
+        <SavedMonthScrubber
+          items={ottFilteredSaved}
+          selected={selectedMonth}
+          onSelect={setSelectedMonth}
         />
       )}
 
@@ -533,12 +582,12 @@ export default function SavedPage() {
           <p className="mt-4 font-display text-lg font-semibold text-foreground">책장이 비어 있어요</p>
           <p className="text-sm mt-1.5 whitespace-pre-line">{`Discover에서 마음에 드는 걸\n하나씩 담아 보세요`}</p>
         </div>
-      ) : ottFilteredSaved.length === 0 ? (
+      ) : monthFilteredSaved.length === 0 ? (
         // viewFilter / ottFilter 별로 빈 상태 안내 분기.
         <div className="flex-1 flex flex-col justify-center px-8 text-muted">
           <IconCheck size={32} />
           <p className="mt-4 font-display text-lg font-semibold text-foreground">
-            {ottFilter
+            {ottFilter || selectedMonth !== null
               ? "이 조건엔 아무것도"
               : viewFilter === "unwatched"
                 ? "모두 시청했어요!"
@@ -549,7 +598,7 @@ export default function SavedPage() {
                     : "표시할 작품이 없어요"}
           </p>
           <p className="text-sm mt-1.5">
-            {ottFilter
+            {ottFilter || selectedMonth !== null
               ? "필터를 조금만 느슨해 보세요"
               : viewFilter === "unwatched"
                 ? "Discover에서 새로운 작품을 찾아보세요"

@@ -20,6 +20,26 @@ export type ViewFilter = "all" | "unwatched" | "watched" | "archived";
 
 export type ViewFilterDef = { key: ViewFilter; label: string; count: number };
 
+export function buildSavedViewFilters({
+  activeCount,
+  unwatchedCount,
+  watchedCount,
+  archivedCount,
+}: {
+  activeCount: number;
+  unwatchedCount: number;
+  watchedCount: number;
+  archivedCount: number;
+}): ViewFilterDef[] {
+  return [
+    { key: "all", label: "전체", count: activeCount },
+    { key: "unwatched", label: "안 본 작품", count: unwatchedCount },
+    { key: "watched", label: "시청 완료", count: watchedCount },
+    // Native parity: archivedCount가 0이어도 탭을 노출해 기능 발견성과 빈 상태 UX를 유지.
+    { key: "archived", label: "아카이브", count: archivedCount },
+  ];
+}
+
 export function SavedFilters({
   viewFilters,
   viewFilter,
