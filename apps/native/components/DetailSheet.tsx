@@ -41,6 +41,7 @@ import type {
   SearchResult,
 } from '../lib/types';
 import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels } from '@neq/core';
+import { displayProviders } from '../lib/providers';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
 import { track } from '../lib/analytics';
@@ -663,6 +664,8 @@ export default function DetailSheet({
   const showTitleEn = !!rec.titleEn && rec.titleEn !== rec.title;
   const typeBadge =
     rec.type === 'series' ? '시리즈' : rec.type === 'variety' ? '예능' : '영화';
+  // 표시용 provider — allowlist + subscription (구 저장 스냅샷의 Crunchyroll 류 치유).
+  const watchProviders = displayProviders(rec.providers);
   // sticky CTA 높이 추정 — mode 무관 2버튼 row (amber save/unsave + ghost share/추천 더 보기).
   // 2026-06-10 (Phase C #4) — detail/share 분기 통합 후 56+inset+24 단일 식.
   const stickyCtaHeight = 56 + insets.bottom + 24;
@@ -817,7 +820,7 @@ export default function DetailSheet({
 
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Where to watch · 시청 가능</Text>
-                {rec.providers.length === 0 ? (
+                {watchProviders.length === 0 ? (
                   <Text style={styles.noProviders}>
                     현재 한국 OTT에서 제공 정보를 찾지 못했어요
                   </Text>
@@ -830,7 +833,7 @@ export default function DetailSheet({
                   // surfaceRaised 면, radius.md). 모바일 터치 타겟 minHeight 44 보장.
                   // 정합 격차: PWA detail (DetailBody.tsx line 312~) 은 여전히 큰 list — 별도 트랙.
                   <View style={styles.providerChips}>
-                    {rec.providers.map((p) => {
+                    {watchProviders.map((p) => {
                       const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
                       return (
                         <Pressable

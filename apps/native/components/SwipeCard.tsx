@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
 import { getOTTIcon, getGenreLabels } from '@neq/core';
+import { displayProviders } from '../lib/providers';
 import { fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, shadowsNative } from '../lib/tokens';
 
@@ -260,10 +261,9 @@ export function CardInner({
         : 'movie';
   const year = rec.date ? rec.date.slice(0, 4) : '';
   const titleEn = rec.titleEn || rec.title;
-  // subscription provider 우선 (web mapRecToWork 정합), 최대 6개.
-  const otts = rec.providers
-    .filter((p) => !p.category || p.category === 'subscription')
-    .slice(0, 6);
+  // 표시용 provider — allowlist + subscription (displayProviders). 구 저장 스냅샷의
+  // Crunchyroll 류 비지원 provider 치유 포함. 최대 6개.
+  const otts = displayProviders(rec.providers).slice(0, 6);
   const infoVisible = !immersive;
 
   return (

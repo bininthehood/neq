@@ -35,6 +35,7 @@ import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
 import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
 import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
+import { displayProviders } from '../lib/providers';
 import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
@@ -461,7 +462,9 @@ export default function SavedScreen() {
   const availableOTTs = useMemo(() => {
     const ottCount = new Map<string, number>();
     for (const s of filteredItems) {
-      for (const p of s.recommendation.providers) {
+      // displayProviders — 구 저장 스냅샷의 비지원 provider (Crunchyroll 류) 가
+      // 필터 옵션으로 새는 것 차단 (2026-07-10 실기기 보고).
+      for (const p of displayProviders(s.recommendation.providers)) {
         ottCount.set(p.name, (ottCount.get(p.name) ?? 0) + 1);
       }
     }
@@ -995,7 +998,7 @@ function PosterCard({
           {report ? (
             <ReactionLabel reaction={report} />
           ) : (
-            rec.providers.slice(0, 2).map((p) => {
+            displayProviders(rec.providers).slice(0, 2).map((p) => {
               const iconUrl = getOTTIcon(p.name) ?? p.logoUrl;
               return iconUrl ? (
                 <Image
@@ -1158,9 +1161,9 @@ function ListCard({
         <View style={styles.listSubRow}>
           {report ? (
             <ReactionLabel reaction={report} />
-          ) : rec.providers.length > 0 ? (
+          ) : displayProviders(rec.providers).length > 0 ? (
             <Text style={styles.listProviders} numberOfLines={1}>
-              {rec.providers.slice(0, 3).map((p) => p.name).join(' · ')}
+              {displayProviders(rec.providers).slice(0, 3).map((p) => p.name).join(' · ')}
             </Text>
           ) : null}
         </View>
