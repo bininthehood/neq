@@ -34,13 +34,13 @@ export const REASON_BANNED_PATTERNS: RegExp[] = [
 // 폐기/컷 경계를 프롬프트보다 느슨히 잡는 이유: 폐기율을 보수적으로 잡아
 // picks 수 급감 위험 회피 (기존 20~30자 체제의 운영 경험 승계).
 const REASON_MIN_DISCARD = 25; // 미만 폐기 — 내용 설명이 성립할 수 없는 길이
-const REASON_MAX = 90; // 초과 시 자연 경계 truncate — 카드 3줄 클리핑 방지
-const REASON_CUT_FLOOR = 60; // truncate 시 최소 보존 길이 (너무 짧게 잘리는 케이스 회피)
+const REASON_MAX = 80; // 초과 시 자연 경계 truncate — 카드 3줄(약 26자/줄) 클리핑 방지, 프롬프트 상한 일치
+const REASON_CUT_FLOOR = 55; // truncate 시 최소 보존 길이 (너무 짧게 잘리는 케이스 회피)
 
 /**
  * LLM 산 reason 안전망. 시스템 프롬프트가 35~80자를 강제하지만 LLM 변동성으로
  * 위반 케이스 발생 가능 — 코드 단에서 명백한 위반만 컷한다.
- * (2026-07-10 톤 개편 — 기존 15/30 경계를 25/90 으로 상향. 상세 위 상수 주석.)
+ * (2026-07-10 톤 개편 — 기존 15/30 경계를 25/80 으로 상향. 상세 위 상수 주석.)
  * export 는 reason-tone 테스트용 — 런타임 소비처는 본 모듈 내부 2곳.
  */
 export function normalizeReason(raw: string): string | null {

@@ -102,7 +102,7 @@ describe("templateReason / fallback — 톤 원칙", () => {
     expect(reasons.length).toBeGreaterThan(20);
     for (const r of reasons) {
       expect(r.length).toBeGreaterThanOrEqual(10);
-      expect(r.length).toBeLessThanOrEqual(90);
+      expect(r.length).toBeLessThanOrEqual(80);
     }
   });
 });
@@ -127,23 +127,23 @@ describe("CURATION_SYSTEM_PROMPT — 톤 블록", () => {
   });
 });
 
-describe("normalizeReason — 25/90 경계", () => {
+describe("normalizeReason — 25/80 경계", () => {
   it("25자 미만 폐기", () => {
     expect(normalizeReason("재밌어요")).toBeNull();
     expect(normalizeReason("스무 자를 갓 넘긴 짧은 감상 한 줄")).toBeNull(); // 19자
   });
 
-  it("25~90자 통과 (trim 원문)", () => {
+  it("25~80자 통과 (trim 원문)", () => {
     const ok = "은퇴한 벤이 패션 스타트업의 시니어 인턴으로 들어가 CEO 줄스와 함께 일하는 이야기";
     expect(normalizeReason(`  ${ok}  `)).toBe(ok);
   });
 
-  it("90자 초과 시 자연 경계에서 truncate — 결과 ≤ 90자", () => {
+  it("80자 초과 시 자연 경계에서 truncate — 결과 ≤ 80자", () => {
     const long =
       "도시를 떠난 혜원이 고향으로 돌아와 계절이 바뀔 때마다 직접 기른 재료로 요리를 만들고, 오래된 친구들과 다시 관계를 쌓으며 일 년을 보내는 과정을 천천히 따라가는 잔잔한 드라마";
     const out = normalizeReason(long);
     expect(out).not.toBeNull();
-    expect(out!.length).toBeLessThanOrEqual(90);
-    expect(out!.length).toBeGreaterThanOrEqual(60);
+    expect(out!.length).toBeLessThanOrEqual(80);
+    expect(out!.length).toBeGreaterThanOrEqual(55);
   });
 });
