@@ -1952,10 +1952,8 @@ export default function DiscoverScreen() {
         style={styles.stackWrap}
         onLayout={(e) => setStackRect(e.nativeEvent.layout)}
       >
-        {/* 4차 — 큐 하이라이트: 면 플레이트 → 테두리 선(outline). 좌/우/하단이
-            카드를 감싸는 얇은 스트로크로 읽히고, 하단은 save(하트) 버튼 위에서
-            여유(bottom 4)를 두고 끝나 겹침 인상 제거. mixBar(솔리드 캡) 와 같은
-            수평 인셋(8) 로 한 덩어리 컨테이너. */}
+        {/* 4차-2 — 큐 하이라이트: 솔리드 컨테이너 + 카드 4px 패딩 인셋.
+            mixBar(캡)와 같은 인셋(8) 로 한 덩어리, 하단은 bottom 4 로 하트와 분리. */}
         {inMix && <View style={styles.mixFrame} pointerEvents="none" />}
         {/* 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
             refresh = 사용자 새로고침 → ApertureBreathLoader (중앙 호흡) 유지.
@@ -2034,7 +2032,7 @@ export default function DiscoverScreen() {
 
         {(state === 'ready' || inMix) && cardsToShow.length > 0 && (
           <GestureDetector gesture={Gesture.Exclusive(tap, pan)}>
-            <Animated.View style={styles.stack}>
+            <Animated.View style={[styles.stack, inMix && styles.mixStackInset]}>
               {/* 2026-05-20 prev overlay 통합 — PrevCardOverlay 별도 컴포넌트 폐기.
                   prev card 를 stack render 의 마지막(=가장 위)에 prepend 해서
                   SwipeCard 의 isPrev 모드로 표시. 도착 시 setTopIdx(i-1) 로
@@ -2351,22 +2349,23 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.accentDim,
   },
-  // 큐 아웃라인 — 면 대신 좌/우/하단 1.5px 스트로크 (4차 피드백: 테두리 선처럼).
-  // 카드(left/right 12, bottom 8) 를 4px 여백으로 감싸고 하단은 bottom 4 에서
-  // 끝나 하트 버튼과 안 겹침. 색은 accentDim 과 동일 hue 의 중간 알파 (12% 는
-  // 1.5px 선에서 비가시 — 35% 로 상향, 면이 아니라 선이므로 amber 예산 동일 표면).
+  // 큐 하이라이트 플레이트 — 아웃라인 폐기 (4차-2 피드백: 선이 조악) → 솔리드
+  // 컨테이너 복귀 + 카드가 4px 패딩으로 안에 앉는 구조. 플레이트 인셋 8 vs 카드
+  // 인셋 12(좌우)/8(하단, 플레이트 bottom 4) + stack marginTop 4 = 사방 4px 패딩.
+  // 하단은 bottom 4 에서 끝나 하트 버튼과 안 겹침. radius 20 = 카드 16 + 패딩 4.
   mixFrame: {
     position: 'absolute',
     left: 8,
     right: 8,
     top: 0,
     bottom: 4,
-    borderLeftWidth: 1.5,
-    borderRightWidth: 1.5,
-    borderBottomWidth: 1.5,
-    borderColor: 'rgba(196, 163, 90, 0.35)',
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
+    backgroundColor: colors.accentDim,
+  },
+  // 큐 중 카드 스택 상단 4px 내림 — 큐 바와 카드 사이에도 패딩 밴드 노출.
+  mixStackInset: {
+    marginTop: 4,
   },
   // seed 미니 포스터 (작품 큐만) — 2:3 비율 28×42, 카드 radius 계열 sm.
   mixBarPoster: {
