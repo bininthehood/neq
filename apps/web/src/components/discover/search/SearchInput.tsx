@@ -20,6 +20,7 @@ interface SearchInputProps {
   onChange: (value: string) => void;
   onClear: () => void;
   onMicClick: () => void;
+  onSubmit: () => void;
   onClose: () => void;
 }
 
@@ -32,6 +33,7 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
       onChange,
       onClear,
       onMicClick,
+      onSubmit,
       onClose,
     },
     ref,
@@ -44,6 +46,12 @@ const SearchInput = forwardRef<HTMLInputElement, SearchInputProps>(
             type="text"
             value={query}
             onChange={(e) => onChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSubmit();
+              }
+            }}
             placeholder="작품, 감독, 배우"
             aria-label="검색"
             className="w-full px-4 py-3 pr-20 text-base focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] transition-colors bg-surface border border-border rounded-lg text-foreground"

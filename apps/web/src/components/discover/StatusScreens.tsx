@@ -4,6 +4,7 @@ import type { Recommendation } from "@/lib/types";
 import type { FilterType, FilterOrigin, FilterYear, FilterRating } from "@/lib/discover-types";
 import { Button, Illust, NeqSpinner } from "@neq/design";
 import FilterChips from "@/components/discover/FilterChips";
+import { getDiscoverErrorCopy } from "@/components/discover/discover-status";
 
 interface FilterChipsPassthrough {
   filterType: FilterType;
@@ -175,6 +176,24 @@ export function SkeletonScreen(chips: FilterChipsPassthrough) {
   );
 }
 
+export function RecommendationFallbackLoadingScreen(chips: FilterChipsPassthrough) {
+  return (
+    <div className="h-dvh flex flex-col" aria-busy="true" aria-label="추천을 더 가져오는 중">
+      <div className="flex items-center justify-between px-5 py-3 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element -- neq 브랜드 워드마크 */}
+        <img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />
+      </div>
+      <FilterChips {...chips} />
+      <div className="flex-1 flex flex-col items-center justify-center px-8 gap-6 text-center">
+        <NeqSpinner size="lg" label="추천을 더 가져오는 중" />
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+          추천을 더 가져오는 중
+        </p>
+      </div>
+    </div>
+  );
+}
+
 interface ErrorScreenProps extends FilterChipsPassthrough {
   error: string;
   onRetry: () => void;
@@ -185,6 +204,8 @@ interface ErrorScreenProps extends FilterChipsPassthrough {
  * D9 매핑: <Illust name="error"> + <Button variant="secondary">
  */
 export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
+  const copy = getDiscoverErrorCopy();
+
   return (
     <div className="h-dvh flex flex-col">
       {/* 위임 R #1 — discover/page.tsx 헤더와 동일 이미지 로고 (회귀 방지) */}
@@ -199,16 +220,14 @@ export function ErrorScreen({ error, onRetry, ...chips }: ErrorScreenProps) {
         <Illust name="error" style="editorial" size="lg" aria-label="오류 발생" />
         <div>
           {/* D7 / Round 3 v2 — N-03 title 유지, N-04 body 정렬 */}
-          <p className="font-display text-lg font-semibold">신호가 흐릿해요.</p>
+          <p className="font-display text-lg font-semibold">{copy.headline}</p>
           <p
             className="text-sm mt-1.5 leading-relaxed"
             style={{ color: "var(--text-secondary)" }}
           >
-            잠시 숨 고르고 다시 와 주세요.
-            <br />
-            대부분 그새 풀려 있어요.
+            {copy.body}
           </p>
-          {error && error !== "신호가 흐릿해요." && (
+          {error && error !== copy.body && (
             <p
               className="text-xs mt-3 font-data tracking-wider uppercase"
               style={{ color: "var(--text-muted)", letterSpacing: "0.15em" }}

@@ -81,6 +81,12 @@ export {
 };
 export type { SearchUiState, SearchUiInput, CategoryGroup };
 
+export function shouldAutoRecordRecentOnFetch(_input: { totalResults: number }): boolean {
+  // Native parity: recent 는 return/search submit 또는 결과 클릭 같은 명시 의도에서만 기록한다.
+  // fetch 성공 자체로 기록하면 타이핑 중간 query 가 recent 에 쌓인다.
+  return false;
+}
+
 interface SearchSheetProps {
   show: boolean;
   sheetY: number;
@@ -183,7 +189,7 @@ export default function SearchSheet({
         (body.works?.length ?? 0) +
         (body.directors?.length ?? 0) +
         (body.actors?.length ?? 0);
-      if (total > 0) {
+      if (shouldAutoRecordRecentOnFetch({ totalResults: total })) {
         addRecentSearch(q);
         setRecents(getRecentSearches());
       }
@@ -258,6 +264,22 @@ export default function SearchSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show, initialQuery]);
 
+  useEffect(() => {
+    if (show) return;
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    if (abortRef.current) abortRef.current.abort();
+    setQuery("");
+    setData(null);
+    setIsFetching(false);
+    setHasError(false);
+    setSelectedWork(null);
+    setProviders([]);
+    setDetailRec(null);
+    setSelectedPerson(null);
+    setPersonWorks([]);
+    setPersonWorksError(false);
+  }, [show]);
+
   // D10b — sheet open 시 idle 컨텐츠 (recents / trending / voice 지원) 준비
   useEffect(() => {
     if (!show) return;
@@ -290,6 +312,13 @@ export default function SearchSheet({
     if (query.trim().length > 0) {
       void search(query);
     }
+  };
+
+  const confirmRecent = () => {
+    const trimmed = query.trim();
+    if (trimmed.length === 0) return;
+    addRecentSearch(trimmed);
+    setRecents(getRecentSearches());
   };
 
   // D10b — Recent / Trending 칩에서 query 적용 → 즉시 검색 트리거 (debounce 우회)
@@ -372,6 +401,7 @@ export default function SearchSheet({
       setDetailRec(null);
       return;
     }
+    confirmRecent();
     // 새 인물로 갈아탈 때 — 이전 작품 선택도 정리 (이전 인물의 nested 작품이거나
     // works 카로셀에서 선택한 작품이거나 모두 시각 혼선 회피)
     setSelectedWork(null);
@@ -413,6 +443,7 @@ export default function SearchSheet({
       setProviders([]);
       return;
     }
+    confirmRecent();
     setSelectedWork(item);
     setLoadingDetail(true);
     setLoadingProviders(true);
@@ -633,6 +664,7 @@ export default function SearchSheet({
             inputRef.current?.focus();
           }}
           onMicClick={handleMicClick}
+          onSubmit={confirmRecent}
           onClose={onClose}
         />
 

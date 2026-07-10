@@ -60,8 +60,8 @@ export function IdleContent({
         </section>
       )}
       {trending.length > 0 && (
-        <section aria-label="지금 떠오르는" className="mt-1">
-          <SectionHead label="Trending · 지금 떠오르는" />
+        <section aria-label="지금 검색해볼 만한 제안" className="mt-1">
+          <SectionHead label="SUGGESTED · 제안" />
           <div className="px-5 flex flex-wrap gap-2">
             {trending.slice(0, 6).map((t) => (
               <TrendingChip

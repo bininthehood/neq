@@ -23,8 +23,8 @@ import FilterChips from "@/components/discover/FilterChips";
 import DetailSheet from "@/components/discover/DetailSheet";
 import ActionBar from "@/components/discover/ActionBar";
 import TutorialFlow, { type TutorialStep } from "@/components/discover/tutorial/TutorialFlow";
-import { LoadingScreen, SkeletonScreen, ErrorScreen, EmptyScreen } from "@/components/discover/StatusScreens";
-import FirstLoadingSkeleton from "@/components/discover/FirstLoadingSkeleton";
+import { LoadingScreen, SkeletonScreen, ErrorScreen, EmptyScreen, RecommendationFallbackLoadingScreen } from "@/components/discover/StatusScreens";
+import { chooseDiscoverEmptyState, chooseDiscoverLoadingState } from "@/components/discover/discover-status";
 import SearchSheet from "@/components/discover/SearchSheet";
 import DiscoverHeader from "@/components/discover/DiscoverHeader";
 import DiscoverDeck from "@/components/discover/DiscoverDeck";
@@ -697,12 +697,11 @@ export default function DiscoverPage() {
   if (rec.loading) {
     const isFirstLoad =
       rec.recs.length === 0 && hasOnboarded() && getSaved().length === 0;
-    // 첫 cold-start 온보딩 로드는 "취향 분석 중" calibrating 일러 유지 (의도된 별개 경험).
-    if (isFirstLoad) return <FirstLoadingSkeleton />;
-    // 2026-06-22 (게이트 0 first_card_p50 11.9s) — origin 분기.
-    //   refreshing (사용자 새로고침) → 기존 LoadingScreen(NeqSpinner) 유지.
-    //   그 외 (첫 진입 / 필터 변경) → 카드 스켈레톤. native loadOrigin 분기와 정합.
-    if (refreshing) return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+    // 2026-07-05 parity — native는 refresh 외 모든 loading origin에서 카드 스켈레톤을 사용.
+    // PWA cold-start 전용 calibrating 일러는 제거하고 SkeletonScreen으로 통일.
+    if (chooseDiscoverLoadingState({ refreshing, isColdStart: isFirstLoad }) === "refresh-loader") {
+      return <LoadingScreen filterLabel={filterLabel} {...chipsProps} />;
+    }
     return <SkeletonScreen {...chipsProps} />;
   }
   if (rec.loadError) return <ErrorScreen error={rec.loadError} onRetry={() => rec.loadRecs(rec.filterType, rec.filterOrigin)} {...chipsProps} />;
@@ -716,6 +715,9 @@ export default function DiscoverPage() {
       return <LoadingScreen filterLabel={`별점 ${rec.filterRating}+`} {...chipsProps} />;
     }
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
+    if (chooseDiscoverEmptyState({ hasFilter: hasF }) === "fallback-loader") {
+      return <RecommendationFallbackLoadingScreen {...chipsProps} />;
+    }
     // 온보딩 완료했거나 saved 있으면 cold start 아님 → 필터 좁음 메시지 대신 일반 empty 메시지
     const isCold = !hasOnboarded() && getSaved().length === 0;
     return <EmptyScreen hasFilter={hasF} isColdStart={isCold} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={() => { setRefreshing(true); rec.refreshRecommendations(); }} {...chipsProps} />;
@@ -726,6 +728,9 @@ export default function DiscoverPage() {
   //   (전체 LoadingScreen 으로 덮어쓰지 않음 — 사용자 컨텍스트 보존, 2026-05-10 UX 개선)
   if (topIdx >= filtered.length && rec.exhausted) {
     const hasF = rec.filterType !== "all" || rec.filterOrigin !== "all" || rec.filterYear !== "all" || rec.filterRating !== "all" || rec.filterOTTs.size > 0;
+    if (chooseDiscoverEmptyState({ hasFilter: hasF }) === "fallback-loader") {
+      return <RecommendationFallbackLoadingScreen {...chipsProps} />;
+    }
     return <EmptyScreen hasFilter={hasF} isColdStart={false} onResetFilter={() => { rec.handleFilterChange("all", "all"); rec.setFilterYear("all"); rec.setFilterRating("all"); rec.handleOTTChange(new Set()); prevFilterOTTsRef.current = null; setMyOTTToggle(false); }} onRefresh={() => { setTopIdx(0); setRefreshing(true); rec.refreshRecommendations(); }} {...chipsProps} />;
   }
 

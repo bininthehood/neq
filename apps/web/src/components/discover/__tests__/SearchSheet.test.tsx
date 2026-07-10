@@ -17,6 +17,7 @@ import {
   resolveSearchUiState,
   buildCategoryGroups,
   SEARCH_DEBOUNCE_MS,
+  shouldAutoRecordRecentOnFetch,
   type SearchUiInput,
 } from "../SearchSheet";
 import type {
@@ -223,6 +224,13 @@ describe("buildCategoryGroups", () => {
 describe("SEARCH_DEBOUNCE_MS", () => {
   it("디바운스는 200ms (D10 spec)", () => {
     expect(SEARCH_DEBOUNCE_MS).toBe(200);
+  });
+});
+
+describe("recent search recording policy", () => {
+  it("native parity: fetch 성공만으로 recent 를 자동 기록하지 않는다", () => {
+    expect(shouldAutoRecordRecentOnFetch({ totalResults: 3 })).toBe(false);
+    expect(shouldAutoRecordRecentOnFetch({ totalResults: 0 })).toBe(false);
   });
 });
 
