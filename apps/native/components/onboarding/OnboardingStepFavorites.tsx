@@ -10,6 +10,7 @@ import {
   FlatList,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { prefetchPosters } from '../../lib/image-prefetch';
 import { GENRE_CHIPS, type GenreChip } from './data';
 import { IconClose } from '../Icons';
 import ApertureBreathLoader from '../feedback/ApertureBreathLoader';
@@ -102,6 +103,11 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
         }),
       );
       if (cancelled) return;
+      // 렌더 전에 각 장르 첫 화면 분량 포스터 캐시 적재 — 캐러셀 팝인 방지 (2026-07-10)
+      prefetchPosters(
+        entries.flatMap(([, f]) => f.items.slice(0, 10).map((it) => it.posterUrl)),
+        60,
+      );
       setGenreRecs(Object.fromEntries(entries));
       setLoadingGenres(false);
       // 2026-05-29 — mount 직후 자동 prefetch. hasMore=true 인 장르 모두
@@ -179,6 +185,8 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
         const data = await res.json();
         const newItems: SearchItem[] = Array.isArray(data?.items) ? data.items : [];
         const hasMore = !!data?.hasMore;
+        // 스크롤 유입 전 캐시 적재 (2026-07-10)
+        prefetchPosters(newItems.map((it) => it.posterUrl));
         setGenreRecs((prev) => {
           const existing = prev[genreSlug] ?? { items: [], page: 1, hasMore: false, loading: false };
           const seen = new Set(existing.items.map((i) => i.id));
@@ -342,7 +350,14 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
                   accessibilityState={{ selected: isSelected }}
                 >
                   {item.posterUrl ? (
-                    <Image source={{ uri: item.posterUrl }} style={styles.searchResultImage} contentFit="cover" />
+                    <Image
+                      source={{ uri: item.posterUrl }}
+                      style={styles.searchResultImage}
+                      contentFit="cover"
+                      transition={150}
+                      cachePolicy="memory-disk"
+                      recyclingKey={item.posterUrl}
+                    />
                   ) : (
                     <View style={[styles.searchResultImage, styles.slotPlaceholder]} />
                   )}
@@ -407,7 +422,14 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
                         >
                           <View style={[styles.carouselImageWrap, isSelected && styles.carouselImageSelected]}>
                             {item.posterUrl ? (
-                              <Image source={{ uri: item.posterUrl }} style={StyleSheet.absoluteFill} contentFit="cover" />
+                              <Image
+                                source={{ uri: item.posterUrl }}
+                                style={StyleSheet.absoluteFill}
+                                contentFit="cover"
+                                transition={150}
+                                cachePolicy="memory-disk"
+                                recyclingKey={item.posterUrl}
+                              />
                             ) : (
                               <View style={[StyleSheet.absoluteFill, styles.slotPlaceholder]}>
                                 <Text style={styles.slotPlaceholderText}>{item.title.slice(0, 6)}</Text>

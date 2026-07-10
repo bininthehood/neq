@@ -815,7 +815,9 @@ function WorkCard({
             source={{ uri: item.posterUrl }}
             style={styles.workPoster}
             contentFit="cover"
-            transition={0}
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={item.posterUrl}
           />
         ) : (
           <View style={[styles.workPoster, styles.workPosterFallback]}>
@@ -911,7 +913,9 @@ function PersonCard({
             source={{ uri: person.profileUrl }}
             style={styles.personAvatarImg}
             contentFit="cover"
-            transition={0}
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={person.profileUrl}
           />
         ) : (
           <Text style={styles.personAvatarFallback}>

@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { prefetchPosters } from '../lib/image-prefetch';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -309,6 +310,17 @@ export default function DetailSheet({
       .then((r) => (r.ok ? r.json() : null))
       .then((data: RelatedWorksResponse | null) => {
         if (cancelled) return;
+        // 렌더 전에 포스터 캐시 적재 — 관련작 행 노출 시 팝인 방지 (2026-07-10)
+        if (data) {
+          prefetchPosters(
+            [
+              ...(data.collection?.works ?? []),
+              ...(data.recommendations ?? []),
+              ...(data.directorWorks ?? []),
+            ].map((w) => w.posterUrl),
+            36,
+          );
+        }
         setRelated(
           data ?? { collection: null, recommendations: [], directorWorks: [], directorName: null },
         );
@@ -483,6 +495,8 @@ export default function DetailSheet({
             mediaType: s.mediaType,
           }),
         );
+        // 필모 풀스크린 렌더 전 포스터 캐시 적재 — 팝인 방지 (2026-07-10)
+        prefetchPosters(mapped.map((w) => w.posterUrl), 36);
         setSubScreen((prev) =>
           prev && prev.type === 'person-works' && prev.personId === person.tmdbId
             ? { ...prev, works: mapped, loading: false, error: false }
@@ -693,7 +707,10 @@ export default function DetailSheet({
                     source={{ uri: heroSrc }}
                     style={StyleSheet.absoluteFill}
                     contentFit="cover"
-                    transition={0}
+                    // 2026-07-10 팝인 완화 — 시트 오픈 전환 중 짧은 fade 로 하드컷 은폐.
+                    // (스와이프 카드는 transition 0 유지 — SwipeCard.tsx 주석 참조)
+                    transition={150}
+                    cachePolicy="memory-disk"
                   />
                 ) : null}
                 <LinearGradient
@@ -1281,8 +1298,8 @@ function CastItem({
           source={{ uri: profileUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          // 2026-05-20 PWA Next/Image 정합 — no fade.
-          transition={0}
+          transition={150}
+          cachePolicy="memory-disk"
         />
       ) : (
         <Text style={styles.castAvatarFallback}>{name.charAt(0)}</Text>
@@ -1456,8 +1473,9 @@ function RelatedRow({
                   source={{ uri: w.posterUrl }}
                   style={StyleSheet.absoluteFill}
                   contentFit="cover"
-                  // 2026-05-20 PWA Next/Image 정합 — no fade.
-                  transition={0}
+                  transition={150}
+                  cachePolicy="memory-disk"
+                  recyclingKey={w.posterUrl}
                 />
               ) : (
                 <RelatedPosterFallback title={w.title} />
@@ -1602,7 +1620,9 @@ function RelatedListScreen({
                   source={{ uri: w.posterUrl }}
                   style={StyleSheet.absoluteFill}
                   contentFit="cover"
-                  transition={0}
+                  transition={150}
+                  cachePolicy="memory-disk"
+                  recyclingKey={w.posterUrl}
                 />
               ) : (
                 <RelatedPosterFallback title={w.title} />

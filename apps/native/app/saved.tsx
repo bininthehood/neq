@@ -960,7 +960,10 @@ function PosterCard({
           source={{ uri: rec.posterUrl }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          transition={0}
+          // 2026-07-10 팝인 완화 — 그리드 셀 fade + 리사이클 잔상 방지
+          transition={150}
+          cachePolicy="memory-disk"
+          recyclingKey={rec.posterUrl}
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.fallback]}>
@@ -1125,7 +1128,9 @@ function ListCard({
             source={{ uri: rec.posterUrl }}
             style={StyleSheet.absoluteFill}
             contentFit="cover"
-            transition={0}
+            transition={150}
+            cachePolicy="memory-disk"
+            recyclingKey={rec.posterUrl}
           />
         ) : (
           <View style={[StyleSheet.absoluteFill, styles.fallback]}>
