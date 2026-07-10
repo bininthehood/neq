@@ -67,8 +67,8 @@ export default function MixScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        {/* 3차 — 영문 display 관례 (Saved 정합): Mix → Cue */}
-        <Text style={styles.title}>Cue</Text>
+        {/* 4차 — 영문 표기 'Que' (neq 어원 라틴어 neque 착안, 사용자 확정. 'Cue' 아님) */}
+        <Text style={styles.title}>Que</Text>
       </View>
 
       {empty ? (
