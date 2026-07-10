@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Image,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -22,7 +21,6 @@ import { createPersona, switchPersona } from '../../lib/store';
 import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
 import {
   clearProgress,
-  loadProgress,
   saveProgress,
 } from '../../lib/survey-storage';
 import PersonaContextSelector from './PersonaContextSelector';
@@ -50,7 +48,6 @@ import TasteSurveyStep from './TasteSurveyStep';
 
 type Phase =
   | 'context_select'
-  | 'resume_modal'
   | 'step_question'
   | 'favorites_pick'
   | 'summary_preview'
@@ -148,11 +145,10 @@ export default function PersonaSurveyController({
       options?: { additionalContentTypes?: PersonaContext['contentType'][] },
     ) => {
       setContext(picked);
-      const existing = await loadProgress(picked);
-      if (existing && existing.prevAnswers.length > 0) {
-        setPhase('resume_modal');
-        return;
-      }
+      // 2026-07-10 — resume modal 폐기 (사용자 결정: 온보딩은 초기 1회/초기화 후라
+      // "이어서 하시겠어요?" 프롬프트가 어느 경우에도 맥락에 안 맞음). stale 진행분은
+      // 조용히 비우고 항상 처음부터.
+      await clearProgress(picked);
       startedAtRef.current = Date.now();
       const extra = options?.additionalContentTypes ?? [];
       track('taste_survey_started', {
@@ -315,37 +311,6 @@ export default function PersonaSurveyController({
     beginStep(context, 2, keep);
   }, [context, prevAnswers, beginStep]);
 
-  // === Resume modal handlers ===
-  const handleResumeContinue = useCallback(async () => {
-    if (!context) return;
-    const existing = await loadProgress(context);
-    if (!existing) {
-      handleResumeRestart();
-      return;
-    }
-    startedAtRef.current = Date.now();
-    track('taste_survey_started', {
-      contentType: context.contentType,
-      companion: context.companion,
-      is_resurvey: !!resurveyPersonaId,
-      resumed: true,
-    });
-    beginStep(context, existing.step, existing.prevAnswers);
-  }, [context, beginStep, resurveyPersonaId]);
-
-  const handleResumeRestart = useCallback(async () => {
-    if (!context) return;
-    await clearProgress(context);
-    startedAtRef.current = Date.now();
-    track('taste_survey_started', {
-      contentType: context.contentType,
-      companion: context.companion,
-      is_resurvey: !!resurveyPersonaId,
-      restarted: true,
-    });
-    beginStep(context, 1, []);
-  }, [context, beginStep, resurveyPersonaId]);
-
   // === 사용자 취소 처리 ===
   const handleCancel = useCallback(() => {
     if (context && phase !== 'context_select' && phase !== 'done') {
@@ -366,11 +331,11 @@ export default function PersonaSurveyController({
   }, [context, phase, step, onCancel]);
 
   // embedded 모드: phase 변화 시 부모 (onboarding) 에 subStep 알림.
-  // modal/done phase 에서는 onSubStepChange 호출 skip — 헤더가 모달 뒤에서
-  // 1 로 fall-through 해 progress 역행하는 회귀 차단.
+  // done phase 에서는 onSubStepChange 호출 skip — 헤더가 1 로 fall-through 해
+  // progress 역행하는 회귀 차단.
   useEffect(() => {
     if (!embedded) return;
-    if (phase === 'resume_modal' || phase === 'done') return;
+    if (phase === 'done') return;
     let subStep = 1;
     if (phase === 'step_question') {
       subStep = step === 1 ? 2 : 3;
@@ -421,15 +386,6 @@ export default function PersonaSurveyController({
         />
       )}
 
-      <ConfirmModal
-        visible={phase === 'resume_modal'}
-        title="이어서 하시겠어요?"
-        description="진행 중이던 설문이 남아있어요."
-        primaryLabel="이어서"
-        secondaryLabel="처음부터"
-        onPrimary={handleResumeContinue}
-        onSecondary={handleResumeRestart}
-      />
     </View>
   );
 }
@@ -518,66 +474,6 @@ function SurveyHeader({
   );
 }
 
-function ConfirmModal({
-  visible,
-  title,
-  description,
-  primaryLabel,
-  secondaryLabel,
-  onPrimary,
-  onSecondary,
-}: {
-  visible: boolean;
-  title: string;
-  description: string;
-  primaryLabel: string;
-  secondaryLabel?: string;
-  onPrimary: () => void;
-  onSecondary?: () => void;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onPrimary}
-    >
-      <View style={modalStyles.backdrop}>
-        <View style={modalStyles.card}>
-          <Text style={modalStyles.title}>{title}</Text>
-          <Text style={modalStyles.description}>{description}</Text>
-          <View style={modalStyles.ctaCol}>
-            <Pressable
-              onPress={onPrimary}
-              accessibilityRole="button"
-              accessibilityLabel={primaryLabel}
-              style={({ pressed }) => [
-                modalStyles.primaryBtn,
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <Text style={modalStyles.primaryLabel}>{primaryLabel}</Text>
-            </Pressable>
-            {secondaryLabel && onSecondary ? (
-              <Pressable
-                onPress={onSecondary}
-                accessibilityRole="button"
-                accessibilityLabel={secondaryLabel}
-                style={({ pressed }) => [
-                  modalStyles.secondaryBtn,
-                  pressed && { opacity: 0.85 },
-                ]}
-              >
-                <Text style={modalStyles.secondaryLabel}>{secondaryLabel}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
@@ -638,64 +534,3 @@ const styles = StyleSheet.create({
   },
 });
 
-const modalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 360,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md + 4,
-  },
-  title: {
-    color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
-    fontSize: 20,
-    letterSpacing: -0.2,
-    marginBottom: spacing.sm,
-  },
-  description: {
-    color: colors.textSecondary,
-    fontSize: fontSizePx.sm,
-    lineHeight: 20,
-    marginBottom: spacing.lg,
-  },
-  ctaCol: {
-    gap: spacing.sm,
-  },
-  primaryBtn: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    backgroundColor: colors.accent,
-  },
-  primaryLabel: {
-    color: colors.bg,
-    fontSize: fontSizePx.sm,
-    fontWeight: '600',
-  },
-  secondaryBtn: {
-    width: '100%',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'transparent',
-  },
-  secondaryLabel: {
-    color: colors.textSecondary,
-    fontSize: fontSizePx.sm,
-  },
-});

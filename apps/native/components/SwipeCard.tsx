@@ -298,28 +298,31 @@ export function CardInner({
 
       {depth <= 1 && (
         <>
-          {/* bottom — badges / year·titleEn / title / reason / otts.
-              4차 (2026-07-10) 피드백: 필 2개를 카드 상단이 아닌 타이틀 근처로 —
-              DetailSheet heroBadges(배지 → 타이틀 스택) 와 동일 구조/스타일. */}
+          {/* bottom — year·titleEn / title+badges / reason / otts.
+              4차-2 (2026-07-10) 피드백: 필을 타이틀 블록 최상단이 아닌 작품명 헤더
+              오른쪽 인라인으로 (포스터 가림 최소화, 사용자 선택 A안). 제목이 길어
+              내부 줄바꿈되면 필은 마지막 줄 우측에 하단 정렬로 앉음. */}
           <View
             style={[styles.bottomInfo, { opacity: infoVisible ? 1 : 0 }]}
             pointerEvents="none"
           >
-            <View style={styles.badgeRow}>
-              <View style={styles.ratingPill}>
-                <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
-              </View>
-              <View style={styles.typePill}>
-                <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
-              </View>
-            </View>
             <Text style={styles.subTitle} numberOfLines={1}>
               {year ? `${year} · ${titleEn}` : titleEn}
             </Text>
             {/* 2026-06-06 B-3 — refresh-race spec testID 정확 매칭 (root 와 동일 tmdbId). */}
-            <Text style={styles.title} testID={`swipe-card-title-${rec.tmdbId}`}>
-              {rec.title}
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title} testID={`swipe-card-title-${rec.tmdbId}`}>
+                {rec.title}
+              </Text>
+              <View style={styles.badgeRow}>
+                <View style={styles.ratingPill}>
+                  <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
+                </View>
+                <View style={styles.typePill}>
+                  <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
+                </View>
+              </View>
+            </View>
             <Text style={styles.reason} numberOfLines={3}>
               {rec.reason}
             </Text>
@@ -369,11 +372,18 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 48,
   },
-  // 배지 row — DetailSheet heroBadges 정합 (배지 → 타이틀 스택, gap 6 + 아래 8).
+  // 타이틀 + 배지 인라인 row — 배지는 타이틀 마지막 줄 우측 하단 정렬.
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    marginBottom: 10,
+  },
   badgeRow: {
     flexDirection: 'row',
     gap: 6,
-    marginBottom: 8,
+    // 타이틀 lineHeight 32 의 디센더 보정 — 필을 baseline 에 시각 정렬.
+    marginBottom: 5,
   },
   // DetailSheet heroBadges 정본 (DetailSheet.tsx styles.ratingPill/typePill 동일값):
   // bg rgba(0,0,0,0.5), radius-sm, padding 10×4, fontSize 11, Geist Mono, ls 0.2.
@@ -426,7 +436,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.7,
     lineHeight: 32,
-    marginBottom: 10,
+    // 인라인 배지 대응 — 긴 제목은 Text 내부 줄바꿈 (배지가 밀려나지 않게 shrink).
+    flexShrink: 1,
   },
   // reason — font-body 400, text-sm(13), rgba(237,237,239,0.85), lineHeight 1.4, maxWidth 85%
   reason: {
