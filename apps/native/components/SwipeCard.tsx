@@ -298,27 +298,21 @@ export function CardInner({
 
       {depth <= 1 && (
         <>
-          {/* top row — 3차 (2026-07-08): DetailSheet heroBadges 정본과 동일 필 2개
-              (★평점 amber → 구분) 를 좌측상단 나란히. 우측은 케밥(44px 원형, index.tsx
-              overlay) 자리 — right 인셋으로 겹침 회피. minHeight 44 center 로 케밥과
-              수직 중심 정렬. */}
-          <View
-            style={[styles.topRow, { opacity: infoVisible ? 1 : 0 }]}
-            pointerEvents="none"
-          >
-            <View style={styles.ratingPill}>
-              <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
-            </View>
-            <View style={styles.typePill}>
-              <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
-            </View>
-          </View>
-
-          {/* bottom — year·titleEn / title / reason / otts */}
+          {/* bottom — badges / year·titleEn / title / reason / otts.
+              4차 (2026-07-10) 피드백: 필 2개를 카드 상단이 아닌 타이틀 근처로 —
+              DetailSheet heroBadges(배지 → 타이틀 스택) 와 동일 구조/스타일. */}
           <View
             style={[styles.bottomInfo, { opacity: infoVisible ? 1 : 0 }]}
             pointerEvents="none"
           >
+            <View style={styles.badgeRow}>
+              <View style={styles.ratingPill}>
+                <Text style={styles.ratingPillText}>★ {rec.rating.toFixed(1)}</Text>
+              </View>
+              <View style={styles.typePill}>
+                <Text style={styles.typePillText}>{CAT_LABEL[type]}</Text>
+              </View>
+            </View>
             <Text style={styles.subTitle} numberOfLines={1}>
               {year ? `${year} · ${titleEn}` : titleEn}
             </Text>
@@ -375,18 +369,11 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 48,
   },
-  // top row — 3차: 좌측 정렬 필 2개. right 74 = 케밥 44 + 카드 인셋(14) + gap(16) 회피.
-  // minHeight 44 + center = 케밥 원형(44px)과 수직 중심 일치.
-  topRow: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 74,
-    minHeight: 44,
+  // 배지 row — DetailSheet heroBadges 정합 (배지 → 타이틀 스택, gap 6 + 아래 8).
+  badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
     gap: 6,
+    marginBottom: 8,
   },
   // DetailSheet heroBadges 정본 (DetailSheet.tsx styles.ratingPill/typePill 동일값):
   // bg rgba(0,0,0,0.5), radius-sm, padding 10×4, fontSize 11, Geist Mono, ls 0.2.

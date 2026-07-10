@@ -48,6 +48,12 @@ interface Props {
   myOTTAvailable: boolean;
   onMyOTTToggle: (next: boolean) => void;
   onMyOTTSetupNavigate: () => void;
+  /**
+   * 4차 (2026-07-10) — dropdown 이 열리는 순간 호출. 호스트(Discover)가 카드
+   * 케밥 인메뉴를 닫아 두 드롭다운 동시 오픈을 방지한다. 역방향(dropdown 열림 중
+   * 케밥 탭)은 본 컴포넌트의 Modal backdrop 이 이미 차단.
+   */
+  onDropdownOpen?: () => void;
 }
 
 const TYPE_OPTIONS: FilterType[] = ['all', 'movie', 'series', 'variety'];
@@ -71,6 +77,7 @@ export default function FilterChips({
   myOTTAvailable,
   onMyOTTToggle,
   onMyOTTSetupNavigate,
+  onDropdownOpen,
 }: Props) {
   const [openDropdown, setOpenDropdown] = useState<DropdownKey>(null);
   // 2026-05-20 — chip row 의 viewport 절대 좌표 측정. dropdown 패널 위치 결정용.
@@ -96,6 +103,8 @@ export default function FilterChips({
           setChipRowRect({ y, h });
         });
       }
+      // 4차 — 열림 전이 시 호스트에 통지 (케밥 인메뉴 동시 오픈 방지).
+      if (next !== null) onDropdownOpen?.();
       return next;
     });
   }

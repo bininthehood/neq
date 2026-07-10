@@ -76,7 +76,7 @@ import type {
   RelatedWork,
   RelatedWorksResponse,
 } from '../lib/types';
-import { colors, spacing, radius } from '../lib/tokens';
+import { colors, spacing, radius, shadowsNative } from '../lib/tokens';
 import { easings, durations, fontsV2 } from '@neq/design';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -344,6 +344,8 @@ export default function DiscoverScreen() {
   const mixQueueRef = useRef<RelatedWork[]>([]);
   const mixHydratingRef = useRef(false);
   const mixFetchAbortRef = useRef<AbortController | null>(null);
+  // 4차 — 큐 재생성(refresh) 시 원래 진입 source 로 재추적하기 위한 보존.
+  const mixSourceRef = useRef<MixStartSource>('native_card_menu');
   const inMix = mixSeed !== null;
   // 카드 케밥(⋮) 인라인 메뉴 — 1차 MIX 칩이 "별점 밑 chip 같다" 는 피드백으로 교체.
   const [cardMenuOpen, setCardMenuOpen] = useState(false);
@@ -1272,7 +1274,14 @@ export default function DiscoverScreen() {
     setCardMenuOpen(true);
   }
 
-  function handleMixStart(seed: Recommendation, source: MixStartSource, theme?: MixThemeInfo) {
+  function handleMixStart(
+    seed: Recommendation,
+    source: MixStartSource,
+    theme?: MixThemeInfo,
+    // 4차 — refresh: 큐 진행 중 하단 refresh 버튼 = 같은 seed/테마로 큐 재생성.
+    // recHistory 활성 + saved 제외를 related 경로에도 적용해 "이미 본 카드" 를 걷어냄.
+    opts?: { refresh?: boolean },
+  ) {
     if (tutorialActive && tutorialStep !== null) return;
     if (saveAbsorbing) return;
     setCardMenuOpen(false);
@@ -1286,7 +1295,9 @@ export default function DiscoverScreen() {
         theme_kind: theme.kind,
         ...(theme.genreId != null && { genre_id: theme.genreId }),
       }),
+      ...(opts?.refresh && { refresh: true }),
     });
+    mixSourceRef.current = source;
     hapticLight();
     mixFetchAbortRef.current?.abort();
     const controller = new AbortController();
@@ -1333,6 +1344,27 @@ export default function DiscoverScreen() {
       setMixCandidatesLoaded(true);
       setMixPump((p) => p + 1);
     };
+    // 제외 셋 — saved + recHistory 활성(7일) + seed 자신. 장르 큐(항상) 와
+    // 큐 재생성(refresh) 경로에서 사용. recHistory 활성 id 는 mediaType 미보유 →
+    // movie/tv 양쪽 키로 제외 (id 충돌 시 과잉 제외 가능하지만 희귀 — 재노출 방지 우선).
+    const needExclude = isGenreQueue || !!opts?.refresh;
+    const excludePromise: Promise<Set<string>> = needExclude
+      ? Promise.all([getSaved(), getActiveExcludeIds({ cooldownDays: 7 })])
+          .then(([saved, hist]) => {
+            const ex = new Set<string>();
+            for (const s of saved) {
+              const mt = s.recommendation.type === 'movie' ? 'movie' : 'tv';
+              ex.add(`${mt}:${s.recommendation.tmdbId}`);
+            }
+            for (const id of hist) {
+              ex.add(`movie:${id}`);
+              ex.add(`tv:${id}`);
+            }
+            ex.add(`${seed.type === 'movie' ? 'movie' : 'tv'}:${seed.tmdbId}`);
+            return ex;
+          })
+          .catch(() => new Set<string>())
+      : Promise.resolve(new Set<string>());
     if (isGenreQueue) {
       const mirrorPromise: Promise<RelatedWork[]> = fetch(
         `${env.API_BASE_URL}/api/tmdb/genre-top?genre=${theme.genreId}`,
@@ -1341,27 +1373,6 @@ export default function DiscoverScreen() {
         .then((r) => (r.ok ? r.json() : null))
         .then((data: RelatedWork[] | null) => (Array.isArray(data) ? data : []))
         .catch(() => []);
-      // 제외 셋 — saved + recHistory 활성(7일) + seed 자신.
-      // recHistory 활성 id 는 mediaType 미보유 → movie/tv 양쪽 키로 제외
-      // (id 충돌 시 과잉 제외 가능하지만 희귀 — 재노출 방지가 우선).
-      const excludePromise: Promise<Set<string>> = Promise.all([
-        getSaved(),
-        getActiveExcludeIds({ cooldownDays: 7 }),
-      ])
-        .then(([saved, hist]) => {
-          const ex = new Set<string>();
-          for (const s of saved) {
-            const mt = s.recommendation.type === 'movie' ? 'movie' : 'tv';
-            ex.add(`${mt}:${s.recommendation.tmdbId}`);
-          }
-          for (const id of hist) {
-            ex.add(`movie:${id}`);
-            ex.add(`tv:${id}`);
-          }
-          ex.add(`${seed.type === 'movie' ? 'movie' : 'tv'}:${seed.tmdbId}`);
-          return ex;
-        })
-        .catch(() => new Set<string>());
       Promise.all([mirrorPromise, relatedPromise, excludePromise]).then(
         ([mirror, rel, exclude]) => {
           const merged = mergeGenreQueueItems(mirror, rel, exclude);
@@ -1370,7 +1381,15 @@ export default function DiscoverScreen() {
         },
       );
     } else {
-      relatedPromise.then(finalize);
+      Promise.all([relatedPromise, excludePromise]).then(([rel, exclude]) => {
+        if (!opts?.refresh) {
+          finalize(rel);
+          return;
+        }
+        // 재생성 — 이미 본(recHistory)/저장 항목 제외. 전멸 시 원본으로 처음부터.
+        const filtered = rel.filter((w) => !exclude.has(`${w.mediaType}:${w.id}`));
+        finalize(filtered.length > 0 ? filtered : rel);
+      });
     }
   }
 
@@ -1924,6 +1943,8 @@ export default function DiscoverScreen() {
           myOTTAvailable={subscribedOtt.length > 0}
           onMyOTTToggle={handleMyOTTToggle}
           onMyOTTSetupNavigate={handleMyOTTSetupNavigate}
+          // 4차 — 필터 dropdown 열림 시 케밥 인메뉴 닫기 (동시 오픈 방지).
+          onDropdownOpen={() => setCardMenuOpen(false)}
         />
       )}
 
@@ -1931,9 +1952,10 @@ export default function DiscoverScreen() {
         style={styles.stackWrap}
         onLayout={(e) => setStackRect(e.nativeEvent.layout)}
       >
-        {/* 3차 — 큐 하이라이트: 각진 풀블리드 폐기 → 카드 인셋(12) 정합 라운드 프레임.
-            mixBar(위, top radius) 와 이 플레이트(bottom radius) 가 한 덩어리 라운드
-            면으로 읽힘. 카드가 위에 얹혀 카드 radius 코너 틈으로도 같은 면이 보임. */}
+        {/* 4차 — 큐 하이라이트: 면 플레이트 → 테두리 선(outline). 좌/우/하단이
+            카드를 감싸는 얇은 스트로크로 읽히고, 하단은 save(하트) 버튼 위에서
+            여유(bottom 4)를 두고 끝나 겹침 인상 제거. mixBar(솔리드 캡) 와 같은
+            수평 인셋(8) 로 한 덩어리 컨테이너. */}
         {inMix && <View style={styles.mixFrame} pointerEvents="none" />}
         {/* 2026-06-22 (게이트 0 first_card_p50 11.9s 대응) — 로딩 origin 분기.
             refresh = 사용자 새로고침 → ApertureBreathLoader (중앙 호흡) 유지.
@@ -2148,8 +2170,14 @@ export default function DiscoverScreen() {
               setDetailOpenCount((c) => c + 1);
             }}
             onRefresh={() => {
-              // 믹스 중 새로고침 = 믹스 해제 + 일반 hard refresh (새 콘텐츠 기대 정합).
-              if (inMix) handleMixRelease();
+              // 4차 — 큐 중 새로고침 = 해제가 아니라 같은 seed/테마로 큐 재생성
+              // (recHistory/saved 제외 적용 → 이미 본 카드 걷어낸 새 목록).
+              if (inMix && mixSeed) {
+                handleMixStart(mixSeed, mixSourceRef.current, mixTheme ?? undefined, {
+                  refresh: true,
+                });
+                return;
+              }
               void handleRefresh();
             }}
             onToggleSave={toggleLike}
@@ -2282,56 +2310,63 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
   },
+  // 4차 — 필터 dropdown 패널과 동일 UI (FilterChips styles.panel/option 정합):
+  // surfaceRaised + radius.lg + shadow-dropdown + option 패딩/타이포.
   cardMenu: {
     position: 'absolute',
     top: 66,
     right: 26,
     minWidth: 180,
     maxWidth: 260,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: 4,
+    padding: spacing.sm + 4,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.lg,
+    ...shadowsNative.dropdown,
   },
   cardMenuItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
   },
   cardMenuItemPressed: {
     backgroundColor: colors.overlayLight,
   },
   cardMenuItemText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '500',
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '400',
   },
-  // 큐 바 — FilterChips 자리 대체. 3차 업스케일: 카드 인셋(12) 정합 마진 + 상단
-  // radius.xl → 아래 mixFrame 플레이트와 한 덩어리 라운드 면. accentDim 은 기존
-  // 1건 예산 그대로 (anti-slop #13 — 큐 모드 한정 transient 표면).
+  // 큐 바 — FilterChips 자리 대체. 4차: 인셋 8 (아웃라인 프레임과 동일) + 상단
+  // radius 20 (카드 16 + 옵셋 4 정합). accentDim 솔리드 캡은 유지 — 아래 아웃라인과
+  // 합쳐 "하이라이트 컨테이너" 로 읽힘 (amber 1건 예산 내).
   mixBar: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 56,
-    marginHorizontal: 12,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    marginHorizontal: 8,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
     backgroundColor: colors.accentDim,
   },
-  // 큐 하이라이트 플레이트 — stackWrap 안 absolute. 카드(left/right 12, bottom 8)
-  // 뒤에 깔려 카드 radius 코너/하단 8px 스트립으로 노출. 하단 radius.xl 로 마감.
+  // 큐 아웃라인 — 면 대신 좌/우/하단 1.5px 스트로크 (4차 피드백: 테두리 선처럼).
+  // 카드(left/right 12, bottom 8) 를 4px 여백으로 감싸고 하단은 bottom 4 에서
+  // 끝나 하트 버튼과 안 겹침. 색은 accentDim 과 동일 hue 의 중간 알파 (12% 는
+  // 1.5px 선에서 비가시 — 35% 로 상향, 면이 아니라 선이므로 amber 예산 동일 표면).
   mixFrame: {
     position: 'absolute',
-    left: 12,
-    right: 12,
+    left: 8,
+    right: 8,
     top: 0,
-    bottom: 0,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-    backgroundColor: colors.accentDim,
+    bottom: 4,
+    borderLeftWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderBottomWidth: 1.5,
+    borderColor: 'rgba(196, 163, 90, 0.35)',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   // seed 미니 포스터 (작품 큐만) — 2:3 비율 28×42, 카드 radius 계열 sm.
   mixBarPoster: {

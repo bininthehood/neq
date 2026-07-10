@@ -20,6 +20,7 @@ import {
   IconSave,
   IconChevronLeft,
   IconChevronRight,
+  IconMoreVertical,
 } from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -185,6 +186,12 @@ export default function DetailSheet({
   useEffect(() => {
     setSynopsisExpanded(false);
   }, [rec?.tmdbId]);
+
+  // 4차 — 상단 케밥(⋮) 인메뉴 ('큐 시작'). 표시 작품 변경/시트 재오픈 시 잔재 제거.
+  const [detailMenuOpen, setDetailMenuOpen] = useState(false);
+  useEffect(() => {
+    setDetailMenuOpen(false);
+  }, [rec?.tmdbId, visible]);
 
   // 2026-06-10 (Phase C #4) — sticky CTA 저장 상태. mode 무관 (detail/share 양쪽 사용).
   // detail mode 에서 Saved 진입 후 unsave 도 같은 토글 경로로 동작 — sheet 내부에서
@@ -961,16 +968,70 @@ export default function DetailSheet({
               ) : (
                 <View />
               )}
-              <Pressable
-                style={styles.topNavBtn}
-                onPress={onClose}
-                hitSlop={12}
-                accessibilityLabel="닫기"
-                accessibilityRole="button"
-              >
-                <IconClose size={20} color={colors.textPrimary} />
-              </Pressable>
+              {/* 4차 — 우측 그룹: 케밥(⋮, 인메뉴 '큐 시작') + X. Discover 카드
+                  케밥과 동일 진입 패턴 — 하단 sticky CTA 의 '큐 시작' 버튼 대체. */}
+              <View style={styles.topNavRightGroup}>
+                {mode !== 'share' && onStartMix ? (
+                  <Pressable
+                    style={styles.topNavBtn}
+                    onPress={() => setDetailMenuOpen((v) => !v)}
+                    hitSlop={12}
+                    accessibilityLabel="상세 메뉴"
+                    accessibilityRole="button"
+                    testID="detail-menu-button"
+                  >
+                    <IconMoreVertical size={18} color={colors.textPrimary} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={styles.topNavBtn}
+                  onPress={onClose}
+                  hitSlop={12}
+                  accessibilityLabel="닫기"
+                  accessibilityRole="button"
+                >
+                  <IconClose size={20} color={colors.textPrimary} />
+                </Pressable>
+              </View>
             </View>
+
+            {/* 4차 — 케밥 인메뉴. 필터 dropdown 패널과 동일 UI (FilterChips panel/option
+                정합 — Discover cardMenu 와 공유 규격). Modal 중첩 회피 위해 시트 내부
+                inline overlay + 투명 backdrop. */}
+            {detailMenuOpen && (
+              <>
+                <Pressable
+                  style={styles.detailMenuBackdrop}
+                  onPress={() => setDetailMenuOpen(false)}
+                  accessibilityLabel="메뉴 닫기"
+                  testID="detail-menu-backdrop"
+                />
+                <View
+                  style={[
+                    styles.detailMenu,
+                    { top: insets.top + spacing.sm + 44 + 8 },
+                  ]}
+                  testID="detail-menu"
+                >
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.detailMenuItem,
+                      pressed && styles.detailMenuItemPressed,
+                    ]}
+                    onPress={() => {
+                      setDetailMenuOpen(false);
+                      onStartMix?.(rec);
+                    }}
+                    accessibilityRole="button"
+                    testID="detail-menu-mix"
+                  >
+                    <Text style={styles.detailMenuItemText} numberOfLines={1}>
+                      {rec.title} 큐 시작
+                    </Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
 
             {/* Sticky bottom CTA — 2026-06-10 (Phase C #4) mode 통합 → 2026-06-11 (build 21) 위계 강화.
                 detail mode (위계 명확): amber save/unsave (flex 1, primary) + ghost share (square 44, icon-only).
@@ -1023,29 +1084,14 @@ export default function DetailSheet({
                     <Text style={styles.ctaGhostText}>추천 더 보기</Text>
                   </Pressable>
                 ) : (
-                  <>
-                    {/* 3차 — '큐 시작' ghost (amber 위계 침범 없음). share mode 제외.
-                        rec = history 현재 작품 — 관련작 탐색 깊이에서도 그 작품이 seed. */}
-                    {onStartMix ? (
-                      <Pressable
-                        style={styles.ctaGhost}
-                        onPress={() => onStartMix(rec)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${rec.title} 큐 시작`}
-                        testID="detail-mix-start"
-                      >
-                        <Text style={styles.ctaGhostText}>큐 시작</Text>
-                      </Pressable>
-                    ) : null}
-                    <Pressable
-                      style={styles.ctaGhostSquare}
-                      onPress={handleShare}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${rec.title} 공유하기`}
-                    >
-                      <IconShare size={16} color={colors.textSecondary} />
-                    </Pressable>
-                  </>
+                  <Pressable
+                    style={styles.ctaGhostSquare}
+                    onPress={handleShare}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${rec.title} 공유하기`}
+                  >
+                    <IconShare size={16} color={colors.textSecondary} />
+                  </Pressable>
                 )}
               </View>
             </View>
@@ -1605,6 +1651,41 @@ const styles = StyleSheet.create({
   topNavLeftGroup: {
     flexDirection: 'row',
     gap: spacing.xs + 2, // 6 — 두 chevron 사이 시각 분리. 44+6+44 = 94px (좌측 영역).
+  },
+  // 4차 — 우측 그룹 (케밥 + X). 좌측 그룹과 동일 gap.
+  topNavRightGroup: {
+    flexDirection: 'row',
+    gap: spacing.xs + 2,
+  },
+  // 4차 — 케밥 인메뉴. FilterChips panel/option 규격 (Discover cardMenu 공유).
+  detailMenuBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'transparent',
+    zIndex: 11,
+  },
+  detailMenu: {
+    position: 'absolute',
+    right: spacing.md,
+    minWidth: 180,
+    maxWidth: 260,
+    padding: spacing.sm + 4,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.lg,
+    ...shadowsNative.dropdown,
+    zIndex: 12,
+  },
+  detailMenuItem: {
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+  },
+  detailMenuItemPressed: {
+    backgroundColor: colors.overlayLight,
+  },
+  detailMenuItemText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '400',
   },
   topNavBtn: {
     width: 44,

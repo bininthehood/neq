@@ -238,8 +238,12 @@ try {
     let ok = false;
     let note = 'Detail 미오픈';
     if (opened >= 0) {
-      const btn = await b.$('~detail-mix-start');
+      // 4차 — 하단 CTA → 상단 케밥(⋮) 인메뉴로 이동.
       try {
+        const kebab = await b.$('~detail-menu-button');
+        await kebab.waitForExist({ timeout: 4000 });
+        await kebab.click();
+        const btn = await b.$('~detail-menu-mix');
         await btn.waitForExist({ timeout: 4000 });
         await btn.click();
         const started = await waitFor(b, async () => {
@@ -253,7 +257,7 @@ try {
         ok = started >= 0;
         note = ok ? `"${detailSeed} 큐" 주입 ${started}ms` : '시트닫힘/덱주입 미확인';
       } catch {
-        note = 'detail-mix-start 버튼 미발견';
+        note = 'detail-menu-button/detail-menu-mix 미발견';
         await closeDetail(b);
       }
     }
