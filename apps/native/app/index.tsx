@@ -1256,6 +1256,10 @@ export default function DiscoverScreen() {
         source: 'card_tap',
       });
     }
+    // 2026-07-10 — hold 램프 즉시 리셋. 탭 인식 시점에 램프가 진행 중이고 Modal
+    // 오픈이 UI thread 의 in-flight withTiming(리셋) 을 중단시키는 케이스에서 축소
+    // 잔존 (onFinalize 리셋만으로 불충분 — 시뮬 재보고). Modal 열기 전 하드 0.
+    holdSV.value = 0;
     setDetailOpen(true);
     // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit.
     setDetailOpenCount((c) => c + 1);
@@ -1518,6 +1522,16 @@ export default function DiscoverScreen() {
   useEffect(() => {
     setCardMenuOpen(false);
   }, [currentRec?.tmdbId]);
+
+  // 2026-07-10 — Modal(DetailSheet/SearchSheet)·메뉴가 모두 닫힌 시점 hold 램프
+  // 하드 리셋. Modal 뒤에서 중단된 in-flight 리셋 애니메이션 방어
+  // (탭→시트→닫기 경로 축소 잔존 — onFinalize 안전망의 사각).
+  useEffect(() => {
+    if (!detailOpen && !searchOpen && !cardMenuOpen) {
+      holdSV.value = 0;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailOpen, searchOpen, cardMenuOpen]);
 
   // Mix 탭 → 믹스 시작 브리지. 탭에서 setPendingMixSeed 후 router.push('/') →
   // focus 시 1회 consume. ref 로 최신 handleMixStart 참조 (stale closure 방지).
