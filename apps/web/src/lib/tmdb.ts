@@ -349,6 +349,60 @@ export async function getCredits(
   return { director, cast, directorMember, castMembers };
 }
 
+/**
+ * TMDB /videos — DetailSheet 트레일러 lazy fetch 용 (2026-07-12).
+ *
+ * 대표 영상 1개만 선별해 반환. 실제 파일이 아니라 YouTube key — 재생은
+ * 클라이언트가 YouTube 링크/embed 로 처리 (TMDB 는 영상 호스팅 안 함).
+ *
+ * 선별 규칙 (score 내림차순):
+ *  - ko 영상 최우선 (+8) — 한국어 더빙/자막 트레일러
+ *  - Trailer(+4) > Teaser(+2). Clip/Featurette 등은 제외 (캐치용 아님)
+ *  - official(+1)
+ *  - 동점이면 published_at 최신 우선
+ * TMDB videos 는 커뮤니티 큐레이션 — 비주류 작품은 빈 배열이 흔함 → null 반환,
+ * 소비처는 섹션 자체 미노출.
+ */
+export async function getBestTrailer(
+  id: number,
+  type: "movie" | "series"
+): Promise<{ key: string; name: string } | null> {
+  const mediaType = type === "series" ? "tv" : "movie";
+  const res = await fetch(
+    `${BASE}/${mediaType}/${id}/videos?api_key=${API_KEY}&language=ko-KR&include_video_language=ko,en,null`
+  );
+  const data = await res.json();
+
+  interface VideoRaw {
+    key?: string;
+    name?: string;
+    site?: string;
+    type?: string;
+    official?: boolean;
+    iso_639_1?: string;
+    published_at?: string;
+  }
+  const candidates: VideoRaw[] = ((data.results ?? []) as VideoRaw[]).filter(
+    (v) =>
+      v.site === "YouTube" &&
+      !!v.key &&
+      (v.type === "Trailer" || v.type === "Teaser")
+  );
+  if (candidates.length === 0) return null;
+
+  const score = (v: VideoRaw) =>
+    (v.iso_639_1 === "ko" ? 8 : 0) +
+    (v.type === "Trailer" ? 4 : 2) +
+    (v.official ? 1 : 0);
+  candidates.sort(
+    (a, b) =>
+      score(b) - score(a) ||
+      (b.published_at ?? "").localeCompare(a.published_at ?? "")
+  );
+  const best = candidates[0];
+  return { key: best.key!, name: best.name ?? "" };
+}
+
 export function posterUrl(path: string | null, size = "w500"): string | null {
   if (!path) return null;
   return `https://image.tmdb.org/t/p/${size}${path}`;

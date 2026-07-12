@@ -23,6 +23,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconMoreVertical,
+  IconPlay,
 } from './Icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -182,6 +183,8 @@ export default function DetailSheet({
   // /api/tmdb/credits 1회 호출해 사진 채움. 이미 *Member 가 있는 hydrate 경로는 fetch X.
   const [lazyDirectorMember, setLazyDirectorMember] = useState<CastMember | null>(null);
   const [lazyCastMembers, setLazyCastMembers] = useState<CastMember[]>([]);
+  // 2026-07-12 — 대표 트레일러 (YouTube key) lazy fetch. null = 없음 → 섹션 미노출.
+  const [trailer, setTrailer] = useState<{ key: string; name: string } | null>(null);
 
   const [related, setRelated] = useState<RelatedWorksResponse | null>(null);
   const [relatedLoading, setRelatedLoading] = useState(false);
@@ -303,6 +306,31 @@ export default function DetailSheet({
       controller.abort();
     };
   }, [visible, rec?.tmdbId, rec?.type, rec?.castMembers, rec?.directorMember, rec?.director, rec?.cast]);
+
+  // 2026-07-12 — 트레일러 lazy fetch (credits 패턴). mirror 는 videos 미보유 →
+  // 시트 오픈/작품 전환 시 라이트 엔드포인트 1회. 실패/없음 = null (섹션 미노출).
+  useEffect(() => {
+    setTrailer(null);
+    if (!visible || !rec?.tmdbId) return;
+    let cancelled = false;
+    const controller = new AbortController();
+    const type = rec.type === 'movie' ? 'movie' : 'series';
+    fetch(
+      `${env.API_BASE_URL}/api/tmdb/videos?id=${rec.tmdbId}&type=${type}`,
+      { signal: controller.signal },
+    )
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { trailer: { key: string; name: string } | null } | null) => {
+        if (!cancelled) setTrailer(data?.trailer ?? null);
+      })
+      .catch(() => {
+        // abort or network error — 섹션 미노출 유지
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [visible, rec?.tmdbId, rec?.type]);
 
   // 관련 작품 fetch — 화면 rec 변경 시 마다.
   // 2026-06-04 (P0 fix) — mode='share' 분기는 fetch 자체 skip.
@@ -689,6 +717,21 @@ export default function DetailSheet({
     }
   }
 
+  // 2026-07-12 — 트레일러는 YouTube 유니버설 링크로 외부 오픈 (앱 설치 시 YouTube 앱).
+  // OTT 딥링크와 동일한 "탭 → 외부" 패턴. 인라인 embed 는 webview 의존 추가 필요 → 후속.
+  function openTrailer() {
+    if (!rec || !trailer) return;
+    track('trailer_opened', {
+      tmdb_id: rec.tmdbId,
+      title: rec.title,
+      video_key: trailer.key,
+      source: mode === 'share' ? 'native_share' : 'native_detail_sheet',
+    });
+    Linking.openURL(`https://www.youtube.com/watch?v=${trailer.key}`).catch(() => {
+      // openURL 실패 — 무시 (OS 거부)
+    });
+  }
+
   if (!rec) return null;
 
   const heroSrc = rec.backdrop || rec.posterUrl;
@@ -832,6 +875,36 @@ export default function DetailSheet({
                   </View>
                 );
               })() : null}
+
+              {/* Trailer — 2026-07-12. 대표 트레일러 썸네일 카드, 탭 시 YouTube 오픈.
+                  데이터 없는 작품 (비주류 다수) 은 섹션 통째로 미노출 — 빈자리 금지. */}
+              {trailer ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Trailer · 예고편</Text>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.trailerCard,
+                      pressed && { opacity: 0.85, transform: [{ scale: 0.99 }] },
+                    ]}
+                    onPress={openTrailer}
+                    accessibilityRole="button"
+                    accessibilityLabel="예고편 재생"
+                  >
+                    <Image
+                      // hqdefault(480×360, 4:3) 상하 레터박스는 cover 크롭으로 제거
+                      source={{ uri: `https://img.youtube.com/vi/${trailer.key}/hqdefault.jpg` }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      transition={150}
+                      cachePolicy="memory-disk"
+                    />
+                    <View style={styles.trailerScrim} pointerEvents="none" />
+                    <View style={styles.trailerPlayBadge}>
+                      <IconPlay size={18} color={colors.textPrimary} />
+                    </View>
+                  </Pressable>
+                </View>
+              ) : null}
 
               {/* Cast — ChapterMark + 가로 스크롤. share mode 에서는 진입 비활성.
                   2026-06-15 (build 27 iter3) — tmdbId 있으면 DetailSheet 내부
@@ -1944,6 +2017,31 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '500',
+  },
+  // 2026-07-12 — 트레일러 썸네일 카드 (16:9). YouTube UI 노출 없이 자체 재생 배지만.
+  trailerCard: {
+    aspectRatio: 16 / 9,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trailerScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlayLight,
+  },
+  trailerPlayBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.full,
+    backgroundColor: colors.overlay,
+    borderWidth: 1,
+    borderColor: 'rgba(237, 237, 239, 0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    // 삼각형 광학 중심 보정 — 좌우 대칭 원 안에서 2px 우측
+    paddingLeft: 2,
   },
   noProviders: {
     color: colors.textMuted,

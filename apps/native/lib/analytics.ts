@@ -147,6 +147,8 @@ export type NekoEvent =
   | 'watch_report_submitted'
   // OTT 전환
   | 'ott_link_clicked'
+  // 2026-07-12 — DetailSheet 트레일러 (YouTube 외부 오픈). native 선행 — web parity 시 동기화 필요.
+  | 'trailer_opened'
   // 공유
   | 'card_shared'
   | 'share_saved'
