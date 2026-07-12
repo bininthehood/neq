@@ -156,6 +156,11 @@ export default function DetailSheet({
   // 표시되는 rec = history[currentIndex] ?? initialRec (history 빈 케이스 안전망).
   const [history, setHistory] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  // 2026-07-12 — 닫힘 모션 2회 재생 근본 수정. swipe-down 은 pan 이 translateY 로
+  // 퇴장 슬라이드를 이미 재생하므로, 이어지는 Modal slide 퇴장까지 겹치면 닫힘이
+  // 두 번 보인다 (X 닫기는 translateY=0 이라 Modal slide 1회 = 정상). swipe 경로만
+  // animationType 을 'none' 으로 내려 닫고, visible=false 처리 후 원복.
+  const [instantExit, setInstantExit] = useState(false);
   const [hydratingRelated, setHydratingRelated] = useState(false);
   const rec = history[currentIndex] ?? initialRec;
   const canGoBack = currentIndex > 0;
@@ -230,6 +235,11 @@ export default function DetailSheet({
       setCurrentIndex(0);
       setSubScreen(null);
       setRelated(null);
+      // 2026-07-12 — swipe 닫힘의 animationType='none' 원복. 이 effect 는 dismiss
+      // commit 이후에 돌므로 (native dismiss 는 이미 none 으로 발화) 다음 open 의
+      // 진입 slide 는 온전히 유지된다. visible=true 분기에서 원복하면 present
+      // commit 시점에 아직 'none' 이라 진입 슬라이드가 사라짐 — 여기가 유일한 지점.
+      setInstantExit(false);
     }
     // Reanimated 4 Fabric crash 메모리 정합 — unmount 시 worklet cleanup.
     return () => {
@@ -540,6 +550,13 @@ export default function DetailSheet({
     [handleRelatedClick, subScreen],
   );
 
+  // 2026-07-12 — swipe-down 닫힘 전용 경로. instantExit 는 onClose 와 같은 배치로
+  // commit 되어 Modal 이 animationType='none' 상태로 dismiss 된다 (모션 2회 방지).
+  function closeFromSwipe() {
+    setInstantExit(true);
+    onClose();
+  }
+
   // 2026-07-10 — 내부 스크롤을 RNGH 에 편입 (pan 과의 simultaneous 관계용).
   const nativeScroll = Gesture.Native();
 
@@ -577,13 +594,14 @@ export default function DetailSheet({
       'worklet';
       if (scrollY.value > 0) return;
       if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
-        // PR2 — 풀스크린 dismiss: 화면 끝까지 슬라이드 후 onClose 호출. Modal animationType="slide"
-        // 가 다음 닫힘 슬라이드 처리, translateY 는 다음 진입 위해 0 으로 복귀.
+        // PR2 — 풀스크린 dismiss: 화면 끝까지 슬라이드 후 onClose 호출.
+        // 2026-07-12 — 퇴장 슬라이드는 이 translateY 애니메이션 1회가 전부.
+        // Modal slide 퇴장이 겹치면 닫힘 모션 2회 → closeFromSwipe 가 'none' 전환.
         translateY.value = withTiming(
           SCREEN_HEIGHT,
           { duration: DETAIL_EXIT_MS, easing: DETAIL_BEZIER },
           () => {
-            runOnJS(onClose)();
+            runOnJS(closeFromSwipe)();
           },
         );
       } else {
@@ -1188,7 +1206,7 @@ export default function DetailSheet({
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={instantExit ? 'none' : 'slide'}
       presentationStyle="fullScreen"
       onRequestClose={onClose}
       statusBarTranslucent
