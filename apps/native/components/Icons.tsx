@@ -299,15 +299,6 @@ export function IconMoreVertical({ size = 16, color = '#000' }: IconProps) {
   );
 }
 
-// 2026-07-12 — DetailSheet 트레일러 재생 배지. 라운드 조인 필드 삼각형.
-export function IconPlay({ size = 16, color = '#000' }: IconProps) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 20 20" fill={color}>
-      <Path d="M7 4.6c0-1.1 1.2-1.8 2.1-1.2l8.2 5.4c.9.6.9 1.9 0 2.4l-8.2 5.4c-.9.6-2.1-.1-2.1-1.2V4.6z" />
-    </Svg>
-  );
-}
-
 // 2026-07-08 Seeded Mix 2차 — Mix 탭 아이콘 (셔플 화살표, Quiet Ink stroke 계열).
 // active 시 IconBookmark 패턴 정합 — stroke 유지 + 옅은 fill 대신 굵기 동일 (선형 아이콘).
 export function IconMix({ size = 20, color = '#000', active = false }: IconProps & { active?: boolean }) {
