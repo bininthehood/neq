@@ -1,112 +1,93 @@
-# neq,
+# neq
 
 > 당신의 취향을 발견하세요. 알고리즘 밖의 OTT 작품을 찾아드려요.
 
-[https://neko-ecru.vercel.app](https://neko-ecru.vercel.app)
+**Web** — [neq.me](https://neq.me) · **iOS** — [App Store](https://apps.apple.com/kr/app/id6773622396)
 
-## 무엇을 하는 앱인가요
-
-OTT에는 볼 게 많은데, 오히려 뭘 볼지 못 고르는 경험. neq,는 좋아하는 작품 3개만 알려주면 숨겨진 명작을 큐레이션해주는 PWA입니다.
+OTT에는 볼 게 많은데, 오히려 뭘 볼지 못 고르는 경험. neq는 좋아하는 작품 3개만 알려주면 숨겨진 명작을 큐레이션해주는 콘텐츠 발굴 앱입니다. 넷플릭스, 디즈니+, 웨이브, 티빙, 쿠팡플레이, 왓챠, 애플TV+ 등 한국에서 볼 수 있는 OTT 전체를 대상으로 합니다.
 
 - **좋아하는 작품 3개 선택** → 취향 파악
-- **스와이프로 탐색** → 카드를 넘기며 발굴의 재미
+- **스와이프로 탐색** → 카드를 넘기며 발굴
 - **저장 + 시청 피드백** → 추천이 점점 정확해짐
-- **오늘 뭐 볼까 버튼** → Saved에서 한 편 추천
-
-넷플릭스, 디즈니+, 웨이브, 티빙, 쿠팡플레이, 왓챠, 애플TV+ 등 한국에서 볼 수 있는 OTT를 전부 대상으로 합니다.
-
-## 핵심 가치
-
-- **발굴성**: 알고리즘이 안 보여주는 숨겨진 명작 70% 이상
-- **빠른 결정**: 긴 설명보다 스와이프 기반 탐색
-- **취향 학습**: 시청 피드백(인생작/괜찮았어/별로였어/안맞았어)으로 프롬프트 개인화
-- **수제 느낌**: AI slop 패턴 배제, Warm Cinema 디자인 시스템
+- **오늘 뭐 볼까** → Saved에서 한 편 추천
 
 ## 주요 기능
 
-### Discover
-- 부채꼴 카드 덱: 최대 15장 버퍼 + 프리페치로 끊김 없는 탐색
-- 제스처: 좌우 스와이프(다음/이전), 하단 탭(디테일), 중앙 탭(봤어요?)
-- 필터: 유형(영화/시리즈) · 국가(국내/해외) · OTT (다중 선택) 드롭다운 칩
-- Pull-to-refresh로 새 추천 요청
-- 디테일 바텀시트: 감독, 출연, 줄거리, OTT 딥링크, 공유
+| 영역 | 내용 |
+| --- | --- |
+| Discover | 카드 덱 스와이프 (좌: 다음 / 우: 이전 / 아래: 저장 / 탭: 디테일), 필터 (유형·국가·OTT), 무한 탐색 |
+| Detail | 바텀시트 — 감독·출연·줄거리, 인라인 트레일러, OTT 딥링크, 공유 |
+| Saved | 장르 필터 칩, 연·월 그룹핑, 시청 완료 아카이브, 랜덤 픽 |
+| 취향 학습 | 시청 피드백 4단계 (인생작 / 괜찮았어 / 별로였어 / 안맞았어) → 추천 프롬프트 개인화 |
 
-### Saved
-- OTT별 그룹핑 토글
-- 필터 탭: 전체 / 안 본 작품 / 시청 완료 / 아카이브
-- 시청 완료 작품 아카이브 기능
-- "오늘 뭐 볼까?" 버튼으로 랜덤 픽
+## 아키텍처
 
-### 추천 엔진
-- OpenAI GPT-4o 기반 큐레이션
-- TMDB API로 메타데이터 + OTT 가용성 검증
-- 시청 피드백을 프롬프트에 주입해 개인화
-- 제외 목록: 이미 본 작품 + 저장한 작품 최대 150개
-- 다양성 규칙: 장르 3개 이상, 시대 혼합, 숨겨진 명작 70%
+Turborepo 모노레포. 웹 PWA와 네이티브 앱이 추천 로직·타입을 공유합니다.
 
-### PWA
-- 오프라인 폴백 (Service Worker)
-- 앱 아이콘 + 스플래시 스크린
-- iOS/Android 홈 화면 설치
-- 리마인더 배너 (24시간마다 안 본 작품 안내)
+```
+neq/
+├── apps/
+│   ├── web/         # Next.js 16 PWA (App Router)
+│   └── native/      # Expo 앱 (iOS / Android)
+├── packages/
+│   ├── core/        # 공유 도메인 로직 (추천, 필터, OTT, 장르)
+│   └── design/      # 디자인 토큰
+├── supabase/        # DB 마이그레이션 (TMDB 미러, pgvector)
+├── scripts/         # 크롤러, 미러 sync, 분석·게이트 스크립트
+└── .github/workflows/  # 데이터 파이프라인 + 모니터링 cron
+```
+
+### 추천 파이프라인
+
+1. **LLM 큐레이션** — OpenAI(gpt-4o-mini)에 취향·시청 피드백·제외 목록을 주입해 후보 생성. 다양성 규칙 (장르·시대 혼합, 숨겨진 명작 위주) 적용
+2. **TMDB 미러 enrich** — LLM 응답을 자체 DB 미러로 hydrate. 라이브 TMDB API 왕복 (4.8~12.3s) 대비 평균 ~400ms, 10~25× 단축
+3. **스트리밍 응답** — 첫 카드부터 순차 전달, 타임아웃 시 비스트리밍 fallback
+
+### TMDB Mirror
+
+TMDB 전체 카탈로그 (~140만 작품)를 Supabase에 미러링해 추천 enrich를 로컬 조회로 처리합니다.
+
+- `tmdb_catalog` (Daily ID Export 전량) / `tmdb_metadata` (detail + credits + providers) / `tmdb_crawl_queue`
+- TTL 관리 — 메타데이터 180일, OTT 가용성(providers) 30일
+- GitHub Actions cron 파이프라인: catalog sync → bulk crawl → stale refresh → providers refresh → snapshot
+- 미러 vs 라이브 parity 97% (200건 샘플 검증)
 
 ## 기술 스택
 
-- **Framework**: Next.js 16 (App Router) + Turbopack
-- **UI**: React 19 + Tailwind CSS v4
-- **Language**: TypeScript
-- **AI**: OpenAI GPT-4o
-- **Data**: TMDB API (메타데이터, OTT 가용성)
-- **Storage**: localStorage (Phase 1)
-- **Deploy**: Vercel
-- **Analytics**: Vercel Analytics
+| 레이어 | 기술 |
+| --- | --- |
+| Web | Next.js 16 (App Router), React 19, Tailwind CSS v4, PWA (Service Worker) |
+| Native | Expo SDK 54, React Native 0.81, Expo Router, Reanimated 4 + Gesture Handler |
+| Backend | Supabase (Postgres + pgvector), Vercel |
+| AI | OpenAI gpt-4o-mini |
+| Data | TMDB API + 자체 미러 |
+| Analytics | PostHog |
+| Testing | Vitest (단위), Appium + WebdriverIO (iOS 시뮬레이터 E2E 회귀) |
+
+## 개발
+
+```bash
+npm install
+
+# 환경 변수
+cp apps/web/.env.example apps/web/.env
+cp apps/native/.env.example apps/native/.env
+
+# 웹 개발 서버
+npm run web:dev        # localhost:3000
+
+# 네이티브 (iOS)
+npm run native:ios     # dev client 빌드 + 실행
+npm run native:start   # Metro (--dev-client)
+
+# 전체 빌드 / 검사
+npm run build
+npm run lint
+npm run type-check
+```
+
+네이티브 E2E는 `apps/native/wdio.conf.ts` 기준 3-way 타겟 (`simulator-devclient` 기본 / `expo-go` / `testflight`)으로 실행합니다.
 
 ## 디자인 시스템
 
-**Warm Cinema** — 영화관의 따뜻한 간접 조명을 모티프로 한 디자인 시스템. 자세한 내용은 [DESIGN.md](./DESIGN.md) 참조.
-
-- 타이포그래피: Fraunces (디스플레이) + Pretendard Variable (한글 본문) + Outfit (숫자)
-- 컬러: 워며 블랙 (#0C0A09) + 번트 오렌지 (#E87B35)
-- 모션: 스프링 물리 기반 카드 스와이프
-
-## 개발 환경
-
-```bash
-# 환경 변수
-cp .env.example .env
-# OPENAI_API_KEY, TMDB_API_KEY 설정
-
-# 의존성 설치
-npm install
-
-# 개발 서버
-npm run dev    # localhost:3000
-
-# 빌드
-npm run build
-npm start
-```
-
-## 프로젝트 구조
-
-```
-src/
-├── app/           # 페이지 (discover, saved, profile, api)
-├── components/    # 컴포넌트 (Icons, BottomNav, Reminder, discover/)
-├── hooks/         # 커스텀 훅 (useSwipeGesture, useDetailSheet, useRecommendations)
-└── lib/           # 로직 (store, recommend, tmdb, ott-links, types)
-```
-
-## 로드맵
-
-- [x] MVP: Onboarding + Discover + Saved
-- [x] 디자인 시스템 적용 (M0)
-- [x] 성능 최적화 (M1)
-- [x] 컴포넌트 리팩토링 (M2)
-- [x] 추천 품질 개선 (M3)
-- [x] PWA 강화 (M4)
-- [x] 폴리시 (M5)
-- [x] 리브랜딩 (Neko → neq,)
-- [ ] DB 연동 (Supabase) — 사용자 리텐션 확인 후
-- [ ] 카카오 로그인
-- [ ] 영화/시리즈 외 문화 전반 확장
+**Quiet Ink** — 포스터가 유일한 색채이고, UI는 잉크처럼 배경에 스며드는 미니멀 디자인. 독립서점의 큐레이션 선반 같은 절제된 타이포와 여백을 지향합니다. 상세 토큰과 원칙은 [DESIGN.md](./DESIGN.md) 참조.
