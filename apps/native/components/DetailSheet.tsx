@@ -34,6 +34,8 @@ import Animated, {
   cancelAnimation,
   runOnJS,
   Easing,
+  interpolate,
+  Extrapolation,
 } from 'react-native-reanimated';
 import type {
   CastMember,
@@ -158,9 +160,11 @@ export default function DetailSheet({
   onStartMix,
 }: Props) {
   const insets = useSafeAreaInsets();
-  // PR2 — translateY 는 swipe-down dismiss 변위. 평소 0, drag 중 양수.
-  // Modal animationType="slide" 가 진입 자체 슬라이드 처리 → 시트 진입 변위는 OS 가 담당.
-  const translateY = useSharedValue(0);
+  // 2026-07-13 — translateY 가 진입/드래그/퇴장 슬라이드 전부 담당 (SearchSheet 정합).
+  // Modal 은 transparent + animationType="none" — OS 애니메이션 주체 제거로
+  // 닫힘 모션 2회 재생 클래스 원천 차단 + 드래그 중 후방(Discover) 노출.
+  // share mode 는 풀스크린 라우트 자체가 진입 단위 → 슬라이드 없이 0 고정.
+  const translateY = useSharedValue(mode === 'share' ? 0 : SCREEN_HEIGHT);
   const scrollRef = useRef<ScrollView>(null);
   // 2026-05-29 — 사용자 요청: detail sheet 스크롤 상단일 때만 swipe-down dismiss.
   // 스크롤 중간일 때는 일반 스크롤 유지. scrollY 추적 + pan gesture 조건 분기.
@@ -189,11 +193,6 @@ export default function DetailSheet({
   // 표시되는 rec = history[currentIndex] ?? initialRec (history 빈 케이스 안전망).
   const [history, setHistory] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  // 2026-07-12 — 닫힘 모션 2회 재생 근본 수정. swipe-down 은 pan 이 translateY 로
-  // 퇴장 슬라이드를 이미 재생하므로, 이어지는 Modal slide 퇴장까지 겹치면 닫힘이
-  // 두 번 보인다 (X 닫기는 translateY=0 이라 Modal slide 1회 = 정상). swipe 경로만
-  // animationType 을 'none' 으로 내려 닫고, visible=false 처리 후 원복.
-  const [instantExit, setInstantExit] = useState(false);
   const [hydratingRelated, setHydratingRelated] = useState(false);
   const rec = history[currentIndex] ?? initialRec;
   const canGoBack = currentIndex > 0;
@@ -261,24 +260,25 @@ export default function DetailSheet({
 
   useEffect(() => {
     if (visible) {
-      // PR2 — 풀스크린 Modal animationType="slide" 가 진입 슬라이드 처리. translateY 는 0 고정 (swipe-down dismiss 변위만).
-      translateY.value = 0;
+      // 2026-07-13 — 진입 슬라이드를 reanimated 가 직접 구동 (transparent Modal).
+      // 이전 close 가 남긴 위치와 무관하게 화면 밖에서 시작 보장 후 슬라이드 인.
+      // share mode 는 라우트 mount 가 진입 — 슬라이드 없이 즉시 표시.
+      if (mode === 'share') {
+        translateY.value = 0;
+      } else {
+        translateY.value = SCREEN_HEIGHT;
+        translateY.value = withTiming(0, {
+          duration: DETAIL_ENTER_MS,
+          easing: DETAIL_BEZIER,
+        });
+      }
       // W5 Task C 7.1 — `detail_opened` 발사는 호출처가 담당.
     } else {
-      // 2026-07-10 — 닫힘 시 translateY 리셋 금지 (닫힘 모션 2회 재생 회귀).
-      // swipe-down 으로 SCREEN_HEIGHT 까지 보낸 직후 여기서 0 으로 되돌리면 Modal
-      // 의 slide 퇴장 애니메이션이 아직 재생 중이라 시트가 복귀한 채 한 번 더
-      // 내려가는 게 보인다. 리셋은 다음 open (visible=true 분기) 이 담당.
-      // 2026-06-15 (build 27) — history 도 초기화. 다음 진입 시 clean state.
+      // 2026-06-15 (build 27) — history 초기화. 다음 진입 시 clean state.
       setHistory([]);
       setCurrentIndex(0);
       setSubScreen(null);
       setRelated(null);
-      // 2026-07-12 — swipe 닫힘의 animationType='none' 원복. 이 effect 는 dismiss
-      // commit 이후에 돌므로 (native dismiss 는 이미 none 으로 발화) 다음 open 의
-      // 진입 slide 는 온전히 유지된다. visible=true 분기에서 원복하면 present
-      // commit 시점에 아직 'none' 이라 진입 슬라이드가 사라짐 — 여기가 유일한 지점.
-      setInstantExit(false);
     }
     // Reanimated 4 Fabric crash 메모리 정합 — unmount 시 worklet cleanup.
     return () => {
@@ -616,11 +616,21 @@ export default function DetailSheet({
     [handleRelatedClick, subScreen],
   );
 
-  // 2026-07-12 — swipe-down 닫힘 전용 경로. instantExit 는 onClose 와 같은 배치로
-  // commit 되어 Modal 이 animationType='none' 상태로 dismiss 된다 (모션 2회 방지).
-  function closeFromSwipe() {
-    setInstantExit(true);
-    onClose();
+  // 2026-07-13 — X 버튼/Android back 등 비-드래그 닫힘: 퇴장 슬라이드 후 onClose.
+  // (swipe-down 은 pan onEnd 가 같은 슬라이드를 이미 재생 → 완료 콜백에서 onClose 직행.)
+  // share mode 는 라우트 전환이 닫힘 — 슬라이드 없이 즉시.
+  function closeAnimated() {
+    if (mode === 'share') {
+      onClose();
+      return;
+    }
+    translateY.value = withTiming(
+      SCREEN_HEIGHT,
+      { duration: DETAIL_EXIT_MS, easing: DETAIL_BEZIER },
+      () => {
+        runOnJS(onClose)();
+      },
+    );
   }
 
   // 2026-07-10 — 내부 스크롤을 RNGH 에 편입 (pan 과의 simultaneous 관계용).
@@ -660,14 +670,13 @@ export default function DetailSheet({
       'worklet';
       if (scrollY.value > 0) return;
       if (e.translationY > CLOSE_THRESHOLD || e.velocityY > 1000) {
-        // PR2 — 풀스크린 dismiss: 화면 끝까지 슬라이드 후 onClose 호출.
-        // 2026-07-12 — 퇴장 슬라이드는 이 translateY 애니메이션 1회가 전부.
-        // Modal slide 퇴장이 겹치면 닫힘 모션 2회 → closeFromSwipe 가 'none' 전환.
+        // 퇴장 슬라이드는 이 translateY 애니메이션 1회가 전부 (Modal 은 무애니메이션).
+        // 드래그 변위에서 이어서 내려가고, dim 도 translateY 연동으로 함께 걷힘.
         translateY.value = withTiming(
           SCREEN_HEIGHT,
           { duration: DETAIL_EXIT_MS, easing: DETAIL_BEZIER },
           () => {
-            runOnJS(closeFromSwipe)();
+            runOnJS(onClose)();
           },
         );
       } else {
@@ -681,6 +690,16 @@ export default function DetailSheet({
 
   const sheetStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
+  }));
+  // 2026-07-13 — 드래그 변위 연동 dim (SearchSheet dimStyle 정합). 시트가 내려간
+  // 만큼 뒤 Discover 가 밝아짐 — 손을 떼지 않은 드래그에서 후방 노출.
+  const dimStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateY.value,
+      [0, SCREEN_HEIGHT],
+      [1, 0],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   async function handleShare() {
@@ -805,10 +824,15 @@ export default function DetailSheet({
   // overlay 패턴 필요.
   const ContainerView = (
     <View
-      style={styles.root}
+      // detail mode 는 transparent Modal — root 는 투명, dim 이 후방 밝기 담당.
+      // share mode 는 풀스크린 라우트 — 기존 불투명 bg 유지.
+      style={[styles.root, mode !== 'share' && styles.rootTransparent]}
       accessibilityViewIsModal
       accessibilityLabel={`${rec.title} 상세 정보`}
     >
+      {mode !== 'share' ? (
+        <Animated.View style={[styles.dim, dimStyle]} pointerEvents="none" />
+      ) : null}
       <GestureDetector gesture={pan}>
           <Animated.View style={[styles.sheet, sheetStyle]}>
             {/* 2026-07-10 — Gesture.Native 래핑: 스크롤 recognizer 를 RNGH 에 편입해
@@ -1163,7 +1187,7 @@ export default function DetailSheet({
                 ) : null}
                 <Pressable
                   style={styles.topNavBtn}
-                  onPress={onClose}
+                  onPress={closeAnimated}
                   hitSlop={12}
                   accessibilityLabel="닫기"
                   accessibilityRole="button"
@@ -1316,11 +1340,13 @@ export default function DetailSheet({
   }
 
   return (
+    // 2026-07-13 — transparent + animationType="none": 진입/퇴장/드래그 전부
+    // reanimated translateY 단일 주체 (SearchSheet 정합). 드래그 중 후방 노출.
     <Modal
       visible={visible}
-      animationType={instantExit ? 'none' : 'slide'}
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
+      animationType="none"
+      transparent
+      onRequestClose={closeAnimated}
       statusBarTranslucent
     >
       {ContainerView}
@@ -1810,6 +1836,14 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bg,
+  },
+  // 2026-07-13 — detail mode (transparent Modal) 전용. 후방 노출은 dim 이 담당.
+  rootTransparent: {
+    backgroundColor: 'transparent',
+  },
+  dim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlayHeavy,
   },
   sheet: {
     flex: 1,
