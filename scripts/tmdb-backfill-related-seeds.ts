@@ -22,8 +22,12 @@
  *   --limit N         최대 N 행 처리 후 종료 (기본 무제한)
  *   --dry-run         TMDB 만 호출, DB 쓰기 없음 (소량 검증용: --dry-run --limit 5)
  *   --providers-only  providers IS NOT NULL 행만 (추천 모집단 우선 백필)
+ *                     ⚠️ pending partial index 가 providers 조건을 안 포함해 대량 잔여 상태에선
+ *                     pull 이 statement timeout 남 (2026-07-15 실측). 전체 백필 사용 권장.
  *   --rps N           TMDB rate limit (기본 30, 한도 40 대비 여유)
  *   --page N          DB pull 페이지 크기 (기본 500)
+ *   --concurrency N   페이지 내 동시 처리 행 수 (기본 12). 직렬 처리는 TMDB 왕복 지연으로
+ *                     ~3행/s 에 묶임 (실측) — rps 한도는 RateLimiter 가 별도 보장.
  *
  * TMDB 호출: 행당 detail + credits 2콜 (providers/watch 는 건너뜀 — seeds 만 필요).
  */
@@ -62,6 +66,7 @@ const DRY_RUN = argFlag("--dry-run");
 const PROVIDERS_ONLY = argFlag("--providers-only");
 const RPS = Number(argVal("--rps") ?? "30");
 const PULL_PAGE = Number(argVal("--page") ?? "500");
+const CONCURRENCY = Math.max(1, Number(argVal("--concurrency") ?? "12"));
 
 type MetaRow = { tmdb_id: number; media_type: MediaType };
 type SeedUpdate = {
@@ -127,34 +132,46 @@ async function main(): Promise<void> {
     if (page.length === 0) break;
     cursorId = page[page.length - 1].tmdb_id;
 
+    const targets = Number.isFinite(LIMIT)
+      ? page.slice(0, Math.max(0, LIMIT - processed))
+      : page;
     const batch: SeedUpdate[] = [];
-    for (const r of page) {
-      if (processed >= LIMIT) break;
-      try {
-        const [detail, credits] = await Promise.all([
-          tmdbGet(r, "", limiter, TMDB_API_KEY!),
-          tmdbGet(r, "/credits", limiter, TMDB_API_KEY!),
-        ]);
-        const seeds = extractRelatedSeeds(r, detail, credits);
-        batch.push({
-          tmdb_id: r.tmdb_id,
-          media_type: r.media_type,
-          ...seeds,
-          related_seeds_fetched_at: now,
-        });
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const chunk = targets.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(
+        chunk.map(async (r): Promise<SeedUpdate | null> => {
+          try {
+            const [detail, credits] = await Promise.all([
+              tmdbGet(r, "", limiter, TMDB_API_KEY!),
+              tmdbGet(r, "/credits", limiter, TMDB_API_KEY!),
+            ]);
+            const seeds = extractRelatedSeeds(r, detail, credits);
+            return {
+              tmdb_id: r.tmdb_id,
+              media_type: r.media_type,
+              ...seeds,
+              related_seeds_fetched_at: now,
+            };
+          } catch (err) {
+            // TMDB 영구 실패(삭제된 id 등) → 마커 SET 안 함 = 다음 재실행에서 재시도.
+            // 반복 실패 id 는 소수라 무한루프 위험 낮음(재실행 시 커서로 지나침).
+            failed += 1;
+            console.warn(
+              `[backfill] ${r.media_type}/${r.tmdb_id} fetch 실패: ${(err as Error).message}`,
+            );
+            return null;
+          }
+        }),
+      );
+      for (const u of results) {
+        if (!u) continue;
+        batch.push(u);
         processed += 1;
         if (DRY_RUN) {
           console.log(
-            `[dry-run] ${r.media_type}/${r.tmdb_id} → collection=${seeds.collection_id} director=${seeds.director_tmdb_id}`,
+            `[dry-run] ${u.media_type}/${u.tmdb_id} → collection=${u.collection_id} director=${u.director_tmdb_id}`,
           );
         }
-      } catch (err) {
-        // TMDB 영구 실패(삭제된 id 등) → 마커 SET 안 함 = 다음 재실행에서 재시도.
-        // 반복 실패 id 는 소수라 무한루프 위험 낮음(재실행 시 커서로 지나침).
-        failed += 1;
-        console.warn(
-          `[backfill] ${r.media_type}/${r.tmdb_id} fetch 실패: ${(err as Error).message}`,
-        );
       }
     }
 
