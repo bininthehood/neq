@@ -28,6 +28,11 @@
  *   --page N          DB pull 페이지 크기 (기본 500)
  *   --concurrency N   페이지 내 동시 처리 행 수 (기본 12). 직렬 처리는 TMDB 왕복 지연으로
  *                     ~3행/s 에 묶임 (실측) — rps 한도는 RateLimiter 가 별도 보장.
+ *   --cursor N        keyset 시작 커서 (기본 -1). 마커 UPDATE 가 pending partial index 에
+ *                     dead entry 를 누적시켜, 재시작 시 -1 부터 훑으면 첫 pull 이 statement
+ *                     timeout (2026-07-15 실측, ~52K 처리 후). 직전 런의 마지막 cursor 로
+ *                     이어 달릴 것. 커서 이전의 fetch 실패 잔여분은 vacuum 후 -1 로 최종
+ *                     1회 회수.
  *
  * TMDB 호출: 행당 detail + credits 2콜 (providers/watch 는 건너뜀 — seeds 만 필요).
  */
@@ -67,6 +72,7 @@ const PROVIDERS_ONLY = argFlag("--providers-only");
 const RPS = Number(argVal("--rps") ?? "30");
 const PULL_PAGE = Number(argVal("--page") ?? "500");
 const CONCURRENCY = Math.max(1, Number(argVal("--concurrency") ?? "12"));
+const START_CURSOR = Number(argVal("--cursor") ?? "-1");
 
 type MetaRow = { tmdb_id: number; media_type: MediaType };
 type SeedUpdate = {
@@ -114,7 +120,7 @@ async function main(): Promise<void> {
   // keyset 페이지네이션: deep OFFSET 은 offset 커질수록 statement timeout → tmdb_id 커서(.gt).
   // related_seeds_fetched_at IS NULL 필터가 처리분을 자동 제외하므로 재실행/중단 안전.
   // 경계에서 같은 tmdb_id 의 다른 media_type 이 드물게 누락될 수 있으나 멱등 재실행으로 회수.
-  let cursorId = -1;
+  let cursorId = START_CURSOR;
   while (processed < LIMIT) {
     let query = admin
       .from("tmdb_metadata")
