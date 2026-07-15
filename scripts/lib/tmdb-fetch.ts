@@ -29,6 +29,10 @@ export type MetadataRow = {
   country: string[] | null;
   origin_country: string[] | null;
   genre_ids: number[] | null;
+  // related 미러 보강 P1 — /api/tmdb/related seeds 단계 미러화용.
+  collection_id: number | null;
+  director_tmdb_id: number | null;
+  related_seeds_fetched_at: string;
   providers:
     | Array<{
         name: string;
@@ -111,6 +115,41 @@ export async function fetchMetadata(
 }
 
 /**
+ * related 미러 보강 P1 — detail+credits 에서 collection_id + director_tmdb_id 추출.
+ *
+ * mapToMetadataRow(크롤 경로) 와 tmdb-backfill-related-seeds(기존 행 백필) 양쪽이 공유.
+ * - collection_id: movie 의 belongs_to_collection.id (TV 는 항상 null — TMDB 미지원)
+ * - director_tmdb_id: crew[job=Director]|department=Directing 첫 항목의 person id
+ */
+export function extractRelatedSeeds(
+  row: { media_type: MediaType },
+  detail: Record<string, unknown>,
+  credits: Record<string, unknown>,
+): { collection_id: number | null; director_tmdb_id: number | null } {
+  const collectionObj = detail.belongs_to_collection as
+    | { id?: number }
+    | null
+    | undefined;
+  const collection_id =
+    row.media_type === "movie" && typeof collectionObj?.id === "number"
+      ? collectionObj.id
+      : null;
+
+  const crew = (credits.crew ?? []) as Array<{
+    id?: number;
+    job?: string;
+    department?: string;
+  }>;
+  const director =
+    crew.find((c) => c.job === "Director") ??
+    crew.find((c) => c.department === "Directing");
+  const director_tmdb_id =
+    typeof director?.id === "number" ? director.id : null;
+
+  return { collection_id, director_tmdb_id };
+}
+
+/**
  * recommend.ts 호환성:
  * - director: job="Director" → department="Directing" 폴백
  * - runtime 시리즈: episode_run_time[0]
@@ -180,6 +219,8 @@ export function mapToMetadataRow(
           .map((g) => g.id)
           .filter((id): id is number => typeof id === "number")
       : null,
+    ...extractRelatedSeeds(row, detail, credits),
+    related_seeds_fetched_at: now,
     providers: extractKoreanProviders(providers),
     watch_link: extractWatchLink(providers),
     providers_fetched_at: now,

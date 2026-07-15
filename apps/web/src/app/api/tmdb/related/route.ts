@@ -6,7 +6,46 @@ import {
   getTMDBRecommendations,
   posterUrl,
 } from "@/lib/tmdb";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import type { RelatedWork, RelatedWorksResponse } from "@neq/core";
+
+type Seeds = {
+  collectionId: number | null;
+  directorId: number | null;
+  directorName: string | null;
+};
+
+/**
+ * seeds 확보 — 미러(tmdb_metadata) 우선, miss/에러 시 TMDB 직접(getRelatedSeeds) fallback.
+ *
+ * 미러 hit 조건: 행 존재 AND related_seeds_fetched_at IS NOT NULL (백필/크롤 완료 마커).
+ *   마커가 있으면 collection_id/director_tmdb_id 가 NULL 이어도 "확정된 값"으로 신뢰 —
+ *   TV 감독 미상 등 정상 NULL 을 miss 로 오인해 불필요한 fallback 하지 않도록.
+ * fallback: 행 없음 / 마커 NULL(미백필) / Supabase 환경변수 누락 / 조회 오류.
+ *   → 백필 완료 전에도 배포 가능 (전 행 fallback = 기존 동작).
+ */
+async function resolveSeeds(id: number, type: "movie" | "series"): Promise<Seeds> {
+  const mediaType = type === "series" ? "tv" : "movie";
+  try {
+    const { data, error } = await supabaseAdmin()
+      .from("tmdb_metadata")
+      .select("collection_id, director_tmdb_id, director, related_seeds_fetched_at")
+      .eq("media_type", mediaType) // PK=(tmdb_id, media_type) — media_type 필수 (movie/TV id 공간 독립)
+      .eq("tmdb_id", id)
+      .maybeSingle();
+
+    if (!error && data && data.related_seeds_fetched_at) {
+      return {
+        collectionId: (data.collection_id as number | null) ?? null,
+        directorId: (data.director_tmdb_id as number | null) ?? null,
+        directorName: (data.director as string | null) ?? null,
+      };
+    }
+  } catch {
+    // env 누락 / 조회 오류 → TMDB 직접 경로로 fallback
+  }
+  return getRelatedSeeds(id, type);
+}
 
 /**
  * TMDB 관련 작품 통합 endpoint — F3 DetailSheet 가로 카로셀용.
@@ -29,7 +68,9 @@ import type { RelatedWork, RelatedWorksResponse } from "@neq/core";
  * "관련 작품 비어있음" 케이스가 거의 사라진다 (예: 반지의 제왕 → 호빗 시리즈 (collection),
  * 인터스텔라 → 그래비티/마션 (recommendations)).
  *
- * 옵션 A (직접 호출) 채택. 미러 보강(belongs_to_collection_id 컬럼)은 latency 모니터링 후 별도 결정.
+ * P1 미러 보강 (2026-07-15): Step 1 seeds 를 tmdb_metadata(collection_id/director_tmdb_id)
+ *   미러 조회로 치환 → 왕복 2→1. 미러 miss(미백필/행없음/오류) 시 TMDB 직접(getRelatedSeeds) fallback.
+ *   Step 2 (collection parts / person credits / recommendations) 는 여전히 TMDB 직접 (Phase 2 범위).
  */
 export async function GET(req: NextRequest) {
   const idParam = req.nextUrl.searchParams.get("work_id");
@@ -43,8 +84,8 @@ export async function GET(req: NextRequest) {
   const type: "movie" | "series" =
     rawType === "series" ? "series" : "movie";
 
-  // Step 1: 작품 메타에서 collectionId / directorId 동시 추출
-  const seeds = await getRelatedSeeds(id, type);
+  // Step 1: 작품 메타에서 collectionId / directorId 동시 추출 (미러 우선, miss 시 TMDB fallback)
+  const seeds = await resolveSeeds(id, type);
 
   // Step 2: collection + person credits + recommendations 병렬 호출
   // recommendations 는 seeds 와 무관 (work id 만 필요) 이지만 동일 단계에 묶어 latency 최소화.

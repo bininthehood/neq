@@ -13,8 +13,13 @@
  *  9) TMDB 4xx/5xx 모두 graceful → 빈 응답 (200) 반환
  *  10) 사용자 직접 테스트 #4 — recommendations 필드 매핑 + popularity desc + top 8 컷
  *  11) recommendations 가 collection/directorWorks 와 dedup (양쪽 등장 작품 제거)
+ *  12) 미러 hit (P1) — 마커 SET 행 반환 시 미러 seeds 사용 + seeds 용 TMDB detail/credits 미호출
+ *      (movie: collection 有 / tv: collection NULL + director 만, media_type eq 스레딩)
  *
  * 모킹 패턴은 /api/search route 테스트와 동일 — fetchMock + vi.resetModules.
+ * 기존 1~11 테스트는 supabase-admin 미stub(env 없음 → supabaseAdmin throw) →
+ *   resolveSeeds catch → TMDB fallback 경로를 검증(P1 이전 동작과 동일 = 무회귀).
+ * 미러 hit 테스트만 vi.doMock("@/lib/supabase-admin") 으로 마커 SET 행 주입.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -65,6 +70,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.doUnmock("@/lib/supabase-admin"); // 미러 hit 테스트의 doMock 이 이후 테스트로 누수 방지
 });
 
 describe("GET /api/tmdb/related", () => {
@@ -440,5 +446,122 @@ describe("GET /api/tmdb/related", () => {
     expect(body.collection.works[0]).toMatchObject({ id: 201, year: "2012" });
     expect(body.directorWorks).toEqual([]);
     expect(body.directorName).toBeNull();
+  });
+
+  // ---- P1 미러 hit 경로 (WARN-C) ----------------------------------------
+
+  /** supabaseAdmin stub — from().select().eq().eq().maybeSingle() 체인이 row 를 반환. */
+  function mockMirror(row: Record<string, unknown> | null) {
+    const eqCalls: Array<[string, unknown]> = [];
+    const chain = {
+      select: vi.fn(() => chain),
+      eq: vi.fn((col: string, val: unknown) => {
+        eqCalls.push([col, val]);
+        return chain;
+      }),
+      maybeSingle: vi.fn(async () => ({ data: row, error: null })),
+    };
+    vi.doMock("@/lib/supabase-admin", () => ({
+      supabaseAdmin: () => ({ from: vi.fn(() => chain) }),
+    }));
+    return { eqCalls };
+  }
+
+  it("미러 hit (movie): 미러 seeds 사용 + seeds 용 TMDB detail/credits 미호출", async () => {
+    const { eqCalls } = mockMirror({
+      collection_id: 119,
+      director_tmdb_id: 578,
+      director: "Peter Jackson",
+      related_seeds_fetched_at: "2026-07-15T00:00:00Z",
+    });
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/collection/119")) {
+        return mockOk({
+          id: 119,
+          name: "반지의 제왕 컬렉션",
+          parts: [
+            { id: 121, title: "두 개의 탑", poster_path: "/p2.jpg", release_date: "2002-12-18" },
+          ] as PartRaw[],
+        });
+      }
+      if (url.includes("/person/578/movie_credits")) {
+        return mockOk({
+          cast: [],
+          crew: [
+            { id: 999, title: "킹콩", job: "Director", popularity: 50, release_date: "2005-12-14" },
+          ] as CrewMemberRaw[],
+        });
+      }
+      if (url.includes("/movie/120/recommendations")) {
+        return mockOk({ results: [] });
+      }
+      return mockFail(404);
+    });
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=120&type=movie"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // 미러 seeds 가 실제 사용됨 — collection 119 + director 578 경로로 응답 채워짐
+    expect(body.collection?.id).toBe(119);
+    expect(body.collection.works).toHaveLength(1);
+    expect(body.directorWorks).toHaveLength(1);
+    expect(body.directorWorks[0].id).toBe(999);
+    // directorName 은 미러 `director` 컬럼에서
+    expect(body.directorName).toBe("Peter Jackson");
+
+    // seeds 확보용 TMDB detail/credits 호출이 없어야 함 (왕복 2→1 의 실체)
+    const calledUrls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes("/movie/120?"))).toBe(false);
+    expect(calledUrls.some((u) => u.includes("/movie/120/credits"))).toBe(false);
+
+    // media_type eq 스레딩 (PK=(tmdb_id, media_type))
+    expect(eqCalls).toContainEqual(["media_type", "movie"]);
+    expect(eqCalls).toContainEqual(["tmdb_id", 120]);
+  });
+
+  it("미러 hit (tv): collection NULL 정상 + director 만 사용, fallback 미발생", async () => {
+    const { eqCalls } = mockMirror({
+      collection_id: null, // TV 는 collection 미지원 — 마커 SET 이므로 확정 NULL (fallback 아님)
+      director_tmdb_id: 900,
+      director: "Showrunner",
+      related_seeds_fetched_at: "2026-07-15T00:00:00Z",
+    });
+
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/person/900/tv_credits")) {
+        return mockOk({
+          cast: [],
+          crew: [
+            { id: 880, name: "다른시리즈", job: "Director", popularity: 60, first_air_date: "2019-03-01" },
+          ] as CrewMemberRaw[],
+        });
+      }
+      if (url.includes("/tv/77/recommendations")) {
+        return mockOk({ results: [] });
+      }
+      return mockFail(404);
+    });
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=77&type=series"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.collection).toBeNull();
+    expect(body.directorWorks).toHaveLength(1);
+    expect(body.directorWorks[0]).toMatchObject({ id: 880, mediaType: "tv" });
+    expect(body.directorName).toBe("Showrunner");
+
+    // seeds 용 /tv/77 detail·credits 미호출 (마커 SET → 확정값 신뢰, fallback 없음)
+    const calledUrls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes("/tv/77?"))).toBe(false);
+    expect(calledUrls.some((u) => u.includes("/tv/77/credits"))).toBe(false);
+
+    // series → tv 로 media_type 스레딩
+    expect(eqCalls).toContainEqual(["media_type", "tv"]);
+    expect(eqCalls).toContainEqual(["tmdb_id", 77]);
   });
 });
