@@ -24,7 +24,6 @@ import {
   IconChevronRight,
   IconMoreVertical,
 } from './Icons';
-import { WebView } from 'react-native-webview';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
@@ -52,39 +51,7 @@ import { track } from '../lib/analytics';
 import { env } from '../lib/env';
 import { isSaved, toggleSaved } from '../lib/store';
 
-const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
-// 2026-07-12 — hero 인라인 트레일러 (16:9). hero 컨테이너 높이는 불변 — 상단에
-// 비디오만 오버레이 (레이아웃 점프 0, 타이틀/배지 존 유지).
-const HERO_VIDEO_HEIGHT = Math.round((SCREEN_WIDTH * 9) / 16);
-
-// 자체 HTML 래퍼 + YouTube IFrame API. 시뮬 실측 (2026-07-12) 근거 2건:
-//  1) embed URL 직접 로드는 referer 부재로 오류 153 (플레이어 구성 오류) —
-//     WebView source.baseUrl 로 origin/referer 를 부여해야 로드됨.
-//  2) iOS WebKit 은 "이미 음소거된" 비디오만 스크립트 재생 허용 — onReady 에서
-//     mute() → playVideo() 순서를 직접 보장 (react-native-youtube-iframe 은
-//     play → mute 순서 + 브리지 페이지 의존이라 cued 고착, 의존성 제거).
-// 상태는 ReactNativeWebView.postMessage 로 전달: state:1=재생 시작, state:0=종료.
-function heroTrailerHtml(videoKey: string): string {
-  return `<!DOCTYPE html><html><head>
-<meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0">
-<style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}#p{width:100%;height:100%}</style>
-</head><body>
-<div id="p"></div>
-<script src="https://www.youtube.com/iframe_api"></script>
-<script>
-function onYouTubeIframeAPIReady(){
-  new YT.Player('p',{
-    videoId:'${videoKey}',
-    playerVars:{autoplay:0,playsinline:1,controls:1,rel:0,fs:0},
-    events:{
-      onReady:function(e){e.target.mute();e.target.playVideo();},
-      onStateChange:function(e){window.ReactNativeWebView.postMessage('state:'+e.data);},
-      onError:function(e){window.ReactNativeWebView.postMessage('error:'+e.data);}
-    }
-  });
-}
-</script></body></html>`;
-}
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 // PR2 (2026-06-01) — 풀스크린 Modal 전환. swipe-down dismiss 임계는 화면 높이의 30%.
 const CLOSE_THRESHOLD = SCREEN_HEIGHT * 0.25;
 // Hero 440px 캡 + 화면 52% 동적 캡 (C3 명세). iPhone SE (667px) 에서 75% 점유 회피 →
@@ -214,12 +181,6 @@ export default function DetailSheet({
   // /api/tmdb/credits 1회 호출해 사진 채움. 이미 *Member 가 있는 hydrate 경로는 fetch X.
   const [lazyDirectorMember, setLazyDirectorMember] = useState<CastMember | null>(null);
   const [lazyCastMembers, setLazyCastMembers] = useState<CastMember[]>([]);
-  // 2026-07-12 — 대표 트레일러 (YouTube key) lazy fetch. null = 없음 → 스틸 컷 유지.
-  const [trailer, setTrailer] = useState<{ key: string; name: string } | null>(null);
-  // hero 인라인 재생 상태. started 전엔 스틸이 그대로 보임 (플레이어 로딩 은폐),
-  // ended 후 플레이어 unmount → 스틸 복귀.
-  const [heroVideoStarted, setHeroVideoStarted] = useState(false);
-  const [heroVideoEnded, setHeroVideoEnded] = useState(false);
 
   const [related, setRelated] = useState<RelatedWorksResponse | null>(null);
   const [relatedLoading, setRelatedLoading] = useState(false);
@@ -342,33 +303,6 @@ export default function DetailSheet({
       controller.abort();
     };
   }, [visible, rec?.tmdbId, rec?.type, rec?.castMembers, rec?.directorMember, rec?.director, rec?.cast]);
-
-  // 2026-07-12 — 트레일러 lazy fetch (credits 패턴). mirror 는 videos 미보유 →
-  // 시트 오픈/작품 전환 시 라이트 엔드포인트 1회. 실패/없음 = null (섹션 미노출).
-  useEffect(() => {
-    setTrailer(null);
-    setHeroVideoStarted(false);
-    setHeroVideoEnded(false);
-    if (!visible || !rec?.tmdbId) return;
-    let cancelled = false;
-    const controller = new AbortController();
-    const type = rec.type === 'movie' ? 'movie' : 'series';
-    fetch(
-      `${env.API_BASE_URL}/api/tmdb/videos?id=${rec.tmdbId}&type=${type}`,
-      { signal: controller.signal },
-    )
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { trailer: { key: string; name: string } | null } | null) => {
-        if (!cancelled) setTrailer(data?.trailer ?? null);
-      })
-      .catch(() => {
-        // abort or network error — 섹션 미노출 유지
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [visible, rec?.tmdbId, rec?.type]);
 
   // 관련 작품 fetch — 화면 rec 변경 시 마다.
   // 2026-06-04 (P0 fix) — mode='share' 분기는 fetch 자체 skip.
@@ -774,28 +708,6 @@ export default function DetailSheet({
     }
   }
 
-  // 2026-07-12 — hero 인라인 재생 상태 전이 (래퍼 페이지 postMessage 수신).
-  // 음소거 자동재생 (iOS 정책상 mute 필수) — 소리는 사용자가 YouTube 컨트롤로 해제.
-  // state:1 = 재생 시작 (스틸 → 비디오 페이드인), state:0 = 종료 (스틸 복귀),
-  // error:* = 임베드 불가/구성 오류 → 스틸 복귀 (빈 플레이어 노출 방지).
-  function onHeroTrailerMessage(msg: string) {
-    if (msg === 'state:1') {
-      if (!heroVideoStarted) {
-        setHeroVideoStarted(true);
-        if (rec && trailer) {
-          track('trailer_opened', {
-            tmdb_id: rec.tmdbId,
-            title: rec.title,
-            video_key: trailer.key,
-            source: mode === 'share' ? 'native_share_hero' : 'native_detail_hero',
-          });
-        }
-      }
-    } else if (msg === 'state:0' || msg.startsWith('error:')) {
-      setHeroVideoEnded(true);
-    }
-  }
-
   if (!rec) return null;
 
   const heroSrc = rec.backdrop || rec.posterUrl;
@@ -872,30 +784,6 @@ export default function DetailSheet({
                   style={StyleSheet.absoluteFill}
                   pointerEvents="none"
                 />
-                {/* 2026-07-12 — hero 인라인 트레일러. 스틸/gradient/타이틀 존은 그대로
-                    두고 상단 16:9 영역에만 플레이어 오버레이 — started 전엔 투명
-                    (스틸이 로딩 은폐), ended 시 unmount (스틸 복귀). 레이아웃 점프 0. */}
-                {trailer && !heroVideoEnded ? (
-                  <View
-                    style={[
-                      styles.heroVideo,
-                      { top: insets.top, height: HERO_VIDEO_HEIGHT },
-                      !heroVideoStarted && { opacity: 0 },
-                    ]}
-                    pointerEvents={heroVideoStarted ? 'auto' : 'none'}
-                  >
-                    <WebView
-                      style={{ width: SCREEN_WIDTH, height: HERO_VIDEO_HEIGHT, backgroundColor: 'transparent' }}
-                      // key 변경 시 래퍼 재로드 (관련작 이동 등 rec 전환)
-                      key={trailer.key}
-                      source={{ html: heroTrailerHtml(trailer.key), baseUrl: 'https://neq.me' }}
-                      allowsInlineMediaPlayback
-                      mediaPlaybackRequiresUserAction={false}
-                      scrollEnabled={false}
-                      onMessage={(e) => onHeroTrailerMessage(e.nativeEvent.data)}
-                    />
-                  </View>
-                ) : null}
                 <View style={styles.heroBody}>
                   <View style={styles.heroBadges}>
                     <View style={styles.ratingPill}>
@@ -2090,14 +1978,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontWeight: '500',
-  },
-  // 2026-07-12 — hero 인라인 트레일러 오버레이 (16:9, 상단 고정. top 은 인라인
-  // insets.top — 노치/Dynamic Island 아래부터 시작해 영상 가림 방지).
-  heroVideo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surfaceSunken,
   },
   noProviders: {
     color: colors.textMuted,
