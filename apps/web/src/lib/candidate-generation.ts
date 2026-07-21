@@ -930,6 +930,16 @@ export async function generateCandidates(
   // 연도 범위
   const dateRange = yearFilterToRange(filter.year);
 
+  // A' (2026-07-21, 1.0.4 latency 백포트) — exclude 를 SQL `NOT IN` 에서 빼고 post-fetch
+  //   blockSet 으로만 거른다 (아래 §NOTE). 그만큼 결과가 줄어드므로 fetch limit 을
+  //   최대 차단 수(excludeIds + favoriteTmdbIds)만큼 보정. 상한(5000)으로 무한 overfetch
+  //   (rating-DESC 인덱스 정렬 이득 상쇄) 차단.
+  const excludeOverfetch = Math.min(
+    excludeIds.length + (profile.favoriteTmdbIds?.length ?? 0),
+    Math.max(0, 5000 - poolSize * 2),
+  );
+  const overfetchLimit = poolSize * 2 + excludeOverfetch;
+
   // -- SQL 빌더 --
   // KR 가용 = providers IS NOT NULL (mirror parity §providers TTL 30일 fresh 가정).
   // genre_ids 매칭은 PostgreSQL `&&` (overlap) 연산자 — pg_array 인덱스 활용 가능.
@@ -969,18 +979,16 @@ export async function generateCandidates(
       // supabase-js 의 .or() 는 비교 연산자 표현이 제한적이라 client 후처리 채택.
     }
 
-    // excludeIds — TMDB id NOT IN. Supabase 의 `.not("tmdb_id", "in", "(...)")` 패턴.
-    // PostgreSQL IN 파라미터 한계 (~수천) → 클라이언트 측 청크 처리는 caller (B-3) 책임.
-    // 본 모듈은 단순 형식만.
-    if (excludeIds.length > 0) {
-      // .not("tmdb_id", "in", "(...)") — Supabase 는 (...) 안에 정수 콤마구분
-      const idList = excludeIds.join(",");
-      q = q.not("tmdb_id", "in", `(${idList})`);
-    }
+    // excludeIds — 1.0.4 트랙 A' (백포트 2026-07-21): SQL `NOT IN (...)` 제거.
+    //   기존 `.not("tmdb_id", "in", "(${idList})")` 는 excludeIds 가 세션 스와이프로 누적
+    //   (~수백 개) 되면 거대한 IN 리스트가 `rating DESC` 정렬과 결합해 candidates SQL 을
+    //   악화시켰다 (출시 후 cand_p50 808ms→1803ms 회귀의 유력 원인). exclude 는 fetch 후
+    //   §blockSet 에서 post-fetch 필터로 처리한다 — favoriteTmdbIds 와 동일 경로라 이미
+    //   중복 방어였다 (correctness 불변, SQL 만 가벼워짐).
 
     // 상위 N — rating desc + limit. persona_match 는 row 받은 후 재정렬.
-    // pool 후보를 충분히 받기 위해 poolSize × 2 (overfetch) — OTT/origin 클라 후처리 손실 보정.
-    return q.order("rating", { ascending: false }).limit(poolSize * 2);
+    // poolSize × 2 (overfetch, OTT/origin 클라 후처리 손실 보정) + A' exclude 보정분.
+    return q.order("rating", { ascending: false }).limit(overfetchLimit);
   }
 
   async function execQuery(

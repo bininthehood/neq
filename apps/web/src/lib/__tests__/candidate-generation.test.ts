@@ -212,14 +212,13 @@ describe("generateCandidates", () => {
 
     const result = await generateCandidates({}, {}, [100]);
 
-    // movie query 의 .not() 호출에 100 포함 확인
+    // A' (1.0.4 latency 백포트): excludeIds 는 더 이상 SQL `.not("tmdb_id","in",...)` 로
+    // 나가지 않는다 (누적 시 rating-DESC 정렬 악화 → 제거). post-fetch blockSet 이 담당.
     const notCalls = lastMovieQuery?._calls.filter((c) => c.method === "not") ?? [];
-    expect(notCalls.length).toBeGreaterThan(0);
     const tmdbIdNotCall = notCalls.find((c) => c.args[0] === "tmdb_id");
-    expect(tmdbIdNotCall).toBeDefined();
-    expect(String(tmdbIdNotCall?.args[2])).toContain("100");
+    expect(tmdbIdNotCall).toBeUndefined();
 
-    // 결과에 차단된 id 없어야 함 (SQL 단계가 mock 이라 client 측 blockSet 후처리만 동작)
+    // 결과에 차단된 id 없어야 함 (post-fetch blockSet 후처리).
     expect(result.find((r) => r.tmdbId === 100)).toBeUndefined();
     expect(result.find((r) => r.tmdbId === 101)).toBeDefined();
   });

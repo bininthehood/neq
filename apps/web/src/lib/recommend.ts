@@ -40,6 +40,14 @@ import {
 const LLM_RERANK_INPUT = 35;
 const LLM_RERANK_TOPK = 18;
 
+// Phase 0 mirror-first preview (1.0.4 latency 백포트, 2026-07-21) — streaming 정상 경로에서
+//   candidates 완료 직후 동기 rankCandidatesScore 로 상위 N 장을 *즉시* emit → 첫 카드가
+//   LLM(rank_p50 7.7s) 완료 전, candidates 완료 시점(~1-2s)으로 당겨진다. 이후 LLM picks 는
+//   신규 id 만 card 로 추가 (mirror 로 이미 emit 된 id 는 usedIds 로 dedup). 옛 클라이언트는
+//   plain type:card 로 즉시 렌더 (프로토콜 무변경 — 하위호환). reswap(mirror 카드 reason 을
+//   LLM 결과로 교체)은 클라 업데이트 필요 → 후속. 참고: `_workspace/03_rec_changes-...`.
+const MIRROR_PREVIEW = 10;
+
 // P3 exploration — 50장 중 예약할 epsilon 슬롯(취향 풀 밖 양질작). REC_EXPLORE_ENABLED gate.
 const EXPLORE_SLOTS = 4;
 import {
@@ -883,7 +891,39 @@ export async function getRecommendationsStreaming(
   const usedTitles = new Set<string>();
   let phase1Count = 0;
 
-  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지)
+  // ── Phase 0 (mirror-first emit) — 첫 카드를 LLM 게이트에서 분리 ──
+  //   이미 fetch 된 tmdbCandidates 를 동기 score 랭킹 → 상위 MIRROR_PREVIEW 장 즉시 emit.
+  //   외부 호출/await 0 → candidates 완료 직후 사용자에게 첫 카드가 도착한다.
+  //   usedIds 등록 → Phase 1 LLM 이 같은 id 를 다시 pick 해도 dedup 으로 skip.
+  const tMirror = performance.now();
+  {
+    const scored = rankCandidatesScore({
+      candidates: tmdbCandidates,
+      favorites,
+      feedback,
+      savedCount,
+      onboardingCount,
+      tasteGenres,
+      subscribedOttIds: subscribedOtt,
+      tasteSummary,
+      excludeCount: matchedIdsSet.size,
+      count: MIRROR_PREVIEW,
+    });
+    for (const { id, reason } of scored.picks) {
+      if (phase1Count >= MIRROR_PREVIEW) break;
+      const tc = candidateById.get(id);
+      if (!tc || usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) continue;
+      const enriched = tmdbCandidateToEnriched(tc);
+      usedIds.add(tc.tmdbId);
+      usedTitles.add(tc.title);
+      phase1Count += 1;
+      callbacks.onCard(buildRecommendationObject(enriched, reason));
+    }
+  }
+  mark("mirror", tMirror);
+
+  // Phase 1: rankCandidatesLLMStreaming — stream pick → 즉시 onCard (buffer 금지).
+  //   mirror 가 이미 emit 한 id 는 usedIds dedup 으로 skip → LLM 은 신규 개인화 pick 만 추가.
   const tRank = performance.now();
   // LLM rerank 입력만 ~35 로 캡 (Phase 2 는 아래에서 전체 tmdbCandidates 사용).
   const rankPool = stratifiedSample(
@@ -905,10 +945,12 @@ export async function getRecommendationsStreaming(
       count: 20,
     },
     (pick) => {
-      if (phase1Count >= 20) return;
       const tc = candidateById.get(pick.id);
       if (!tc) return;
+      // mirror 가 이미 emit 한 카드 → skip (옛 클라는 reswap 미지원 → 재전송/중복 금지).
       if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) return;
+      // mirror(≤10) 위로 LLM 개인화 픽을 최대 20 장까지 추가 → phase1 총 ≤30, 나머지는 phase2.
+      if (phase1Count >= 20 + MIRROR_PREVIEW) return;
       const enriched = tmdbCandidateToEnriched(tc);
       usedIds.add(tc.tmdbId);
       usedTitles.add(tc.title);
