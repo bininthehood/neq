@@ -564,4 +564,153 @@ describe("GET /api/tmdb/related", () => {
     expect(eqCalls).toContainEqual(["media_type", "tv"]);
     expect(eqCalls).toContainEqual(["tmdb_id", 77]);
   });
+
+  // ---- P2 미러 hit 경로 (Phase 2) ----------------------------------------
+
+  /**
+   * P2 supabaseAdmin stub — 테이블/select 컬럼으로 응답 분기.
+   *  - tmdb_metadata + "collection_id..." → seeds (maybeSingle)
+   *  - tmdb_metadata + "...rating"        → director rows (.limit)
+   *  - tmdb_metadata + "embedding"        → embedding row (maybeSingle)
+   *  - tmdb_catalog                       → popularity rows (직접 await = thenable)
+   *  - rpc("match_tmdb_by_embedding")     → 유사작 rows
+   */
+  function mockMirrorP2(opts: {
+    seedsRow: Record<string, unknown> | null;
+    directorRows?: unknown[];
+    catalogRows?: unknown[];
+    embeddingRow?: Record<string, unknown> | null;
+    rpcRows?: unknown[];
+  }) {
+    const eqCalls: Array<[string, unknown]> = [];
+    const rpcCalls: Array<[string, unknown]> = [];
+
+    const list = (table: string, cols: string) => {
+      if (table === "tmdb_catalog") return { data: opts.catalogRows ?? [], error: null };
+      if (table === "tmdb_metadata" && cols.includes("rating"))
+        return { data: opts.directorRows ?? [], error: null };
+      return { data: [], error: null };
+    };
+    const single = (cols: string) =>
+      cols.includes("embedding")
+        ? { data: opts.embeddingRow ?? null, error: null }
+        : { data: opts.seedsRow, error: null };
+
+    const makeBuilder = (table: string) => {
+      let cols = "";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const b: any = {
+        select: (c: string) => {
+          cols = c;
+          return b;
+        },
+        eq: (col: string, val: unknown) => {
+          eqCalls.push([col, val]);
+          return b;
+        },
+        in: () => b,
+        order: () => b,
+        limit: () => Promise.resolve(list(table, cols)),
+        maybeSingle: () => Promise.resolve(single(cols)),
+        then: (res: (v: unknown) => unknown, rej?: (e: unknown) => unknown) =>
+          Promise.resolve(list(table, cols)).then(res, rej),
+      };
+      return b;
+    };
+
+    vi.doMock("@/lib/supabase-admin", () => ({
+      supabaseAdmin: () => ({
+        from: (table: string) => makeBuilder(table),
+        rpc: (name: string, args: unknown) => {
+          rpcCalls.push([name, args]);
+          return Promise.resolve({ data: opts.rpcRows ?? [], error: null });
+        },
+      }),
+    }));
+    return { eqCalls, rpcCalls };
+  }
+
+  it("미러 directorWorks (트랙1): director_tmdb_id 매칭 + catalog popularity 정렬 + getPersonCredits 미호출", async () => {
+    mockMirrorP2({
+      seedsRow: {
+        collection_id: null,
+        director_tmdb_id: 578,
+        director: "Peter Jackson",
+        related_seeds_fetched_at: "2026-07-21T00:00:00Z",
+      },
+      directorRows: [
+        { tmdb_id: 1001, title: "호빗", poster_path: "/h.jpg", release_date: "2012-12-14", rating: 7.0 },
+        { tmdb_id: 999, title: "킹콩", poster_path: "/k.jpg", release_date: "2005-12-14", rating: 6.5 },
+      ],
+      catalogRows: [
+        { tmdb_id: 1001, popularity: 70 },
+        { tmdb_id: 999, popularity: 50 },
+      ],
+      embeddingRow: null, // recommendations 는 TMDB fallback (아래 fetch []), 본 테스트 관심 밖
+    });
+
+    // 임베딩 없음 → recommendations fallback: /movie/120/recommendations 만 응답
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.includes("/movie/120/recommendations")) return mockOk({ results: [] });
+      return mockFail(404);
+    });
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=120&type=movie"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // catalog popularity(70>50) 순 정렬
+    expect(body.directorWorks).toHaveLength(2);
+    expect(body.directorWorks[0]).toMatchObject({ id: 1001, title: "호빗", year: "2012", mediaType: "movie" });
+    expect(body.directorWorks[1]).toMatchObject({ id: 999, title: "킹콩", year: "2005" });
+    expect(body.directorWorks[0].posterUrl).toContain("w185");
+    expect(body.directorName).toBe("Peter Jackson");
+
+    // 미러 hit → getPersonCredits(/person/578/movie_credits) 미호출
+    const calledUrls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes("/person/578/movie_credits"))).toBe(false);
+  });
+
+  it("미러 recommendations (트랙2): 작품 임베딩 RPC 사용 + getTMDBRecommendations 미호출", async () => {
+    const { rpcCalls } = mockMirrorP2({
+      seedsRow: {
+        collection_id: null,
+        director_tmdb_id: null, // 감독 없음 → directorWorks 미조회
+        director: null,
+        related_seeds_fetched_at: "2026-07-21T00:00:00Z",
+      },
+      embeddingRow: { embedding: [0.1, 0.2, 0.3] },
+      rpcRows: [
+        { tmdb_id: 7777, title: "유사작A", title_en: null, poster_path: "/a.jpg", release_date: "2020-01-01", similarity: 0.9 },
+        { tmdb_id: 7778, title: "유사작B", title_en: null, poster_path: "/b.jpg", release_date: "2019-01-01", similarity: 0.8 },
+      ],
+    });
+
+    // 미러 성공 시 어떤 TMDB 호출도 없어야 함 — 전부 404 로 두어 fallback 진입 시 감지
+    fetchMock.mockResolvedValue(mockFail(404));
+
+    const { GET } = await import("../route");
+    const res = await GET(makeReq("work_id=120&type=movie"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    expect(body.directorWorks).toEqual([]);
+    // similarity DESC 보존 (0.9 → 0.8)
+    expect(body.recommendations).toHaveLength(2);
+    expect(body.recommendations[0]).toMatchObject({ id: 7777, title: "유사작A", year: "2020", mediaType: "movie" });
+    expect(body.recommendations[1]).toMatchObject({ id: 7778, title: "유사작B" });
+    expect(body.recommendations[0].posterUrl).toContain("w185");
+
+    // RPC 호출 인자 — 요청 type=movie / self 제외
+    expect(rpcCalls).toHaveLength(1);
+    const [rpcName, rpcArgs] = rpcCalls[0] as [string, Record<string, unknown>];
+    expect(rpcName).toBe("match_tmdb_by_embedding");
+    expect(rpcArgs.p_media_type).toBe("movie");
+    expect(rpcArgs.p_exclude_ids).toEqual([120]);
+
+    // getTMDBRecommendations(/movie/120/recommendations) 미호출
+    const calledUrls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(calledUrls.some((u) => u.includes("/recommendations"))).toBe(false);
+  });
 });

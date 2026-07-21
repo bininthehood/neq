@@ -372,7 +372,7 @@ const POP_WEIGHT = 0.15;
  * Supabase 가 vector(1536) 컬럼을 JSON 문자열("[...]")로 돌려줄 수 있어 정규화.
  * scripts/tmdb-embed-sanity.ts 의 parseEmbedding 패턴 재사용.
  */
-function parseEmbedding(e: number[] | string | null | undefined): number[] | null {
+export function parseEmbedding(e: number[] | string | null | undefined): number[] | null {
   if (e == null) return null;
   if (Array.isArray(e)) return e;
   try {
