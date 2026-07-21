@@ -15,6 +15,8 @@ import { IconStar } from "@/components/Icons";
 import { ChapterMark } from "./ChapterMark";
 import { RelatedSection } from "./DetailRelated";
 import { DetailHero } from "./DetailHero";
+import { ArrivalProbe } from "./ArrivalProbe";
+import { isArrivalProbeEnabled } from "@/lib/env";
 
 // GH-3 #7 — Synopsis 더보기/접기 토글 임계.
 // 200자 미만은 토글 자체 미노출 (자연스럽게 전체 표시).
@@ -312,7 +314,11 @@ export function DetailBody({
             도 따라감. icon 32→20, padding gap-3 px-4 py-3 → gap-2 px-3 py-2.5,
             min-h-[44px] 모바일 터치 타겟 보장, › arrow + flex-1 + icon placeholder 제거. */}
         {rec.providers.length === 0 ? (
-          <p className="text-sm text-muted py-2">현재 한국 OTT에서 제공 정보를 찾지 못했어요</p>
+          <>
+            <p className="text-sm text-muted py-2">현재 한국 OTT에서 제공 정보를 찾지 못했어요</p>
+            {/* qa WARN — key 에 type 포함 (native 정합). 같은 tmdbId 의 movie/tv 교체 시 remount 보장 */}
+            {isArrivalProbeEnabled() && <ArrivalProbe key={`${rec.type}:${rec.tmdbId}`} rec={rec} />}
+          </>
         ) : (
           <div className="flex flex-wrap gap-2">
             {rec.providers.map((p) => {

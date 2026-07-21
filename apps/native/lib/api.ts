@@ -597,6 +597,29 @@ const GENRE_CHUNK = 200; // route 의 .slice(0,200) 상한과 정합.
  *
  * @returns { [tmdbId]: number[] }. 에러/미매칭 id 는 결과에서 빠짐 (호출자가 skip).
  */
+/**
+ * 입고 알림 프로브 — 타국(US/JP/GB) 구독 가용성 조회 (web /api/tmdb/foreign-availability).
+ * 실패/타임아웃/미가용 시 빈 배열 (호출자가 pill 없이 버튼만 노출).
+ */
+export async function fetchForeignAvailability(
+  tmdbId: number,
+  type: 'movie' | 'series' | 'variety',
+  signal?: AbortSignal,
+): Promise<{ code: string; name: string }[]> {
+  const mt = type === 'movie' ? 'movie' : 'series';
+  try {
+    const res = await fetch(
+      `${env.API_BASE_URL}/api/tmdb/foreign-availability?work_id=${tmdbId}&type=${mt}`,
+      { signal },
+    );
+    if (!res.ok) return [];
+    const data = (await res.json()) as { countries?: { code: string; name: string }[] };
+    return Array.isArray(data.countries) ? data.countries : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchGenresForIds(
   items: GenreFetchItem[],
   signal?: AbortSignal,

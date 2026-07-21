@@ -196,7 +196,10 @@ export type NekoEvent =
   | 'taste_survey_completed'
   | 'taste_summary_generated'
   | 'taste_survey_fallback_triggered'
-  | 'persona_taste_resurveyed';
+  | 'persona_taste_resurveyed'
+  // 입고 알림 프로브 (2026-07-21) — web `apps/web/src/lib/analytics.ts` 정합.
+  | 'arrival_probe_shown'
+  | 'arrival_notify_tapped';
 
 /**
  * 테스트 전용 — 큐 길이를 노출하기 위함. 프로덕션 코드는 사용 X.

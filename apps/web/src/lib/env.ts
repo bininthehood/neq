@@ -43,6 +43,8 @@ function readFlag(name: string): boolean {
       return process.env.NEXT_PUBLIC_NOTIFICATIONS_ENABLED === "true";
     case "NEXT_PUBLIC_SEARCH_GROUPED":
       return process.env.NEXT_PUBLIC_SEARCH_GROUPED === "true";
+    case "NEXT_PUBLIC_ARRIVAL_PROBE_ENABLED":
+      return process.env.NEXT_PUBLIC_ARRIVAL_PROBE_ENABLED === "true";
     default:
       return false;
   }
@@ -57,6 +59,12 @@ export function isNotificationsEnabled(): boolean {
 
 export function isSearchGroupedEnabled(): boolean {
   return readFlag("NEXT_PUBLIC_SEARCH_GROUPED");
+}
+
+// 입고 알림 프로브 (2026-07-21) — 미서비스 상세의 타국 가용성 pill + "알려드릴게요"
+// 버튼. 계측 전용. 기본 OFF. 설계: james-vpn-instore-country-availability-design.
+export function isArrivalProbeEnabled(): boolean {
+  return readFlag("NEXT_PUBLIC_ARRIVAL_PROBE_ENABLED");
 }
 
 // ─────────────────────────────────────────────

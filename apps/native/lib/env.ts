@@ -50,3 +50,10 @@ export const env = {
 // 2026-05-22 — TASTE_GENRES_ENABLED / OTT_WEAK_SIGNAL / ONBOARDING_V2 는
 // default ON 으로 전환됨 (flag 분기 자체 제거). EAS Build env 미등록 시에도 ON.
 // 후속 flag 추가 시 본 파일에 명시 readFlag 패턴 추가.
+
+// 입고 알림 프로브 (2026-07-21) — 미서비스 상세의 타국 가용성 pill + "알려드릴게요"
+// 버튼. 계측 전용. 기본 OFF. web `apps/web/src/lib/env.ts` isArrivalProbeEnabled 정합.
+// EXPO_PUBLIC_* 는 빌드 타임 인라인 — literal access 필수 (dynamic key 금지).
+export function isArrivalProbeEnabled(): boolean {
+  return process.env.EXPO_PUBLIC_ARRIVAL_PROBE_ENABLED === 'true';
+}

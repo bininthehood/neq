@@ -45,10 +45,11 @@ import type {
 } from '../lib/types';
 import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
+import { ArrivalProbe } from './ArrivalProbe';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
 import { track } from '../lib/analytics';
-import { env } from '../lib/env';
+import { env, isArrivalProbeEnabled } from '../lib/env';
 import { isSaved, toggleSaved } from '../lib/store';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -883,9 +884,14 @@ export default function DetailSheet({
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Where to watch · 시청 가능</Text>
                 {watchProviders.length === 0 ? (
-                  <Text style={styles.noProviders}>
-                    현재 한국 OTT에서 제공 정보를 찾지 못했어요
-                  </Text>
+                  <>
+                    <Text style={styles.noProviders}>
+                      현재 한국 OTT에서 제공 정보를 찾지 못했어요
+                    </Text>
+                    {isArrivalProbeEnabled() && (
+                      <ArrivalProbe key={`${rec.type}:${rec.tmdbId}`} rec={rec} />
+                    )}
+                  </>
                 ) : (
                   // 2026-06-04 — detail/share mode 통합 칩(pill) 형태.
                   // 이전: share = 칩, detail = 큰 list (px 16 / py 12 / 32×32 icon + 화살표).

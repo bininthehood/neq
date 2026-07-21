@@ -142,4 +142,8 @@ export type NekoEvent =
   | "taste_survey_completed"        // summarize 성공 + "맞아요" 수락 (전체 duration_ms)
   | "taste_summary_generated"       // summarize 응답 도착 (preview 노출 직전, fallback 여부 포함)
   | "taste_survey_fallback_triggered" // step/summarize 둘 다 — 서버 _fallback 또는 클라 static 진입
-  | "persona_taste_resurveyed";     // "다시 받기" 클릭 — 기존 페르소나 재설문 + 신규 페르소나 retry
+  | "persona_taste_resurveyed"      // "다시 받기" 클릭 — 기존 페르소나 재설문 + 신규 페르소나 retry
+  // 입고 알림 프로브 (2026-07-21) — 미서비스(KR provider 0) 상세의 계측 전용 프로브.
+  // 판정 = arrival_notify_tapped / arrival_probe_shown (person×작품 유니크 집계).
+  | "arrival_probe_shown"           // 버튼 실렌더 + 타국 조회 settle 시점 (tmdb_id, media_type, pill_shown)
+  | "arrival_notify_tapped";        // "알려드릴게요" 탭 (tmdb_id, media_type, foreign_countries). 로컬 dedup — 재탭 미발화
