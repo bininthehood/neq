@@ -43,7 +43,7 @@ import {
 } from "@/components/saved/SavedSortControl";
 import { SavedMonthScrubber } from "@/components/saved/SavedMonthScrubber";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
-import { track } from "@/lib/analytics";
+import { track, trackCardSaved } from "@/lib/analytics";
 import { useToast } from "@neq/design";
 
 // SavedSort 타입은 SavedSortControl 에서 export — 이전 파일 (page.tsx 내부 export) 외부 참조 호환.
@@ -108,7 +108,11 @@ export default function SavedPage() {
     setSortBy(loadSavedSort());
     if (!trackedViewRef.current) {
       trackedViewRef.current = true;
-      track("saved_viewed");
+      const savedCount = getSaved().length;
+      track("saved_viewed", {
+        saved_count: savedCount,
+        has_saved_items: savedCount > 0,
+      });
     }
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
@@ -345,7 +349,8 @@ export default function SavedPage() {
           },
         });
       } else {
-        track("card_saved", {
+        // 이미 Saved 페이지 위라 first-save reward(Saved 진입 action)는 생략 — payload 만 공유.
+        trackCardSaved({
           tmdb_id: id,
           title: rec.title,
           source: "detail_save_button",

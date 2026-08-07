@@ -12,7 +12,7 @@ import {
 import { getAccountPrefs } from "@/lib/account-prefs";
 import { subscribedOttToFilterOTTs } from "@neq/core";
 import { vibrate } from "@/lib/haptics";
-import { track } from "@/lib/analytics";
+import { track, trackCardSaved } from "@/lib/analytics";
 import { getPrimaryCountryName } from "@/lib/country-names";
 import type { Recommendation } from "@/lib/types";
 import type { FilterYear, FilterRating } from "@/lib/discover-types";
@@ -52,6 +52,9 @@ export default function DiscoverPage() {
     return saved ? Number(saved) : 0;
   });
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  // Zero-saved quiet hint — 저장 0개 사용자에게 세션당 1회, save 버튼 근처 저대비 캡션.
+  // 첫 저장 시(또는 이미 저장 이력이 있으면 mount 조건에서) 사라짐.
+  const [saveHintVisible, setSaveHintVisible] = useState(false);
   // Save 흡수 모션 (Stage 4 D1, swipe-stack.jsx) — 아래 스와이프 또는 save 클릭 트리거
   const [saveAbsorbing, setSaveAbsorbing] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
@@ -362,9 +365,13 @@ export default function DiscoverPage() {
       setTimeout(() => setSaveFlash(false), 600);
       return;
     }
-    track("card_saved", { tmdb_id: id, title: current.title, source: reason });
+    const { isFirstSave } = trackCardSaved({ tmdb_id: id, title: current.title, source: reason });
     addSaved(current);
     setSavedIds((s) => new Set(s).add(id));
+    if (isFirstSave) {
+      setSaveHintVisible(false);
+      toast.show("first-save", { onAction: () => router.push("/saved") });
+    }
     // TutorialFlow v3 — save 신호 emit (swipe-down 또는 button 둘 다 카운트)
     setSaveActionCount((c) => c + 1);
     setSaveAbsorbing(true);
@@ -458,13 +465,19 @@ export default function DiscoverPage() {
         });
         return;
       }
-      track("card_saved", {
+      const { isFirstSave } = trackCardSaved({
         tmdb_id: id,
         title: r.title,
         source: "detail_save_button",
       });
       addSaved(r);
       setSavedIds((s) => new Set(s).add(id));
+      if (isFirstSave) {
+        // 첫 저장 reward — undo 대신 Saved 진입 action (자동 이동 없음).
+        setSaveHintVisible(false);
+        toast.show("first-save", { onAction: () => router.push("/saved") });
+        return;
+      }
       toast.show("save", {
         ctx: { title: r.title },
         onAction: () => {
@@ -478,7 +491,7 @@ export default function DiscoverPage() {
         },
       });
     },
-    [savedIds, toast],
+    [savedIds, toast, router],
   );
 
   const handleShare = useCallback(async (r: Recommendation) => {
@@ -521,6 +534,9 @@ export default function DiscoverPage() {
     setMounted(true);
     rec.loadRecs("all", "all");
     setSavedIds(new Set(saved.map((s) => s.recommendation.tmdbId)));
+    if (saved.length === 0 && !sessionStorage.getItem("neq_save_hint_shown")) {
+      setSaveHintVisible(true);
+    }
     return () => { swipe.clearTimers(); rec.abortLoading(); };
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -552,6 +568,14 @@ export default function DiscoverPage() {
       }
     });
   }, [filtered, topIdx]);
+
+  // Zero-saved hint 세션 플래그 — 카드가 실제 보이는 시점에만 소모 기록.
+  // (mount 시점 기록이면 로드 실패/에러 화면 mount 가 노출 없이 1회를 소모함)
+  useEffect(() => {
+    if (saveHintVisible && !tutorialActive && filtered.length > 0) {
+      sessionStorage.setItem("neq_save_hint_shown", "1");
+    }
+  }, [saveHintVisible, tutorialActive, filtered.length]);
 
   // topIdx를 sessionStorage에 저장 (Saved 페이지 왕복 시 복원용)
   useEffect(() => {
@@ -811,6 +835,20 @@ export default function DiscoverPage() {
           overflow: immersive ? "hidden" : "visible",
         }}
       >
+        {/* Zero-saved quiet hint — save 버튼(우측) 방향 정렬, 카드/포스터 위 미덮음.
+            튜토리얼 진행 중엔 중복 안내라 숨김. */}
+        {saveHintVisible && !tutorialActive && (
+          <div
+            className="px-5 pb-1 text-right"
+            style={{
+              fontSize: "var(--text-xs)",
+              color: "var(--text-muted)",
+              letterSpacing: "0.02em",
+            }}
+          >
+            나중에 볼 작품은 아래로 살짝 저장해둘 수 있어요
+          </div>
+        )}
         <ActionBar
           ref={saveBtnRef}
           isSaved={isSaved}

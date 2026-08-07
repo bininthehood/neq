@@ -2,6 +2,8 @@
 
 import posthog from "posthog-js";
 
+import { getSaved } from "./store";
+
 /**
  * Neko 이벤트 트래킹 헬퍼.
  *
@@ -46,6 +48,27 @@ export function track(event: NekoEvent, props?: EventProps) {
   } catch {
     // 실패해도 앱 동작에는 영향 없음
   }
+}
+
+/**
+ * card_saved 공용 emit — 반드시 addSaved() 호출 *전에* 부를 것 (before 카운트 정확성).
+ * saved_count_before/after + is_first_save 동봉. 호출처 3곳:
+ * discover triggerSaveAbsorption / discover·saved handleDetailSaveToggle.
+ */
+export function trackCardSaved(props: {
+  tmdb_id: number;
+  title: string;
+  source: "swipe_down" | "button" | "detail_save_button";
+}): { isFirstSave: boolean } {
+  const before = getSaved().length;
+  const isFirstSave = before === 0;
+  track("card_saved", {
+    ...props,
+    saved_count_before: before,
+    saved_count_after: before + 1,
+    is_first_save: isFirstSave,
+  });
+  return { isFirstSave };
 }
 
 /**

@@ -55,6 +55,7 @@ export type ToastVariant = "success" | "error" | "info";
  */
 export type ToastType =
   | "save"
+  | "first-save"
   | "pass"
   | "remove"
   | "watched"
@@ -130,6 +131,8 @@ export const TOAST_MAX_VISIBLE = 3;
 export function defaultDurationFor(type: ToastType): number {
   if (type === "error") return 4000;
   if (type === "sync-warn") return 3200;
+  // first-save: action("Saved 보기") 읽고 누를 시간 — sync-warn 과 동일 체류
+  if (type === "first-save") return 3200;
   return TOAST_DEFAULT_DURATION;
 }
 
@@ -157,6 +160,13 @@ export function toastCopy(type: ToastType, ctx: ToastContext = {}): ToastCopy {
   switch (type) {
     case "save":
       return { primary: "책장에 담았어요", secondary: title || null, action: "실행 취소" };
+    case "first-save":
+      // 첫 저장 reward — save 와 달리 undo 대신 Saved 진입 action.
+      return {
+        primary: "첫 작품을 담았어요",
+        secondary: "나중에 볼 작품이 하나 생겼어요",
+        action: "Saved 보기",
+      };
     case "pass":
       return { primary: "다음 카드", secondary: "취향 학습에 반영해요", action: "되돌리기" };
     case "remove":
@@ -301,6 +311,7 @@ export function toastV2Styles(type: ToastType): {
 function ToastGlyph({ type, color, size = 18 }: { type: ToastType; color: string; size?: number }) {
   switch (type) {
     case "save":
+    case "first-save":
     case "success":
       return (
         <svg width={size} height={size} viewBox="0 0 18 18" fill="none" aria-hidden="true">
