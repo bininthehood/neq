@@ -50,6 +50,27 @@ const MIRROR_PREVIEW = 10;
 
 // P3 exploration — 50장 중 예약할 epsilon 슬롯(취향 풀 밖 양질작). REC_EXPLORE_ENABLED gate.
 const EXPLORE_SLOTS = 4;
+
+// ── A/B: LLM rerank 픽 수 (2026-08-07) ──────────────────────────────────────
+// rank 단계는 completion-bound 다 — 실측 completion 549 tok @ ~70 tok/s ≈ 7.4s
+// (prompt 5.4K 는 생성 속도와 무관). 출력의 대부분이 픽당 reason 텍스트라
+// 픽 수가 곧 rank latency. 그런데 사용자가 처음 보는 10장은 MIRROR_PREVIEW 가
+// 이미 template reason 으로 emit 하고, phase2 로 채워지는 나머지도 template —
+// 50장 중 30장은 원래 LLM reason 이 아니다. 즉 "LLM 픽 20장" 은 검증된 적 없는 전제.
+// phase2Slots 가 남는 자리를 자동으로 메우므로 총 출력 50장은 arm 과 무관하게 불변.
+const RERANK_CAP_CONTROL = 20;
+const RERANK_CAP_VARIANT = 10;
+
+/**
+ * 호출 단위 50/50 배정. 사용자 단위가 아닌 호출 단위인 이유:
+ *  - 주 지표인 rank latency 는 호출 단위가 오히려 정확하다 (같은 사용자 안에서
+ *    paired 비교 → 기기/네트워크 교란 제거).
+ *  - 요청 body 에 안정적인 사용자 식별자가 없어 서버에서 사용자 단위 고정이 불가.
+ * `rng` 는 테스트 주입용.
+ */
+export function pickRerankCap(rng: () => number = Math.random): number {
+  return rng() < 0.5 ? RERANK_CAP_VARIANT : RERANK_CAP_CONTROL;
+}
 import {
   rankCandidatesLLM,
   rankCandidatesLLMStreaming,
@@ -931,6 +952,16 @@ export async function getRecommendationsStreaming(
     LLM_RERANK_INPUT,
     LLM_RERANK_TOPK,
   );
+  // A/B arm — 이 호출의 LLM 픽 수. count 와 아래 phase1 가드가 반드시 같은 값을
+  // 봐야 한다 (어긋나면 LLM 이 뽑은 픽을 가드가 잘라 arm 이 오염됨).
+  const rerankCap = pickRerankCap();
+  // 측정 채널로 timings 를 쓰는 이유: metaToProps 는 allowlist 라 web/native 클라
+  // 양쪽 배포가 필요하고 native 는 1.0.5 빌드까지 기다려야 한다 (현 트래픽의 80%가
+  // native → 배정만 하고 수집이 안 되는 공백 발생). timingsToProps 는 키를 순회하는
+  // 제네릭이라 **이미 배포된 native 1.0.4 바이너리에서도 그대로 수집**된다.
+  // 대가: 채널 규칙상 `_ms` 접미사가 붙어 `srv_rerank_cap_ms` 가 된다 — 시간이 아니라
+  // 픽 수다. 실험 종료 후 승자를 상수로 굳히면서 이 키도 같이 제거할 것.
+  timings.rerank_cap = rerankCap;
   const usage = await rankCandidatesLLMStreaming(
     {
       candidates: rankPool,
@@ -942,15 +973,15 @@ export async function getRecommendationsStreaming(
       subscribedOttIds: subscribedOtt,
       tasteSummary,
       excludeCount: matchedIdsSet.size,
-      count: 20,
+      count: rerankCap,
     },
     (pick) => {
       const tc = candidateById.get(pick.id);
       if (!tc) return;
       // mirror 가 이미 emit 한 카드 → skip (옛 클라는 reswap 미지원 → 재전송/중복 금지).
       if (usedIds.has(tc.tmdbId) || usedTitles.has(tc.title)) return;
-      // mirror(≤10) 위로 LLM 개인화 픽을 최대 20 장까지 추가 → phase1 총 ≤30, 나머지는 phase2.
-      if (phase1Count >= 20 + MIRROR_PREVIEW) return;
+      // mirror(≤10) 위로 LLM 개인화 픽을 arm 만큼 추가 → 나머지는 phase2 가 채움.
+      if (phase1Count >= rerankCap + MIRROR_PREVIEW) return;
       const enriched = tmdbCandidateToEnriched(tc);
       usedIds.add(tc.tmdbId);
       usedTitles.add(tc.title);
