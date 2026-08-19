@@ -19,6 +19,7 @@
  * 예상 소요: 80,000 × 3 req ÷ 30 req/s ≈ 2.2시간
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { shouldSkipIngest } from "./lib/db-guard";
 import {
   RateLimiter,
   fetchMetadata,
@@ -26,9 +27,15 @@ import {
   type MetadataRow,
 } from "./lib/tmdb-fetch";
 
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
 const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.MIRROR_SUPABASE_URL ??
+  process.env.SUPABASE_URL ??
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY =
+  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const MOVIE_LIMIT = Number(process.env.MOVIE_LIMIT ?? "50000");
 const TV_LIMIT = Number(process.env.TV_LIMIT ?? "30000");
@@ -50,6 +57,10 @@ async function main(): Promise<void> {
   console.log(
     `[tmdb-initial-crawl] 시작 ${startedAt.toISOString()} movie=${MOVIE_LIMIT} tv=${TV_LIMIT} rps=${RATE_LIMIT_RPS}`,
   );
+
+  // 2026-08-18 — 신규 유입 가드. 전체 카탈로그를 큐에 붓는 스크립트라
+  // 임계 도달 시 반드시 막아야 한다 (scripts/lib/db-guard.ts).
+  if (await shouldSkipIngest(admin, "tmdb-initial-crawl")) return;
 
   const movieIds = await pickTopFromCatalog(admin, "movie", MOVIE_LIMIT);
   const tvIds = await pickTopFromCatalog(admin, "tv", TV_LIMIT);

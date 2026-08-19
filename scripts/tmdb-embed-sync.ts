@@ -52,9 +52,15 @@ import {
   type EmbedSourceRow,
 } from "./lib/tmdb-fetch";
 
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
 const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.MIRROR_SUPABASE_URL ??
+  process.env.SUPABASE_URL ??
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY =
+  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const EMBED_MODEL = process.env.EMBED_MODEL ?? "text-embedding-3-small";
 const EMBED_DIM = 1536; // text-embedding-3-small. 모델 교체 시 migration 차원과 동기화.

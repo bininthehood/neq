@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseMirror } from "@/lib/supabase-admin";
 
 /**
  * TMDB id 배열 → genre_ids 매핑. Saved 장르 백필 전용 (mirror-only, TMDB 재호출 없음).
@@ -42,9 +42,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({}, { status: 200 });
   }
 
-  let admin: ReturnType<typeof supabaseAdmin>;
+  let admin: ReturnType<typeof supabaseMirror>;
   try {
-    admin = supabaseAdmin();
+    admin = supabaseMirror();
   } catch {
     return NextResponse.json({ error: "server unavailable" }, { status: 503 });
   }

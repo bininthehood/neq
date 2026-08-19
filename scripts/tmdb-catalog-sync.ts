@@ -14,12 +14,19 @@
  *   4. 이번 사이클에 last_export가 갱신되지 않은 레코드는 soft delete
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { shouldSkipIngest } from "./lib/db-guard";
 import { createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
 
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
 const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.MIRROR_SUPABASE_URL ??
+  process.env.SUPABASE_URL ??
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY =
+  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 const POPULARITY_MIN = Number(process.env.TMDB_POPULARITY_MIN ?? "1.0");
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
@@ -41,6 +48,10 @@ async function main(): Promise<void> {
   const dateStr = tmdbExportDate(startedAt);
 
   console.log(`[tmdb-catalog-sync] 시작 ${startedAt.toISOString()} (date=${dateStr}, popularity>=${POPULARITY_MIN})`);
+
+  // 2026-08-18 — 신규 유입 가드. 이 스크립트는 카탈로그를 늘리는 쪽이라
+  // 임계 도달 시 전체를 skip 한다 (scripts/lib/db-guard.ts).
+  if (await shouldSkipIngest(admin, "tmdb-catalog-sync")) return;
 
   const movie = await syncType(admin, "movie", dateStr);
   console.log(`[tmdb-catalog-sync] movie:`, movie);

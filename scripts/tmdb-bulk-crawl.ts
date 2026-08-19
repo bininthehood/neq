@@ -16,6 +16,7 @@
  *   6. failed_count >= MAX_FAILURES(5) 이면 큐에서 삭제 (dead letter는 향후)
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { checkDbGuard } from "./lib/db-guard";
 import {
   RateLimiter,
   fetchMetadata,
@@ -23,9 +24,15 @@ import {
   type MetadataRow,
 } from "./lib/tmdb-fetch";
 
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
 const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.MIRROR_SUPABASE_URL ??
+  process.env.SUPABASE_URL ??
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY =
+  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
+  process.env.SUPABASE_SERVICE_ROLE_KEY;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const BATCH_SIZE = Number(process.env.TMDB_BULK_BATCH ?? "2000");
 const RATE_LIMIT_RPS = Number(process.env.TMDB_RATE_LIMIT_RPS ?? "30");
@@ -53,6 +60,16 @@ async function main(): Promise<void> {
   console.log(
     `[tmdb-bulk-crawl] 시작 ${startedAt.toISOString()} batch=${BATCH_SIZE} rps=${RATE_LIMIT_RPS}`,
   );
+
+  // 2026-08-18 — 큐 소비자. 큐에 무엇이 들어오는지는 유입 스크립트(catalog-sync /
+  // initial-crawl)의 가드가 통제하므로, 여기서는 halt 만 본다. refreshOnly 단계에서
+  // 큐에 남는 건 갱신분이고 그건 계속 처리해야 한다 (라이선스 180일 의무).
+  const guard = await checkDbGuard(admin, "tmdb-bulk-crawl");
+  console.log(`[tmdb-bulk-crawl] db-guard: ${guard.summary}`);
+  if (guard.level === "halt") {
+    console.warn("[tmdb-bulk-crawl] DB 크기 전면 중단선 초과 — 종료");
+    return;
+  }
 
   const queueRows = await pullQueue(admin, BATCH_SIZE);
   console.log(`[tmdb-bulk-crawl] 큐에서 ${queueRows.length}건 pull`);

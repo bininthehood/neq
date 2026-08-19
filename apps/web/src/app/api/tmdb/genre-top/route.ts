@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseMirror } from "@/lib/supabase-admin";
 import type { RelatedWork } from "@neq/core";
 
 /**
@@ -42,9 +42,9 @@ export async function GET(req: NextRequest) {
   const limitRaw = Number(req.nextUrl.searchParams.get("limit"));
   const limit = Math.min(Number.isInteger(limitRaw) && limitRaw > 0 ? limitRaw : 30, 50);
 
-  let admin: ReturnType<typeof supabaseAdmin>;
+  let admin: ReturnType<typeof supabaseMirror>;
   try {
-    admin = supabaseAdmin();
+    admin = supabaseMirror();
   } catch {
     return NextResponse.json({ error: "server unavailable" }, { status: 503 });
   }

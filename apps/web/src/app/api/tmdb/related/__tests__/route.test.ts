@@ -17,7 +17,7 @@
  *      (movie: collection 有 / tv: collection NULL + director 만, media_type eq 스레딩)
  *
  * 모킹 패턴은 /api/search route 테스트와 동일 — fetchMock + vi.resetModules.
- * 기존 1~11 테스트는 supabase-admin 미stub(env 없음 → supabaseAdmin throw) →
+ * 기존 1~11 테스트는 supabase-admin 미stub(env 없음 → supabaseMirror throw) →
  *   resolveSeeds catch → TMDB fallback 경로를 검증(P1 이전 동작과 동일 = 무회귀).
  * 미러 hit 테스트만 vi.doMock("@/lib/supabase-admin") 으로 마커 SET 행 주입.
  */
@@ -450,7 +450,7 @@ describe("GET /api/tmdb/related", () => {
 
   // ---- P1 미러 hit 경로 (WARN-C) ----------------------------------------
 
-  /** supabaseAdmin stub — from().select().eq().eq().maybeSingle() 체인이 row 를 반환. */
+  /** supabaseMirror stub — from().select().eq().eq().maybeSingle() 체인이 row 를 반환. */
   function mockMirror(row: Record<string, unknown> | null) {
     const eqCalls: Array<[string, unknown]> = [];
     const chain = {
@@ -462,7 +462,7 @@ describe("GET /api/tmdb/related", () => {
       maybeSingle: vi.fn(async () => ({ data: row, error: null })),
     };
     vi.doMock("@/lib/supabase-admin", () => ({
-      supabaseAdmin: () => ({ from: vi.fn(() => chain) }),
+      supabaseMirror: () => ({ from: vi.fn(() => chain) }),
     }));
     return { eqCalls };
   }
@@ -568,7 +568,7 @@ describe("GET /api/tmdb/related", () => {
   // ---- P2 미러 hit 경로 (Phase 2) ----------------------------------------
 
   /**
-   * P2 supabaseAdmin stub — 테이블/select 컬럼으로 응답 분기.
+   * P2 supabaseMirror stub — 테이블/select 컬럼으로 응답 분기.
    *  - tmdb_metadata + "collection_id..." → seeds (maybeSingle)
    *  - tmdb_metadata + "...rating"        → director rows (.limit)
    *  - tmdb_metadata + "embedding"        → embedding row (maybeSingle)
@@ -619,7 +619,7 @@ describe("GET /api/tmdb/related", () => {
     };
 
     vi.doMock("@/lib/supabase-admin", () => ({
-      supabaseAdmin: () => ({
+      supabaseMirror: () => ({
         from: (table: string) => makeBuilder(table),
         rpc: (name: string, args: unknown) => {
           rpcCalls.push([name, args]);
