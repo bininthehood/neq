@@ -34,6 +34,7 @@ import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
 import SearchSheet from '../components/SearchSheet';
+import { useSearchTrigger } from '../lib/search-trigger';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
 import { buildSeededMixItems, mergeGenreQueueItems, mixLabelOf } from '../lib/mix-utils';
 import { prefetchRelated } from '../lib/data-prefetch';
@@ -412,6 +413,15 @@ export default function DiscoverScreen() {
   // 빈 문자열 = 일반 검색 진입 (잔해 제거). 인물 이름 = Cast 클릭 진입.
   const [searchInitialQuery, setSearchInitialQuery] = useState('');
   const [immersive, setImmersive] = useState(false);
+
+  // 2026-08-12 — 하단 "검색" 탭 → 이 화면의 SearchSheet 열기.
+  // 헤더 검색 버튼이 프로필로 바뀌면서 진입점이 탭으로 이동했다. initialQuery 는
+  // 비워 잔해를 제거(기존 헤더 버튼 동작 정합). search_opened track 은 탭
+  // 리스너(_layout.tsx)에서 한 번만 발사한다.
+  useSearchTrigger(() => {
+    setSearchInitialQuery('');
+    setSearchOpen(true);
+  });
 
   const load = useCallback(
     async (
@@ -1936,14 +1946,7 @@ export default function DiscoverScreen() {
         activePersona={persona.activePersona}
         onPersonaSwitch={handlePersonaSwitch}
         onAddPersona={() => router.push('/profile')}
-        onSearchOpen={() => {
-          // 위임 O #1.2 — 검색 버튼으로 진입 시 initialQuery 비움 (잔해 제거).
-          // WARN-A (2026-05-19 재검증) — search_opened track 추가. Saved/Profile
-          // 의 search 버튼은 이미 호출 중 — 3탭 search 진입 지표 정합.
-          track('search_opened');
-          setSearchInitialQuery('');
-          setSearchOpen(true);
-        }}
+        onProfileOpen={() => router.push('/profile')}
       />
 
       {/* 2026-07-08 Seeded Mix 2차 — 큐 중엔 FilterChips 대신 큐 바.

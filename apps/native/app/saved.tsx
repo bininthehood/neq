@@ -37,7 +37,8 @@ import { displayProviders } from '../lib/providers';
 import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
-import { IconSearch, IconArchive, IconBang, IconCheckPop } from '../components/Icons';
+import { IconUser, IconArchive, IconBang, IconCheckPop } from '../components/Icons';
+import { useSearchTrigger } from '../lib/search-trigger';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -178,6 +179,13 @@ export default function SavedScreen() {
   // DetailSheet Cast 클릭 시에도 진입 — searchInitialQuery 에 인물명 주입.
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitialQuery, setSearchInitialQuery] = useState('');
+
+  // 2026-08-12 — 하단 "검색" 탭 → 이 화면의 SearchSheet 열기 (헤더 버튼은 프로필로 교체).
+  // search_opened track 은 탭 리스너(_layout.tsx)에서 발사.
+  useSearchTrigger(() => {
+    setSearchInitialQuery('');
+    setSearchOpen(true);
+  });
   // 2026-05-29 — Discover 정합. SearchSheet 결과 클릭으로 진입한 DetailSheet 추적.
   // DetailSheet 닫힐 때 true 면 SearchSheet 자동 복귀 + 검색 컨텍스트 보존.
   const [returnToSearchAfterDetail, setReturnToSearchAfterDetail] =
@@ -566,19 +574,15 @@ export default function SavedScreen() {
         <View style={styles.titleSlot}>
           <Text style={styles.title}>Saved</Text>
         </View>
+        {/* 2026-08-12 — 검색 → 프로필로 교체. 검색은 하단 탭으로 이동. */}
         <Pressable
           style={styles.searchBtn}
-          onPress={() => {
-            // web saved/page.tsx:511 정합 — search_opened 이벤트 + initialQuery 비움.
-            track('search_opened');
-            setSearchInitialQuery('');
-            setSearchOpen(true);
-          }}
+          onPress={() => router.push('/profile')}
           accessibilityRole="button"
-          accessibilityLabel="검색 열기"
+          accessibilityLabel="프로필"
           hitSlop={8}
         >
-          <IconSearch size={18} color={colors.textMuted} />
+          <IconUser size={18} color={colors.textMuted} />
         </Pressable>
         {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김.
             absolute fill + alignItems/justifyContent center → header 정중앙.

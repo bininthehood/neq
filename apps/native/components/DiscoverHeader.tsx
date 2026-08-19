@@ -11,7 +11,7 @@ import {
 import Svg, { Path, Polyline } from 'react-native-svg';
 import type { Persona } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
-import { IconSearch } from './Icons';
+import { IconUser } from './Icons';
 import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './onboarding/data';
 
 /**
@@ -42,7 +42,7 @@ interface DiscoverHeaderProps {
   onPersonaSwitch: (id: string) => void;
   /** dropdown "+ 새 취향 추가" — Profile 로 라우팅 */
   onAddPersona: () => void;
-  onSearchOpen: () => void;
+  onProfileOpen: () => void;
 }
 
 const MAX_PERSONAS = 3;
@@ -86,7 +86,7 @@ export default function DiscoverHeader({
   activePersona,
   onPersonaSwitch,
   onAddPersona,
-  onSearchOpen,
+  onProfileOpen,
 }: DiscoverHeaderProps) {
   const [open, setOpen] = useState(false);
   // chip 좌표 — measureInWindow 결과. dropdown 을 chip 바로 아래 가운데 정렬.
@@ -167,14 +167,15 @@ export default function DiscoverHeader({
         </Pressable>
       )}
 
+      {/* 2026-08-12 — 검색 → 프로필로 교체. 검색은 하단 탭으로 이동. */}
       <Pressable
         style={styles.searchBtn}
-        onPress={onSearchOpen}
+        onPress={onProfileOpen}
         accessibilityRole="button"
-        accessibilityLabel="검색 열기"
+        accessibilityLabel="프로필"
         hitSlop={8}
       >
-        <IconSearch size={20} color={colors.textMuted} />
+        <IconUser size={20} color={colors.textMuted} />
       </Pressable>
 
       {/* persona dropdown — RN Modal 로 portal 대체. backdrop 탭 시 닫힘. */}

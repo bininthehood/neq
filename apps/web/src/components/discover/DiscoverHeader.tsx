@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { IconSearch } from "@/components/Icons";
+import { IconUser } from "@/components/Icons";
 
 /**
  * DiscoverHeader — discover 페이지 상단.
@@ -11,7 +11,7 @@ import { IconSearch } from "@/components/Icons";
  * - 로고 표시
  * - persona 전환 chip + dropdown (createPortal 로 body 마운트 — 위임 P #2: 헤더 wrapper
  *   `overflow:hidden` 의 dropdown clipping 회피)
- * - 검색 버튼
+ * - 프로필 버튼 (2026-08-12 — 검색 버튼과 자리 교체. 검색은 하단 탭으로 이동)
  *
  * state 자체 (personaOpen, switchPersona 등) 는 부모 page 에서 owned.
  * portal 좌표 계산 (chip rect 기준) 은 본 컴포넌트 내부에서 effect 로 처리.
@@ -40,7 +40,8 @@ interface DiscoverHeaderProps {
   onAddPersona: () => void;
   /** persona switch 시 부모 cleanup (rec abort, filter 리셋, topIdx 0 등) */
   onPersonaSwitch: (id: string) => void;
-  onSearchOpen: () => void;
+  /** 헤더 우상단 — Profile 로 라우팅 */
+  onProfileOpen: () => void;
 }
 
 export default function DiscoverHeader({
@@ -49,7 +50,7 @@ export default function DiscoverHeader({
   onPersonaToggle,
   onAddPersona,
   onPersonaSwitch,
-  onSearchOpen,
+  onProfileOpen,
 }: DiscoverHeaderProps) {
   // dropdown 좌표 — chipRef.getBoundingClientRect() + page 절댓값.
   const [chipRef, setChipRef] = useState<HTMLButtonElement | null>(null);
@@ -216,12 +217,13 @@ export default function DiscoverHeader({
             )}
         </div>
       )}
+      {/* 2026-08-12 — 검색 → 프로필로 교체. 검색은 하단 탭으로 이동. */}
       <button
-        onClick={onSearchOpen}
-        aria-label="검색 열기"
+        onClick={onProfileOpen}
+        aria-label="프로필"
         className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
       >
-        <IconSearch size={18} color="var(--text-muted)" />
+        <IconUser size={18} color="var(--text-muted)" />
       </button>
     </div>
   );

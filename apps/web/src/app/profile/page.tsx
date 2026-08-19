@@ -12,9 +12,10 @@ import { getDeviceId } from "@/lib/device-id";
 import { wipeCloudData } from "@/lib/sync";
 import { track } from "@/lib/analytics";
 import { usePersona } from "@/contexts/PersonaContext";
-import { IconClose, IconSearch } from "@/components/Icons";
+import { IconClose } from "@/components/Icons";
 import SearchSheet from "@/components/discover/SearchSheet";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
+import { useSearchTrigger } from "@/lib/search-trigger";
 import {
   calcTypeDistribution,
   calcOTTDistribution,
@@ -33,9 +34,15 @@ const PERSONA_SURVEY_V2_ENABLED =
 export default function ProfilePage() {
   const router = useRouter();
   const persona = usePersona();
-  // 헤더 search 버튼 → SearchSheet 자체 마운트. cancel 시 Profile 페이지 그대로 유지.
+  // SearchSheet 자체 마운트. cancel 시 Profile 페이지 그대로 유지.
   const searchSheet = useDetailSheet();
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
+  // 2026-08-12 — 하단 "검색" 탭 → 이 페이지의 SearchSheet 열기 (헤더 버튼은 닫기로 교체).
+  // search_opened track 은 탭 리스너(BottomNav)에서 발사.
+  useSearchTrigger(() => {
+    setSearchInitialQuery("");
+    searchSheet.openDetail();
+  });
   const [mounted, setMounted] = useState(false);
   const [tasteItems, setTasteItems] = useState<string[]>([]);
   const [savedCount, setSavedCount] = useState(0);
@@ -130,17 +137,19 @@ export default function ProfilePage() {
         >
           Profile
         </h1>
+        {/* 2026-08-12 — 프로필이 탭바에서 내려와 헤더 버튼(push) 진입이 되면서
+            나갈 수단이 필요해졌다. 검색 버튼 자리를 닫기로 교체 (검색은 하단 탭).
+            공유 링크 등으로 바로 들어와 history 가 비면 발견으로 되돌린다. */}
         <button
           type="button"
           onClick={() => {
-            track("search_opened");
-            setSearchInitialQuery("");
-            searchSheet.openDetail();
+            if (window.history.length > 1) router.back();
+            else router.push("/discover");
           }}
-          aria-label="검색 열기"
+          aria-label="닫기"
           className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
         >
-          <IconSearch size={18} color="var(--text-muted)" />
+          <IconClose size={18} color="var(--text-muted)" />
         </button>
       </div>
 
@@ -327,7 +336,7 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* SearchSheet — Profile 페이지 자체 마운트. 헤더 search 버튼으로 진입. */}
+      {/* SearchSheet — Profile 페이지 자체 마운트. 하단 검색 탭으로 진입. */}
       <SearchSheet
         show={searchSheet.showDetail}
         sheetY={searchSheet.detailY}

@@ -13,8 +13,12 @@ import {
   type MixTheme,
 } from '../lib/mix-themes';
 import type { SavedItem } from '../lib/types';
-import { colors, spacing, radius } from '../lib/tokens';
-import { fontsV2 } from '@neq/design';
+// 2026-08-12 — fontsV2 를 lib/tokens 경유로 통일 (saved/profile 정합). 값은 동일하게
+// @neq/design 재export 이지만, 헤더 3화면이 같은 출처를 보도록 맞춘다.
+import { colors, spacing, radius, fontsV2 } from '../lib/tokens';
+import SearchSheet from '../components/SearchSheet';
+import { IconUser } from '../components/Icons';
+import { useSearchTrigger } from '../lib/search-trigger';
 
 /**
  * Seeded Mix 2차 (2026-07-08) — Mix 탭.
@@ -27,6 +31,12 @@ import { fontsV2 } from '@neq/design';
 export default function MixScreen() {
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+
+  // 2026-08-12 — 하단 "검색" 탭이 모든 화면에 노출되면서 큐만 시트가 없어 무반응이었다
+  // (사용자 보고). profile.tsx 선례대로 visible/onClose 만으로 마운트 — DetailSheet 은
+  // 붙이지 않는다 (마운트 추가 시 SearchSheet fetch race 회귀).
+  const [searchOpen, setSearchOpen] = useState(false);
+  useSearchTrigger(() => setSearchOpen(true));
 
   useFocusEffect(
     useCallback(() => {
@@ -69,6 +79,16 @@ export default function MixScreen() {
       <View style={styles.header}>
         {/* 4차 — 영문 표기 'Que' (neq 어원 라틴어 neque 착안, 사용자 확정. 'Cue' 아님) */}
         <Text style={styles.title}>Que</Text>
+        {/* 2026-08-12 — 나머지 3화면 헤더와 정합. 큐만 프로필 진입점이 없었다. */}
+        <Pressable
+          style={styles.profileBtn}
+          onPress={() => router.push('/profile')}
+          accessibilityRole="button"
+          accessibilityLabel="프로필"
+          hitSlop={8}
+        >
+          <IconUser size={18} color={colors.textMuted} />
+        </Pressable>
       </View>
 
       {empty ? (
@@ -130,6 +150,13 @@ export default function MixScreen() {
           )}
         </ScrollView>
       )}
+      {/* SearchSheet — Que 자체 마운트. 하단 "검색" 탭으로 진입.
+          profile.tsx 선례 정합 — DetailSheet 은 마운트하지 않는다 (마운트 추가 시
+          SearchSheet fetch race 회귀, 2026-05-29 사용자 보고). */}
+      <SearchSheet
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -178,8 +205,16 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     height: 48,
+  },
+  // Saved/Discover 헤더 우상단 버튼과 동일 규격.
+  profileBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     color: colors.textPrimary,

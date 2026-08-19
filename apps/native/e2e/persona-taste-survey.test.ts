@@ -119,8 +119,9 @@ describe('Persona v2 — taste survey full flow', () => {
         'before: onboarding 자동 진행 실패. _helpers.ts ensureOnboardedOrSkip 의 단계별 라벨 확인 필요.',
       );
     }
-    const ok = await tapTab('프로필');
-    if (!ok) throw new Error('프로필 탭 진입 실패 — 앱 mount 미확인 (탭바 미렌더)');
+    // 2026-08-12 — 프로필이 탭바에서 내려가고 Discover 헤더 우상단 버튼이 됨.
+    const ok = await tapByLabel('프로필', { timeout: 5000 });
+    if (!ok) throw new Error('프로필 진입 실패 — 앱 mount 미확인 (헤더 미렌더)');
     await browser.pause(800);
     await capture('persona-v2-00-profile');
   });
@@ -211,13 +212,13 @@ describe('Persona v2 — taste survey full flow', () => {
     await browser.pause(1500);
     await capture('persona-v2-05-after-accept');
 
-    // profile 화면이면 탭바의 "프로필" tab 노출. 다른 라우트면 다시 탭 진입.
+    // 2026-08-12 — 프로필은 탭이 아니라 헤더 우상단 버튼 진입. 다른 라우트면 재시도.
     const onProfile =
       (await pageSourceContains('취향')) &&
       (await pageSourceContains('+ 새 취향 추가'));
     if (!onProfile) {
-      console.log('profile 아닌 화면 — 프로필 탭 진입 재시도');
-      await tapTab('프로필');
+      console.log('profile 아닌 화면 — 헤더 프로필 버튼 재시도');
+      await tapByLabel('프로필', { timeout: 4000 });
       await browser.pause(1200);
     }
 

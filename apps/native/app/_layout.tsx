@@ -34,7 +34,8 @@ import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
-import { IconDiscover, IconBookmark, IconUser, IconMix } from '../components/Icons';
+import { IconDiscover, IconBookmark, IconSearch, IconMix } from '../components/Icons';
+import { emitSearchOpen } from '../lib/search-trigger';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // 2026-06-01 splash → Welcome (Lottie frame 0) 자연 연결.
@@ -276,20 +277,41 @@ function TabsWithGuard() {
                 ),
               }}
             />
+            {/* 2026-08-12 — 하단 4번째 슬롯을 프로필 → 검색으로 교체 (프로필은
+                각 화면 헤더 우상단 버튼으로 이동).
+
+                검색은 라우트가 아니라 각 화면이 자체 마운트하는 모달 시트라
+                tabPress 를 preventDefault 하고 `emitSearchOpen()` 만 쏜다. 포커스된
+                화면이 자기 SearchSheet 를 연다 (lib/search-trigger.ts).
+                시트 마운트를 한 곳으로 합치지 않는 이유는 profile.tsx 의 fetch race
+                경고 주석 참조.
+
+                search_opened track 은 여기 한 곳에서만 발사 — 기존에는 3화면 헤더
+                버튼이 각자 호출했다. 진입 경로가 탭 하나로 합쳐져 중복이 없다. */}
             <Tabs.Screen
-              name="profile"
+              name="search"
               options={{
-                lazy: false,
-                tabBarAccessibilityLabel: '프로필',
+                tabBarAccessibilityLabel: '검색',
                 tabBarIcon: ({ focused }) => (
                   <TabItem
-                    icon={({ color }) => <IconUser color={color} />}
-                    label="프로필"
+                    icon={({ color }) => <IconSearch size={20} color={color} />}
+                    label="검색"
                     focused={focused}
                   />
                 ),
               }}
+              listeners={{
+                tabPress: (e) => {
+                  e.preventDefault();
+                  track('search_opened');
+                  emitSearchOpen();
+                },
+              }}
             />
+            {/* 프로필 — 탭바에서 내리고 헤더 우상단 버튼(router.push)으로 진입.
+                라우트 자체는 Tabs 내부에 남아 하단 탭바가 계속 보이고, 다른 탭으로
+                바로 나갈 수 있다. */}
+            <Tabs.Screen name="profile" options={{ href: null }} />
             {/* 2026-05-19 native↔PWA 정합 audit (구조 #1) — onboarding/ 에 `_layout.tsx`
                 (<Stack/>) 를 추가해 expo-router 가 onboarding 을 단일 그룹 노드로 합침.
                 그 노드 자체에 href:null 을 주어 합성 placeholder 탭(▼) 제거.
