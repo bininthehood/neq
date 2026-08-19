@@ -52,7 +52,8 @@ Supabase 대시보드에서 새 프로젝트를 만든다. 이름은 `neq-tmdb-m
 | 8 | `20260715_tmdb_related_seeds.sql` | |
 | 9 | `20260715_tmdb_related_seeds_idx.sql` | |
 | 10 | `20260721_tmdb_director_id_idx.sql` | |
-| 11 | `20260818_db_size_guard.sql` | 크기 가드 RPC |
+| 11 | `20260818_tmdb_catalog_slim.sql` | catalog 슬림화 (adult/last_export/deleted 제거) |
+| 12 | `20260818_db_size_guard.sql` | 크기 가드 RPC |
 
 **벡터 인덱스(`20260624_tmdb_embedding_hnsw.sql`)는 데이터 이전 후에** 만든다.
 빈 테이블에 만들면 IVFFlat 의 `lists` 가 무의미하고, 적재 중에는 인덱스 갱신 비용만 든다.

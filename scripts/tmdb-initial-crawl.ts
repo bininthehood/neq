@@ -151,12 +151,13 @@ async function pickTopFromCatalog(
   let offset = 0;
   while (offset < limit) {
     const end = Math.min(offset + PAGE, limit) - 1;
+    // 2026-08-18 — catalog 슬림화로 deleted/adult 컬럼 제거.
+    // adult 는 catalog-sync 가 스트림 단계에서 걸러 애초에 적재되지 않고,
+    // deleted 는 우주 전체를 보관하지 않게 되면서 개념 자체가 사라졌다.
     const { data, error } = await admin
       .from("tmdb_catalog")
       .select("tmdb_id")
       .eq("media_type", mediaType)
-      .eq("deleted", false)
-      .eq("adult", false)
       .order("popularity", { ascending: false })
       .range(offset, end);
     if (error) throw new Error(`catalog select 실패 (${mediaType}): ${error.message}`);

@@ -82,13 +82,25 @@ DB 미러로 치환해 ~100ms 로 단축. **상태: 2026-05-08 prod 활성화** 
 
 | Workflow (`.github/workflows/`) | 스케줄 (UTC) | 스크립트 (`scripts/`) | 역할 |
 |---|---|---|---|
-| `tmdb-catalog-sync.yml` | 매일 08:00 | `tmdb-catalog-sync.ts` | TMDB Daily ID Export → `tmdb_catalog` upsert |
+| `tmdb-catalog-sync.yml` | 매일 08:00 | `tmdb-catalog-sync.ts` | Daily ID Export **스트림** → 보유분 popularity 갱신 + 상위 N 신규만 큐 적재 (2026-08-18 재작성) |
 | `tmdb-initial-crawl.yml` | manual (1회성) | `tmdb-initial-crawl.ts` | catalog 전체 → 큐 적재 |
 | `tmdb-bulk-crawl.yml` | 6시간 간격 (`15 */6 * * *`) | `tmdb-bulk-crawl.ts` | 큐 pull → metadata upsert (providers 포함) |
 | `tmdb-refresh-stale.yml` | 매일 08:30 | `tmdb-refresh-stale.ts` | 180일+ stale row → 큐에 추가 |
 | `tmdb-refresh-providers.yml` | 매일 09:00 | `tmdb-refresh-providers.ts` | providers 30일 TTL 트리거 → 큐에 추가 (2026-05-08 신규) |
 | `tmdb-providers-snapshot.yml` | 매일 18:00 | (workflow 내장) | providers 변동 snapshot 보관 |
 | ~~`api-warmup.yml`~~ | **비활성화 (2026-05-19)** | — | cron-job.org 외부 ping 으로 이전. GH Actions 무료 cron 실제 간격 26~86분 → 5분 보장 실패. 파일은 `disabled_manually` 로 보존 (`gh workflow enable` 복구 가능) |
+
+**용량 사고 + 유입 정책 (2026-08-17~19):**
+- 2026-08-17 밤 Supabase Free 500MB 초과 → 프로젝트 전체 `exceed_db_size_quota` 차단 (HTTP 402).
+  원인은 크롤에 유입만 있고 상한·방출이 없던 것 — 4월 시작 이후 단조 증가
+- 대응: `tmdb_catalog` 를 우주 전체(140만 행, 270MB) → **미러 보유분 popularity** (9.7MB) 로 축소.
+  요청 경로는 `genre-top`/`related` 두 곳이 보유분 popularity 만 조회
+- **크기 가드** (`scripts/lib/db-guard.ts` + `db_size_bytes()` RPC): 420MB 신규 유입 중단 /
+  460MB 전면 중단. 갱신 계열은 halt 에서만 멈춤 (180일 재fetch = 라이선스 의무)
+- **미러 프로젝트 분리**: 유저 데이터(약 3MB)와 미러(약 400MB)를 별도 Supabase 프로젝트로.
+  `supabaseMirror()` — `MIRROR_*` env 미설정 시 fallback. 절차: `supabase/mirror-project-setup.md`
+- 상한: 미러 10만 편 / 350MB, 신규 유입 하루 1,000편 (`TMDB_DAILY_INGEST`)
+- **미완**: 방출(P2) 미구현 — 현재 113,666편으로 상한 초과 상태. 크론 6종 `disabled_manually`
 
 **활성화 분기 (`apps/web/src/app/api/recommend/route.ts`):**
 ```ts
