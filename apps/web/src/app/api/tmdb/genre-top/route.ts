@@ -25,6 +25,7 @@ import type { RelatedWork } from "@neq/core";
 const IMG_BASE = "https://image.tmdb.org/t/p/w185";
 const PRESELECT_CAP = 1000;
 const CHUNK = 400;
+const PUBLIC_CACHE = { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
 
 interface MetaRow {
   tmdb_id: number;
@@ -62,13 +63,18 @@ export async function GET(req: NextRequest) {
       .limit(PRESELECT_CAP);
     if (error) {
       console.error(`[genre-top] mirror 조회 실패 (${mt}):`, error);
-      return [];
+      throw error;
     }
     return (data ?? []) as unknown as MetaRow[];
   }
 
-  const rows = (await Promise.all([fetchByType("movie"), fetchByType("tv")])).flat();
-  if (rows.length === 0) return NextResponse.json([]);
+  let rows: MetaRow[];
+  try {
+    rows = (await Promise.all([fetchByType("movie"), fetchByType("tv")])).flat();
+  } catch {
+    return NextResponse.json({ error: "query failed" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+  if (rows.length === 0) return NextResponse.json([], { headers: PUBLIC_CACHE });
 
   // popularity 2차 조회 — catalog (media_type, tmdb_id) 청크 병렬.
   const popByKey = new Map<string, number>();
@@ -111,5 +117,5 @@ export async function GET(req: NextRequest) {
       mediaType: r.media_type,
     }));
 
-  return NextResponse.json(works);
+  return NextResponse.json(works, { headers: PUBLIC_CACHE });
 }

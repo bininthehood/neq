@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecommendations, getRecommendationsStreaming } from "@/lib/recommend";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkDailyRecommendationBudget, checkRateLimit } from "@/lib/rate-limit";
 
 /** 다양한 플랫폼/프록시 환경에서 클라이언트 IP를 안정적으로 추출 */
 function getClientIp(req: NextRequest): string {
@@ -100,6 +100,18 @@ export async function POST(req: NextRequest) {
       { error: "잘못된 요청입니다" },
       { status: 400 }
     );
+  }
+
+  try {
+    if (!(await checkDailyRecommendationBudget())) {
+      return NextResponse.json(
+        { error: "오늘의 추천 요청 한도에 도달했습니다. 내일 다시 시도해주세요." },
+        { status: 429 },
+      );
+    }
+  } catch (error) {
+    console.error("[recommend] 일일 예산 확인 실패:", error);
+    return NextResponse.json({ error: "추천을 일시적으로 이용할 수 없습니다." }, { status: 503 });
   }
 
   // streaming opt-in: 클라이언트가 x-neko-streaming: 1 헤더 보낼 때만 NDJSON stream 응답.
