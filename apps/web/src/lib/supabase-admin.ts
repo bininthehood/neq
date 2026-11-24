@@ -31,8 +31,9 @@ export function supabaseAdmin(): SupabaseClient {
  * 서버에서만 읽으므로 별도 프로젝트로 뺀다. 장애 범위 분리가 목적이며,
  * 무료 용량 증가는 보장되지 않는다 (조직 합산 Fair Use 제한 확인 필요).
  *
- * 대상 테이블: tmdb_metadata / tmdb_catalog / tmdb_crawl_queue /
- *              tmdb_provider_snapshots, RPC: match_tmdb_by_embedding
+ * 대상 테이블: tmdb_metadata / tmdb_catalog / tmdb_crawl_queue,
+ *              RPC: match_tmdb_by_embedding
+ * tmdb_provider_snapshots 는 메인 프로젝트에 둔다 (saved_items 파생).
  *
  * env 미설정 시 메인 프로젝트로 fallback — 분리 전에도 이 코드가 그대로 돌고,
  * 문제가 생기면 env 두 개를 지우는 것만으로 즉시 롤백된다.

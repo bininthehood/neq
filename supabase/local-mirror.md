@@ -27,11 +27,34 @@ docker exec -e PGOPTIONS='-c maintenance_work_mem=256MB' -i supabase_db_neko psq
 
 The final two commands ensure schema and vector index coverage after import. The importer upserts by `(tmdb_id, media_type)` and can be rerun. The full import copies all available rows up to 200,000 per table; it does not fetch TMDB data. If a migration fails halfway through on a fresh stack, inspect or reset that local stack before retrying the schema script.
 
-Make a separate backup before relying on the local mirror. The backup script creates a private PostgreSQL dump in `../neko-backups` (beside the repository, on the Workspace volume) by default and checks its archive listing. Set `LOCAL_MIRROR_BACKUP_DIR` to choose another destination. A successful listing is not a substitute for a restore drill.
+Make a separate backup before relying on the local mirror. The backup script creates a private PostgreSQL dump in `../neko-backups` (beside the repository, on the Workspace volume) by default and checks its archive listing. Set `LOCAL_MIRROR_BACKUP_DIR` to choose another destination. A successful listing is not a substitute for a restore drill (see below).
 
 ```bash
 bash scripts/local-mirror-backup.sh
 ```
+
+## Restore from a backup
+
+Tested 2026-11-24 in an empty container of the same Postgres image (no network): 68s, all 113,651 rows of both tables matched by content hash, and indexes, constraints, functions, RLS policies and grants were identical to the live mirror. Not tested: a stack newly created by `npx supabase start`, and serving through PostgREST after a restore.
+
+A plain `pg_restore` fails: `-n public` does not create the extensions, and Supabase's `DEFAULT ACL` entries need a superuser. Restore into an empty stack only (never over a live mirror), instead of `local-mirror-schema.sh`:
+
+```bash
+DB=supabase_db_neko; DUMP=../neko-backups/<file>.dump
+docker exec $DB psql -U postgres -v ON_ERROR_STOP=1 -q \
+  -c "create extension if not exists vector schema public" \
+  -c "create extension if not exists pg_trgm schema public" \
+  -c "do \$\$ begin if not exists (select from pg_roles where rolname='mirror_reader') then create role mirror_reader nologin; end if; end \$\$"
+docker exec -i $DB sh -c 'cat > /tmp/mirror.dump' < "$DUMP"
+docker exec $DB sh -c "pg_restore -l -n public /tmp/mirror.dump | grep -v 'DEFAULT ACL' > /tmp/mirror.toc"
+docker exec -e PGOPTIONS='-c maintenance_work_mem=256MB' $DB pg_restore -U postgres -d postgres -n public \
+  -L /tmp/mirror.toc --exit-on-error --single-transaction /tmp/mirror.dump
+docker exec -i $DB psql -U postgres -v ON_ERROR_STOP=1 -q < supabase/local-mirror-reader.sql
+docker exec $DB psql -U postgres -v ON_ERROR_STOP=1 -q -c "revoke execute on function public.db_size_bytes() from anon, authenticated" -c "analyze public.tmdb_metadata, public.tmdb_catalog"
+docker exec $DB rm /tmp/mirror.dump /tmp/mirror.toc
+```
+
+The `revoke` matters: a fresh stack's default privileges grant the function to `anon`. IVFFlat is rebuilt on restore, so approximate neighbours can differ slightly; exact search returned the same result. The backup and the Docker volume are on the same Workspace disk, so keep a copy on another disk.
 
 ## Run local batches
 
@@ -80,7 +103,7 @@ cloudflared tunnel --url http://127.0.0.1:54400   # quick tunnel; URL changes on
 - The JWT secret is random and kept in `supabase/.mirror-serve.secret` (gitignored). Requests without a token or with a forged token get 401. The `mirror_reader` role can only SELECT `tmdb_metadata`, `tmdb_catalog`, `tmdb_provider_snapshots` and execute `match_tmdb_by_embedding`; writes, the crawl queue and other functions return 403.
 - Web env: `MIRROR_POSTGREST_URL` (tunnel URL) and `MIRROR_POSTGREST_TOKEN` override `MIRROR_SUPABASE_*`. Remove them to roll back. The vector RPC is always cut at 3s, on every path. `MIRROR_TIMEOUT_MS` (default 8000) bounds other requests when an explicit mirror is set; it is longer because the recommendation SQL fallback (1.2–1.6MB responses) takes 2.0–2.9s through the tunnel even when healthy. Neither abort triggers postgrest-js retries.
 - Measured from this machine through the tunnel: first call ~0.4–1s, then 20-row select ~50ms and `match_tmdb_by_embedding` ~90–110ms. Origin down with tunnel up returns Cloudflare 502 in ~0.9s. A server that accepts but never answers aborts at the timeout. A connection-level failure (tunnel itself unreachable) is still retried by postgrest-js for about 7s.
-- Writers that use `supabaseMirror()` from the web app (`/api/cron/tmdb-providers-snapshot` upserts snapshots) fail with 403 under this mode; run them locally against the mirror instead.
+- The web app only reads through `supabaseMirror()`; writes would fail with 403 under this mode. `tmdb_provider_snapshots` is read and written in the main DB (`/api/cron/tmdb-providers-snapshot`, `ott-expiry`), so keep that table when the hosted mirror tables are dropped. The local copy of that table is not used by the web app.
 - Named tunnel `neq-mirror` serves `https://mirror.neq.me` (config `~/.cloudflared/config.yml`, catch-all 404). cloudflared runs as a user LaunchAgent (`com.cloudflare.cloudflared`, args `tunnel --no-autoupdate run` added by hand because `cloudflared service install` omits them). All mirror containers use `restart: unless-stopped`.
 - Colima does not auto-start yet. A LaunchAgent running `colima status`/`colima start` hung under launchd (likely the macOS removable-volume permission for `~/.colima` on `/Volumes/Workspace`); it is parked at `~/Library/LaunchAgents/me.neq.colima.plist.disabled`. After a reboot run `colima start` by hand until this is solved.
 - Deploy from the CLI only with the root `.vercelignore` allowlist; without it the upload included git-ignored native builds (2.9GB).

@@ -19,9 +19,11 @@ Supabase의 현재 [데이터베이스 크기 문서](https://supabase.com/docs/
 
 ## 이동 대상
 
-**테이블** — `tmdb_metadata` / `tmdb_catalog` / `tmdb_crawl_queue` / `tmdb_provider_snapshots`
+**테이블** — `tmdb_metadata` / `tmdb_catalog` / `tmdb_crawl_queue`
 **RPC** — `match_tmdb_by_embedding` (pgvector retrieval), `db_size_bytes` (크기 가드)
 **확장** — `vector` (pgvector), `pg_trgm`
+
+`tmdb_provider_snapshots` 는 옮기지 않는다. 저장 작품에서 나온 7일치 데이터라 메인 프로젝트에서 읽고 쓴다.
 
 유저 테이블(`saved_items` / `watch_reports` / `personas` / `profiles` / auth 일체)은
 기존 프로젝트에 그대로 둔다. **두 덩어리 사이에 FK 도 조인도 없다** — 분리 가능성은
@@ -46,17 +48,16 @@ Supabase 대시보드에서 새 프로젝트를 만든다. 이름은 `neq-tmdb-m
 | 순서 | 파일 | 비고 |
 |---|---|---|
 | 1 | `20260424_tmdb_mirror.sql` | 미러 3테이블 본체 |
-| 2 | `20260428_onboarding_v2.sql` | **`tmdb_provider_snapshots` 부분만** — 나머지는 유저 스키마 |
-| 3 | `20260606_tmdb_metadata_phase_b_indexes.sql` | |
-| 4 | `20260624_tmdb_embedding_column.sql` | `vector` 확장 필요 |
-| 5 | `20260624_tmdb_embed_backfill_index.sql` | |
-| 6 | `20260624_tmdb_match_embedding.sql` | retrieval RPC |
-| 7 | `20260629_tmdb_metadata_title_en_index.sql` | |
-| 8 | `20260715_tmdb_related_seeds.sql` | |
-| 9 | `20260715_tmdb_related_seeds_idx.sql` | |
-| 10 | `20260721_tmdb_director_id_idx.sql` | |
-| 11 | `20260818_tmdb_catalog_slim.sql` | catalog 슬림화 (adult/last_export/deleted 제거) |
-| 12 | `20260818_db_size_guard.sql` | 크기 가드 RPC |
+| 2 | `20260606_tmdb_metadata_phase_b_indexes.sql` | |
+| 3 | `20260624_tmdb_embedding_column.sql` | `vector` 확장 필요 |
+| 4 | `20260624_tmdb_embed_backfill_index.sql` | |
+| 5 | `20260624_tmdb_match_embedding.sql` | retrieval RPC |
+| 6 | `20260629_tmdb_metadata_title_en_index.sql` | |
+| 7 | `20260715_tmdb_related_seeds.sql` | |
+| 8 | `20260715_tmdb_related_seeds_idx.sql` | |
+| 9 | `20260721_tmdb_director_id_idx.sql` | |
+| 10 | `20260818_tmdb_catalog_slim.sql` | catalog 슬림화 (adult/last_export/deleted 제거) |
+| 11 | `20260818_db_size_guard.sql` | 크기 가드 RPC |
 
 **벡터 인덱스(`20260624_tmdb_embedding_hnsw.sql`)는 데이터 이전 후에** 만든다.
 빈 테이블에 만들면 IVFFlat 의 `lists` 가 무의미하고, 적재 중에는 인덱스 갱신 비용만 든다.
@@ -116,7 +117,7 @@ MIRROR_SUPABASE_SERVICE_ROLE_KEY
 
 ```sql
 -- 기존 프로젝트에서 (전환 검증 완료 후에만!)
-DROP TABLE tmdb_provider_snapshots;
+-- tmdb_provider_snapshots 는 메인 DB 에서 사용 중이므로 DROP 금지
 DROP TABLE tmdb_crawl_queue;
 DROP TABLE tmdb_catalog;
 DROP TABLE tmdb_metadata;
