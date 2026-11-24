@@ -27,11 +27,34 @@ docker exec -e PGOPTIONS='-c maintenance_work_mem=256MB' -i supabase_db_neko psq
 
 The final two commands ensure schema and vector index coverage after import. The importer upserts by `(tmdb_id, media_type)` and can be rerun. The full import copies all available rows up to 200,000 per table; it does not fetch TMDB data. If a migration fails halfway through on a fresh stack, inspect or reset that local stack before retrying the schema script.
 
-Make a separate backup before relying on the local mirror. The backup script creates a private PostgreSQL dump in `../neko-backups` (beside the repository, on the Workspace volume) by default and checks its archive listing. Set `LOCAL_MIRROR_BACKUP_DIR` to choose another destination. A successful listing is not a substitute for a restore drill.
+Make a separate backup before relying on the local mirror. The backup script creates a private PostgreSQL dump in `../neko-backups` (beside the repository, on the Workspace volume) by default and checks its archive listing. Set `LOCAL_MIRROR_BACKUP_DIR` to choose another destination. A successful listing is not a substitute for a restore drill (see below).
 
 ```bash
 bash scripts/local-mirror-backup.sh
 ```
+
+## Restore from a backup
+
+Tested 2026-11-24 in an empty container of the same Postgres image (no network): 68s, all 113,651 rows of both tables matched by content hash, and indexes, constraints, functions, RLS policies and grants were identical to the live mirror. Not tested: a stack newly created by `npx supabase start`, and serving through PostgREST after a restore.
+
+A plain `pg_restore` fails: `-n public` does not create the extensions, and Supabase's `DEFAULT ACL` entries need a superuser. Restore into an empty stack only (never over a live mirror), instead of `local-mirror-schema.sh`:
+
+```bash
+DB=supabase_db_neko; DUMP=../neko-backups/<file>.dump
+docker exec $DB psql -U postgres -v ON_ERROR_STOP=1 -q \
+  -c "create extension if not exists vector schema public" \
+  -c "create extension if not exists pg_trgm schema public" \
+  -c "do \$\$ begin if not exists (select from pg_roles where rolname='mirror_reader') then create role mirror_reader nologin; end if; end \$\$"
+docker exec -i $DB sh -c 'cat > /tmp/mirror.dump' < "$DUMP"
+docker exec $DB sh -c "pg_restore -l -n public /tmp/mirror.dump | grep -v 'DEFAULT ACL' > /tmp/mirror.toc"
+docker exec -e PGOPTIONS='-c maintenance_work_mem=256MB' $DB pg_restore -U postgres -d postgres -n public \
+  -L /tmp/mirror.toc --exit-on-error --single-transaction /tmp/mirror.dump
+docker exec -i $DB psql -U postgres -v ON_ERROR_STOP=1 -q < supabase/local-mirror-reader.sql
+docker exec $DB psql -U postgres -v ON_ERROR_STOP=1 -q -c "revoke execute on function public.db_size_bytes() from anon, authenticated" -c "analyze public.tmdb_metadata, public.tmdb_catalog"
+docker exec $DB rm /tmp/mirror.dump /tmp/mirror.toc
+```
+
+The `revoke` matters: a fresh stack's default privileges grant the function to `anon`. IVFFlat is rebuilt on restore, so approximate neighbours can differ slightly; exact search returned the same result. The backup and the Docker volume are on the same Workspace disk, so keep a copy on another disk.
 
 ## Run local batches
 
