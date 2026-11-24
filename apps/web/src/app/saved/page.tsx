@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   getSaved,
   removeSaved,
@@ -19,7 +20,7 @@ import {
   IconHeart,
   IconGrid,
   IconList,
-  IconSearch,
+  IconUser,
   IconPreview,
 } from "@/components/Icons";
 import DetailSheet from "@/components/discover/DetailSheet";
@@ -43,6 +44,7 @@ import {
 } from "@/components/saved/SavedSortControl";
 import { SavedMonthScrubber } from "@/components/saved/SavedMonthScrubber";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
+import { useSearchTrigger } from "@/lib/search-trigger";
 import { track, trackCardSaved } from "@/lib/analytics";
 import { useToast } from "@neq/design";
 
@@ -50,6 +52,7 @@ import { useToast } from "@neq/design";
 export type { SavedSort };
 
 export default function SavedPage() {
+  const router = useRouter();
   const [saved, setSaved] = useState<SavedItem[]>([]);
   /**
    * detailItem 만 페이지가 보유. detailY/detailAnimating/detailBodyRef + 모션/터치 핸들러는
@@ -58,9 +61,15 @@ export default function SavedPage() {
    */
   const [detailItem, setDetailItem] = useState<SavedItem | null>(null);
   const detail = useDetailSheet();
-  // 헤더 search 버튼 → SearchSheet 자체 마운트. cancel 시 Saved 페이지 그대로 유지.
+  // SearchSheet 자체 마운트. cancel 시 Saved 페이지 그대로 유지.
   const searchSheet = useDetailSheet();
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
+  // 2026-08-12 — 하단 "검색" 탭 → 이 페이지의 SearchSheet 열기 (헤더 버튼은 프로필로 교체).
+  // search_opened track 은 탭 리스너(BottomNav)에서 발사.
+  useSearchTrigger(() => {
+    setSearchInitialQuery("");
+    searchSheet.openDetail();
+  });
   const [reportingId, setReportingId] = useState<number | null>(null);
   const [reports, setReports] = useState<Record<number, WatchReaction>>({});
   const [stats, setStats] = useState({ total: 0, loved: 0, good: 0, meh: 0, dropped: 0 });
@@ -488,17 +497,14 @@ export default function SavedPage() {
             </svg>
           </button>
         )}
+        {/* 2026-08-12 — 검색 → 프로필로 교체. 검색은 하단 탭으로 이동. */}
         <button
           type="button"
-          onClick={() => {
-            track("search_opened");
-            setSearchInitialQuery("");
-            searchSheet.openDetail();
-          }}
-          aria-label="검색 열기"
+          onClick={() => router.push("/profile")}
+          aria-label="프로필"
           className="w-11 h-11 flex items-center justify-center active:scale-90 transition-transform focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:outline-none rounded-md"
         >
-          <IconSearch size={18} color="var(--text-muted)" />
+          <IconUser size={18} color="var(--text-muted)" />
         </button>
       </div>
 
@@ -692,7 +698,7 @@ export default function SavedPage() {
         sortBy={sortBy}
         setSortBy={handleSortChange}
       />
-      {/* SearchSheet — Saved 페이지 자체 마운트. 헤더 search 버튼 또는 DetailSheet cast 클릭으로 진입. */}
+      {/* SearchSheet — Saved 페이지 자체 마운트. 하단 검색 탭 또는 DetailSheet cast 클릭으로 진입. */}
       <SearchSheet
         show={searchSheet.showDetail}
         sheetY={searchSheet.detailY}

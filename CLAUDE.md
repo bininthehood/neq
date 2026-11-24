@@ -43,104 +43,6 @@ In QA mode, flag any code that doesn't match DESIGN.md.
 - 정본 prototype: `_design-handoff/Phase 4 - Full Prototype.html` + `Round 3 - Copy Revisions.html`.
 - 새 컴포넌트/아이콘 추가 시 반드시 이 디렉토리부터 확인. 외부 zip / 다른 prototype 디렉토리는 신뢰하지 말 것.
 
-## 하네스: neq OTT 추천 PWA
-
-**목표:** OTT 콘텐츠 발굴 PWA의 추천 엔진, UI/UX, 데이터 레이어를 에이전트 팀으로 개발·개선·검증
-
-**에이전트 팀:**
-| 에이전트 | 역할 |
-|---------|------|
-| rec-engineer | OpenAI 프롬프트 튜닝 + TMDB 필터링 로직 |
-| ux-reviewer | DESIGN.md 준수 + 스와이프 터치 UX 리뷰 |
-| content-manager | TMDB API 통합 + OTT 가용성 + 메타데이터 |
-| frontend-builder | React 컴포넌트 + 애니메이션 + 상태 관리 |
-| qa-tester | 통합 정합성 + 엣지 케이스 + 리그레션 |
-
-**스킬:**
-| 스킬 | 용도 | 사용 에이전트 |
-|------|------|-------------|
-| prompt-tuning | 추천 프롬프트 최적화 | rec-engineer |
-| ux-review | Warm Cinema 디자인 시스템 검증 | ux-reviewer |
-| tmdb-integration | TMDB API 통합 가이드 | content-manager |
-| component-build | 프론트엔드 구현 가이드 | frontend-builder |
-| mobile-qa | Native (Expo RN) Simulator/Emulator QA — iOS Sim 우선 + Android Emu 보조 | qa-tester |
-| testflight-qa | TestFlight 베타 실기기 회귀 + 출시 게이트 | qa-tester |
-| weekly-status | 주간 진행 점검 + 잔여 트랙 + 출시 게이트 read-only 산출 | 리더 (메인) |
-| neq-orchestrator | 팀 오케스트레이션 | 리더 (메인) |
-
-**실행 규칙:**
-- neq 기능 구현/개선/QA 작업 요청 시 `neq-orchestrator` 스킬을 통해 에이전트 팀으로 처리
-- 단순 질문/확인/코드 리뷰는 에이전트 팀 없이 직접 응답 가능
-- 모든 에이전트는 `model: "opus"` 사용
-- 중간 산출물: `_workspace/` 디렉토리
-- 아키텍처: Producer-Reviewer (build → review → feedback 사이클)
-- **추가 요청 라우팅 (2026-07-10):** QA/구현/검증 등 장시간 위임 작업은 서브에이전트를
-  **background 로 스폰**해 세션을 유지하고, 작업 완료 전 사용자의 추가/수정 요청은
-  새 에이전트 생성·재시작 대신 **SendMessage 로 기존 에이전트에 전달** (컨텍스트 보존).
-  같은 작업의 후속 요청도 동일 — 항상 기존 에이전트 continue 우선.
-  메인 세션이 직접 수행 중인 작업(/loop 등)은 사용자 입력이 자동 큐잉되므로 그대로 반영.
-  한계: 에이전트가 도구 실행 중이면 메시지는 다음 턴에 반영 (즉시 인터럽트 아님).
-
-**디렉토리 구조:**
-```
-.claude/
-├── agents/
-│   ├── rec-engineer.md
-│   ├── ux-reviewer.md
-│   ├── content-manager.md
-│   ├── frontend-builder.md
-│   └── qa-tester.md
-└── skills/
-    ├── prompt-tuning/SKILL.md
-    ├── ux-review/SKILL.md
-    ├── tmdb-integration/SKILL.md
-    ├── component-build/SKILL.md
-    ├── mobile-qa/SKILL.md
-    ├── testflight-qa/
-    │   ├── SKILL.md
-    │   └── references/
-    │       ├── manual-test-matrix.md
-    │       ├── release-gate.md
-    │       └── crash-regression.md
-    ├── weekly-status/SKILL.md
-    └── neq-orchestrator/SKILL.md
-```
-
-## 하네스: 디자인 팀
-
-**목표:** neq, 디자인 시스템 리빌드. Warm Cinema 탈피 → 고유 디자인 언어 구축. 외부 디자인 에이전시 수준.
-
-**에이전트 팀:**
-| 에이전트 | 역할 | Phase |
-|---------|------|-------|
-| brand-designer | 브랜드 철학, 컬러, 타이포, 톤앤매너 | 1 |
-| ui-designer | 컴포넌트 시스템, 레이아웃, 스페이싱 | 2 |
-| motion-designer | 애니메이션, 제스처, 트랜지션 | 3 |
-| design-critic | anti-slop 감사, 경쟁 분석, 비평 | 4 |
-
-**스킬:**
-| 스킬 | 용도 |
-|------|------|
-| design-orchestrator | 디자인 팀 오케스트레이션 (Phase 1→2→3→4→DESIGN.md) |
-
-**실행 규칙:**
-- 디자인 시스템 리빌드/업그레이드 요청 시 `design-orchestrator` 스킬 사용
-- Phase 순차 실행 (1→2→3→4). 이전 Phase 산출물을 다음 Phase 입력으로 사용
-- design-critic은 모든 산출물을 cross-review
-- 최종 산출물: 새 DESIGN.md + 구현 가이드
-
-**디렉토리 구조:**
-```
-.claude/
-├── agents/
-│   ├── brand-designer.md
-│   ├── ui-designer.md
-│   ├── motion-designer.md
-│   └── design-critic.md
-└── skills/
-    └── design-orchestrator/SKILL.md
-```
-
 ## 네이티브 앱 전환 (진행 중)
 
 **상태:** Phase 2 PoC 단계 (2026-04-15 시작)
@@ -163,23 +65,8 @@ neko/
 
 **실행 규칙:**
 - 네이티브 관련 작업 시 `apps/native/` 내부에서 작업. 기존 `src/`에 영향 주지 말 것
-- 스와이프/애니메이션 → `frontend-builder` 에이전트 (RN 섹션 참조)
-- E2E 테스트 → `qa-tester` 에이전트 (Appium 섹션 참조)
 - 웹과 네이티브 간 공통 타입 변경 시 양쪽 동기화 필수
 - 구체 로드맵: `_workspace/native-transition-plan.md` 참조
-
-**변경 이력:**
-| 날짜 | 변경 내용 | 대상 | 사유 |
-|------|----------|------|------|
-| 2026-04-07 | 초기 구성 | 전체 | neq 하네스 신규 구축 — 5 에이전트 Producer-Reviewer 팀 |
-| 2026-04-15 | 디자인 팀 추가 | 디자인 | Warm Cinema 탈피 + 고유 디자인 언어 구축 |
-| 2026-04-15 | 네이티브 전환 시작 | 전체 | PWA → Expo RN. frontend-builder, qa-tester 확장 |
-| 2026-05-12 | W3 디자인 통합 완료 | 디자인 | DESIGN.md 247→425L, motion 토큰 globals.css 활성화, Brand Identity 섹션 신규, ux-reviewer follow-up 11/14건 처리. devlog: `_workspace/devlog-2026-05-12-w3-integration.md`. W4 (이관 준비) 진입 가능 |
-| 2026-05-28 | testflight-qa 스킬 추가 | neq 하네스 | TestFlight 베타 시행 단계 진입. mobile-qa(빌드 전 코드 정합성) 와 책임 분리. IPA/EAS 매니페스트, Universal Link 실기기 검증, Reanimated 4 회귀, E2E testflight 분기, 출시 게이트 (UL 자격증명 의존 4건 + PostHog 준비도). qa-tester 에이전트 재사용 |
-| 2026-05-29 | mobile-qa 스킬 재정의 | neq 하네스 | PWA 빌드 정합성 중심 → Native (Expo RN) Simulator/Emulator QA 로 전환. iOS Sim 정본 + Android Emu 보조, Phase 0~6 (환경점검 / 매니페스트 / 시뮬부팅 / 자동회귀 E2E expo-go / 수동탐색 / Android 스폿 / 리포트). PWA QA 요청은 `ux-review` / `qa` 로 라우팅, 실기기는 `testflight-qa` 위임 — 시뮬 단계 책임 명확화 |
-| 2026-06-01 | weekly-status 스킬 추가 | neq 하네스 | 주간 진행 점검 + 잔여 트랙 + 출시 게이트 read-only 산출 스킬. W1~W12 로드맵 + 메모리 7건 + 최신 _workspace devlog + 최근 2주 git log + app.json buildNumber 종합 → 현재 주차 / 6 트랙별 상태 / 잔여 / 다음 주차 진입 게이트 / 출시 D-Day 표 출력. `neq-orchestrator` (실행) 와 책임 분리 — 본 스킬은 read-only, 권고만 산출. W6 (TestFlight 베타) ~ W8 (iOS 출시) 구간 진입으로 주간 status 점검 빈도 증가 대응 |
-| 2026-06-02 | mobile-qa default → simulator-devclient | neq 하네스 | `b1b0d5a` (Welcome 4차 Lottie 도입) 이후 Expo Go 로 Welcome 화면 깨짐 → `wdio.conf.ts` 에 3-way 분기 (`simulator-devclient` (default) / `expo-go` (legacy) / `testflight`). `com.neq.app` 시뮬 dev client 가 새 회귀 트랙. `package.json` 에 `test:e2e:ios:expo-go` / `test:e2e:ios:testflight` 편의 scripts 추가. `mobile-qa` SKILL.md Phase 0~3 갱신 (dev client 존재 여부 점검 / `npx expo run:ios` 1회 빌드 / `expo start --dev-client` 부착 / E2E_TARGET default 변경). qa-tester 에이전트 본체는 변경 없음 |
-| 2026-07-10 | 추가 요청 SendMessage 라우팅 규칙 | 전체 | 장시간 위임 작업(QA/구현/검증)은 서브에이전트 background 스폰 + 세션 유지. 진행 중 사용자 추가 요청은 재스폰 대신 SendMessage 로 기존 에이전트에 전달 (컨텍스트 보존). 메인 세션 직접 작업은 입력 자동 큐잉으로 충분 — 별도 장치 불필요 |
 
 ## TMDB Mirror 인프라
 
@@ -195,13 +82,25 @@ DB 미러로 치환해 ~100ms 로 단축. **상태: 2026-05-08 prod 활성화** 
 
 | Workflow (`.github/workflows/`) | 스케줄 (UTC) | 스크립트 (`scripts/`) | 역할 |
 |---|---|---|---|
-| `tmdb-catalog-sync.yml` | 매일 08:00 | `tmdb-catalog-sync.ts` | TMDB Daily ID Export → `tmdb_catalog` upsert |
+| `tmdb-catalog-sync.yml` | 매일 08:00 | `tmdb-catalog-sync.ts` | Daily ID Export **스트림** → 보유분 popularity 갱신 + 상위 N 신규만 큐 적재 (2026-08-18 재작성) |
 | `tmdb-initial-crawl.yml` | manual (1회성) | `tmdb-initial-crawl.ts` | catalog 전체 → 큐 적재 |
 | `tmdb-bulk-crawl.yml` | 6시간 간격 (`15 */6 * * *`) | `tmdb-bulk-crawl.ts` | 큐 pull → metadata upsert (providers 포함) |
 | `tmdb-refresh-stale.yml` | 매일 08:30 | `tmdb-refresh-stale.ts` | 180일+ stale row → 큐에 추가 |
 | `tmdb-refresh-providers.yml` | 매일 09:00 | `tmdb-refresh-providers.ts` | providers 30일 TTL 트리거 → 큐에 추가 (2026-05-08 신규) |
 | `tmdb-providers-snapshot.yml` | 매일 18:00 | (workflow 내장) | providers 변동 snapshot 보관 |
 | ~~`api-warmup.yml`~~ | **비활성화 (2026-05-19)** | — | cron-job.org 외부 ping 으로 이전. GH Actions 무료 cron 실제 간격 26~86분 → 5분 보장 실패. 파일은 `disabled_manually` 로 보존 (`gh workflow enable` 복구 가능) |
+
+**용량 사고 + 유입 정책 (2026-08-17~19):**
+- 2026-08-17 밤 Supabase Free 500MB 초과 → 프로젝트 전체 `exceed_db_size_quota` 차단 (HTTP 402).
+  원인은 크롤에 유입만 있고 상한·방출이 없던 것 — 4월 시작 이후 단조 증가
+- 대응: `tmdb_catalog` 를 우주 전체(140만 행, 270MB) → **미러 보유분 popularity** (9.7MB) 로 축소.
+  요청 경로는 `genre-top`/`related` 두 곳이 보유분 popularity 만 조회
+- **크기 가드** (`scripts/lib/db-guard.ts` + `db_size_bytes()` RPC): 420MB 신규 유입 중단 /
+  460MB 전면 중단. 갱신 계열은 halt 에서만 멈춤 (180일 재fetch = 라이선스 의무)
+- **미러 프로젝트 분리**: 유저 데이터(약 3MB)와 미러(약 400MB)를 별도 Supabase 프로젝트로.
+  `supabaseMirror()` — `MIRROR_*` env 미설정 시 fallback. 절차: `supabase/mirror-project-setup.md`
+- 상한: 미러 10만 편 / 350MB, 신규 유입 하루 1,000편 (`TMDB_DAILY_INGEST`)
+- **미완**: 방출(P2) 미구현 — 현재 113,666편으로 상한 초과 상태. 크론 6종 `disabled_manually`
 
 **활성화 분기 (`apps/web/src/app/api/recommend/route.ts`):**
 ```ts

@@ -37,8 +37,9 @@ jobs:
 
       - name: Run tmdb-bulk-crawl
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_BATCH_TARGET: hosted
+          MIRROR_SUPABASE_URL: ${{ secrets.MIRROR_SUPABASE_URL }}
+          MIRROR_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MIRROR_SUPABASE_SERVICE_ROLE_KEY }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TMDB_BULK_BATCH: ${{ inputs.batch_size || '2000' }}
           TMDB_RATE_LIMIT_RPS: ${{ inputs.rate_limit_rps || '30' }}

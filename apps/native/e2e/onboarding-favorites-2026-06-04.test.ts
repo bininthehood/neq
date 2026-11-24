@@ -54,8 +54,8 @@ async function waitForRadioOption(timeoutMs = 25000): Promise<string | null> {
 
 /** Persona context → step 1 → step 2 → favorites_pick 진입 경로. */
 async function reachFavoritesPick(): Promise<boolean> {
-  // 1. profile 진입
-  if (!(await tapTab('프로필'))) return false;
+  // 1. profile 진입 — 2026-08-12 프로필이 탭바에서 내려가고 헤더 우상단 버튼이 됨.
+  if (!(await tapByLabel('프로필', { timeout: 4000 }))) return false;
   await browser.pause(800);
 
   // 2. "+ 새 취향 추가" tap

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseMirror } from "@/lib/supabase-admin";
+
+const PUBLIC_CACHE = { "Cache-Control": "public, max-age=0, s-maxage=300, stale-while-revalidate=600" };
 
 /**
  * TMDB id 배열 → genre_ids 매핑. Saved 장르 백필 전용 (mirror-only, TMDB 재호출 없음).
@@ -39,12 +41,12 @@ export async function GET(req: NextRequest) {
     if (!sp.has("movie") && !sp.has("tv") && !sp.has("ids")) {
       return NextResponse.json({ error: "movie/tv/ids 중 하나 필수" }, { status: 400 });
     }
-    return NextResponse.json({}, { status: 200 });
+    return NextResponse.json({}, { status: 200, headers: PUBLIC_CACHE });
   }
 
-  let admin: ReturnType<typeof supabaseAdmin>;
+  let admin: ReturnType<typeof supabaseMirror>;
   try {
-    admin = supabaseAdmin();
+    admin = supabaseMirror();
   } catch {
     return NextResponse.json({ error: "server unavailable" }, { status: 503 });
   }
@@ -93,5 +95,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json(out);
+  return NextResponse.json(out, { headers: PUBLIC_CACHE });
 }

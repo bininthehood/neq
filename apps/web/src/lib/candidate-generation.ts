@@ -24,7 +24,7 @@
  * 산출 spec: `_workspace/08_refactor-handoff-2026-06-06.md` §2 Phase B.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { supabaseAdmin } from "./supabase-admin";
+import { supabaseMirror } from "./supabase-admin";
 import type { RecommendFilter } from "./types";
 import { isSubscriptionProvider } from "./discover-types";
 
@@ -728,7 +728,7 @@ export async function dppDiversify(
   if (candidates.length === 0) return [];
   if (candidates.length <= k) return candidates.slice();
   try {
-    const admin = supabaseAdmin();
+    const admin = supabaseMirror();
     const pool = candidates.slice(0, Math.min(DPP_POOL, candidates.length));
     const embMap = await fetchNormalizedEmbeddings(
       admin,
@@ -778,7 +778,7 @@ export async function fetchExplorationCandidates(
   k: number,
 ): Promise<TmdbCandidate[]> {
   if (k <= 0) return [];
-  const admin = supabaseAdmin();
+  const admin = supabaseMirror();
   const genreIds = new Set<number>([
     ...(profile.favoriteGenreIds ?? []),
     ...tasteGenresToIds(profile.tasteGenres),
@@ -876,7 +876,7 @@ export async function generateCandidates(
   poolSize: number = 1000,
   topK: number = 30,
 ): Promise<TmdbCandidate[]> {
-  const admin = supabaseAdmin(); // env 누락 시 throw → caller 가 fallback
+  const admin = supabaseMirror(); // env 누락 시 throw → caller 가 fallback
 
   // ── P2 (2026-06-24): pgvector ANN retrieval 분기 (순수 additive + flag gating) ──
   // flag off | 취향벡터 null | RPC throw → 아래 기존 SQL rating-DESC 경로 그대로 (fallback).

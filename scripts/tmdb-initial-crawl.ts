@@ -19,6 +19,8 @@
  * 예상 소요: 80,000 × 3 req ÷ 30 req/s ≈ 2.2시간
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { shouldSkipIngest } from "./lib/db-guard";
+import { resolveBatchTarget } from "./lib/batch-target";
 import {
   RateLimiter,
   fetchMetadata,
@@ -26,17 +28,17 @@ import {
   type MetadataRow,
 } from "./lib/tmdb-fetch";
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const MOVIE_LIMIT = Number(process.env.MOVIE_LIMIT ?? "50000");
 const TV_LIMIT = Number(process.env.TV_LIMIT ?? "30000");
 const RATE_LIMIT_RPS = Number(process.env.TMDB_RATE_LIMIT_RPS ?? "30");
 
-if (!SUPABASE_URL || !SERVICE_KEY || !TMDB_API_KEY) {
+if (!TMDB_API_KEY) {
   console.error(
-    "[tmdb-initial-crawl] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TMDB_API_KEY 누락",
+    "[tmdb-initial-crawl] TMDB_API_KEY 누락",
   );
   process.exit(1);
 }
@@ -50,6 +52,10 @@ async function main(): Promise<void> {
   console.log(
     `[tmdb-initial-crawl] 시작 ${startedAt.toISOString()} movie=${MOVIE_LIMIT} tv=${TV_LIMIT} rps=${RATE_LIMIT_RPS}`,
   );
+
+  // 2026-08-18 — 신규 유입 가드. 전체 카탈로그를 큐에 붓는 스크립트라
+  // 임계 도달 시 반드시 막아야 한다 (scripts/lib/db-guard.ts).
+  if (await shouldSkipIngest(admin, "tmdb-initial-crawl")) return;
 
   const movieIds = await pickTopFromCatalog(admin, "movie", MOVIE_LIMIT);
   const tvIds = await pickTopFromCatalog(admin, "tv", TV_LIMIT);
@@ -102,6 +108,7 @@ async function main(): Promise<void> {
     }
 
     if (metadataBatch.length >= 500) {
+      if (await shouldSkipIngest(admin, "tmdb-initial-crawl")) return;
       await flushMetadata(admin, metadataBatch);
       metadataBatch = [];
     }
@@ -120,6 +127,7 @@ async function main(): Promise<void> {
   }
 
   if (metadataBatch.length > 0) {
+    if (await shouldSkipIngest(admin, "tmdb-initial-crawl")) return;
     await flushMetadata(admin, metadataBatch);
   }
 
@@ -140,12 +148,13 @@ async function pickTopFromCatalog(
   let offset = 0;
   while (offset < limit) {
     const end = Math.min(offset + PAGE, limit) - 1;
+    // 2026-08-18 — catalog 슬림화로 deleted/adult 컬럼 제거.
+    // adult 는 catalog-sync 가 스트림 단계에서 걸러 애초에 적재되지 않고,
+    // deleted 는 우주 전체를 보관하지 않게 되면서 개념 자체가 사라졌다.
     const { data, error } = await admin
       .from("tmdb_catalog")
       .select("tmdb_id")
       .eq("media_type", mediaType)
-      .eq("deleted", false)
-      .eq("adult", false)
       .order("popularity", { ascending: false })
       .range(offset, end);
     if (error) throw new Error(`catalog select 실패 (${mediaType}): ${error.message}`);

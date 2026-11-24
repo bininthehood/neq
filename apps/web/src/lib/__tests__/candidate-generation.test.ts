@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-// env stub — supabaseAdmin 평가 단계 throw 방지
+// env stub — supabaseMirror 평가 단계 throw 방지
 vi.hoisted(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "http://localhost";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-key";
@@ -80,7 +80,7 @@ let lastMovieQuery: MockQuery | null = null;
 let lastTvQuery: MockQuery | null = null;
 
 vi.mock("../supabase-admin", () => ({
-  supabaseAdmin: () => ({
+  supabaseMirror: () => ({
     from: (table: string) => {
       if (table !== "tmdb_metadata") throw new Error(`unexpected table ${table}`);
       // media_type eq 호출 순서 기준으로 movie / tv 분기. 첫 호출 = movie 가정.

@@ -41,7 +41,8 @@ import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
 import SearchSheet from '../components/SearchSheet';
 import DistributionChart from '../components/DistributionChart';
-import { IconClose, IconSearch, IconCheck } from '../components/Icons';
+import { IconClose, IconCheck } from '../components/Icons';
+import { useSearchTrigger } from '../lib/search-trigger';
 import { track } from '../lib/analytics';
 
 /**
@@ -127,8 +128,11 @@ export default function ProfileScreen() {
   // 타입/OTT 분포 차트용 원본 saved 배열 (web `profile/page.tsx:37` savedRaw 정합).
   const [savedRaw, setSavedRaw] = useState<SavedItem[]>([]);
   const [deviceId, setDeviceId] = useState('');
-  // 헤더 search 버튼 → SearchSheet 자체 마운트 (web `profile/page.tsx` 정합).
+  // SearchSheet 자체 마운트 (web `profile/page.tsx` 정합).
+  // 2026-08-12 — 진입점이 헤더 버튼 → 하단 "검색" 탭으로 이동. 마운트는 그대로 유지
+  // (한 곳으로 합치면 아래 fetch race 회귀 — 610행 주석 참조).
   const [searchOpen, setSearchOpen] = useState(false);
+  useSearchTrigger(() => setSearchOpen(true));
   // 구독 OTT — onboarding step 9 에서 수집된 provider ids. Profile 에서 변경 가능.
   // 다음 추천 호출 시 자동 반영 (즉시 refetch 안 함).
   const [subscribedOtt, setSubscribedOttState] = useState<Set<number>>(
@@ -286,18 +290,17 @@ export default function ProfileScreen() {
       {/* 헤더 — 좌:title / 우:search. web profile/page.tsx 헤더 정합 (3탭 공통 search). */}
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
+        {/* 2026-08-12 — 프로필이 탭바에서 내려와 헤더 버튼(push) 진입이 되면서
+            나갈 수단이 필요해졌다. 검색 버튼 자리를 닫기로 교체 (검색은 하단 탭).
+            딥링크로 바로 들어와 back stack 이 비면 발견으로 되돌린다. */}
         <Pressable
           style={styles.searchBtn}
-          onPress={() => {
-            // web profile/page.tsx:122 정합 — search_opened 이벤트 발사.
-            track('search_opened');
-            setSearchOpen(true);
-          }}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
           accessibilityRole="button"
-          accessibilityLabel="검색 열기"
+          accessibilityLabel="닫기"
           hitSlop={8}
         >
-          <IconSearch size={18} color={colors.textMuted} />
+          <IconClose size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 

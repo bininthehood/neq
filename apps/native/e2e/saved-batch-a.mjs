@@ -109,9 +109,10 @@ try {
 
   if (!hasItems) {
     rec('SKIP', 'Saved 비어 있음 — 정렬/필터/그룹핑/reaction 실측 불가. 빈 상태만 검증.');
-    // 그래도 빈 상태에서 헤더 양끝 정렬·search 버튼 확인
-    const searchEmpty = await b.$$('~검색 열기');
-    rec('1', `빈 상태에서 search 버튼: ${searchEmpty.length}개`);
+    // 그래도 빈 상태에서 헤더 양끝 정렬·우상단 버튼 확인
+    // 2026-08-12 — 헤더 우상단이 "검색 열기" → "프로필" 로 교체 (검색은 하단 탭).
+    const profileEmpty = await b.$$('~프로필');
+    rec('1', `빈 상태에서 프로필 버튼: ${profileEmpty.length}개`);
   } else {
     // ── viewFilter rect (FAIL-B 비교 baseline: grid 모드) ──
     const vfGrid = await rects(b, '저장 필터');

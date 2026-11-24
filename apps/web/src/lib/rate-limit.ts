@@ -1,4 +1,5 @@
 import { Redis } from "@upstash/redis";
+import { reserveDailyBudget } from "./recommend-budget";
 
 /**
  * /api/recommend rate limit (분당 60회/IP).
@@ -76,4 +77,16 @@ export async function checkRateLimit(
   } catch {
     return checkInMemory(ip);
   }
+}
+
+/** An opt-in global cap. A configured cap requires Redis; storage failures stop paid calls. */
+export async function checkDailyRecommendationBudget(): Promise<boolean> {
+  const raw = process.env.RECOMMEND_DAILY_MAX_REQUESTS;
+  if (!raw) return true;
+  const max = Number(raw);
+  if (!Number.isInteger(max) || max < 1) {
+    throw new Error("RECOMMEND_DAILY_MAX_REQUESTS must be a positive integer");
+  }
+  if (!redis) throw new Error("Shared Redis is required for the recommendation budget");
+  return reserveDailyBudget(redis, max);
 }

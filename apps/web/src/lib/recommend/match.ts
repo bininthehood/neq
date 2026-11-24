@@ -1,5 +1,5 @@
 import { searchTMDB, searchBestByPopularity, getTMDBRecommendations } from "../tmdb";
-import { supabaseAdmin } from "../supabase-admin";
+import { supabaseMirror } from "../supabase-admin";
 import type { Candidate, MatchedFavorite } from "./types";
 
 // ---------- Step 1: favorites → TMDB 매칭 ----------
@@ -142,7 +142,7 @@ async function resolveFavoritesFromMirror(
   favorites: string[],
 ): Promise<Map<string, { id: number; type: "movie" | "series"; genreIds: number[] }>> {
   const out = new Map<string, { id: number; type: "movie" | "series"; genreIds: number[] }>();
-  const admin = supabaseAdmin();
+  const admin = supabaseMirror();
 
   // 정규화 키 ↔ 원본 제목 (dedup). 원본은 미러 컬럼이 ko-KR 우선이라 ko 매칭이 다수.
   const wantedKeys = new Set(favorites.map((t) => normalizeTitle(t)));
@@ -203,7 +203,7 @@ async function resolveFavoritesFromMirror(
  * @returns `${tmdb_id}:${media_type}` → popularity. 미존재 행은 맵 부재 (-1 로 취급).
  */
 async function fetchCatalogPopularity(
-  admin: ReturnType<typeof supabaseAdmin>,
+  admin: ReturnType<typeof supabaseMirror>,
   refs: Array<{ id: number; type: "movie" | "tv" }>,
 ): Promise<Map<string, number>> {
   const out = new Map<string, number>();
@@ -293,7 +293,7 @@ export async function gatherCandidates(
 async function filterByMirrorKR(pool: Candidate[]): Promise<Candidate[]> {
   if (pool.length === 0) return pool;
   try {
-    const admin = supabaseAdmin();
+    const admin = supabaseMirror();
     const ids = pool.map((c) => c.id);
     const { data, error } = await admin
       .from("tmdb_metadata")

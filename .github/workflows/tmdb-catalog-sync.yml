@@ -32,7 +32,8 @@ jobs:
 
       - name: Run tmdb-catalog-sync
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_BATCH_TARGET: hosted
+          MIRROR_SUPABASE_URL: ${{ secrets.MIRROR_SUPABASE_URL }}
+          MIRROR_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MIRROR_SUPABASE_SERVICE_ROLE_KEY }}
           TMDB_POPULARITY_MIN: ${{ inputs.popularity_min || '1.0' }}
         run: npx tsx scripts/tmdb-catalog-sync.ts

@@ -23,19 +23,14 @@
  *   bulk-crawl 1h cron 이 큐를 비워주는 메커니즘 활성화 시점에 의미 있어짐.
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { checkDbGuard } from "./lib/db-guard";
+import { resolveBatchTarget } from "./lib/batch-target";
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const STALE_DAYS = Number(process.env.STALE_DAYS ?? "180");
 const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? "1000");
-
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error(
-    "[tmdb-refresh-stale] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락",
-  );
-  process.exit(1);
-}
 
 type StaleRow = {
   tmdb_id: number;
@@ -51,6 +46,16 @@ async function main(): Promise<void> {
   console.log(
     `[tmdb-refresh-stale] 시작 ${startedAt.toISOString()} stale_days=${STALE_DAYS} batch=${BATCH_SIZE}`,
   );
+
+  // 2026-08-18 — 갱신 계열이라 refreshOnly 단계에서는 계속 돈다.
+  // 180일 재fetch 는 TMDB 라이선스 의무라 유입 임계로 멈추면 안 된다.
+  // halt(전면 중단) 에서만 종료 (scripts/lib/db-guard.ts).
+  const guard = await checkDbGuard(admin, "tmdb-refresh-stale");
+  console.log(`[tmdb-refresh-stale] db-guard: ${guard.summary}`);
+  if (guard.level === "halt") {
+    console.warn("[tmdb-refresh-stale] DB 크기 전면 중단선 초과 — 종료");
+    return;
+  }
 
   const cutoff = new Date(Date.now() - STALE_DAYS * 24 * 60 * 60 * 1000);
   console.log(`[tmdb-refresh-stale] cutoff = ${cutoff.toISOString()}`);
@@ -98,7 +103,7 @@ async function enqueue(
   const queueRows = rows.map((r) => ({
     tmdb_id: r.tmdb_id,
     media_type: r.media_type,
-    priority: 0,
+    priority: 10,
     failed_count: 0,
   }));
 

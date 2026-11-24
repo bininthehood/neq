@@ -41,8 +41,9 @@ jobs:
 
       - name: Run tmdb-initial-crawl
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_BATCH_TARGET: hosted
+          MIRROR_SUPABASE_URL: ${{ secrets.MIRROR_SUPABASE_URL }}
+          MIRROR_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MIRROR_SUPABASE_SERVICE_ROLE_KEY }}
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           MOVIE_LIMIT: ${{ inputs.movie_limit || '50000' }}
           TV_LIMIT: ${{ inputs.tv_limit || '30000' }}

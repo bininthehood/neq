@@ -27,7 +27,7 @@
 import { NextResponse } from "next/server";
 import { isNotificationsEnabled } from "@/lib/env";
 import { isAuthorizedCron } from "@/lib/notifications/cron-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin, supabaseMirror } from "@/lib/supabase-admin";
 import {
   sendPush,
   generateTrackingId,
@@ -110,6 +110,9 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now();
   const admin = supabaseAdmin();
+  // 2026-08-18 — 미러 분리. tmdb_* 테이블은 별도 프로젝트에서 읽는다
+  // (env 미설정 시 supabaseAdmin 으로 fallback).
+  const mirror = supabaseMirror();
   const sinceIso = yesterdayIsoDate();
 
   // STEP 1 — newRelease=true 사용자 조회
@@ -167,7 +170,7 @@ export async function GET(req: Request) {
   const distinctTvIds = Array.from(new Set(savedTvRows.map((r) => r.tmdb_id)));
 
   // 미러에서 seasons 가 있으면 fetch skip 하기 위한 간단 룩업
-  const mirrorTvLookup = await fetchMirrorTv(admin, distinctTvIds);
+  const mirrorTvLookup = await fetchMirrorTv(mirror, distinctTvIds);
 
   const tvSeasonCache = new Map<number, NewReleaseCandidate[]>();
   await mapWithConcurrency(distinctTvIds, TMDB_CONCURRENCY, async (id) => {

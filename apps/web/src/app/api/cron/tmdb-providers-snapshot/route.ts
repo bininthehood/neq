@@ -22,7 +22,7 @@
 import { NextResponse } from "next/server";
 import { isNotificationsEnabled } from "@/lib/env";
 import { isAuthorizedCron } from "@/lib/notifications/cron-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin, supabaseMirror } from "@/lib/supabase-admin";
 import {
   classifyCache,
   extractKrProviderIds,
@@ -71,6 +71,9 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now();
   const admin = supabaseAdmin();
+  // 2026-08-18 — 미러 분리. tmdb_* 테이블은 별도 프로젝트에서 읽는다
+  // (env 미설정 시 supabaseAdmin 으로 fallback).
+  const mirror = supabaseMirror();
   const now = new Date();
   const today = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
 
@@ -100,7 +103,7 @@ export async function GET(req: Request) {
   }
 
   // STEP 2 — tmdb_metadata 미러 join (24h fresh 분류)
-  const joined = await joinMirror(admin, targets, now);
+  const joined = await joinMirror(mirror, targets, now);
   const mirrorHits = joined.filter((j) => j.cacheStatus === "fresh").length;
 
   // STEP 3 — TMDB 호출 (stale/miss 만)
@@ -148,7 +151,7 @@ export async function GET(req: Request) {
   let snapshotsInserted = 0;
   for (let i = 0; i < rowsToUpsert.length; i += UPSERT_BATCH) {
     const batch = rowsToUpsert.slice(i, i + UPSERT_BATCH);
-    const { error: upErr } = await admin
+    const { error: upErr } = await mirror
       .from("tmdb_provider_snapshots")
       .upsert(batch, {
         onConflict: "work_id,media_type,snapshot_date",
@@ -169,7 +172,7 @@ export async function GET(req: Request) {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000)
       .toISOString()
       .slice(0, 10);
-    const { count, error: pruneErr } = await admin
+    const { count, error: pruneErr } = await mirror
       .from("tmdb_provider_snapshots")
       .delete({ count: "exact" })
       .lt("snapshot_date", sevenDaysAgo);

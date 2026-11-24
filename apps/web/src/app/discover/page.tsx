@@ -18,6 +18,7 @@ import type { Recommendation } from "@/lib/types";
 import type { FilterYear, FilterRating } from "@/lib/discover-types";
 import { useSwipeGesture } from "@/hooks/useSwipeGesture";
 import { useDetailSheet } from "@/hooks/useDetailSheet";
+import { useSearchTrigger } from "@/lib/search-trigger";
 import { useRecommendations } from "@/hooks/useRecommendations";
 import FilterChips from "@/components/discover/FilterChips";
 import DetailSheet from "@/components/discover/DetailSheet";
@@ -91,8 +92,17 @@ export default function DiscoverPage() {
 
   // 위임 J #3 — DetailSheet Cast 클릭 → SearchSheet 그 이름으로 자동 검색.
   // searchInitialQuery 가 SearchSheet 에 prop 으로 전달되며 sheet 가 열릴 때 자동 트리거.
-  // 평소(검색 버튼 클릭)에는 빈 문자열 → SearchSheet 가 idle 상태 유지.
+  // 평소(하단 검색 탭)에는 빈 문자열 → SearchSheet 가 idle 상태 유지.
   const [searchInitialQuery, setSearchInitialQuery] = useState<string>("");
+
+  // 2026-08-12 — 하단 "검색" 탭 → 이 페이지의 SearchSheet 열기.
+  // 헤더 검색 버튼이 프로필로 바뀌면서 진입점이 탭으로 이동했다. initialQuery 는
+  // 비워 잔해를 제거(기존 헤더 버튼 동작 정합). search_opened track 은 탭
+  // 리스너(BottomNav)에서 발사.
+  useSearchTrigger(() => {
+    setSearchInitialQuery("");
+    searchSheet.openDetail();
+  });
 
   // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
   // native `apps/native/app/index.tsx` 동등 정합.
@@ -785,12 +795,7 @@ export default function DiscoverPage() {
             const target = persona.personas.find((p) => p.id === id);
             track("persona_switched", { persona_id: id, persona_name: target?.name });
           }}
-          onSearchOpen={() => {
-            track("search_opened");
-            // 위임 J #3 — 검색 버튼으로 진입 시 initialQuery 비움 (이전 인물 검색 잔해 제거).
-            setSearchInitialQuery("");
-            searchSheet.openDetail();
-          }}
+          onProfileOpen={() => router.push("/profile")}
         />
       </div>
       <div className="transition-all duration-300 relative z-20" style={{ opacity: immersive ? 0 : 1, maxHeight: immersive ? 0 : 60, overflow: immersive ? "hidden" : "visible", pointerEvents: immersive ? "none" : "auto" }}>

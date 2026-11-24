@@ -7,7 +7,7 @@ import {
   getTMDBRecommendations,
   posterUrl,
 } from "@/lib/tmdb";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseMirror } from "@/lib/supabase-admin";
 import { parseEmbedding } from "@/lib/candidate-generation";
 import type { RelatedWork, RelatedWorksResponse } from "@neq/core";
 
@@ -281,7 +281,7 @@ export async function GET(req: NextRequest) {
   // admin 1회 확보 — 미러 3트랙 공유. env 누락 시 null → 전 트랙 TMDB fallback(기존 동작).
   let admin: SupabaseClient | null = null;
   try {
-    admin = supabaseAdmin();
+    admin = supabaseMirror();
   } catch {
     admin = null;
     console.warn(`[related] admin 확보 실패(env 누락) → 전 트랙 TMDB fallback id=${id}`);

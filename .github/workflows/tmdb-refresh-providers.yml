@@ -38,8 +38,9 @@ jobs:
 
       - name: Run tmdb-refresh-providers
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TMDB_BATCH_TARGET: hosted
+          MIRROR_SUPABASE_URL: ${{ secrets.MIRROR_SUPABASE_URL }}
+          MIRROR_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MIRROR_SUPABASE_SERVICE_ROLE_KEY }}
           PROVIDERS_TTL_DAYS: ${{ inputs.providers_ttl_days || '30' }}
           BATCH_SIZE: ${{ inputs.batch_size || '1000' }}
         run: npx tsx scripts/tmdb-refresh-providers.ts

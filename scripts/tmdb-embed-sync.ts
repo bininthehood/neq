@@ -45,6 +45,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
+import { resolveBatchTarget } from "./lib/batch-target";
 import OpenAI from "openai";
 import {
   buildEmbedDocument,
@@ -52,9 +53,9 @@ import {
   type EmbedSourceRow,
 } from "./lib/tmdb-fetch";
 
-const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const EMBED_MODEL = process.env.EMBED_MODEL ?? "text-embedding-3-small";
 const EMBED_DIM = 1536; // text-embedding-3-small. 모델 교체 시 migration 차원과 동기화.
@@ -78,12 +79,6 @@ const LIMIT = CLI_LIMIT
     : Infinity;
 const DRY_RUN = argv.includes("--dry-run") || process.env.DRY_RUN === "true";
 
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error(
-    "[tmdb-embed-sync] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락",
-  );
-  process.exit(1);
-}
 if (!OPENAI_API_KEY && !DRY_RUN) {
   console.error("[tmdb-embed-sync] OPENAI_API_KEY 누락 (--dry-run 은 예외)");
   process.exit(1);

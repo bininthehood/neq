@@ -10,7 +10,7 @@
  *
  * 동작:
  *   1. CRON_SECRET 검증 (다른 cron route 패턴과 동일)
- *   2. supabaseAdmin().from("tmdb_metadata").select("tmdb_id").limit(1)
+ *   2. supabaseMirror().from("tmdb_metadata").select("tmdb_id").limit(1)
  *      — connection pool 살리기 + mirror 테이블 query path 검증
  *   3. OpenAI models.list() — SDK TLS handshake warm
  *   4. match_tmdb_by_embedding RPC (match_count=1) — pgvector HNSW 인덱스/embedding
@@ -23,7 +23,7 @@
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { isAuthorizedCron } from "@/lib/notifications/cron-auth";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseMirror } from "@/lib/supabase-admin";
 
 // 2026-05-22 — PostHog capture REST 직접 호출 (posthog-node 의존 추가 회피).
 // warmup ping 의 실제 실행 빈도 + db ping 성공률을 PostHog 에서 추적.
@@ -60,13 +60,13 @@ export async function GET(req: Request) {
   };
 
   // Supabase admin client 초기화 + lightweight query.
-  // - mirror 경로 (/api/recommend enrich 단계) 와 동일 supabaseAdmin 인스턴스 활용
+  // - mirror 경로 (/api/recommend enrich 단계) 와 동일 supabaseMirror 인스턴스 활용
   // - tmdb_metadata limit 1 — index hit 로 ms 단위 응답
   let dbOk = false;
   let dbError: string | null = null;
   try {
     const tDb = Date.now();
-    const admin = supabaseAdmin();
+    const admin = supabaseMirror();
     const { error } = await admin
       .from("tmdb_metadata")
       .select("tmdb_id")
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
     }
   } catch (err) {
     dbError = err instanceof Error ? err.message : String(err);
-    console.error("[warmup] supabaseAdmin init failed:", err);
+    console.error("[warmup] supabaseMirror init failed:", err);
   }
 
   // OpenAI client TLS handshake + edge connection warm.
@@ -108,7 +108,7 @@ export async function GET(req: Request) {
   let retrievalError: string | null = null;
   try {
     const tRet = Date.now();
-    const admin = supabaseAdmin();
+    const admin = supabaseMirror();
     const { error } = await admin.rpc("match_tmdb_by_embedding", {
       query_embedding: new Array(1536).fill(1), // 유효 방향벡터 (cosine 정의), 값 무의미
       match_count: 1,

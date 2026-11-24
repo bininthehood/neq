@@ -134,8 +134,9 @@ describe('B1 — Onboarding 진입 경로', () => {
     await ensureBackToDiscover();
   });
 
-  it('Profile 탭 진입 → "모든 데이터 초기화" reset entry 존재 (onboarding 진입 경로 보호)', async () => {
-    const tabOk = await tapTab('프로필');
+  // 2026-08-12 — 프로필은 탭이 아니라 헤더 우상단 버튼(~프로필) 진입.
+  it('Profile 진입 → "모든 데이터 초기화" reset entry 존재 (onboarding 진입 경로 보호)', async () => {
+    const tabOk = await tapByLabel('프로필', { timeout: 4000 });
     expect(tabOk).toBe(true);
     await browser.pause(1200);
     await capture('b1-01-profile');
@@ -251,10 +252,11 @@ describe('B2 — Saved 필터/정렬/검색', () => {
   });
 
   it('Saved 내 검색 sheet 열기/닫기', async () => {
-    // saved.tsx 의 "검색 열기" 버튼
+    // 2026-08-12 — saved.tsx 헤더 "검색 열기" 버튼 폐지(프로필로 교체).
+    // 하단 "검색" 탭이 포커스된 화면(Saved)의 SearchSheet 를 연다.
     let sheetMounted = false;
     for (let attempt = 0; attempt < 3 && !sheetMounted; attempt++) {
-      const opened = await tapByLabel('검색 열기', { timeout: 3000 });
+      const opened = await tapTab('검색');
       if (!opened) continue;
       for (let i = 0; i < 4; i++) {
         await browser.pause(400);

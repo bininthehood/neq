@@ -1,4 +1,4 @@
-import { supabaseAdmin } from "../supabase-admin";
+import { supabaseMirror } from "../supabase-admin";
 import { getKoreanProviders, getCredits, getDetails } from "../tmdb";
 import type { Candidate, EnrichedCandidate, TmdbMetadataRow } from "./types";
 
@@ -76,7 +76,7 @@ export async function enrichFromMirror(
 
   let admin;
   try {
-    admin = supabaseAdmin();
+    admin = supabaseMirror();
   } catch {
     // SUPABASE 환경변수 누락 등 → 기존 TMDB 경로 fallback
     return enrichCandidates(candidates);

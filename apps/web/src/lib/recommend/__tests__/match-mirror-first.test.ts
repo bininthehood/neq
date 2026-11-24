@@ -100,7 +100,7 @@ function makeCatalogQuery() {
 }
 
 vi.mock("../../supabase-admin", () => ({
-  supabaseAdmin: () => ({
+  supabaseMirror: () => ({
     from: (table: string) => {
       if (table === "tmdb_metadata") return makeMetadataQuery();
       if (table === "tmdb_catalog") return makeCatalogQuery();
