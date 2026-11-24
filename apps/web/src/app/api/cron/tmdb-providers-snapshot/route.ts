@@ -71,8 +71,8 @@ export async function GET(req: Request) {
 
   const startedAt = Date.now();
   const admin = supabaseAdmin();
-  // 2026-08-18 — 미러 분리. tmdb_* 테이블은 별도 프로젝트에서 읽는다
-  // (env 미설정 시 supabaseAdmin 으로 fallback).
+  // 2026-11-24 — 미러(읽기 전용일 수 있음)는 tmdb_metadata 조회에만 쓴다.
+  // 스냅샷은 saved_items 파생 데이터라 메인 DB 에 저장한다.
   const mirror = supabaseMirror();
   const now = new Date();
   const today = now.toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
@@ -151,7 +151,7 @@ export async function GET(req: Request) {
   let snapshotsInserted = 0;
   for (let i = 0; i < rowsToUpsert.length; i += UPSERT_BATCH) {
     const batch = rowsToUpsert.slice(i, i + UPSERT_BATCH);
-    const { error: upErr } = await mirror
+    const { error: upErr } = await admin
       .from("tmdb_provider_snapshots")
       .upsert(batch, {
         onConflict: "work_id,media_type,snapshot_date",
@@ -172,7 +172,7 @@ export async function GET(req: Request) {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 3600 * 1000)
       .toISOString()
       .slice(0, 10);
-    const { count, error: pruneErr } = await mirror
+    const { count, error: pruneErr } = await admin
       .from("tmdb_provider_snapshots")
       .delete({ count: "exact" })
       .lt("snapshot_date", sevenDaysAgo);

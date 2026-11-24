@@ -95,9 +95,10 @@ function makeFakeAdmin() {
 
 vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: () => makeFakeAdmin(),
-  // 2026-08-18 미러 분리 — 라우트가 두 클라이언트를 쓴다.
-  // fake 는 테이블명으로 분기하므로 동일 인스턴스를 주면 기존 동작이 유지된다.
-  supabaseMirror: () => makeFakeAdmin(),
+  // 스냅샷은 메인 DB 에만 있다 — 미러에 접근하면 실패시킨다.
+  supabaseMirror: () => {
+    throw new Error("ott-expiry must not use the mirror");
+  },
 }));
 
 const sendPushMock = vi.fn();

@@ -102,9 +102,13 @@ function makeFakeAdmin() {
 
 vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: () => makeFakeAdmin(),
-  // 2026-08-18 미러 분리 — 라우트가 두 클라이언트를 쓴다.
-  // fake 는 테이블명으로 분기하므로 동일 인스턴스를 주면 기존 동작이 유지된다.
-  supabaseMirror: () => makeFakeAdmin(),
+  // 로컬 미러는 읽기 전용(쓰기 403) — 미러로는 tmdb_metadata 조회만 허용한다.
+  supabaseMirror: () => ({
+    from(table: string) {
+      if (table !== "tmdb_metadata") throw new Error(`mirror must not touch ${table}`);
+      return makeFakeAdmin().from(table);
+    },
+  }),
 }));
 
 beforeEach(() => {
