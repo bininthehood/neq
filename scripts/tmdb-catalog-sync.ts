@@ -28,6 +28,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { shouldSkipIngest } from "./lib/db-guard";
+import { resolveBatchTarget } from "./lib/batch-target";
 import {
   scanExportStream,
   type Candidate,
@@ -38,26 +39,13 @@ import { createGunzip } from "node:zlib";
 import { Readable } from "node:stream";
 
 // 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
-// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
-const SUPABASE_URL =
-  process.env.MIRROR_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY =
-  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 
 /** 신규 후보 하한. 이 아래는 KR 미가용 비율이 89%(2026-05 감사) 라 긁을 값이 없다. */
 const POPULARITY_MIN = Number(process.env.TMDB_POPULARITY_MIN ?? "1.0");
 /** 하루 신규 유입 상한. 상한 도달 후에는 방출(P2)과 균형을 이뤄야 한다. */
 const DAILY_INGEST = Number(process.env.TMDB_DAILY_INGEST ?? "1000");
-
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error(
-    "[tmdb-catalog-sync] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락",
-  );
-  process.exit(1);
-}
 
 
 async function main(): Promise<void> {
@@ -91,6 +79,7 @@ async function main(): Promise<void> {
   const updated = await upsertCatalog(admin, popUpdates, "popularity 갱신");
 
   // 신규는 popularity 상위 DAILY_INGEST 개만. movie/tv 를 합쳐 전역 상위로 자른다.
+  if (await shouldSkipIngest(admin, "tmdb-catalog-sync")) return;
   newCandidates.sort((a, b) => b.popularity - a.popularity);
   const admitted = newCandidates.slice(0, DAILY_INGEST);
   const dropped = newCandidates.length - admitted.length;

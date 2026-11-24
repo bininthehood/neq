@@ -24,25 +24,13 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkDbGuard } from "./lib/db-guard";
+import { resolveBatchTarget } from "./lib/batch-target";
 
 // 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
-// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
-const SUPABASE_URL =
-  process.env.MIRROR_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY =
-  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const STALE_DAYS = Number(process.env.STALE_DAYS ?? "180");
 const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? "1000");
-
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error(
-    "[tmdb-refresh-stale] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락",
-  );
-  process.exit(1);
-}
 
 type StaleRow = {
   tmdb_id: number;
@@ -115,7 +103,7 @@ async function enqueue(
   const queueRows = rows.map((r) => ({
     tmdb_id: r.tmdb_id,
     media_type: r.media_type,
-    priority: 0,
+    priority: 10,
     failed_count: 0,
   }));
 

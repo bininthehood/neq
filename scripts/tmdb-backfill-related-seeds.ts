@@ -37,6 +37,7 @@
  * TMDB 호출: 행당 detail + credits 2콜 (providers/watch 는 건너뜀 — seeds 만 필요).
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { resolveBatchTarget } from "./lib/batch-target";
 import {
   RateLimiter,
   extractRelatedSeeds,
@@ -45,19 +46,13 @@ import {
 } from "./lib/tmdb-fetch";
 
 // 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
-// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
-const SUPABASE_URL =
-  process.env.MIRROR_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY =
-  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-if (!SUPABASE_URL || !SERVICE_KEY || !TMDB_API_KEY) {
+if (!TMDB_API_KEY) {
   console.error(
-    "[backfill-related-seeds] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TMDB_API_KEY 누락",
+    "[backfill-related-seeds] TMDB_API_KEY 누락",
   );
   process.exit(1);
 }

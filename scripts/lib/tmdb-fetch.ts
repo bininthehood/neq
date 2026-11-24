@@ -70,6 +70,9 @@ export class RateLimiter {
   }
 }
 
+/** TMDB 404 — the title was removed (or the id/media_type pair never existed). Definitive, never retried. */
+export class TmdbNotFoundError extends Error {}
+
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -88,6 +91,7 @@ export async function tmdbGet(
   const url = `https://api.themoviedb.org/3/${row.media_type}/${row.tmdb_id}${path}?api_key=${apiKey}&language=ko-KR`;
   const res = await fetch(url);
   if (!res.ok) {
+    if (res.status === 404) throw new TmdbNotFoundError(`TMDB ${path || "/detail"} 404`);
     if (res.status === 429 || res.status >= 500) {
       await sleep(2000);
       const retry = await fetch(url);

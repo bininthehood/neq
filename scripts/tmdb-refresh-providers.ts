@@ -12,7 +12,7 @@
  * 처리 흐름:
  *   1. tmdb_metadata 에서 providers_fetched_at < NOW() - 30 days 인 row 추출 (오래된 순)
  *      - providers_fetched_at IS NULL 도 포함 (구버전 적재로 미세팅된 경우)
- *   2. tmdb_crawl_queue 에 (tmdb_id, media_type, priority=0) UPSERT — DO NOTHING on conflict
+ *   2. tmdb_crawl_queue 에 (tmdb_id, media_type, priority=10) UPSERT — DO NOTHING on conflict
  *   3. bulk-crawl (6시간 cron) 이 큐에서 pull 해서 갱신. 갱신 시 providers_fetched_at 도 NOW 로 update.
  *
  * 주의:
@@ -20,10 +20,11 @@
  *   따라서 본 스크립트가 큐에 추가하면 metadata 전체가 refresh 됨 (providers 외 필드도 freshness 향상).
  *
  * 환경 변수:
- *   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (필수)
+ *   TMDB_BATCH_TARGET, MIRROR_SUPABASE_URL, MIRROR_SUPABASE_SERVICE_ROLE_KEY (필수)
  *   PROVIDERS_TTL_DAYS (기본 30)
  *   BATCH_SIZE (기본 1000)
  *   DRY_RUN (기본 false) — true 시 큐 적재 없이 후보 수만 보고. 운영 검증용.
+ *   PROVIDERS_ONLY (기본 false) — true 시 현재 제공처 정보가 있는 작품부터 갱신.
  *
  * 운영:
  *   GitHub Actions `.github/workflows/tmdb-refresh-providers.yml` (매일 09:00 UTC)
@@ -31,26 +32,15 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { checkDbGuard } from "./lib/db-guard";
+import { resolveBatchTarget } from "./lib/batch-target";
 
 // 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
-// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
-const SUPABASE_URL =
-  process.env.MIRROR_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY =
-  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const PROVIDERS_TTL_DAYS = Number(process.env.PROVIDERS_TTL_DAYS ?? "30");
 const BATCH_SIZE = Number(process.env.BATCH_SIZE ?? "1000");
 const DRY_RUN = process.env.DRY_RUN === "true";
-
-if (!SUPABASE_URL || !SERVICE_KEY) {
-  console.error(
-    "[tmdb-refresh-providers] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 누락",
-  );
-  process.exit(1);
-}
+const PROVIDERS_ONLY = process.env.PROVIDERS_ONLY === "true";
 
 type StaleRow = {
   tmdb_id: number;
@@ -64,7 +54,7 @@ async function main(): Promise<void> {
   });
 
   console.log(
-    `[tmdb-refresh-providers] 시작 ${startedAt.toISOString()} ttl_days=${PROVIDERS_TTL_DAYS} batch=${BATCH_SIZE}${DRY_RUN ? " [DRY_RUN]" : ""}`,
+    `[tmdb-refresh-providers] 시작 ${startedAt.toISOString()} ttl_days=${PROVIDERS_TTL_DAYS} batch=${BATCH_SIZE}${PROVIDERS_ONLY ? " providers-only" : ""}${DRY_RUN ? " [DRY_RUN]" : ""}`,
   );
 
   // 2026-08-18 — 갱신 계열. 기존 행의 providers 만 바꿔 쓰므로 행 수가 늘지 않는다.
@@ -79,7 +69,7 @@ async function main(): Promise<void> {
   const cutoff = new Date(Date.now() - PROVIDERS_TTL_DAYS * 24 * 60 * 60 * 1000);
   console.log(`[tmdb-refresh-providers] cutoff = ${cutoff.toISOString()}`);
 
-  const staleRows = await fetchStaleProviders(admin, cutoff, BATCH_SIZE);
+  const staleRows = await fetchStaleProviders(admin, cutoff, BATCH_SIZE, PROVIDERS_ONLY);
   console.log(`[tmdb-refresh-providers] stale row ${staleRows.length}건 발견`);
 
   if (staleRows.length === 0) {
@@ -112,13 +102,16 @@ async function fetchStaleProviders(
   admin: SupabaseClient,
   cutoff: Date,
   limit: number,
+  providersOnly: boolean,
 ): Promise<StaleRow[]> {
   // providers_fetched_at < cutoff OR providers_fetched_at IS NULL
   // 정렬: NULL 우선 → 오래된 순. NULL 은 fetched_at 가 cutoff 보다 오래됐을 때만 안전 후보.
   // 단순화: NULL OR < cutoff 모두 후보. fetched_at 도 cutoff 미만일 때만 (이중 안전 — 최근 적재 행 재큐 방지)
-  const { data, error } = await admin
+  let query = admin
     .from("tmdb_metadata")
-    .select("tmdb_id, media_type")
+    .select("tmdb_id, media_type");
+  if (providersOnly) query = query.not("providers", "is", null);
+  const { data, error } = await query
     .or(
       `providers_fetched_at.is.null,providers_fetched_at.lt.${cutoff.toISOString()}`,
     )
@@ -144,7 +137,7 @@ async function enqueue(
   const queueRows = rows.map((r) => ({
     tmdb_id: r.tmdb_id,
     media_type: r.media_type,
-    priority: 0,
+    priority: 10,
     failed_count: 0,
   }));
 

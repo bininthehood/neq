@@ -40,8 +40,8 @@ function mb(bytes: number): string {
 /**
  * 현재 DB 크기를 조회해 진행 단계를 판정한다.
  *
- * 조회 실패 시 `ok` 로 degrade — 가드가 크롤을 막는 원인이 되면 안 된다.
- * (RPC 미적용 환경, 일시적 네트워크 오류 등. 실패는 로그로 남긴다.)
+ * 조회 실패 시 작업을 중단한다. 크기를 모르는 상태에서 쓰기를 허용하면
+ * 용량 제한으로 서비스 전체가 차단될 수 있다.
  */
 export async function checkDbGuard(
   admin: SupabaseClient,
@@ -49,13 +49,11 @@ export async function checkDbGuard(
 ): Promise<GuardResult> {
   const { data, error } = await admin.rpc("db_size_bytes");
 
-  if (error || typeof data !== "number") {
-    const reason = error?.message ?? `예상치 못한 응답: ${JSON.stringify(data)}`;
-    console.warn(
-      `[${tag}] DB 크기 조회 실패 — 가드 없이 진행 (${reason}). ` +
-        `supabase/migrations/20260818_db_size_guard.sql 적용 여부 확인 필요.`,
-    );
-    return { level: "ok", bytes: null, summary: "크기 미상 (가드 skip)" };
+  if (error) {
+    throw new Error(`[${tag}] DB 크기 조회 실패: ${error.message}`);
+  }
+  if (typeof data !== "number" || !Number.isFinite(data) || data < 0) {
+    throw new Error(`[${tag}] DB 크기 응답 오류: ${JSON.stringify(data)}`);
   }
 
   const bytes = data;

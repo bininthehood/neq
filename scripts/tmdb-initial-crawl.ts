@@ -20,6 +20,7 @@
  */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { shouldSkipIngest } from "./lib/db-guard";
+import { resolveBatchTarget } from "./lib/batch-target";
 import {
   RateLimiter,
   fetchMetadata,
@@ -28,22 +29,16 @@ import {
 } from "./lib/tmdb-fetch";
 
 // 2026-08-18 미러 분리 — tmdb_* 는 별도 Supabase 프로젝트.
-// MIRROR_* 미설정 시 기존 프로젝트로 fallback (분리 전/롤백 호환).
-const SUPABASE_URL =
-  process.env.MIRROR_SUPABASE_URL ??
-  process.env.SUPABASE_URL ??
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SERVICE_KEY =
-  process.env.MIRROR_SUPABASE_SERVICE_ROLE_KEY ??
-  process.env.SUPABASE_SERVICE_ROLE_KEY;
+// TMDB_BATCH_TARGET과 MIRROR_* 자격 정보를 명시해야 실행한다.
+const { url: SUPABASE_URL, key: SERVICE_KEY } = resolveBatchTarget(process.env);
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const MOVIE_LIMIT = Number(process.env.MOVIE_LIMIT ?? "50000");
 const TV_LIMIT = Number(process.env.TV_LIMIT ?? "30000");
 const RATE_LIMIT_RPS = Number(process.env.TMDB_RATE_LIMIT_RPS ?? "30");
 
-if (!SUPABASE_URL || !SERVICE_KEY || !TMDB_API_KEY) {
+if (!TMDB_API_KEY) {
   console.error(
-    "[tmdb-initial-crawl] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / TMDB_API_KEY 누락",
+    "[tmdb-initial-crawl] TMDB_API_KEY 누락",
   );
   process.exit(1);
 }
@@ -113,6 +108,7 @@ async function main(): Promise<void> {
     }
 
     if (metadataBatch.length >= 500) {
+      if (await shouldSkipIngest(admin, "tmdb-initial-crawl")) return;
       await flushMetadata(admin, metadataBatch);
       metadataBatch = [];
     }
@@ -131,6 +127,7 @@ async function main(): Promise<void> {
   }
 
   if (metadataBatch.length > 0) {
+    if (await shouldSkipIngest(admin, "tmdb-initial-crawl")) return;
     await flushMetadata(admin, metadataBatch);
   }
 

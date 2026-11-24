@@ -38,9 +38,7 @@ jobs:
 
       - name: Run tmdb-refresh-providers
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          # 2026-08-18 미러 분리 — 미설정 시 위 SUPABASE_* 로 fallback
+          TMDB_BATCH_TARGET: hosted
           MIRROR_SUPABASE_URL: ${{ secrets.MIRROR_SUPABASE_URL }}
           MIRROR_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MIRROR_SUPABASE_SERVICE_ROLE_KEY }}
           PROVIDERS_TTL_DAYS: ${{ inputs.providers_ttl_days || '30' }}
