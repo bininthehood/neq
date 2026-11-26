@@ -59,6 +59,58 @@ const mirrorFetch =
     return fetch(url, { ...init, signal });
   };
 
+/**
+ * 집 미러(로컬 PostgREST)가 응답하지 않을 때 호스팅(메인 프로젝트)의 미러 테이블로 넘긴다.
+ * Mac 꺼짐·로그인 대기는 Cloudflare 530, 터널만 살아 있으면 502, 그 밖에 무응답·연결 거부.
+ * 우회가 없으면 호출처 fallback(TMDB/LLM)으로 추천이 20~55초까지 늘어난다 (2026-11-25 실측).
+ *
+ * - 응답 헤더까지 3초 안에 오지 않거나 5xx·네트워크 오류면 같은 요청을 호스팅으로 보낸다.
+ * - 한 번 실패하면 60초 동안 집 미러를 건너뛴다. 그 뒤 첫 요청이 다시 집 미러를 시도한다.
+ * - 4xx(토큰·권한 오류)와 호출자 취소는 넘기지 않는다. 설정 오류는 드러나야 한다.
+ * - 벡터 RPC 는 넘기지 않고 바로 실패시킨다 (아래 toMain 참고).
+ * ponytail: 인스턴스별 메모리 상태 — 인스턴스마다 첫 요청 하나는 실패를 직접 겪는다.
+ */
+const HOME_HEADERS_TIMEOUT_MS = 3000;
+const HOME_SKIP_MS = 60_000;
+let homeDownUntil = 0;
+
+const homeWithFailover =
+  (mainUrl: string, mainKey: string): typeof fetch =>
+  async (input, init) => {
+    const url = input instanceof Request ? input.url : String(input);
+    const toMain = () => {
+      // 호스팅에는 벡터 인덱스가 없어(2026-08-18 DROP) 3초를 더 기다린 뒤 실패할 뿐이다.
+      // 바로 오류를 내면 호출처가 대체 SQL 로 넘어간다. POST 라 postgrest-js 재시도도 없다.
+      if (url.includes("/rpc/match_tmdb_by_embedding")) {
+        return Promise.reject(new Error("home mirror down; hosted mirror has no vector index"));
+      }
+      const headers = new Headers(init?.headers);
+      headers.set("apikey", mainKey);
+      headers.set("Authorization", `Bearer ${mainKey}`);
+      return mirrorFetch(false)(mainUrl + url.slice(url.indexOf("/rest/v1/")), { ...init, headers });
+    };
+    if (Date.now() < homeDownUntil) return toMain();
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(new Error("home mirror headers timeout")), HOME_HEADERS_TIMEOUT_MS);
+    const signal = init?.signal ? AbortSignal.any([init.signal, ac.signal]) : ac.signal;
+    let reason: string;
+    try {
+      const res = await mirrorFetch(true)(input, { ...init, signal });
+      if (res.status < 500) return res;
+      await res.body?.cancel();
+      reason = `HTTP ${res.status}`;
+    } catch (err) {
+      if (init?.signal?.aborted) throw err;
+      reason = String(err);
+    } finally {
+      clearTimeout(timer);
+    }
+    homeDownUntil = Date.now() + HOME_SKIP_MS;
+    console.warn(`[mirror] 집 미러 실패(${reason}) → ${HOME_SKIP_MS / 1000}초간 호스팅 미러 사용`);
+    return toMain();
+  };
+
 export function supabaseMirror(): SupabaseClient {
   if (_mirror) return _mirror;
   const auth = { persistSession: false, autoRefreshToken: false };
@@ -70,8 +122,12 @@ export function supabaseMirror(): SupabaseClient {
   // Cloudflare Tunnel 로 노출. 설정 시 MIRROR_SUPABASE_* 보다 우선한다.
   const restUrl = process.env.MIRROR_POSTGREST_URL;
   const restToken = process.env.MIRROR_POSTGREST_TOKEN;
+  const mainUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const mainKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (restUrl && restToken) {
-    _mirror = createClient(restUrl, restToken, { auth, db, global: { fetch: mirrorFetch(true) } });
+    // 메인 env 가 없으면 우회할 곳이 없으므로 집 미러만 쓴다.
+    const fetch = mainUrl && mainKey ? homeWithFailover(mainUrl, mainKey) : mirrorFetch(true);
+    _mirror = createClient(restUrl, restToken, { auth, db, global: { fetch } });
     return _mirror;
   }
 
@@ -83,8 +139,6 @@ export function supabaseMirror(): SupabaseClient {
   }
 
   // 분리 전/롤백 시 — 기존 프로젝트를 그대로 사용. 벡터 RPC 외에는 제한을 두지 않는다 (기존 거동).
-  const mainUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const mainKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!mainUrl || !mainKey) return supabaseAdmin(); // env 누락 → throw
   _mirror = createClient(mainUrl, mainKey, { auth, global: { fetch: mirrorFetch(false) } });
   return _mirror;
