@@ -1,384 +1,186 @@
 # Design System — neq
 
+> 2026-11-26 전면 리디자인. 이전 시스템 "Quiet Ink"(웜 다크 + 황금색 + 세리프 헤드라인)는 실사용자에게 "Claude 디자인과 비슷하다"는 평을 받아 폐기했다. 근거와 이전 결정은 맨 아래 Decisions Log에 남겼다. **코드 토큰은 아직 Quiet Ink 값이다** — 이 문서가 인텐트 정본이고, 구현은 별도 트랙에서 바꾼다.
+
 ## Product Context
-- **What this is:** OTT 콘텐츠 발굴/큐레이션 모바일 PWA
-- **Who it's for:** 2030 직장인. 퇴근 후 소파에서 한 손으로 "오늘 뭐 볼까" 해결.
-- **Space/industry:** OTT 콘텐츠 디스커버리 (스와이프 기반)
-- **Project type:** Mobile-first PWA (390x844 기준)
+- **What this is:** OTT 콘텐츠 발굴 앱. 포스터 카드를 넘기며 "오늘 뭐 볼까"를 고른다.
+- **Who it's for:** 2030 직장인. 퇴근 후 소파에서 한 손으로 쓴다.
+- **Space/industry:** OTT 디스커버리 (Netflix·Watcha·TVING·wavve·Letterboxd·MUBI와 같은 자리)
+- **Project type:** iOS 네이티브 앱(Expo, `apps/native`) 우선 + 모바일 PWA(`apps/web`, 390×844 기준)
 
 ## Aesthetic Direction
-- **Direction:** Quiet Ink
-- **Decoration level:** Minimal — 포스터가 유일한 색채. UI는 잉크처럼 배경에 스며든다.
-- **Mood:** 독립서점의 큐레이션 선반. 갤러리 전시실의 여백. 포스터가 주인공이고 UI는 절제된 타이포와 여백으로 존재감을 드러낸다.
-- **Brand essence:** "당신의 문화적 감각을 신뢰하는 공간"
-- **Brand personality:** Discerning(안목), Unhurried(여유), Ownable(소유감)
-- **Anti-slop:** 아래 금지 목록 참조. AI가 만든 느낌을 철저히 배제.
+- **Direction:** **Night Pool (밤 수영장)** — 깊은 청록 밤 위로 형광 라임이 튀고, 버튼은 젤리처럼 눌린다.
+- **기억할 한 가지:** "만지고 싶은 촉감" + "친구가 골라주는 가벼움". 모든 결정은 이 두 가지를 강화하는지로 판단한다.
+- **Decoration level:** Intentional — 장식 대신 재질(유리)과 반응(젤리 프레스, 스티커)이 개성을 만든다.
+- **Mood:** 밤 수영장의 시원한 물빛, 포스터 위에 친구가 붙여 준 형광 메모. 진지한 큐레이터가 아니라 같이 보는 친구.
+- **포스터가 가장 화려한 면이다.** UI 색은 청록 계열 중성과 라임·아쿠아 두 강조색으로 제한하고, 포스터를 필터로 덮지 않는다.
+
+### 피해야 할 인상 (리디자인 이유)
+- **Claude와 겹치는 조합 금지:** 크림·웜 슬레이트 바탕(#FAF9F5, #F0EEE6, #141413 계열), 테라코타·코랄·앰버 단일 강조(#D97757, #C96442, #CC785C, #C4A35A 계열), 문학적 세리프 헤드라인(Tiempos·Copernicus·Instrument Serif 류), 베이지·토프 중성색, "사려 깊은 지식인" 분위기.
+- **경쟁 OTT와 겹치는 조합 금지:** 검정 + 빨강(Netflix·TVING), 검정 + 분홍(Watcha), 파랑 주조(wavve·MUBI), 슬레이트 + 초록(Letterboxd).
 
 ### Anti-slop 금지 목록
 1. 보라/바이올렛 그라디언트 배경
-2. 균일한 둥근 모서리 (모든 요소에 같은 큰 radius)
-3. 3열/4열 균일 아이콘 그리드 (같은 크기, 같은 간격)
-4. 센터 정렬 일변도 (모든 헤딩, 설명, 카드가 text-align: center)
+2. 모든 요소에 같은 큰 radius (아래 Shape 위계를 따른다)
+3. 3열/4열 균일 아이콘 그리드
+4. 센터 정렬 일변도
 5. 그라디언트 버튼
-6. `border-left: Npx solid accent` 스타일 인용 블록 (AI가 좋아하는 패턴)
-   - 예외 1: CardVariantB pull-quote 한정 (2026-05-02 Decisions Log).
-   - 예외 2: DetailSheet/Saved reason 인용구 한정 (2026-05-02 amber 누적 분배 정책 — 면 → 선 전환). 다른 컴포넌트 복제 금지.
+6. `border-left: Npx solid accent` 인용 블록
 7. 에모지를 디자인 요소로 사용 (텍스트/아이콘으로 대체)
-8. `text-[10px]` 이하 폰트 사이즈. 최소 xs=11px.
-   - 예외: Geist Mono uppercase + letter-spacing 0.12em 이상 컨텍스트는 10px 허용 (잡지 eyebrow / 챕터 마크 / tech tag 톤).
+8. 11px 미만 글자. 예외: 영문·숫자 전용 Recursive Mono 라벨은 10px 허용. **한글에는 넓은 자간(0.05em 초과)과 uppercase 계열 처리 금지.**
 9. 장식용 blob, 물결 SVG 디바이더
 10. "Welcome to X", "Unlock the power of..." 류 제네릭 카피
-11. 스카이 블루 액센트 (Discord/Linear 기본 링크 느낌)
-12. 쿨 톤 다크 + 블루 조합 (개발자 도구 클리셰)
-13. amber accent 누적 과부하 (한 화면에 amber 토큰 5개 이상 동시 노출 금지)
-    - 카운트 규칙: 항상 동시에 보이는 amber 사용처를 1건으로 셈. focus-visible / transient overlay(toast, CoachMark) / CTA Save(브랜드 닻)는 카운트 제외.
-    - ChapterMark 위계: 시트/페이지의 첫 ChapterMark 1개만 amber, 나머지는 `text-secondary` (uppercase + 0.12em tracking 유지).
-    - reason 박스: 면(`bg-accent-dim`) 금지 → 선(`borderLeft 2px solid var(--accent-border)`) 강조 (anti-slop #6 예외 2 패턴).
-    - 통계 숫자: 한 그룹당 1개만 amber, 나머지는 primary.
-    - 보조 액션(공유, OTT "열기" 텍스트, Tonight 화살표 등) amber 금지 — 가중치/형태로 위계 표현.
-    - selected 칩 그룹: 한 그룹의 selected 칩들은 시각적 연속이므로 1건으로 카운트(개수 무관). 그룹이 늘면 그룹 수만큼 카운트.
+11. 라임 남용 — 한 화면에 라임 채움 요소는 동시에 3개 이하 (선택된 칩 그룹은 1개로 센다. 토스트 점·드래그 중 스티커처럼 잠깐 뜨는 것은 제외)
+12. 유리 위 유리 겹치기, 포스터 카드 자체에 유리·블러 적용 (2026-06 카드 깜빡임 이력)
+13. 웜 브라운·베이지 중성색 (Claude 회귀)
 
 ## Brand Identity
 
 ### 워드마크 (Wordmark)
-**정본:** `apps/web/public/neq-logo.png` (346×153, 투명 배경). 화면에 워드마크를 노출하는 모든 곳은 **이 이미지 자산을 그대로 사용**한다. 텍스트 + `font-display` + `text-accent` 조합으로 흉내내지 않는다.
-
-| 항목 | 규칙 |
-|------|------|
-| 자산 | `/neq-logo.png` (라이트/다크 모드 공통, 색상 변형 미보유) |
-| 호출 | `<img src="/neq-logo.png" alt="neq," className="h-5 object-contain" />` — height 만 변경, width 는 `object-contain` 으로 자동 |
-| Alt | `alt="neq,"` 정본 (쉼표 포함, 브랜드 표기) |
-| 기본 사이즈 | `h-5` (20px) — Discover 헤더, StatusScreens, ShareClient 등 |
-| 작은 사이즈 | `h-4` (16px) 까지 허용. 그 이하는 식별성 저하로 금지 |
-| 큰 사이즈 | 온보딩 hero 컨텍스트에서 `h-6` ~ `h-10` (24~40px) 허용 |
-| Clear space | 워드마크 주위에 최소 자체 height 의 50% 여백 (`h-5` 사용 시 10px 여백) |
-| Container | 부모 컨테이너 정렬은 `flex items-center` — baseline 정렬 금지 (쉼표가 baseline 보다 아래로 떨어짐) |
-| Lazy loading | `next/image` 또는 plain `<img>` 모두 허용. PWA shell 이미지라 lazy 불필요. eslint 규칙 disable 주석 부여 (`// eslint-disable-next-line @next/next/no-img-element`) |
-
-**금지:**
-- ❌ `<span className="font-display text-accent">neq,</span>` — 텍스트 모방. 폰트가 다름(Fraunces 계열 ↔ Instrument Serif). 색상은 2026-05-13 amber 정합되었으나 폰트 모방 금지는 유지.
-- ❌ 워드마크 위에 그라디언트/필터 오버레이.
-- ❌ 워드마크 회전·기울임·왜곡.
-- ❌ 워드마크를 글자 단위로 분리(`n` / `e` / `q` / `,`) 하여 재배치.
-- ❌ Drop shadow / glow 등 장식 효과 (Quiet Ink anti-slop).
-
-**문장 안 워드마크:** "neq, 앱으로 열기" 처럼 워드마크가 한 문장의 일부로 포함되는 경우(InstallBanner) 는 텍스트 처리 허용 (이미지로 분리 시 baseline·줄바꿈 문제). 이 때는 `font-display font-bold` 로 처리하되, 동일 시야에 워드마크 이미지(앱 아이콘 등)가 이미 노출되어 브랜드 인지가 확보된 컨텍스트에 한정.
-
-**색상 정합 (2026-05-13 Phase 5 리컬러링):** 워드마크 자산은 amber `#C4A35A` 단색으로 정합됨. Warm Cinema 잔재(#E87B35) 해소. 폰트(Instrument Serif italic 계열 추정) + 형태는 유지. 변환 방식: 알파 채널 마스크 + 단색 fill (`_workspace/recolor-wordmark.js`, sharp). 백업 원본은 `_workspace/neq-logo.warm-cinema.png`.
-
-### Metadata 텍스트 (검색·OG·시스템)
-HTML `<title>`, OG `siteName`, manifest `short_name` 등 **렌더되지 않는 텍스트 컨텍스트**는 `"neq,"` 문자열 사용 (이미지 불가). 위치:
-- `apps/web/src/app/layout.tsx` — `title`, OG, Twitter card
-- `apps/web/public/manifest.json` — `name`, `short_name`
-- `apps/web/src/app/share/[id]/page.tsx` — metadata title
-
-### 앱 아이콘
-| 자산 | 사이즈 | 용도 |
-|------|--------|------|
-| `apps/web/public/icon-512.png` | 512×512 | PWA manifest large icon |
-| `apps/web/public/icon-192.png` | 192×192 | PWA manifest standard icon |
-| `apps/web/public/apple-touch-icon.png` | 180×180 | iOS 홈스크린 |
-| `apps/web/public/favicon.png` | 32×32 | 브라우저 탭 |
-| `apps/web/public/og-image.png`, `og-image-square.png` | OG card | 공유 미리보기 |
-
-**미정 (Phase 5 별도 작업):**
-- 1024×1024 마스터 아이콘 (iOS 앱스토어 제출용, W7 블로커)
-- 로고 마크(심볼) — 글자 없는 브랜드 식별자. design-critique 가 ""N" 폴백 이미지를 브랜드 시그니처로 발전"제안. 현재 PosterFallback 의 "N" 글자가 후보.
-- 워드마크 amber 리컬러링 — Quiet Ink 정합. `design-orchestrator` 사이클로 분리.
+- **형태 유지:** `apps/web/public/neq-logo.png` 의 세리프 이탤릭 "neq," 형태는 바꾸지 않는다(사용자 결정 2026-11-26). 화면 안 세리프는 **워드마크에만** 남는다 — 굵은 산세리프 UI 사이의 서명 한 줄.
+- **색:** 다크 `#58DCCB`(아쿠아), 라이트 `#007B72`. 자산이 단색 알파 PNG라 재색칠이 쉽다 — 네이티브는 `Image tintColor`, 웹은 CSS `mask-image` + 배경색. 색별 PNG를 새로 굽지 않는다.
+- **사이즈·여백·금지:** 기본 높이 20px, 최소 16px, 온보딩 hero 24~40px. 주위에 자체 높이의 50% 여백. 텍스트 모방, 그라디언트·글로우·그림자, 회전·왜곡, 글자 분리 재배치 금지.
+- **Alt:** `"neq,"` (쉼표 포함). 렌더되지 않는 메타 텍스트(title, OG, manifest)도 `"neq,"`.
+- **미정:** 로고 마크·1024² 앱 아이콘은 외부 팀 의뢰 트랙. 앱 아이콘은 새 팔레트(청록 + 라임) 기준으로 의뢰한다.
 
 ## Typography
-- **Display/Hero:** **Instrument Serif** (Google Fonts, weight 400 + italic) — 절제된 현대 세리프. 영문 헤드라인, 카드 메타("2024"), reason 인용구 italic. CSS var: `--font-display`. 한글 헤딩은 Pretendard 700 폴백 (Noto Serif KR 차순위).
-- **Body:** Pretendard Variable — 한글 UI 최적. 본문, 라벨, 추천 이유, 설명 텍스트, **한글 제목** (700). CSS var: `--font-body`.
-- **UI/Labels:** Pretendard Variable (weight 500)
-- **Data/Tabular:** **Geist Mono** (Google Fonts, tabular-nums) — 평점, 연도, 러닝타임, 카운터 + eyebrow/챕터 마크/tech tag (uppercase + tracking 0.12em 컨텍스트, anti-slop #8 예외). CSS var: `--font-data`.
-- **Loading:** Pretendard CDN (cdn.jsdelivr.net/gh/orioncactus/pretendard), `next/font/google` (Instrument Serif, Geist Mono — `layout.tsx` 에서 inject).
-- **Weight 위계:** 400 본문 / 500 UI 라벨·버튼·네비 / 600 강조·활성 탭 / 700 한글 제목 (Instrument Serif 는 400 만 로드).
-- **Scale:** size / line-height / letter-spacing — 큰 사이즈일수록 자간 음수로 옵티컬 보정.
+모두 OFL(앱 임베드 가능). 한글 우선.
 
-| 토큰 | size | line-height | letter-spacing | 용도 |
-|------|------|-------------|----------------|------|
-| xs | 11px | 1.45 | 0.02em | 뱃지, 태그, 캡션 |
-| sm | 13px | 1.45 | 0.01em | 메타, 부가 텍스트 |
-| base | 15px | 1.5 | 0 | 본문, 추천 이유 |
-| lg | 18px | 1.4 | -0.01em | 카드 제목, 섹션 헤딩 |
-| xl | 22px | 1.3 | -0.015em | 페이지 제목, DetailSheet 제목 |
-| 2xl | 28px | 1.25 | -0.02em | 대형 제목, Profile 통계 숫자 |
-| 3xl | 36px | 1.2 | -0.025em | 히어로, SwipeCard 제목 |
-| display | 48px | 1.1 | -0.03em | Fraunces 디스플레이 |
+| 역할 | 폰트 | 비고 |
+|---|---|---|
+| 한글 UI·본문·한글 제목 | **SUIT Variable** | 본문 400, 라벨·버튼 600, 한글 제목 800~900. [sun-typeface/SUIT](https://github.com/sun-typeface/SUIT) |
+| 영문 제목·영문 강조 | **Unbounded** (500/700/900) | 넓고 둥근 디스플레이. 영문 원제, 큰 영문 숫자 강조에만. **한글에는 쓰지 않는다**(한글 글리프 없음 → SUIT로 폴백되면 안 됨) |
+| 데이터·숫자 | **Recursive** (MONO 1, CASL 0) | 평점, 연도, 러닝타임, 회차, 통계 숫자. tabular |
+| 워드마크 | 이미지 자산 | 텍스트로 재현하지 않는다 |
 
-- **금지:** 10px 이하 폰트 (anti-slop #8) / text-transform uppercase 를 한글에 적용 / letter-spacing 0.12em 이상을 한글에 적용.
+- **폐기:** Pretendard, Instrument Serif, Geist Mono, Fraunces (Quiet Ink).
+- **Scale (size / line-height / letter-spacing):**
+
+| 토큰 | size | lh | ls | 용도 |
+|---|---|---|---|---|
+| xs | 11 | 1.45 | 0 | 뱃지, 캡션 |
+| sm | 13 | 1.5 | 0 | 메타, 보조 |
+| base | 15 | 1.55 | 0 | 본문 |
+| lg | 18 | 1.4 | -0.01em | 섹션 제목 |
+| xl | 22 | 1.3 | -0.03em | 시트 제목 |
+| 2xl | 28 | 1.2 | -0.035em | 페이지 제목, 통계 숫자 |
+| 3xl | 34 | 1.15 | -0.035em | 카드 한글 제목 |
+
+- 한글 제목은 SUIT 900 + 음수 자간이 시그니처. 영문 원제는 Unbounded 700 + 0.02em, 대문자 허용.
+- 본문 최소 15(시트·설명), 카드 위 이유 문구 13 이상.
 
 ## Color
-- **Approach:** Restrained + Warm Neutral
-- **Background:** #12110E — 미세한 웜 뉴트럴 다크. 차가운 쿨 블랙도, 브라운 블랙도 아닌 중도.
-- **Surface:** #1A1916 — 카드, 모달 배경
-- **Surface Raised:** #24231E — 호버, 활성 상태
-- **Surface Sunken:** #0B0A07 — 인셋 영역, 입력 필드 배경
-- **Border:** #2E2D27 — 기본 구분선
-- **Border Subtle:** #22211C — 미세한 구분 (리스트 아이템 사이)
-- **Border Strong:** #3A392F — 강조 구분선, 섹션 분리
-- **Text Primary:** #EDEDEF — 뉴트럴 화이트. bg 위 대비비 14.8:1 (AAA)
-- **Text Secondary:** #8E8F9A — 부제목, 메타 정보. 대비비 5.8:1 (AA)
-- **Text Muted:** #6B6C75 — 비활성 텍스트, 힌트. 대비비 ~3.5:1 (대형 텍스트 AA)
-- **Accent:** #C4A35A — 앰버 골드. Save, CTA, 긍정적 행동. 독립서점 조명의 따뜻한 금빛.
-- **Accent Hover:** #D4B36A — 호버 시 밝아지는 골드
-- **Accent Dim:** rgba(196, 163, 90, 0.12) — 액센트 배경
+- **Approach:** Balanced — 청록 계열 중성 + 강조 2색(라임 = 행동, 아쿠아 = 길 안내). 시스템 설정을 따라 **다크·라이트 둘 다** 지원한다.
 
-포커스 링은 별도 strong 토큰 없이 `--accent` 직접 사용 (현재 사용처 0건 의 `--accent-strong` 토큰은 5/12 제거).
-- **Danger:** #E05A4F — 따뜻한 빨강. Pass, 삭제. 버튼 텍스트는 --text-inverse 사용.
-- **Danger Dim:** rgba(224, 90, 79, 0.14) — 위험 영역 배경
-- **Warning:** #D4A245 — 경고
-- **Info:** #7BA3D4 — 차분한 파랑 (accent와 구별되는 톤)
-- **Success:** #4DB06A — 완료/확인
-- **Dark mode:** 이것이 기본. 라이트 모드 없음.
+### 다크 (기본 아님 — 시스템 따름)
+| 토큰 | 값 | 비고 |
+|---|---|---|
+| bg | `#071B20` | 깊은 청록 밤 |
+| surface | `#0E252A` | 시트 본문, 카드 바탕 |
+| raised | `#17343A` | 칩·입력·떠 있는 면 |
+| sunken | `#04141A` | 인셋 |
+| border | `#23444A` | 기본 선 |
+| text | `#F3FAF8` | bg 대비 16.7:1 |
+| text-secondary | `#A9C2C0` | 9.4:1 |
+| text-muted | `#6F8E8C` | 5.0:1 |
+| lime | `#D8F547` | 채움, 위 글자는 `#071B20` (14.4:1) |
+| aqua | `#58DCCB` | 글자·아이콘 (bg 10.5:1) |
+| danger | `#FF7A6B` | 글자 7.0:1, 채움 위 글자 `#071B20` |
+| warning | `#FFC857` | |
+| success | 라임 사용 | |
 
-## Overlay 토큰
-포스터 위 텍스트, 모달 배경, 스와이프 피드백 등에 사용하는 반투명 레이어 체계.
-모든 오버레이는 웜 뉴트럴(18, 17, 14) 기반.
+### 라이트
+| 토큰 | 값 | 비고 |
+|---|---|---|
+| bg | `#EAF6F5` | 연한 민트 (흰색·크림 아님) |
+| surface | `#FFFFFF` | |
+| raised | `#D8EBE9` | |
+| sunken | `#DCEDEB` | |
+| border | `#B9D4D2` | |
+| text | `#0F2A2F` | 13.6:1 |
+| text-secondary | `#43626A` | 5.9:1 |
+| text-muted | `#6A858A` | 3.6:1 — **큰 글자·힌트 전용** |
+| lime | `#D8F547` | **채움 전용**(밝은 배경 위 글자로 쓰면 1.1:1). 위 글자 `#0F2A2F` |
+| lime-text | `#4E6E00` | 라임 의미를 글자로 써야 할 때 (5.3:1) |
+| aqua-text | `#007B72` | 링크·현재 탭·워드마크 (4.7:1) |
+| danger | `#C0392B` | 글자 4.9:1, 흰 글자 채움 5.4:1 |
+| warning | `#8A6100` | 글자 5.0:1 |
 
-| 토큰 | opacity | 용도 |
-|------|---------|------|
-| `--bg-overlay-light` | 0.4 | 시청 완료 포스터 딤 |
-| `--bg-overlay` | 0.7 | 뱃지, 태그, 힌트 배경 |
-| `--bg-overlay-heavy` | 0.85 | 포스터 하단 그라디언트 종점 |
-| `--bg-overlay-dense` | 0.92 | 인라인 리액션 피커 |
-| `--bg-overlay-solid` | 0.97 | 상세 모달 (거의 불투명) |
+### 색 역할
+- **라임:** 저장(버튼 활성, 저장 스와이프 스티커 "찜!"), 선택된 필터 칩, 주요 CTA("Netflix에서 보기"), 인생작 표시, 친구 메모 스티커. 라임은 **채움**으로 쓰고 위 글자는 bg 색.
+- **아쿠아:** 워드마크, 현재 탭, 링크, 평가 선택(인생작/괜찮았어/별로/안 맞아의 선택 상태), 포커스 링.
+- **포스터:** 카드에 색 필터를 씌우지 않는다. 카드 하단 그라디언트는 `rgba(4,20,24,…)` 청록 잉크로 끝난다(검정 아님).
 
-**Border/Dim 토큰:**
-- `--accent-border`: rgba(196, 163, 90, 0.25) — 액센트 보더
-- `--accent-border-light`: rgba(196, 163, 90, 0.15) — 약한 액센트 보더
-- `--danger-overlay`: rgba(224, 90, 79, 0.22) — Pass 스와이프 피드백
-- `--text-primary-dim`: rgba(237, 237, 239, 0.07) — 텍스트 컬러 기반 미세 배경
+## Material — Liquid Glass
+- **어디에:** 탭바(4슬롯: 발견·큐·저장 + 검색 액션), 필터 칩, 액션바 버튼, 헤더 버튼, 토스트, 시트 상단·반만 열린 시트. 탭바는 iOS 26 시스템 탭바(`expo-router` native tabs)와 `GlassView` 기반 자체 탭바 중 구현 스파이크로 정한다 — 검색 슬롯이 화면 전환이 아니라 시트를 여는 액션이라 시스템 탭바에서 유지되는지 확인이 필요하다.
+- **어디에 안:** 포스터 카드, Saved 그리드, 시트 본문(끝까지 올렸을 때), 긴 텍스트 면.
+- **시트 규칙:** 화면 일부만 덮을 때는 유리(뒤 포스터 색이 비침), 끝까지 올리면 `surface` 불투명 면으로 굳는다.
+- **틴트:** 다크 `rgba(7,27,32,0.40)` + 테두리 `rgba(160,240,230,0.18)`, 라이트 `rgba(255,255,255,0.55)` + 테두리 `rgba(15,42,47,0.10)`. 밝은 포스터 위 clear 유리 버튼에는 청록 잉크 받침 `rgba(7,27,32,0.28~0.45)`.
+- **유리 위 글자:** `text` 색, 13px 이상, 600 이상. `text-secondary`·`text-muted`는 불투명 면에서만.
+- **iOS 26 미만·PWA:** 같은 모양의 불투명 `raised` 면 + 1px `border`. 가짜 블러로 흉내 내지 않는다. 손맛(프레스·햅틱)은 동일.
+- **구현 메모:** `expo-glass-effect`(iOS 26 + Xcode 26 빌드). 부모에 `opacity: 0`을 걸면 유리가 렌더되지 않는다. 가용성은 OS 버전이 아니라 API로 판단.
 
 ## Spacing
-- **Base unit:** 4px. 모든 spacing 은 4px 의 배수. 예외 없음.
-- **Density:** Comfortable — 피곤한 상태에서도 정확히 누를 수 있는 터치 타겟
-- **Minimum touch target:** 44×44px
-- **좌우 여백:** 콘텐츠 20px (px-5), 그리드/필터 16px (px-4)
-- **Scale:**
+- **Base unit:** 4px. 모든 간격은 4의 배수.
+- **Density:** Comfortable. 최소 터치 타겟 44×44.
+- **Scale:** 2xs 2 · xs 4 · sm 8 · md 16 · lg 24 · xl 32 · 2xl 48 · 3xl 64
+- **좌우 여백:** 콘텐츠 20, 그리드/칩 줄 12~16.
 
-| 토큰 | px | 배수 | 용도 |
-|------|---|------|------|
-| `--space-2xs` | 2 | 0.5× | 아이콘-텍스트 인라인 미세 간격 |
-| `--space-xs` | 4 | 1× | 뱃지 내부, 아이콘 gap |
-| `--space-sm` | 8 | 2× | 칩 간격, 그리드 gap, 리스트 아이템 사이 |
-| `--space-md` | 16 | 4× | 섹션 내부 padding, 카드 내부 여백 |
-| `--space-lg` | 24 | 6× | 섹션 간 간격, 페이지 좌우 여백 |
-| `--space-xl` | 32 | 8× | 큰 섹션 간 간격, 페이지 하단 |
-| `--space-2xl` | 48 | 12× | 페이지 상단 여백, 히어로 영역 |
-| `--space-3xl` | 64 | 16× | 그라디언트 padding-top, 대형 간격 |
+## Layout & Shape
+- **Discover:** 카드가 화면을 거의 채우고(좌우 6), 칩·헤더 버튼·액션바·탭바가 **카드 위에 유리로 뜬다**. 다음 카드는 뒤에서 살짝 보인다.
+- **Saved:** 3열 비대칭 그리드 유지(가운데 열 14px 내림, 포스터 2:3). 균일 4열 이상 금지.
+- **Max content width (PWA):** 480px.
+- **Radius 위계:** 뱃지 8 · 썸네일 14 · 칩·토스트 14(높이 28이면 알약형) · 저장 버튼 16 · 카드 24 · 시트 상단 32 · 원형 버튼 full. 같은 큰 값을 일괄 적용하지 않는다.
 
-- **간격 원칙:** 같은 그룹 ≤ sm / 그룹 내 섹션 분리 = md / 섹션 간 = lg~xl / 페이지 수준 ≥ 2xl. 의심스러우면 넓혀라 — Quiet Ink 는 밀도보다 여백.
-
-## Layout
-- **Approach:** Full-bleed + asymmetric
-- **Discover:** 카드가 화면의 85%. 시스템 UI는 카드 위 반투명 오버레이.
-- **Saved:** 3열 비대칭 그리드 (Pinterest식, 2026-07 3열 전환 — 누적 저장작 밀도 대응). 포스터 2:3 비율 + 높이 변화 유지. 단조로운 균일 그리드 금지.
-- **Max content width:** 480px (모바일 최적화)
-- **Border radius:**
-  - sm: 4px (뱃지, 태그)
-  - md: 8px (입력, 작은 카드)
-  - lg: 12px (카드, 모달)
-  - xl: 16px (메인 카드, 바텀시트)
-  - full: 9999px (버튼, 아바타)
-
-## Responsive
-- **기본:** Mobile-first (390x844 기준). 480px max-width 컨테이너.
-- **태블릿 (768px+):** 콘텐츠 중앙 정렬. 배경에 radial gradient (surface → 더 어두운 블랙).
-- **데스크톱 (1024px+):** max-width 420px로 더 좁게. 미세한 accent glow shadow.
-- **전략:** 모바일 레이아웃이 주인공. 태블릿/데스크톱은 "영화관 스크린" 느낌으로 감싸기.
-- **금지:** `user-scalable=no`, `maximum-scale=1` (접근성 위반)
-
-## Grid
-- **원칙:** 비대칭 그리드 우선. 균일한 n열 반복 금지.
-- **Discover:** 카드 1장이 화면의 85%. 스와이프 인터랙션.
-- **Saved:** 3열 비대칭 (포스터 2:3 비율 연동, 높이 변화: `CARD_H = CARD_W×1.5` / tall `×1.6`). Pinterest식 비대칭 보존. 2026-07 2열→3열 전환.
-- **금지:** 균일한 4열 이상 그리드. 모든 카드가 같은 크기인 레이아웃.
-
-## Accessibility
-- **터치 타겟:** 모든 인터랙티브 요소 최소 44x44px. 작은 아이콘 버튼이라도 패딩으로 터치 영역 확보.
-- **Focus:** `focus:outline-none` 사용 시 반드시 `focus-visible:ring-2 ring-[--accent]` 대체 제공. BottomNav 탭은 추가로 `border-radius: var(--radius-md)`.
-- **확대:** viewport에서 `user-scalable=no` 금지. 사용자가 원하면 확대 가능해야 함.
-- **컬러:** 색상만으로 정보 전달 금지 — 아이콘 / 라벨 / 패턴 / 방향 병행. Save vs Pass 스와이프는 색상 틴트뿐 아니라 방향성 자체가 1차 단서.
-- **모바일:** `autoFocus` 금지 (모바일에서 키보드 자동 팝업 방지).
-- **대비비:** text-primary on bg ≥ 14:1 (AAA), text-secondary ≥ 4.5:1 (AA), text-muted ≥ 3.0:1 (대형 텍스트 AA), text-inverse on accent ≥ 4.5:1 (AA). Danger·Accent 버튼 텍스트는 `--text-inverse` 사용 (`--text-primary` 사용 시 AA 미달).
-
-### ARIA 라벨 매핑
-| 컴포넌트 | aria-label / 역할 |
-|---------|------------------|
-| ActionBar 되감기 | "처음으로" |
-| ActionBar 공유 | "공유" |
-| ActionBar 상세 | "상세보기" |
-| ActionBar 새로고침 | "새로고침" |
-| ActionBar Save | "저장" (toggle: `aria-pressed`) |
-| BottomNav | `<nav aria-label="메인 네비게이션">` |
-| BottomNav 탭 | 탭별 설명 (예: "Discover — 추천 작품 탐색") |
-| BottomNav 활성 탭 | `aria-current="page"` |
-| Toast 컨테이너 | `role="status"` `aria-live="polite"` (성공) / `role="alert"` (에러) |
-| Modal | `role="dialog" aria-modal="true" aria-labelledby={titleId}` |
-| Skeleton | `aria-busy="true"` 부모에 적용, 자식에 `aria-hidden="true"` |
-
-## States
-공통 상태 규격. 컴포넌트 디테일은 `_workspace_20260417_172931/design-rebuild/02_states-spec.md` 참조.
-
-### Skeleton (로딩)
-- **배경:** `--surface`, 펄스 색상 `--surface-raised`.
-- **애니메이션:** `skeleton-pulse 2s var(--ease-soft) infinite` (opacity 1 ↔ 0.4). Quiet Ink 호흡 = 1.5s → 2s 로 느리게.
-- **Radius:** 각 요소의 기본 radius 따름. 모서리 날카로움 금지.
-- **추천 생성 중:** 카드 스켈레톤 + 센터 텍스트 오버레이 ("취향에 맞는 작품을 고르고 있어요..."). 스피너 없이 텍스트 = Quiet Ink 침묵. 별도 NeqSpinner(Fraunces morph) 사용 시 회전 dots 금지.
-
-### Empty State
-| 속성 | 값 |
-|------|---|
-| 정렬 | 수직/수평 중앙 |
-| 아이콘 | 48px, `--text-muted` |
-| 아이콘 → 제목 gap | `--space-md` (16px) |
-| 제목 | font-body, `--text-base`, 500, `--text-primary` |
-| 설명 | font-body, `--text-sm`, 400, `--text-muted` |
-| CTA | 설명 아래 `--space-lg` (24px), Ghost variant |
-| max-width | 260px |
-
-검색 결과 없음 / 인라인 빈 상태(Profile 좋아한 작품 없음 등)는 아이콘 생략 — 검색 입력·섹션 헤더가 이미 시각 앵커.
-
-### Error State
-- Empty 와 동일 구조, 아이콘 색상만 `--danger`.
-- **포스터 로딩 실패 (카드 폴백):** 배경 `--surface`, font-display 5xl "N" 글자 + `--text-muted`. 에러 메시지 없음 — 조용한 폴백 = neq 브랜드 시그니처.
-- **OTT 조회 실패:** 인라인 텍스트만 ("현재 한국 OTT에서 제공 정보를 찾지 못했어요"), 에러 톤 없이 담백.
-- **검색 API 에러:** 조용한 실패(silent catch). 결과 리스트 비움. "결과가 없어요"로 표시 — 사용자에게 에러와 빈 결과 구분 안 함 (의도적).
-
-### Toast (성공/에러 피드백)
-| 속성 | 값 |
-|------|---|
-| 위치 | fixed top 64px, 수평 중앙 |
-| padding | `px-4 py-2.5` |
-| 배경 | `--surface-raised` |
-| radius | `--radius-lg` |
-| 인디케이터 dot | 6×6, 성공=`--accent`, 에러=`--danger` |
-| 등장 | opacity 0→1 + translateY(-8→0), `--duration-moderate`, `--ease-enter` |
-| 체류 | 2500ms |
-| 퇴장 | opacity 1→0 + translateY(0→-4), `--duration-quick`, `--ease-exit` |
-| 중복 | 새 토스트가 기존 토스트 즉시 교체. 동시 2개 금지 |
-
-Pass 스와이프는 무언 — Toast 없이 카드만 사라짐.
-
-## Motion
-- **Approach:** Intentional + physics-based + restrained
-- **원칙:** 잉크가 종이 위에 스며들 듯, 차분하고 의도적. 동시 움직임 최대 3개.
-- **Easing:**
-  - `--ease-enter`: cubic-bezier(0.25, 1, 0.5, 1) — 요소 등장
-  - `--ease-exit`: cubic-bezier(0.5, 0, 0.75, 0) — 요소 퇴장
-  - `--ease-move`: cubic-bezier(0.45, 0, 0.55, 1) — 위치 이동
-  - `--ease-spring`: cubic-bezier(0.34, 1.3, 0.64, 1) — 절제된 스프링 (30% 오버슈트)
-  - `--ease-soft`: cubic-bezier(0.4, 0, 0.2, 1) — opacity/색상 전환
-- **Duration:**
-  - instant: 80ms (탭 피드백, 토글)
-  - quick: 150ms (필터 전환, 드롭다운)
-  - moderate: 250ms (페이드, 토스트)
-  - steady: 350ms (바텀시트, 카드 스냅백)
-  - slow: 500ms (풀스크린 전환)
-- **규칙:** 닫힘은 열림보다 50ms 짧게. 사용자 입력 첫 반응 100ms 이내.
-- **카드 진입 회전:** 3deg (Warm Cinema 5deg 에서 축소). enterFromLeft/Right `rotate(±3deg)`.
-- **Active scale 위계:** `scale(0.97)` 일반 버튼 / `scale(0.93)` 대형 버튼·Save / `scale(0.9)` 탭 아이콘·BottomNav. 단일 값으로 통일 금지 — 크기에 비례한 수축.
-
-### prefers-reduced-motion 요소별 대체
-| 요소 | 일반 | reduced |
-|------|------|---------|
-| 카드 스와이프 드래그 추적 | 1:1 실시간 | **유지** (사용자 직접 조작) |
-| 카드 스냅백 | 스프링 350ms | 즉시 위치 변경 |
-| 바텀시트 드래그 추적 | 1:1 실시간 | **유지** |
-| 바텀시트 열림/닫힘 | 슬라이드 350/250ms | 즉시 표시/숨김 |
-| Toast 등장·퇴장 | 페이드+슬라이드 | 즉시 표시 후 시간 경과로 즉시 숨김 |
-| 필터 칩 전환 | 색상 150ms | 즉시 색상 변경 |
-| 스켈레톤 펄스 | 2s 무한 반복 | 정적 단색 surface |
-| Immersive 확장 | 350ms | 즉시 확장 |
-| 모달 스케일 | 0.96→1, 250ms | 즉시 표시 |
-| 버튼 active scale | 0.97, 80ms | scale 변경 생략 |
-| NeqSpinner Fraunces morph | 1400ms loop | 정적 amber fill |
-
-### Loading Interaction
-- **방향:** Quiet Ink 보존 + pop art 향(워홀 실크스크린의 "면" 느낌)
-- **패턴:** 타이포 중심. Fraunces 글자가 amber로 채워졌다가 비워지는 morph
-- **금지:** 회전 dots(클래식 스피너), 보라/그라디언트, blob, 이모지
-- **Duration:** 1400ms loop, --ease-soft
-- **Reduced motion:** 정적 amber fill (애니메이션 정지)
+## Motion & Touch
+- **Approach:** Expressive-tactile. 손에 닿는 순간은 크게, 화면 전환은 짧게. 동시 움직임 최대 3개.
+- **젤리 프레스 (시그니처):** 누르면 90ms에 `scale(1.03, 0.92)`로 찌그러지고, 놓으면 스프링 `cubic-bezier(0.3, 1.6, 0.5, 1)` 280ms로 튕겨 복귀. 큰 버튼일수록 찌그러짐을 줄인다(저장 버튼 `scale(1.02, 0.94)`).
+- **드래그 피드백:** 카드 수평 드래그 회전 최대 ±8°. 아래로 끌면 라임 "찜!" 스티커, 위로 끌면 청록 반투명 "관심 없음" 스티커가 `rotate(-6deg)` 상태로 0.6→1.1 스케일로 붙는다. 저장 버튼은 끄는 거리에 비례해 최대 1.14배.
+- **관심 없음 퇴장:** 카드가 작아지며(0.6) 흑백·어둡게 가라앉는다, 220ms ease-in. 이 연출은 이 동작에서만 쓴다. (RN에서 흑백 필터가 안 되면 어둡게만.)
+- **Easing:** enter `cubic-bezier(0.25,1,0.5,1)` · exit `cubic-bezier(0.5,0,0.75,0)` · move `cubic-bezier(0.45,0,0.55,1)` · jelly `cubic-bezier(0.3,1.6,0.5,1)` · sheet `cubic-bezier(0.32,0.72,0.24,1)`
+- **Duration:** instant 90 · quick 150 · moderate 250 · steady 320 · sheet 450/350(열림/닫힘)
+- **햅틱:** 누름 soft, 스와이프 임계 통과 rigid, 저장 확정 success 1회. 연속 발화 금지. 에러에는 진동 없음.
+- **reduced-motion:** 드래그 1:1 추적은 유지, 스프링·스티커 스케일·젤리는 즉시 상태 변경으로 대체.
 
 ## Iconography
-- **Source of truth:** `_design-handoff/` (Claude Design `neq-design-v2` bundle, 2026-04-29).
-  - 정본: `_design-handoff/Phase 4 - Full Prototype.html` (line 169-182, `TabIcon*` 함수).
-  - 후속 카피 수정: `_design-handoff/Round 3 - Copy Revisions.html` (텍스트 중심, 아이콘 변경 없음).
-  - 처음 읽을 곳: `_design-handoff/HANDOFF_README.md` (claude.ai/design 출처 안내 + 우선순위).
-- **Color:** `currentColor` 위임. 호출부에서 `--text-*` 또는 `--accent` 결정. 아이콘 자체는 색 모름.
-- **viewBox:** 핸드오프 정본은 **20×20** (BottomNav 4종). 그 외 기존 아이콘은 24×24 / 16×16 유지.
-- **Active variant:** Discover / Bookmark 는 `active?: boolean` prop. 다른 탭 아이콘(Search/User)은 단일 형태.
-
-### 5 디자인 원칙
-1. **Uniform thin stroke** — `strokeWidth={1.5}` 기준. thick-thin contrast 금지(잡음).
-2. **Round terminals** — `strokeLinecap="round"` 기본. square 는 X 표 같은 의도적 직각 컷에만.
-3. **Single-form silhouette** — 한 형태로 즉시 인지(diamond / bookmark / lens). 장식 tick / serif terminal 금지.
-4. **Color 위임** — `currentColor`. 컴포넌트는 색 모름. `--accent` 위치는 호출부 판단.
-5. **Quiet weight** — 포스터 아트가 주인공. 아이콘은 잉크처럼 옅게 배경에 스며든다.
-
-### 적용 매핑 (BottomNav + Search)
-| 아이콘 | 핸드오프 위치 | 패턴 |
-|--------|---------------|------|
-| Discover (active) | Phase 4 L171 | circle r=7.5 stroke 1.5 + 중앙 small dot r=2 fill (focus 인지) |
-| Discover (inactive) | Phase 4 L172 | circle r=7.5 stroke 1.4 + diamond `M13 7L11 11L7 13L9 9L13 7Z` stroke 1.2 (방향 모티프) |
-| Bookmark (Saved) | Phase 4 L178 | bookmark `M5 3h10v15l-5-3.5L5 18V3z` stroke 1.5 round, active 시 fill opacity 0.18 |
-| Search (헤더 버튼) | Phase 4 L175 | circle r=6 stroke 1.5 + path `M13.5 13.5L17 17` stroke 1.5 round (viewBox 20×20) |
-| User (Profile) | Phase 4 L181 | head circle r=3.2 stroke 1.5 + body arc stroke 1.5 round |
-
-**구조 차이 메모:** 핸드오프(Phase 4)는 4탭 (Discover/Search/Saved/Profile). 코드는 3탭 — `Search`
-는 별도 탭 대신 각 페이지 헤더 버튼 + SearchSheet 모델로 의도적 분기. 시각 토큰만 핸드오프 그대로.
-
-### 정렬 대상 (별도 PR 후보)
-IconHeart(saved 내부 reaction badge) / IconSave / Close / Refresh / Detail / Share / Star / Pass 등 나머지는 기존 패턴 유지.
-세부 일제 통합은 별도 작업 — 본 PR 범위는 BottomNav 4 아이콘 + IconSearch 정본화만.
+- 선 1.5 균일, 둥근 끝, 단일 실루엣, `currentColor` 위임 — `_design-handoff/` 아이콘 형태는 그대로 쓴다(색·폰트 토큰은 이 문서가 대체).
+- 선택 상태: 현재 탭 아이콘은 아쿠아 + 옅은 아쿠아 캡슐 배경.
 
 ## Interaction Model
 
-### Discover 스와이프 (불변식)
+### Discover 카드 제스처
 | 제스처 | 동작 |
-|-------|------|
-| **좌 스와이프** (dragX < -80px) | 다음 카드 (`nextCard`) |
-| **우 스와이프** | 이전 카드 오버레이 (`prevOverlayX`, 드래그 중 topIdx 유지) |
-| **카드 탭** | Detail 바텀시트 열기 |
-| **아래로 스와이프 (30%+)** | 바텀시트 닫기 / Discover 복귀 |
+|---|---|
+| 좌 스와이프 | 다음 카드 (탐색, 평가 아님) |
+| 우 스와이프 | 이전 카드 오버레이 (놓을 때만 전환) |
+| **아래 스와이프** | 저장 (라임 "찜!") |
+| **위 스와이프** | **관심 없음 = 이 작품 숨기기** (2026-11-26 재도입). 평가가 아니라 치우는 동작이다. 토스트 "다시 안 보여요 · 되돌리기" |
+| 탭 | 상세 시트 |
 
-- **좌우 스와이프는 캐러셀 브라우징** 전용. like/pass/reject 의미 절대 부여 금지.
-- 이전 카드 전환은 **오버레이 레이어**로만. 드래그 중 `topIdx` 변경 금지 — 놓을 때만 30%+ 조건에서 전환.
-- 좋아요는 스와이프 아님. **명시적 버튼** (ActionBar 또는 카드 하단)로만 토글.
-- "별로" / 거절 / Pass 제스처는 없음. 사용자가 싫으면 그냥 다음 카드로 넘어가면 됨.
+- 좌우 축에는 좋음/싫음 의미를 붙이지 않는다. "관심 없음"은 위 축 하나에만.
+- **평가는 제스처가 아니라 명시 픽커**(상세 시트의 인생작/괜찮았어/별로/안 맞아)에서만.
+- 세로 축(위·아래)과 탭 판정이 겹치지 않게 임계를 분리한다(아래 터치 임계 참조, `feedback_pan_gesture_offset_conflict`).
 
-### 터치 임계치
-- 수평 스와이프 트리거: 80px
-- 수직 바텀시트 닫기: 30% 화면 높이
-- 방향 잠금: 첫 10px 이동 방향으로 잠금 (수평 vs 수직 혼동 방지)
+### 터치 임계
+- 탭: 이동 8px 미만 + 300ms 미만
+- 수평 스와이프: 80px
+- 세로 스와이프(저장·관심 없음): 100px
+- 방향 잠금: 첫 10px 이동 방향
+- 시트 닫기: 아래로 30%
 
-### 햅틱 피드백 (`navigator.vibrate(10)`)
-| 동작 | 진동 | 비고 |
-|------|------|------|
-| Pass 스와이프 임계값 도달 | 10ms | 가벼운 탭 |
-| Save 스와이프 임계값 도달 | 10ms | 가벼운 탭 |
-| 이전 카드 오버레이 30% 도달 | 10ms | 임계값 인지 |
-| 시청 리포트 드래그 임계값 | 10ms | 트리거 시점 |
-| 에러 | 없음 | Quiet Ink 는 에러에 진동을 쓰지 않음 |
+## States
+- **Skeleton:** `surface` 바탕 + `raised` 펄스 2s. 카드 모양 그대로.
+- **Empty:** 아이콘 48(`text-muted`) → 제목 15/600 → 설명 13 → CTA(유리 또는 라임). 최대 폭 260.
+- **Error:** Empty와 같은 구조, 아이콘만 danger. 포스터 로딩 실패는 `surface` + 워드마크 실루엣(아쿠아 20%)으로 조용히.
+- **Toast:** 상단 44, 유리, radius 14, 라임 점 7px. 등장 250ms enter, 체류 2.5s(되돌리기 있으면 3s), 동시 1개.
+- **Friend memo (친구 메모 스티커):** 카드 우상단, 라임 채움, SUIT 800 12px, `rotate(-6deg)`, radius 12. **12자 안팎의 한마디**("비 오는 밤에 딱"). 긴 추천 이유는 상세 시트로 내린다. 문구는 추천 생성 단계에서 별도 필드로 만든다(구현 트랙).
 
-미지원 브라우저는 무시. iOS Safari 는 `navigator.vibrate` 미지원 (사용자 설정 의존) — 핵심 UX 가 햅틱에 의존하지 않도록 시각 피드백 병행 필수.
-
-### touch-action 전략
-| 영역 | 값 | 이유 |
-|------|---|------|
-| 카드 스와이프 영역 | `none` | 수평 스와이프와 브라우저 뒤로가기 제스처 충돌 방지 |
-| 바텀시트 본체 | `none` | 드래그↔스크롤 전환을 JS 가 직접 관리 |
-| 바텀시트 내부 콘텐츠 | `pan-y` | 세로 스크롤은 네이티브 허용 |
-| Saved 그리드 | `pan-y` | 기본 세로 스크롤 |
-| BottomNav | `manipulation` | 기본 탭 동작만, double-tap zoom 차단 |
-
-### 동시 제스처 충돌 방지
-- 스와이프 중 (`swiping === true`) 이면 `onCardTap` 무시.
-- 방향 잠금: 첫 10px 이동으로 수평/수직 결정. 이후 변경 불가.
-- 시트 열린 상태에서는 z-index 차단으로 카드 터치 이벤트가 도달하지 않음.
-- 애니메이션 진행 중 사용자 입력은 `swiping` ref 로 중복 실행 방지.
+## Accessibility
+- 터치 타겟 44×44 이상. 포커스는 아쿠아 2px 링.
+- 대비: 본문 AA 이상(위 표 수치). 라이트 `text-muted`는 큰 글자·힌트 전용. 라이트에서 라임을 글자로 쓰지 않는다.
+- 색만으로 상태를 전달하지 않는다 — 저장/관심 없음은 방향 + 스티커 글자 + 햅틱을 함께 준다.
+- `user-scalable=no`, `autoFocus` 금지(PWA). 유리 위 글자는 대비가 흔들리므로 받침·굵기 규칙을 지킨다.
+- ARIA/접근성 라벨은 기존 매핑 유지(ActionBar "처음으로/공유/상세보기/새 추천/저장", 탭 라벨 등) + 위 스와이프 대체 수단: 상세 시트에 "관심 없음" 버튼.
 
 ## Tone & Voice
 - **기본 톤:** 해요체 (부드러운 존댓말). "~습니다" 격식체 금지.
@@ -411,36 +213,12 @@ IconHeart(saved 내부 reaction badge) / IconSave / Close / Refresh / Detail / S
 | 공유 | "링크를 복사했어요" |
 | 로그인 유도 | "로그인하면 리스트가 저장돼요" |
 
-## Content Categories (확장용)
-영화/시리즈 외 확장 시 카테고리 구분 색상. 메인 UI에는 미사용, 뱃지/필터 칩에만 적용.
-
-| 카테고리 | Hex | 비고 |
-|---------|-----|------|
-| 영화 | #C4A35A | 기본 액센트와 동일 |
-| 시리즈 | #9B8AE0 | 라벤더 |
-| 음악 | #E08A6C | 코랄 |
-| 도서 | #7EC4A0 | 세이지 그린 |
-| 공연 | #D4A245 | 앰버 |
-
 ## References
-DESIGN.md 는 원칙·토큰 문서. 컴포넌트별 상세 규격·시각 정본·산출물은 외부 문서로 분리해 두께를 관리.
-
-- **`_design-handoff/`** — Claude Design `neq-design-v2` bundle (2026-04-29). **아이콘/시각 정본**. 진입점: `HANDOFF_README.md`. 정본 prototype: `Phase 4 - Full Prototype.html`. 시각 토큰 충돌 시 이쪽 우선.
-- **`_workspace_20260417_172931/design-rebuild/`** — 4-Phase 디자인 팀 산출물 (2026-04-15 ~ 2026-04-17, brand/ui/motion/critic). 컴포넌트 디테일·빈 상태 카피 템플릿·gesture numeric spec 의 원전.
-  - `01_brand-identity.md` — 경쟁 분석 5종 + 브랜드 포지셔닝
-  - `01_color-system.md` — 컬러 토큰 (블루 → 앰버 결정 전 원안)
-  - `01_typography.md` — 타이포 (Instrument Serif 원안, Fraunces 로 결정)
-  - `01_tone-guide.md` — 빈 상태/에러/로딩 카피 템플릿 + 금지 표현 원전
-  - `02_component-spec.md` — 컴포넌트 10종 풀스펙 (655L)
-  - `02_spacing-layout.md` — Discover/Saved/Profile 레이아웃 다이어그램
-  - `02_states-spec.md` — 스켈레톤·빈·에러·전환 애니메이션 원전
-  - `03_gesture-spec.md` — 카드/시트 제스처 numeric spec
-  - `03_motion-language.md` — easing/duration 토큰 원전
-  - `04_anti-slop-audit.md` — 12 항목 PASS/FAIL 감사
-  - `04_benchmark.md` — Letterboxd/Spotify/Watcha/Mubi 와 색상축 좌표 매핑
-  - `04_design-critique.md` — P0/P1 비평 → DESIGN.md 가 채택한 결정의 근거
-- **코드 토큰 정본:** `apps/web/src/app/globals.css` — `:root` CSS 변수 선언. DESIGN.md ↔ globals.css 값 불일치 시 globals.css 가 빌드 정본, DESIGN.md 가 인텐트 정본.
-- **컴포넌트 진입점:** `CODEMAP.md` — 거대 파일 책임 분할 후 어디부터 읽을지 1줄 안내.
+- **이번 리디자인 산출물:** `~/.gstack/projects/bininthehood-neq/designs/redesign-20261126/` — 3안 비교(`neq-redesign-3way-b8.html`), B안 확장 시안(`neq-night-pool-c1.html`), 브리프·외부 의견.
+- **리퀴드 글래스 시안:** `~/.gstack/projects/bininthehood-neq/designs/liquid-glass-20261126/preview.html` (Quiet Ink 색 기준으로 만든 재질·제스처 시안. 재질 규칙만 유효)
+- **`_design-handoff/`:** 아이콘 형태의 정본. 색·폰트·분위기 토큰은 이 문서가 대체한다.
+- **코드 토큰 위치(아직 Quiet Ink 값):** `packages/design/src/tokens.ts`, `packages/design/src/tokens.css`, `apps/web/src/app/globals.css`, `apps/native/lib/tokens.ts`(re-export).
+- Apple: [Materials](https://developer.apple.com/design/human-interface-guidelines/materials), [Adopting Liquid Glass](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass). Expo: [GlassEffect (SDK 54)](https://docs.expo.dev/versions/v54.0.0/sdk/glass-effect), [Native tabs](https://docs.expo.dev/router/advanced/native-tabs/).
 
 ## Decisions Log
 | Date | Decision | Rationale |
@@ -465,3 +243,11 @@ DESIGN.md 는 원칙·토큰 문서. 컴포넌트별 상세 규격·시각 정�
 | 2026-05-13 | Phase 5 워드마크 amber 리컬러링 (5/12 L462 잔여 이행) | 5/12 Brand Identity 섹션의 색상 drift 메모 해소. `apps/web/public/neq-logo.png` 워드마크 자산을 Warm Cinema 오렌지(#E87B35) → Quiet Ink amber(#C4A35A) 정합. 변환 방식: 알파 채널 마스크 + 단색 fill (sharp 라이브러리, `_workspace/recolor-wordmark.js`). tint 명도 grading 방식과 비교 후 단색 fill 채택 — DESIGN.md 토큰값 정확 매칭 우선. 폰트(Instrument Serif italic 계열) + 형태 + 알파 마스크는 유지. **사용처 8곳 자동 반영** (이미지 정본 단일 출처): discover/loading, share/[id]/ShareClient, StatusScreens 3곳, DiscoverHeader, StepHeader, OnboardingStepWelcome. 백업: `_workspace/neq-logo.warm-cinema.png` (gitignored). **잔여 Phase 5:** 로고 마크(심볼) + 1024² 앱 아이콘은 외부 디자인 팀 인계. |
 | 2026-05-13 | 온보딩 6단계 UX 일괄 정합 (ux-reviewer audit 후속) | 보조 옵션 4종 시각 통일 = **Option A 풀폭 패턴** (`w-full py-3 text-sm text-secondary` 무장식 + `active:scale-[0.99]`): Hello "이름 없이 시작" / Genre "장르 정하지 않고 시작" / Taste "작품 정하지 않고 시작" / OTT "나중에 설정". Genre·Taste 의 inline underline + `text-decoration` 제거. 컨테이너 `flex-col items-center gap-3` → `flex flex-col gap-2` (Hello/OTT 패턴 정합). **Notify 신규 보조 옵션 "알림 받지 않기"** 추가 — 모든 토글 OFF + `Notification.requestPermission()` 호출 skip + `onNext({ skipped: true })` 분기. analytics `onboarding_step_completed` props = `{ notifications_skipped: true }` (Genre/Taste 의 `{ random: true }` 패턴 정합). **Tone 위반 정정 3건**: OTT "지금 바로 볼 수 있는" → "지금 보실 수 있는" + `<br />` 제거(자연 wrap), Welcome "알고리즘 대신, 큐레이션" → "리스트 대신, 한 편씩" (L393 "알고리즘" 노출 회피), Notify "곧 시작됩니다/적용됩니다" → "곧 시작해요/적용돼요" (L384 격식체 금지). **anti-slop #8 정정 2건**: Genre chip 의 `<span fontSize 10>✓</span>` + OTT row 의 raw `✓` 문자 → 모두 `<IconCheck size={12} />` 컴포넌트 (10px 폰트 → 12px SVG). **토큰 정합 2건**: StepHeader 워드마크 `h-6`(24px) → `h-5`(20px) (L51 기본), Controller `max-w-lg`(512px) → `max-w-[480px]` (L177). **예외 1건**: Hello 미리보기 "○○○ 님, 이번 주 한 편 어떠세요?" L125 의 "님" 호칭은 사용자 결정으로 유지 — DESIGN.md L401 정책 예외 인정. |
 | 2026-05-27 | 온보딩 Hybrid v2 — persona 인라인 + 통합 10단계 progress | 기존 별도 작품 선택(taste) 단계 제거 + `PersonaSurveyController` 를 onboarding step 4 로 인라인 마운트. **STEP_LABELS 6단계 유지** (`welcome / hello / genre / persona / ott / notify`) 인데 사용자 progress 표시는 **통합 10단계** — persona 의 sub-step 5종 (context_select / step1 / step2-or-3 / favorites_pick / summary) = 4·5·6·7·8 위치. `OnboardingV2Controller.tsx` / 네이티브 `app/onboarding/index.tsx` 의 `headerCurrent` 산식: `step<3 ? step : step===3 ? 3+(subStep-1) : step+4`. **StepHeader** 가 모든 단계에서 동일 사용 — persona 내부 `SurveyHeader` 는 embedded 모드에서 hide. **trap 차단 영구 규칙 (P0 review fix)**: persona subStep≥2 일 때 우상단 X 건너뛰기 노출 — `PersonaSurveyController` 가 LLM 행/rate-limit 으로 사용자를 가두는 회귀 방지. confirm 후 `goNext({persona_created:false, skipped_from_header:true})`. error_modal 도 embedded 일 때 primary "다시 시도"·secondary "건너뛰기" 분기 (profile 진입은 기존 "닫기" 단일 버튼 유지). **헤더 동기화 회귀 가드 (P1 review fix)**: step 변화 시 `personaSubStep=1` 리셋 + `error_modal/resume_modal/done` phase 동안 `onSubStepChange` skip — progress 역행/stale 차단. **Native layout shift 3건 fix** (a3152bc): splash bg `#0a0a0a→#12110E` (colors.bg 정합), `SafeAreaProvider initialMetrics={initialWindowMetrics}`, fontsLoaded false 시 빈 View fallback. **잔여 검증**: Android splash bg 가 expo-splash-screen plugin 미등록 상태에서 실제 반영되는지 EAS Build 확인 필요 (TODOS.md #9 참조). |
+| 2026-11-26 | **전면 리디자인: Quiet Ink → Night Pool** | 실사용자 피드백 "폰트·색·분위기가 Claude 디자인과 비슷하다". 웜 다크 + 앰버 단일 강조 + 세리프 헤드라인이 Claude 시각 축과 겹쳤다. /design-consultation 처음부터 재실행: 경쟁 OTT·Claude 시각 조사 + Codex·별도 에이전트 외부 의견 → 3안(라임 소다/밤 수영장/포스터 물들임) 시안 비교 → 사용자 B안 선택. 세 의견 공통: 형광 라임 강조, 세리프는 워드마크에만, 젤리 프레스. |
+| 2026-11-26 | 다크·라이트 둘 다 지원 | 사용자 결정. 시스템 설정 따름. |
+| 2026-11-26 | 워드마크 형태 유지, 색만 아쿠아(#58DCCB / #007B72) | 사용자 결정. 단색 알파 PNG라 tint/mask로 재색칠. |
+| 2026-11-26 | 폰트 교체: SUIT(한글 UI·제목) + Unbounded(영문 제목) + Recursive(숫자) | Pretendard·Instrument Serif·Geist Mono 폐기. 모두 OFL. |
+| 2026-11-26 | Liquid Glass 재질 규칙 | 조작부·칩·토스트·탭바·반만 열린 시트만 유리, 카드·본문은 불투명, iOS 26 미만은 불투명 대체. Apple 가이드(콘텐츠 층 금지) + 2026-06 카드 블러 깜빡임 이력. |
+| 2026-11-26 | 위 스와이프 = "관심 없음" 재도입 (2026-05-02 R1 제거 결정 번복) | 사용자 요청. 평가가 아닌 숨기기 액션으로 정의, 평가는 명시 픽커에만 둔다는 원칙은 유지. |
+| 2026-11-26 | 친구 메모 스티커 도입 | "친구가 골라주는 가벼움". 카드에는 12자 안팎 한마디, 긴 이유는 상세 시트로. 추천 생성에 짧은 문구 필드 추가 필요. |
+| 2026-11-26 | Content Categories(확장용 카테고리 색) 표 폐기 | 앰버·코랄·라벤더가 새 팔레트와 충돌. 카테고리 확장 시 Night Pool 기준으로 다시 정한다. |

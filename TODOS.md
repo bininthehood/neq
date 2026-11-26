@@ -11,6 +11,26 @@
 
 ## Open
 
+### Night Pool — 웹(PWA) 반영 (1.1.0 출시 후)
+
+- **What**: 웹을 Night Pool 토큰·폰트(SUIT·Unbounded·Recursive)·다크/라이트·위 스와이프 "관심 없음"·친구 메모로 바꾸고, `globals.css` 의 `tokens-quiet-ink.css` 고정 import 를 `@neq/design/tokens.css` 로 되돌린다.
+- **Why**: 1.1.0 동안 웹만 Quiet Ink 로 남는다(의도된 분리). 고정 파일을 잊으면 웹이 계속 옛 디자인이다.
+- **Pros**: 앱·웹 시각 통일, Quiet Ink 잔재(옛 사본 CSS·폰트) 완전 제거.
+- **Cons**: 1~1.5일. 웹에는 리퀴드 글래스가 없어 불투명 대체만 적용.
+- **Context**: `docs/plans/2026-11-26-night-pool-implementation.md` 6단계 + 교차 검토 X1. 친구 메모는 `packages/core` `friendMemo()` 재사용, 숨김은 서버 `hiddenKeys`(PR-S) 이미 배포됨.
+- **Effort**: M · **Priority**: P2
+- **Depends on / blocked by**: 1.1.0 출시
+
+### Night Pool — "관심 없음" 계정 단위 동기화
+
+- **What**: 계정(OAuth + linkIdentity) 도입 시 기기 로컬 `hiddenKeys` 를 서버에 옮겨 재설치·다른 기기에서도 유지.
+- **Why**: 1.1.0 은 기기 기준 보관(교차 검토 X3)이라 앱을 지우면 숨김이 사라진다.
+- **Pros**: "다시 안 보여요" 약속이 기기를 바꿔도 지켜진다.
+- **Cons**: 새 테이블·API·마이그레이션(로컬 → 서버 병합) 필요.
+- **Context**: 저장 키 형식 `'movie:1396'` + 추가 시각(`apps/native/lib/store.ts`). 서버 필터는 요청 필드 `hiddenKeys` 로 이미 동작 — 서버 보관으로 바꿔도 필터 지점은 그대로.
+- **Effort**: M · **Priority**: P3
+- **Depends on / blocked by**: 계정 도입 결정 (메모리 "디바이스 격리 — 출시 후 결정")
+
 ### Hybrid onboarding 후속 — informational deferrals (v0.3.3.0 review)
 
 - **Priority:** P2
