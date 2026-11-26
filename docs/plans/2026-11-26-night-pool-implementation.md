@@ -1,7 +1,7 @@
 # Night Pool 리디자인 구현 계획
 
 작성 2026-11-26 · 기준 문서 [DESIGN.md](../../DESIGN.md) · 브랜치 `design/night-pool`
-상태: **계획 — 결정 4건 확정, 엔지니어링 검토 전**. 코드 변경 없음.
+상태: **계획 확정(엔지니어링 검토 완료) · 0단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
 
 ## 목표와 범위
 - iOS 네이티브 앱(`apps/native`)을 Quiet Ink → Night Pool로 바꾼다. 웹(PWA)은 같은 토큰을 쓰지만 화면 반영은 마지막 단계에서 따로 한다.
@@ -40,6 +40,20 @@ main ─┬─ PR-S (서버만): hiddenKeys 검증·필터 ──▶ 배포 (앱
 2. **글래스:** `npx expo install expo-glass-effect` → 시뮬(iOS 26)에서 `GlassView` 칩·버튼·시트 상단 렌더, 부모 `opacity` 애니메이션 문제 확인. **성능(D9):** 줄 단위 `GlassContainer` 묶음(칩 줄·액션바·헤더·탭바 ≈ 4개)으로 카드 스와이프 중 프레임을 Instruments로 측정 — 기준 60fps(최소 지원 기기에서). 미달 시 칩 줄은 불투명 대체.
 3. **탭바:** `expo-router/unstable-native-tabs`로 4슬롯 + 검색 액션(시트 열기)이 가능한지. 불가하면 `GlassView` 기반 자체 탭바로 간다.
 - 산출: 세 결정의 결과를 이 문서에 기록.
+
+### 0단계 결과 (2026-11-26, iPhone 17 Pro 시뮬 · iOS 26.5 · 브랜치 `spike/night-pool-0` 2615173, 병합 금지)
+| 항목 | 결과 | 결정 |
+|---|---|---|
+| `DynamicColorIOS` — View 배경·테두리, Text, react-native-svg `fill`/`stroke`/`color`, `Image tintColor` | 정상. 시스템 밝기를 바꾸면 **재시작 없이 즉시** 전환 | 기본 방식으로 채택 (호출부 ~587곳 그대로) |
+| `DynamicColorIOS` — Reanimated `Animated.*` 의 **정적** 스타일 | **크래시** `[Reanimated] Invalid color value` (Reanimated 4.1.7 CSS 스타일 처리 `css/native/style/processors/colors.ts`) | 금지 |
+| `DynamicColorIOS` — `useAnimatedStyle` 반환값 | 크래시는 없지만 **아무것도 안 그려짐**(조용한 실패) | 금지 |
+| 대상 규모 | `Animated.*` 에 색 스타일이 걸린 곳 약 22곳 / 12파일 (ActionBar·SwipeCard·DetailSheet·SearchSheet·PrevCardOverlay·SkeletonCard·saved·onboarding/complete·tutorial 등) | 이 곳만 `useThemeColors()`(현재 밝기의 hex 문자열, `useColorScheme` 기반)로 |
+| 리퀴드 글래스 | `isLiquidGlassAvailable()`·`isGlassEffectAPIAvailable()` 모두 true, `GlassView`/`GlassContainer` 렌더 정상 (`expo-glass-effect` 0.1.10, SDK 54 호환) | 채택. 라이트에서는 틴트를 라이트 값으로 바꿔야 회색으로 탁해지지 않음 |
+| 글래스 성능 | 움직이는 포스터 위 4묶음: 유리 켬/끔 모두 UI 60fps, 최악 프레임 17ms (시뮬 — Mac GPU라 실기기 부하를 대표하지 않음) | 실기기(iPhone 15 Plus) 측정은 4단계 TestFlight에서 재확인 |
+| 시스템 탭바(native tabs) | 코드 확인: `expo-router` 6.0.23 `NativeTabsView` 가 `onNativeFocusChange` 에서 무조건 `JUMP_TO` — `tabPress` preventDefault 없음. react-native-screens 4.16 `experimentalControlNavigationStateInJS` 가 있으나 expo-router가 노출하지 않음 | **자체 `GlassView` 탭바** 채택 (검색 = 시트 열기 동작·E2E 라벨 유지). 검색을 실제 탭 화면(role="search")으로 바꾸는 안은 제품 결정이 필요해 보류 |
+| iOS 26 미만 대체 | 설치된 시뮬 런타임이 iOS 26.4/26.5뿐이라 미확인 | 4단계에서 `isLiquidGlassAvailable()` false 강제 분기로 대체 표현 확인 + 구형 기기 TestFlight |
+
+**후속 규칙:** 공용 `GlassSurface`·`JellyPressable` 등 Reanimated 를 쓰는 공용 컴포넌트는 처음부터 `useThemeColors()` 를 쓴다. 정적 동적색이 `Animated.*` 에 들어가면 개발 모드에서 빨간 오류 화면으로 바로 드러나지만, `useAnimatedStyle` 반환은 조용히 사라지므로 라이트·다크 스크린샷 E2E(D8 ②)로 잡는다.
 
 ### 1. 토큰·폰트 기반 (OTA 가능)
 - `packages/design/src/tokens.ts`: Night Pool 다크·라이트 팔레트, radius·motion(jelly·sheet) 토큰. 중립 키(`bg`, `surface`, `textPrimary` …)는 이름 유지·값만 교체. **`accent`·`accentDim`·`accentBorder*`·`accentHover`는 삭제**하고 `lime`(채움)·`limeText`(글자)·`aqua`·`aquaText`만 둔다 → 타입 오류로 117곳(94 + 23)을 빠짐없이 용도별 치환(D5).
