@@ -447,6 +447,7 @@ export default function SearchSheet({
                   onChangeText={handleInput}
                   placeholder="작품, 감독, 배우"
                   placeholderTextColor={colors.textMuted}
+                  selectionColor={colors.aquaText}
                   style={styles.input}
                   autoCorrect={false}
                   // 2026-05-29 v2 — visible 가드 제거. <Modal visible=false> 는
@@ -685,7 +686,7 @@ function IdleContent({
     >
       {recents.length > 0 && (
         <View accessibilityLabel="최근 검색어">
-          <Text style={styles.sectionHead}>RECENT · 최근 검색</Text>
+          <Text style={styles.sectionHead}>최근 검색</Text>
           <View style={styles.chipRow}>
             {recents.slice(0, 7).map((r) => (
               <RecentChip
@@ -705,7 +706,7 @@ function IdleContent({
               (textSecondary / 500 / sentence-case) 은 RECENT (sectionHead, textPrimary /
               600 / ALL CAPS) 와 위계 불일치. RECENT 와 시각 위계 균등하게 sectionHead
               스타일 재사용 → SUGGESTED 도 영문 약어로 ALL CAPS 정당성 확보. */}
-          <Text style={styles.sectionHead}>SUGGESTED · 제안</Text>
+          <Text style={styles.sectionHead}>제안</Text>
           <View style={styles.chipRow}>
             {trending.slice(0, 6).map((t) => (
               <TrendingChip
@@ -1072,8 +1073,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: SHEET_MAX_HEIGHT,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
   },
   handleRow: {
     alignItems: 'center',
@@ -1099,11 +1100,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     paddingHorizontal: spacing.md,
+    minHeight: 44,
   },
   input: {
     flex: 1,
@@ -1117,7 +1119,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 4,
   },
   cancelBtnPressed: { opacity: 0.6 },
-  cancelText: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
+  cancelText: { color: colors.textSecondary, fontSize: 15, fontFamily: fontsV2.bodySemi },
 
   // body
   body: { flex: 1 },
@@ -1132,18 +1134,16 @@ const styles = StyleSheet.create({
   idleScroll: { flex: 1 },
   idleContent: { paddingBottom: spacing.md },
   sectionHead: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1.3,
-    textTransform: 'uppercase',
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
     paddingBottom: spacing.xs + 2,
   },
   // 2026-06-15 (build 27 fix iter2) — sectionHeadAlt 제거.
   // 사유: SUGGESTED 라벨 채택으로 sectionHead 와 시각 위계 균등 유지 결정.
-  // RECENT 와 동일 스타일 (textPrimary / 600 / ALL CAPS / 1.3 letterSpacing) 재사용.
+  // 최근 검색과 같은 섹션 라벨 스타일 재사용.
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1168,7 +1168,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   recentChipMark: { color: colors.textMuted, fontSize: 12 },
-  recentChipText: { color: colors.textPrimary, fontSize: 12, fontWeight: '500' },
+  recentChipText: { color: colors.textPrimary, fontSize: 13, fontFamily: fontsV2.bodySemi },
   recentChipRemove: {
     paddingLeft: 4,
     paddingRight: spacing.sm + 2,
@@ -1184,7 +1184,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.aquaDim,
   },
-  trendingChipText: { color: colors.aquaText, fontSize: 12, fontWeight: '500' },
+  trendingChipText: { color: colors.aquaText, fontSize: 13, fontFamily: fontsV2.bodySemi },
 
   // loading
   centered: {
@@ -1226,7 +1226,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   retryBtnPressed: { opacity: 0.7 },
-  retryText: { color: colors.textPrimary, fontWeight: '600', fontSize: 14 },
+  retryText: { color: colors.textPrimary, fontFamily: fontsV2.bodySemi, fontSize: 15 },
 
   // ok
   okScroll: { flex: 1 },
@@ -1247,10 +1247,8 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     color: colors.aquaText,
-    fontSize: 11,
+    fontSize: 13,
     fontFamily: fontsV2.bodySemi,
-    textTransform: 'uppercase',
-    letterSpacing: 1.6,
   },
   sectionCount: {
     color: colors.textMuted,
@@ -1269,7 +1267,7 @@ const styles = StyleSheet.create({
   workPosterFrame: {
     width: WORK_CARD_W,
     height: WORK_CARD_H,
-    borderRadius: radius.sm,
+    borderRadius: radius.thumb,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -1288,9 +1286,9 @@ const styles = StyleSheet.create({
   },
   workTitle: {
     color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
     marginTop: spacing.sm,
+    fontFamily: fontsV2.bodySemi,
   },
   workMeta: {
     // anti-slop #8 정합 (web a3bbf94, SearchResults.tsx:330) — 한글 메타 ("시리즈 · 2024 · 평점")
@@ -1298,6 +1296,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+    fontFamily: fontsV2.data,
   },
 
   // people carousel cards
@@ -1324,11 +1323,11 @@ const styles = StyleSheet.create({
   },
   personName: {
     color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
     marginTop: spacing.sm,
     textAlign: 'center',
     width: '100%',
+    fontFamily: fontsV2.bodySemi,
   },
   personKnownFor: {
     // anti-slop #8 정합 (web a3bbf94, SearchResults.tsx:456) — known-for 텍스트 (배우 대표작 한글).
@@ -1347,7 +1346,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs + 2,
     marginBottom: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.toast,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -1382,7 +1381,7 @@ const styles = StyleSheet.create({
   workPosterFrameGrid: {
     width: '100%',
     aspectRatio: 2 / 3,
-    borderRadius: radius.sm,
+    borderRadius: radius.thumb,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -1390,9 +1389,9 @@ const styles = StyleSheet.create({
   },
   workTitleGrid: {
     color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
     marginTop: 4,
     lineHeight: 14,
+    fontFamily: fontsV2.bodySemi,
   },
 });

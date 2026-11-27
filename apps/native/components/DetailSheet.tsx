@@ -781,7 +781,7 @@ export default function DetailSheet({
                   />
                 ) : null}
                 <LinearGradient
-                  colors={['transparent', 'rgba(18,17,14,0.4)', t.bg]}
+                  colors={['transparent', t.overlayLight, t.bg]}
                   locations={[0, 0.5, 1]}
                   style={StyleSheet.absoluteFill}
                   pointerEvents="none"
@@ -814,7 +814,7 @@ export default function DetailSheet({
                 </View>
               </View>
 
-              {/* Reason 박스 — borderLeft 2px amber, 면 금지 */}
+              {/* Reason 박스 — raised 면 (Night Pool) */}
               {rec.reason ? (
                 <View style={styles.reasonBox}>
                   <Text style={styles.reasonText}>{rec.reason}</Text>
@@ -829,7 +829,7 @@ export default function DetailSheet({
                 return (
                   <View style={styles.section}>
                     <Text style={[styles.sectionTitle, styles.sectionTitleAmber]}>
-                      Synopsis · 시놉시스
+                      줄거리
                     </Text>
                     {isLong ? (
                       <Pressable
@@ -865,7 +865,7 @@ export default function DetailSheet({
               {(rec.director || rec.cast.length > 0) && (
                 <>
                   <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Cast · 캐스트</Text>
+                    <Text style={styles.sectionTitle}>캐스트</Text>
                   </View>
                   <CastRow
                     director={rec.director}
@@ -883,7 +883,7 @@ export default function DetailSheet({
               )}
 
               <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Where to watch · 시청 가능</Text>
+                <Text style={styles.sectionTitle}>볼 수 있는 곳</Text>
                 {watchProviders.length === 0 ? (
                   <>
                     <Text style={styles.noProviders}>
@@ -1779,30 +1779,34 @@ const styles = StyleSheet.create({
     maxWidth: 260,
     padding: spacing.sm + 4,
     backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.lg,
+    borderRadius: radius.toast,
     ...shadowsNative.dropdown,
     zIndex: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   detailMenuItem: {
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: 10,
   },
   detailMenuItemPressed: {
     backgroundColor: colors.overlayLight,
   },
   detailMenuItemText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '400',
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   topNavBtn: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.full,
     backgroundColor: colors.surfaceRaised,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // 2026-06-15 (build 27) — disabled 상태 (회색, 사용자 결정). hidden 아님.
   // surfaceRaised 그대로 두고 opacity 만 낮춰 면적 인지는 유지, 색채 위계만 강등.
@@ -1838,26 +1842,24 @@ const styles = StyleSheet.create({
   ratingPill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: radius.badge,
+    backgroundColor: 'rgba(4,20,24,0.55)',
   },
   ratingPillText: {
     color: colors.lime, // 포스터 위 어두운 받침 — 테마 무관 밝은 라임
-    fontSize: 11,
-    fontFamily: fontsV2.data,
-    letterSpacing: 0.2,
+    fontSize: 12,
+    fontFamily: fontsV2.dataMedium,
   },
   typePill: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: radius.badge,
+    backgroundColor: 'rgba(4,20,24,0.55)',
   },
   typePillText: {
     color: colors.textPrimary,
-    fontSize: 11,
-    fontFamily: fontsV2.data,
-    letterSpacing: 0.2,
+    fontSize: 12,
+    fontFamily: fontsV2.bodySemi,
   },
   // C3 — title Instrument Serif 28/32 overlay
   title: {
@@ -1865,39 +1867,38 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: fontsV2.title,
     lineHeight: 32,
-    letterSpacing: -0.56, // -0.02em on 28
+    letterSpacing: -0.98,
   },
   // C3 — titleEn Fraunces italic 15 별행
   titleEn: {
     color: colors.textMuted,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: fontsV2.en,
-    letterSpacing: -0.15,
+    letterSpacing: 0.28,
     marginTop: 4,
   },
   // C3 — meta GeistMono 11 + 국가 포함
   meta: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: fontsV2.data,
-    letterSpacing: 0.2,
     marginTop: 8,
   },
-  // anti-slop #6 예외 2 — reason 박스는 면 금지, 선(borderLeft 2px accent) 만.
+  // Night Pool — reason 은 raised 면 (borderLeft 인용 블록은 anti-slop #6 로 폐기).
   // PR2 — hero 가 풀폭이므로 marginHorizontal 22 로 직접 위치.
   reasonBox: {
     marginTop: spacing.lg,
     marginHorizontal: 22,
-    paddingLeft: 12,
-    paddingVertical: 4,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.aquaBorder,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: radius.toast,
   },
   // PR2 — reason text: Fraunces italic 13 (anti-slop #6 예외 2 정합), 13 × 1.45 ≈ 19.
   reasonText: {
     color: colors.textPrimary,
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 15,
+    lineHeight: 23,
     fontFamily: fontsV2.body,
   },
   // 위임 O #1.1 — Cast row 가로 스크롤. PR2 hero 풀폭이라 left 22 으로 직접 indent.
@@ -1936,11 +1937,11 @@ const styles = StyleSheet.create({
   },
   castName: {
     color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
     lineHeight: 14,
     textAlign: 'center',
     width: '100%',
+    fontFamily: fontsV2.bodySemi,
   },
   castRole: {
     color: colors.textMuted,
@@ -1957,11 +1958,8 @@ const styles = StyleSheet.create({
   // 기본 = textSecondary. Synopsis 한 곳만 amber (sectionTitleAmber merge).
   sectionTitle: {
     color: colors.textSecondary,
-    fontSize: 10,
-    fontFamily: fontsV2.data,
-    fontWeight: '500',
-    letterSpacing: 1.2, // ≈ 0.12em on 10
-    textTransform: 'uppercase',
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     marginBottom: spacing.sm,
   },
   sectionTitleAmber: {
@@ -1980,8 +1978,8 @@ const styles = StyleSheet.create({
   },
   synopsisToggleText: {
     color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
   },
   noProviders: {
     color: colors.textMuted,
@@ -2004,14 +2002,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     minHeight: 44, // 모바일 터치 타겟
     backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.border,
   },
   providerChipIcon: {
     width: 20,
     height: 20,
-    borderRadius: 4,
+    borderRadius: 6,
     backgroundColor: colors.surface,
     overflow: 'hidden',
     flexShrink: 0,
@@ -2019,7 +2017,7 @@ const styles = StyleSheet.create({
   providerChipName: {
     color: colors.textPrimary,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: fontsV2.bodySemi,
   },
   // PR2 — sticky bottom CTA 컨테이너. mode='detail' = ghost 공유 1개, mode='share' = amber + ghost 2개.
   stickyCta: {
@@ -2044,7 +2042,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs + 2, // 8 — IconSave + label
     paddingVertical: 14,
-    borderRadius: radius.lg,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.lime,
@@ -2062,8 +2060,8 @@ const styles = StyleSheet.create({
   },
   ctaPrimaryText: {
     color: colors.textInverse,
-    fontWeight: '700',
-    fontSize: 14,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   ctaPrimarySavedText: {
     color: colors.limeText,
@@ -2073,7 +2071,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs + 2,
     paddingVertical: 14,
-    borderRadius: radius.lg,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceRaised,
@@ -2088,7 +2086,7 @@ const styles = StyleSheet.create({
     width: 48,
     minHeight: 48,
     paddingVertical: 14,
-    borderRadius: radius.lg,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceRaised,
@@ -2097,8 +2095,8 @@ const styles = StyleSheet.create({
   },
   ctaGhostText: {
     color: colors.textPrimary,
-    fontWeight: '600',
-    fontSize: 14,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   // 관련 작품 (F3) — neko-detail-sheet.jsx SimilarStrip
   relatedSkeletonRow: {
@@ -2110,7 +2108,7 @@ const styles = StyleSheet.create({
   relatedSkeletonCard: {
     width: 90,
     height: 132,
-    borderRadius: radius.md,
+    borderRadius: radius.thumb,
     backgroundColor: colors.surface,
     opacity: 0.5,
   },
@@ -2134,19 +2132,14 @@ const styles = StyleSheet.create({
   // 더보기 텍스트 — Quiet Ink 톤. textSecondary 12px, 라벨과 위계 균등.
   relatedHeaderMoreText: {
     color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
   },
   // PR2 — ChapterMark amber 1개 규칙 정합. 관련작 label 은 textSecondary 강등.
   relatedSectionTitle: {
     color: colors.textSecondary,
-    fontSize: 10,
-    fontFamily: fontsV2.data,
-    fontWeight: '500',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    // 2026-06-15 (build 27 fix iter2) — relatedHeader row 안으로 이동하면서
-    // marginBottom 제거 (헤더 row 가 통합 spacing 담당).
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
   },
   relatedRowContent: {
     gap: spacing.sm + 2,
@@ -2158,7 +2151,7 @@ const styles = StyleSheet.create({
   relatedPosterWrap: {
     width: 90,
     height: 132,
-    borderRadius: radius.sm,
+    borderRadius: radius.thumb,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -2193,20 +2186,19 @@ const styles = StyleSheet.create({
   // web PosterFallback xs eyebrowSize text-[9px] 정본 그대로 (aria-hidden 장식).
   relatedFallbackEyebrow: {
     fontFamily: fontsV2.data,
-    fontSize: 9,
-    letterSpacing: 1.35,
+    fontSize: 10, // 영문 전용 Recursive — anti-slop #8 예외
     color: colors.textMuted,
     textAlign: 'center',
   },
   relatedTitle: {
     color: colors.textPrimary,
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
     lineHeight: 14,
+    fontFamily: fontsV2.bodySemi,
   },
   relatedYear: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
     fontFamily: fontsV2.data,
   },
@@ -2239,9 +2231,9 @@ const styles = StyleSheet.create({
   subScreenTitle: {
     flex: 1,
     color: colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: -0.15,
+    fontSize: 18,
+    letterSpacing: -0.18,
+    fontFamily: fontsV2.bodyHeavy,
   },
   subScreenGrid: {
     flexDirection: 'row',
@@ -2257,7 +2249,7 @@ const styles = StyleSheet.create({
     // width 는 inline (cardWidth) 으로 주입. grid item.
   },
   subScreenPosterWrap: {
-    borderRadius: radius.md,
+    borderRadius: radius.thumb,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -2269,9 +2261,9 @@ const styles = StyleSheet.create({
   // anti-slop #8 (한글 10px 미만 금지) 위반 없음 — 12px 안전선.
   subScreenItemTitle: {
     color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
     lineHeight: 16,
+    fontFamily: fontsV2.bodySemi,
   },
   // year 는 11px 유지 (anti-slop #8 마지노선). Geist Mono / textMuted 약 위계.
   subScreenItemYear: {
@@ -2298,13 +2290,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
+    borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
   },
   subScreenRetryText: {
     color: colors.textPrimary,
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: fontsV2.bodySemi,
   },
 });
