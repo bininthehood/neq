@@ -427,6 +427,8 @@ const styles = StyleSheet.create({
   // 더블탭 저장 "찜!" 스티커 — 카드 위쪽 가운데. 색은 palette.dark 문자열(Animated 정적 style 규칙)
   dragSticker: {
     position: 'absolute',
+    // 피드 카드(zIndex 10·가라앉는 카드 20) 위
+    zIndex: 30,
     top: '30%',
     alignSelf: 'center',
     paddingHorizontal: 18,

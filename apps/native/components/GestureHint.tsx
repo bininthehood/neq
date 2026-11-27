@@ -34,10 +34,10 @@ export default function GestureHint({ step, onClose }: { step: HintStep; onClose
 }
 
 const styles = StyleSheet.create({
-  // 카드 위쪽 1/3 — 칩 줄·케밥·친구 메모 아래, 제목 블록 위
+  // 카드 가운데 — "찜!" 스티커(30%)·친구 메모 아래, 제목 블록 위
   wrap: {
     position: 'absolute',
-    top: '34%',
+    top: '44%',
     left: 0,
     right: 0,
     alignItems: 'center',
