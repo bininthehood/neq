@@ -94,7 +94,7 @@ describe('관심 없음 (Night Pool 5단계)', () => {
     await capture('not-interested-after-refresh');
 
     // 탭 접근성 라벨 4종 유지
-    for (const label of ['발견', '큐', '저장', '검색']) {
+    for (const label of ['발견', '큐', '저장', '프로필']) {
       expect((await waitForLabel(label, 3000)) || (await pageSourceContains(label))).toBe(true);
     }
   });

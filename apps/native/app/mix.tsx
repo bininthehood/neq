@@ -19,9 +19,8 @@ import type { SavedItem } from '../lib/types';
 import { colors, spacing, radius, fontsV2 } from '../lib/tokens';
 import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import SearchSheet from '../components/SearchSheet';
-import { IconUser, IconMix } from '../components/Icons';
+import { IconSearch, IconMix } from '../components/Icons';
 import { Button } from '../components/Button';
-import { useSearchTrigger } from '../lib/search-trigger';
 
 /**
  * Seeded Mix 2차 (2026-07-08) — Mix 탭.
@@ -35,11 +34,9 @@ export default function MixScreen() {
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [loaded, setLoaded] = useState(false);
 
-  // 2026-08-12 — 하단 "검색" 탭이 모든 화면에 노출되면서 큐만 시트가 없어 무반응이었다
-  // (사용자 보고). profile.tsx 선례대로 visible/onClose 만으로 마운트 — DetailSheet 은
-  // 붙이지 않는다 (마운트 추가 시 SearchSheet fetch race 회귀).
+  // 헤더 검색 버튼 → 자체 SearchSheet. profile.tsx 선례대로 visible/onClose 만으로 마운트 —
+  // DetailSheet 은 붙이지 않는다 (마운트 추가 시 SearchSheet fetch race 회귀).
   const [searchOpen, setSearchOpen] = useState(false);
-  useSearchTrigger(() => setSearchOpen(true));
 
   useFocusEffect(
     useCallback(() => {
@@ -82,15 +79,18 @@ export default function MixScreen() {
       <View style={styles.header}>
         {/* 4차 — 영문 표기 'Que' (neq 어원 라틴어 neque 착안, 사용자 확정. 'Cue' 아님) */}
         <Text style={styles.title}>Que</Text>
-        {/* 2026-08-12 — 나머지 3화면 헤더와 정합. 큐만 프로필 진입점이 없었다. */}
+        {/* 2026-11-27 — 헤더 우상단 = 검색 (프로필은 탭바, 제임스 요청). */}
         <Pressable
           style={styles.profileBtn}
-          onPress={() => router.push('/profile')}
+          onPress={() => {
+            track('search_opened');
+            setSearchOpen(true);
+          }}
           accessibilityRole="button"
-          accessibilityLabel="프로필"
+          accessibilityLabel="검색 열기"
           hitSlop={8}
         >
-          <IconUser size={18} color={colors.textMuted} />
+          <IconSearch size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 

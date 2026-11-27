@@ -134,6 +134,10 @@ type CardCategory = 'movie' | 'series' | 'variety';
 const CARD_INK = ['rgba(4,20,24,0)', 'rgba(4,20,24,0.82)', 'rgba(4,20,24,0.96)'] as const;
 // 포스터·잉크 위 글자는 테마 무관 밝은 값 (라이트 모드에서도 어두운 잉크 위)
 const ON_INK = palette.dark;
+// 2026-11-27 카드 유리 테두리 (제임스 요청 "카드가 너무 평면"). 포스터 위에 GlassView 를 올리지 않고
+// 가장자리만 유리처럼: 밝은 림 + 안쪽 잉크 헤어라인(두께감) + 위쪽 반사광. 전부 정적 뷰라 스와이프 중
+// 추가 렌더 비용이 없다 (움직이는 카드 위 실제 유리는 매 프레임 뒤를 다시 샘플링 + 2026-06 깜빡임 이력).
+const GLASS_SHEEN = ['rgba(214,255,248,0.16)', 'rgba(214,255,248,0)'] as const;
 const HANGUL = /[\u3131-\uD79D]/;
 /** 액션바(64)와 떠 있는 탭바가 카드 아래를 덮으므로 정보 영역을 그만큼 올린다 (index.tsx·SkeletonCard 와 공유). */
 export const CARD_BOTTOM_OVERLAY = 64 + TAB_BAR_SPACE;
@@ -406,6 +410,9 @@ export const CardInner = memo(function CardInner({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      <LinearGradient colors={GLASS_SHEEN} style={styles.glassSheen} pointerEvents="none" />
+      <View style={styles.glassRim} pointerEvents="none" />
+      <View style={styles.glassRimInner} pointerEvents="none" />
 
       {depth <= 1 && (
         <>
@@ -486,6 +493,27 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     // backgroundColor 는 inline (useThemeColors) — Animated.View 정적 style 에 동적 색 금지
     ...shadowsNative.lg,
+  },
+  // 카드 유리 테두리 — 테마 무관(포스터 위). 림 1.5 + 안쪽 잉크 1 = 유리 두께, 위 72 반사광.
+  glassRim: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: radius.card,
+    borderWidth: 1.5,
+    borderColor: 'rgba(200,255,245,0.32)',
+  },
+  glassRimInner: {
+    ...StyleSheet.absoluteFillObject,
+    margin: 1.5,
+    borderRadius: radius.card - 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(4,20,24,0.35)',
+  },
+  glassSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 72,
   },
   fallback: {
     backgroundColor: colors.surface,

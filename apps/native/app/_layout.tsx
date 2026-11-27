@@ -13,8 +13,7 @@ import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
 import { ToastProvider } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
-import { IconDiscover, IconBookmark, IconSearch, IconMix } from '../components/Icons';
-import { emitSearchOpen } from '../lib/search-trigger';
+import { IconDiscover, IconBookmark, IconUser, IconMix } from '../components/Icons';
 import { GlassSurface } from '../components/GlassSurface';
 import { TAB_BAR_BOTTOM, TAB_BAR_HEIGHT } from '../lib/tab-bar';
 
@@ -67,6 +66,10 @@ function TabItem({
 // 커스텀 Pressable 로 pressed 상태 시 opacity 0.4 + scale 0.92 적용 → 명확한 시각
 // 피드백. tabBarButton 의 props type 은 react-navigation v7 자체 정의라 외부
 // noexport 가 일반적 — any 로 받아 children/onPress 등 그대로 위임.
+// alignSelf stretch 필수 — 없으면 부모(tabBarItemStyle alignItems center) 때문에 너비 0 → 그림은 넘쳐 보여도
+// XCUITest 접근성 트리에서 빠지고 터치 영역도 사라진다.
+const tabButtonCenter = { flex: 1, alignSelf: 'stretch', padding: 0, justifyContent: 'center', alignItems: 'center' } as const;
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ActiveTabBarButton(props: any) {
   const baseStyle = typeof props.style === 'function' ? null : props.style;
@@ -75,6 +78,10 @@ function ActiveTabBarButton(props: any) {
       {...props}
       style={({ pressed }: { pressed: boolean }) => [
         baseStyle,
+        // 2026-11-27 — 라이브러리 기본(justifyContent flex-start + padding 5 + 31×28 아이콘 틀)이면
+        // 48pt 아이콘+라벨이 틀 밖으로 넘쳐 위로 붙는다(실기기 피드백 "중심 안 맞음").
+        // 버튼이 슬롯 전체를 채우고 가운데 정렬 — tabBarIconStyle 100% 와 짝.
+        tabButtonCenter,
         pressed && {
           opacity: 0.4,
           transform: [{ scale: 0.92 }],
@@ -164,7 +171,7 @@ function TabsWithGuard() {
       screenOptions={{
         headerShown: false,
         // 2026-11-27 Night Pool 4단계 — 떠 있는 유리 탭바 (0단계 결정: 시스템 native tabs 는
-        // tabPress preventDefault 가 없어 검색=시트 열기를 못 지킴 → JS Tabs + GlassSurface 배경).
+        // tabPress preventDefault 가 없어 당시 검색=시트 열기를 못 지킴 → JS Tabs + GlassSurface 배경).
         // absolute 라 화면 콘텐츠가 뒤로 지나간다 → 각 화면은 lib/tab-bar TAB_BAR_SPACE 만큼 비켜 준다.
         tabBarStyle: isOnboarding
           ? { display: 'none' }
@@ -183,6 +190,8 @@ function TabsWithGuard() {
             },
         tabBarBackground: () => <GlassSurface radius={TAB_BAR_HEIGHT / 2} />,
         tabBarItemStyle: { justifyContent: 'center', alignItems: 'center' },
+        // 아이콘 틀(기본 31×28)을 버튼 전체로 — TabItem 이 슬롯 정가운데에 놓인다.
+        tabBarIconStyle: { width: '100%', height: '100%' },
         tabBarShowLabel: false,
         sceneStyle: { backgroundColor: colors.bg },
         // 2026-05-20 (v3) — 시장 표준 정합. 즉시 전환 (no animation).
@@ -253,48 +262,30 @@ function TabsWithGuard() {
                 ),
               }}
             />
-            {/* 2026-08-12 — 하단 4번째 슬롯을 프로필 → 검색으로 교체 (프로필은
-                각 화면 헤더 우상단 버튼으로 이동).
-
-                검색은 라우트가 아니라 각 화면이 자체 마운트하는 모달 시트라
-                tabPress 를 preventDefault 하고 `emitSearchOpen()` 만 쏜다. 포커스된
-                화면이 자기 SearchSheet 를 연다 (lib/search-trigger.ts).
-                시트 마운트를 한 곳으로 합치지 않는 이유는 profile.tsx 의 fetch race
-                경고 주석 참조.
-
-                search_opened track 은 여기 한 곳에서만 발사 — 기존에는 3화면 헤더
-                버튼이 각자 호출했다. 진입 경로가 탭 하나로 합쳐져 중복이 없다. */}
+            {/* 2026-11-27 — 4번째 슬롯 = 프로필 (제임스 요청, 2026-08-12 f2f60b7 의 반대).
+                검색은 각 화면 헤더 우상단 버튼이 자기 SearchSheet 를 연다(마운트를 한 곳으로
+                합치지 않는 이유는 profile.tsx 의 fetch race 주석). lazy 기본값 유지 — 프로필은
+                시작 시 미리 그릴 이유가 없다. */}
             <Tabs.Screen
-              name="search"
+              name="profile"
               options={{
-                tabBarAccessibilityLabel: '검색',
+                tabBarAccessibilityLabel: '프로필',
                 tabBarIcon: ({ focused }) => (
                   <TabItem
-                    icon={({ color }) => <IconSearch size={20} color={color} />}
-                    label="검색"
+                    icon={({ color }) => <IconUser size={20} color={color} />}
+                    label="프로필"
                     focused={focused}
                   />
                 ),
               }}
-              listeners={{
-                tabPress: (e) => {
-                  e.preventDefault();
-                  track('search_opened');
-                  emitSearchOpen();
-                },
-              }}
             />
-            {/* 프로필 — 탭바에서 내리고 헤더 우상단 버튼(router.push)으로 진입.
-                라우트 자체는 Tabs 내부에 남아 하단 탭바가 계속 보이고, 다른 탭으로
-                바로 나갈 수 있다. */}
-            <Tabs.Screen name="profile" options={{ href: null }} />
             {/* 2026-05-19 native↔PWA 정합 audit (구조 #1) — onboarding/ 에 `_layout.tsx`
                 (<Stack/>) 를 추가해 expo-router 가 onboarding 을 단일 그룹 노드로 합침.
                 그 노드 자체에 href:null 을 주어 합성 placeholder 탭(▼) 제거.
-                결과: 탭바 = 발견·저장·프로필 3개. (라우트는 router.replace 로 정상 진입.) */}
+                (라우트는 router.replace 로 정상 진입.) */}
             <Tabs.Screen name="onboarding" options={{ href: null }} />
             {/* share/[id] 도 동적 라우트로 자동 등록됨 — 탭바에서 숨김
-                (Universal Link / 공유 진입 전용, 발견·저장·프로필 3탭만 노출). */}
+                (Universal Link / 공유 진입 전용). */}
             <Tabs.Screen name="share/[id]" options={{ href: null }} />
           </Tabs>
   );

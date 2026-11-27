@@ -46,8 +46,8 @@ const dark = {
   aquaBorder: 'rgba(88, 220, 203, 0.30)',
 
   // Liquid Glass 틴트·테두리 (DESIGN.md Material) — GlassView tintColor 와 대체 없는 유리 테두리
-  glassTint: 'rgba(7, 27, 32, 0.40)',
-  glassBorder: 'rgba(160, 240, 230, 0.18)',
+  glassTint: 'rgba(7, 27, 32, 0.15)',
+  glassBorder: 'rgba(160, 240, 230, 0.24)',
 
   // Semantic
   danger: '#FF7A6B',
@@ -96,7 +96,7 @@ const light: Record<PaletteKey, string> = {
   aquaDim: 'rgba(0, 123, 114, 0.10)',
   aquaBorder: 'rgba(0, 123, 114, 0.30)',
 
-  glassTint: 'rgba(234, 246, 245, 0.92)', // 민트(bg) 0.92 — 흰색 0.55·민트 0.80 은 어두운 포스터 위에서 회색으로 탁해짐(4단계 시뮬 확인)
+  glassTint: 'rgba(234, 246, 245, 0.80)', // 민트(bg) 0.80 — 0.92 는 실기기에서 불투명 면과 구분이 안 됨(1.1.0 피드백), 0.60 이하는 어두운 포스터 위 회색
   glassBorder: 'rgba(15, 42, 47, 0.10)',
 
   danger: '#C0392B',

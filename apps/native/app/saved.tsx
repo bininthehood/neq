@@ -37,11 +37,10 @@ import { displayProviders } from '../lib/providers';
 import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
-import { IconUser, IconArchive, IconBang, IconCheckPop, IconBookmark } from '../components/Icons';
+import { IconSearch, IconArchive, IconBang, IconCheckPop, IconBookmark } from '../components/Icons';
 import { Button } from '../components/Button';
 import { GlassSurface, useGlassEnabled } from '../components/GlassSurface';
 import { TAB_BAR_SPACE } from '../lib/tab-bar';
-import { useSearchTrigger } from '../lib/search-trigger';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -184,12 +183,6 @@ export default function SavedScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchInitialQuery, setSearchInitialQuery] = useState('');
 
-  // 2026-08-12 — 하단 "검색" 탭 → 이 화면의 SearchSheet 열기 (헤더 버튼은 프로필로 교체).
-  // search_opened track 은 탭 리스너(_layout.tsx)에서 발사.
-  useSearchTrigger(() => {
-    setSearchInitialQuery('');
-    setSearchOpen(true);
-  });
   // 2026-05-29 — Discover 정합. SearchSheet 결과 클릭으로 진입한 DetailSheet 추적.
   // DetailSheet 닫힐 때 true 면 SearchSheet 자동 복귀 + 검색 컨텍스트 보존.
   const [returnToSearchAfterDetail, setReturnToSearchAfterDetail] =
@@ -582,15 +575,19 @@ export default function SavedScreen() {
         <View style={styles.titleSlot}>
           <Text style={styles.title}>Saved</Text>
         </View>
-        {/* 2026-08-12 — 검색 → 프로필로 교체. 검색은 하단 탭으로 이동. */}
+        {/* 2026-11-27 — 헤더 우상단 = 검색 (프로필은 탭바, 제임스 요청). */}
         <Pressable
           style={styles.searchBtn}
-          onPress={() => router.push('/profile')}
+          onPress={() => {
+            track('search_opened');
+            setSearchInitialQuery('');
+            setSearchOpen(true);
+          }}
           accessibilityRole="button"
-          accessibilityLabel="프로필"
+          accessibilityLabel="검색 열기"
           hitSlop={8}
         >
-          <IconUser size={18} color={colors.textMuted} />
+          <IconSearch size={18} color={colors.textMuted} />
         </Pressable>
         {/* viewMode segmented (grid/list/preview). items 비어있으면 숨김.
             absolute fill + alignItems/justifyContent center → header 정중앙.

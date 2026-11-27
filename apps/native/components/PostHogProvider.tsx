@@ -13,6 +13,8 @@ import {
   PostHogProvider as RNPostHogProvider,
 } from 'posthog-react-native';
 import Constants from 'expo-constants';
+import { AccessibilityInfo, Platform } from 'react-native';
+import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { env } from '../lib/env';
 import { attachPostHogInstance, detachPostHogInstance } from '../lib/analytics';
 
@@ -60,6 +62,19 @@ export default function PostHogProvider({ children }: Props): React.ReactElement
     // TestFlight 는 스토어와 같은 production 바이너리라 JS·빌드 env 로 구분 불가 (계획 결정 기록 참조).
     // 네이티브 익명 사용자는 사람 프로필이 없어 사람 속성이 저장되지 않는다 → 모든 이벤트에 붙는 슈퍼 속성으로.
     if (__DEV__) client.register({ is_internal_build: true });
+    // 2026-11-27 — 실기기에서 유리가 실제로 켜졌는지 (1.1.0(49) "평평해 보임" 피드백).
+    // glass_available = isLiquidGlassAvailable() 원값(iOS 26 + Xcode 26 빌드), 투명도 줄이기면 대체 면이 그려진다.
+    // 슈퍼 속성이라 매 실행 덮어씀 — OS 업데이트·설정 변경도 따라간다.
+    if (Platform.OS === 'ios') {
+      let glass = false;
+      try {
+        glass = isLiquidGlassAvailable();
+      } catch {}
+      client.register({ glass_available: glass });
+      AccessibilityInfo.isReduceTransparencyEnabled()
+        .then((v) => client.register({ reduce_transparency: v }))
+        .catch(() => {});
+    }
     return () => {
       detachPostHogInstance();
     };

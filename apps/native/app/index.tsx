@@ -37,7 +37,6 @@ import TutorialFlow, {
   type TutorialStep,
 } from '../components/TutorialFlow';
 import SearchSheet from '../components/SearchSheet';
-import { useSearchTrigger } from '../lib/search-trigger';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
 import { buildSeededMixItems, mergeGenreQueueItems, mixLabelOf } from '../lib/mix-utils';
 import { prefetchRelated } from '../lib/data-prefetch';
@@ -429,14 +428,13 @@ export default function DiscoverScreen() {
   const [searchInitialQuery, setSearchInitialQuery] = useState('');
   const [immersive, setImmersive] = useState(false);
 
-  // 2026-08-12 — 하단 "검색" 탭 → 이 화면의 SearchSheet 열기.
-  // 헤더 검색 버튼이 프로필로 바뀌면서 진입점이 탭으로 이동했다. initialQuery 는
-  // 비워 잔해를 제거(기존 헤더 버튼 동작 정합). search_opened track 은 탭
-  // 리스너(_layout.tsx)에서 한 번만 발사한다.
-  useSearchTrigger(() => {
+  // 2026-11-27 — 헤더 검색 버튼 → 이 화면의 SearchSheet 열기 (프로필은 탭바로, 제임스 요청).
+  // initialQuery 는 비워 잔해 제거.
+  const openSearch = () => {
+    track('search_opened');
     setSearchInitialQuery('');
     setSearchOpen(true);
-  });
+  };
 
   const load = useCallback(
     async (
@@ -2072,7 +2070,7 @@ export default function DiscoverScreen() {
         activePersona={persona.activePersona}
         onPersonaSwitch={handlePersonaSwitch}
         onAddPersona={() => router.push('/profile')}
-        onProfileOpen={() => router.push('/profile')}
+        onSearchOpen={openSearch}
       />
 
       <View

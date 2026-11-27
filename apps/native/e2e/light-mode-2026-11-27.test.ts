@@ -93,25 +93,21 @@ describe('라이트 모드 진입 (Night Pool 3단계)', () => {
       await assertNoRedBox(`${mode} 저장`);
       await capture(`light-mode-${mode}-saved`);
 
-      expect(await tapTab('검색')).toBe(true);
+      expect(await tapByLabel('검색 열기', { timeout: 3000 })).toBe(true);
       await browser.pause(1200);
       await assertNoRedBox(`${mode} 검색`);
       await capture(`light-mode-${mode}-search`);
       await closeAllSheets();
 
+      expect(await tapTab('프로필')).toBe(true);
+      await browser.pause(1500);
+      await assertNoRedBox(`${mode} 프로필`);
+      await capture(`light-mode-${mode}-profile`);
       expect(await tapTab('발견')).toBe(true);
       await browser.pause(800);
-      if (await tapByLabel('프로필', { timeout: 3000 })) {
-        await browser.pause(1500);
-        await assertNoRedBox(`${mode} 프로필`);
-        await capture(`light-mode-${mode}-profile`);
-        await browser.back().catch(() => {});
-        await tapByLabel('뒤로', { timeout: 1500 });
-        await browser.pause(800);
-      }
 
-      // 탭 접근성 라벨 4종 유지 (기존 회귀 스펙 9개 파일이 참조)
-      for (const label of ['발견', '큐', '저장', '검색']) {
+      // 탭 접근성 라벨 4종 (2026-11-27 검색 → 프로필)
+      for (const label of ['발견', '큐', '저장', '프로필']) {
         expect(await waitForLabel(label, 3000) || (await pageSourceContains(label))).toBe(true);
       }
     });

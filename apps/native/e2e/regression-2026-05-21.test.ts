@@ -63,8 +63,8 @@ async function closeSearchSheetIfOpen(): Promise<boolean> {
 }
 
 // SearchSheet 의 검색 TextInput 셀렉터.
-// 2026-08-12 — 하단 탭 라벨도 "검색" 이 되면서 `~검색` 이 탭바 버튼을 먼저 잡을 수
-// 있다 (dual a11y label 트랩). TextField 로 타입 한정해 시트 input 만 매칭.
+// `~검색` 이 다른 요소를 먼저 잡을 수 있다 (dual a11y label 트랩, 2026-08 탭 라벨 이력).
+// TextField 로 타입 한정해 시트 input 만 매칭.
 const SEARCH_INPUT =
   '-ios predicate string:type == "XCUIElementTypeTextField" AND label == "검색"';
 
@@ -82,8 +82,8 @@ async function tapByPredicate(predicate: string, opts: { timeout?: number } = {}
   }
 }
 
-// 탭바 진입 — Tabs 라벨 텍스트로 매칭 (예: "발견", "저장", "검색").
-// 2026-08-12 — 프로필은 탭이 아니라 각 화면 헤더 우상단 버튼(~프로필)이다.
+// 탭바 진입 — Tabs 라벨 텍스트로 매칭 (예: "발견", "저장", "프로필"). 헤더 "검색 열기" 버튼에도 쓴다.
+// 2026-11-27 — 프로필은 다시 탭, 검색은 각 화면 헤더 우상단 버튼(~검색 열기).
 // 일부 XCUITest 버전은 ~Label, 다른 버전은 predicate 필요 — 양쪽 다 시도.
 async function tapTab(label: string): Promise<boolean> {
   if (await tapByLabel(label, { timeout: 2000 })) return true;
@@ -179,14 +179,14 @@ describe('P0 — 최근 변경 회귀 (ce94e02 + 0499bb3 revert)', () => {
   });
 
   it('ce94e02 fix #1 — SearchSheet → 작품 탭 → DetailSheet → 닫으면 SearchSheet 복귀 + 검색어 유지', async () => {
-    // 1) 검색 sheet 열기 — 2026-08-12 헤더 "검색 열기" 버튼 폐지, 하단 "검색" 탭 진입.
+    // 1) 검색 sheet 열기 — 2026-11-27 헤더 우상단 "검색 열기" 버튼 (하단 탭은 프로필).
     // 첫 탭이 React mount race 로 onPress 발화 안 하는 케이스 관찰됨.
     // tap → 폴링 → 안 뜨면 다시 tap. 최대 3회.
     let sheetMounted = false;
     for (let attempt = 0; attempt < 3 && !sheetMounted; attempt++) {
-      const opened = await tapTab('검색');
+      const opened = await tapTab('검색 열기');
       if (!opened) {
-        console.warn(`tap attempt ${attempt + 1}: 검색 탭 element 못 찾음`);
+        console.warn(`tap attempt ${attempt + 1}: 검색 열기 버튼 element 못 찾음`);
         continue;
       }
       // 폴링 1.6s
@@ -308,7 +308,7 @@ describe('P0 — 최근 변경 회귀 (ce94e02 + 0499bb3 revert)', () => {
     // SearchSheet 새로 열기 — fix #1 과 동일한 retry (첫 탭 race condition)
     let sheetMounted = false;
     for (let attempt = 0; attempt < 3 && !sheetMounted; attempt++) {
-      const opened = await tapTab('검색');
+      const opened = await tapTab('검색 열기');
       if (!opened) continue;
       for (let i = 0; i < 4; i++) {
         await browser.pause(400);
@@ -405,9 +405,9 @@ describe('P0 — 최근 변경 회귀 (ce94e02 + 0499bb3 revert)', () => {
     // 단발 tap + 700ms 대기는 시뮬 dev client 환경에서 첫 tap onPress 누락 발생 시 false-FAIL.
     let sheetBack = false;
     for (let attempt = 0; attempt < 3 && !sheetBack; attempt++) {
-      const opened = await tapTab('검색');
+      const opened = await tapTab('검색 열기');
       if (!opened) {
-        console.warn(`tap attempt ${attempt + 1}: 검색 탭 element 못 찾음`);
+        console.warn(`tap attempt ${attempt + 1}: 검색 열기 버튼 element 못 찾음`);
         continue;
       }
       for (let i = 0; i < 4; i++) {
@@ -551,13 +551,9 @@ describe('P2 — 엣지/시각', () => {
     expect(hasError).toBe(false);
   });
 
-  // 2026-08-12 — 프로필이 탭바에서 내려가고 각 화면 헤더 우상단 버튼이 됨.
-  it('프로필 진입 — 헤더 우상단 버튼', async () => {
-    const tapped = await tapByLabel('프로필', { timeout: 4000 });
-    if (!tapped) {
-      console.warn('SKIP — 프로필 헤더 버튼 라벨 못 찾음');
-      return;
-    }
+  // 2026-11-27 — 프로필이 다시 탭바 4번째 슬롯 (제임스 요청).
+  it('프로필 진입 — 탭바', async () => {
+    expect(await tapTab('프로필')).toBe(true);
     await browser.pause(1000);
     await capture('p2-02-profile');
     const { hasError } = await pageSourceHasError();
