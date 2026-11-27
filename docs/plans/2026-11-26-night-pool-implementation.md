@@ -314,6 +314,13 @@ NO UNRESOLVED DECISIONS
 | 2026-11-27 | 세션 리플레이 켬: `posthog-react-native-session-replay` 1.6.0(PostHog iOS 3.58.3, peer react·react-native *, iOS 13+ — SDK 54/RN 0.81 pod install·Release 빌드 확인). `maskAllTextInputs`·`maskAllImages`·`maskAllSandboxedViews` true(기본값 명시), `captureLog` false, `captureNetworkTelemetry` true, `throttleDelayMs` 1000(기본), `sampleRate` = `EXPO_PUBLIC_POSTHOG_REPLAY_SAMPLE_RATE`, 기본 스토어·TestFlight 1.0 / dev 0 | 실트래픽 일 1~3 명(표본 하한 메모리)이라 샘플을 버리면 볼 세션이 없음. 트래픽이 늘면 env 로 낮춤(코드 변경 없이 새 빌드). 콘솔 로그는 dev 에서 작품 제목 등 track 페이로드가 찍혀 끔. dev 0 은 시뮬 기록이 섞이지 않게. PostHog 프로젝트 스위치는 안 건드림 |
 | 2026-11-27 | 성능: 튜토리얼 밖에서는 `isDragging` state 를 안 바꿈(터치 시작·끝마다 발견 화면 전체 재렌더 2회 제거), SwipeCard `CardInner` memo, 다음에 쌓일 카드(top+3~+5) 포스터 메모리 prefetch | 결과·원인 분석은 아래 "5단계 결과" |
 | 2026-11-27 | 5단계 완료 판정 | 아래 "5단계 결과". 계측 추가(card_viewed·saved_viewed·not_interested·first_open·save_failed·앱 버전·is_internal_build·세션 리플레이)는 코디네이터 요청 반영. 남은 것: PR #55 배포, 실기기 끊김 확인, TestFlight 내부 표시 방법 결정 |
+| 2026-11-27 | (1.1.0(49) 피드백) 유리 평평함 원인 = 틴트. EAS 이미지는 원인 아님 — `eas.json` 에 `ios.image` 추가 안 함 | 빌드 49 로그(`eas build:view` → 로그 파일): `macos-sequoia-15.6-xcode-26.0`, Xcode 26.0 (17A324), iPhoneOS26.0.sdk. EAS 문서도 SDK 54 기본(`sdk-54`/`auto`) = Xcode 26.0. 유리는 켜져 있었고 다크 0.40·라이트 0.92 틴트가 굴절을 덮어 불투명 면처럼 보였음 |
+| 2026-11-27 | 유리 틴트 다크 0.40→0.15·테두리 0.18→0.24, 라이트 0.92→0.80 (ts·css·DESIGN.md) | 시뮬 비교: 다크 0.15 에서 뒤 포스터 색·글자가 굴절돼 비침, 칩 글자 대비 유지. 라이트 0.60 은 어두운 포스터 위 회색, 0.80 은 민트 유지 + 굴절·림 보임 |
+| 2026-11-27 | PostHog 슈퍼 속성 `glass_available`(isLiquidGlassAvailable 원값) + `reduce_transparency`, iOS 매 실행 `register` | 다음 빌드에서 실제로 켜졌는지·투명도 줄이기로 대체 면인지 이벤트로 확인. 슈퍼 속성이라 OS 업데이트·설정 변경도 따라감 |
+| 2026-11-27 | 탭 아이콘 정렬: 탭 버튼 `flex 1 + alignSelf stretch + padding 0 + 가운데`, `tabBarIconStyle` 100% | 원인: 라이브러리 기본 버튼(justifyContent flex-start·padding 5·31×28 아이콘 틀)에 48pt 아이콘+라벨이 넘쳐 위로 붙음. 부수 발견: 버튼 너비가 42pt(슬롯 93)뿐이었음 → 터치 영역도 슬롯 전체로. alignSelf 를 빼면 너비 0 → XCUITest 트리에서 탭이 사라짐(E2E 로 확인) |
+| 2026-11-27 | 탭 구조: 4번째 슬롯 = 프로필(라벨 '프로필', lazy 기본), 검색 = 각 화면(발견·큐·저장·프로필) 헤더 우상단 '검색 열기' 버튼이 자기 SearchSheet 를 직접 엶. `app/search.tsx`·`lib/search-trigger.ts` 삭제, `search_opened` 는 각 버튼에서 | 제임스 요청(f2f60b7 의 반대). 탭 가로채기가 없어져 트리거 모듈이 필요 없음. 프로필 헤더의 '닫기'는 탭이 됐으니 검색으로. 웹(PWA)은 6단계 범위라 미변경 |
+| 2026-11-27 | E2E: `tapTab('검색')` → `tapTab('검색 열기')`(regression·extended), light-mode 는 `tapTab('프로필')`, 탭 라벨 4종 검사 = 발견·큐·저장·프로필 | `tapByLabel('프로필')` 을 쓰는 나머지 스펙은 탭 접근성 라벨이 같아 그대로 동작 |
+| 2026-11-27 | 카드 유리 = 정적 "유리 테두리"(림 1.5 + 안쪽 잉크 1 + 위 72px 반사광), `CardInner` 안(이전 카드 오버레이와 동일), 테마 무관. DESIGN.md anti-slop #12 를 "포스터 면" 금지로 좁힘 | 제임스 요청 "카드가 평면". 움직이는 카드 위 `GlassView` 는 매 프레임 뒤를 다시 샘플링하고 2026-06 깜빡임 이력 → 포스터를 덮지 않는 가장 가벼운 방식부터. 프레임 전후 같음(아래 결과) |
 
 ### 4단계 결과 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
 
@@ -345,10 +352,25 @@ NO UNRESOLVED DECISIONS
 - **더 줄이려면 (구조 변경이라 이번엔 안 함):** ① 덱 전진을 발견 화면 state 에서 떼어 덱 전용 컴포넌트(카드 스택 + 액션바)로 분리 — 전진 commit 이 화면 전체가 아니라 스택만 다시 그림. 가장 효과 클 것으로 봄, 반나절~1일 + 제스처 회귀 위험 ② 전진 commit 을 퇴장 애니메이션 중간이 아니라 지금처럼 뒤에 두되 `startTransition` 으로 낮은 우선순위 렌더 — 작은 변경이지만 Fabric 에서 UI 반영 프레임이 줄어드는지는 미검증 ③ 실기기 Instruments 로 먼저 확인 — 시뮬 xctrace Time Profiler 는 이번에 기록 후 처리 단계에서 멈춰 결과를 못 얻음.
 - **앱 크기:** 세션 리플레이는 PostHog iOS 3.58.3 정적 링크(시뮬 `libPostHog.a` 32MB 는 심볼 포함이라 대표값 아님). 실제 증가분은 이번에 못 쟀다 → EAS 빌드 후 App Store Connect "앱 크기"를 1.0.4 와 비교.
 
+### 1.1.0(49) 실기기 피드백 반영 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
+
+피드백(iPhone 15 Plus): ① 탭바 아이콘 중심 ② 카드도 유리 느낌 ③ 검색↔프로필 위치 교체 ④ 유리가 평평함. 결정은 위 결정 기록.
+
+**카드 유리 테두리 프레임 (Debug·Metro, 앱 안 좌 스와이프 15회, UI `useFrameCallback`·JS rAF, 임시 계측 — 커밋 안 함)**
+| 조건 | UI 25ms 초과 / 15회 | UI 최악 | JS 25ms 초과 / 15회 |
+|---|---|---|---|
+| 전 (틴트 변경만) | 23 · 29 | 85 · 44ms | 35 · 39 |
+| 후 (카드 유리 테두리) | 25 · 24 · 22 | 87 · 87 · 80ms | 41 · 43 · 39 |
+- 늘지 않음(5단계 Debug 22~26 과 같은 범위). 최악 80~87ms 는 전에도 있던 덱 전진 commit(5단계 원인 분석).
+
+**검증:** tsc 네이티브·웹 0 · vitest 네이티브 67/67 · 웹(+core+design) 705/705 · eslint 오류 0 · Appium `regression-2026-05-21` 12/12 · `light-mode` 2/2 · `not-interested` 2/2 · `extended-2026-05-21` 9/9. 발견·상세·큐·저장·검색·프로필 다크·라이트 스크린샷.
+
+**다음 빌드에서 확인:** PostHog 에서 1.1.0 새 빌드 이벤트의 `glass_available`·`reduce_transparency`. `glass_available=false` 면 기기 OS 가 iOS 26 미만이거나 런타임 판정 실패, `reduce_transparency=true` 면 의도된 불투명 대체.
+
 **실기기 테스트 준비 (제임스 실행 — 에이전트는 실행하지 않음)**
 - 버전: `app.json` 1.1.0 / runtimeVersion(appVersion) 1.1.0 / buildNumber 48 → production autoIncrement 로 49. `eas.json` `appVersionSource: local`.
 - 빌드에 들어가는 네이티브 변경: `expo-glass-effect` 0.1.10, 폰트 내장(SUIT·Unbounded·Recursive, expo-font 플러그인), 라이트·다크 스플래시, **`posthog-react-native-session-replay` 1.6.0(5단계)**. 전부 OTA 불가 → 새 빌드 필수.
-- 확인할 것: 글래스는 iOS 26 SDK(Xcode 26)로 빌드해야 켜진다. EAS 기본 이미지가 Xcode 26 인지 빌드 로그에서 확인, 아니면 `eas.json` production `ios.image` 를 Xcode 26 이미지로 지정.
+- 확인 완료(2026-11-27): EAS SDK 54 기본 이미지 = `macos-sequoia-15.6-xcode-26.0`(빌드 49 로그) → `ios.image` 지정 불필요.
 - EAS production 환경 변수: `EXPO_PUBLIC_POSTHOG_KEY`·`EXPO_PUBLIC_POSTHOG_HOST` 는 기존 그대로. 리플레이 샘플링을 바꾸려면 `EXPO_PUBLIC_POSTHOG_REPLAY_SAMPLE_RATE`(0~1, 미설정 = 1.0). 리플레이가 실제로 쌓이려면 PostHog 프로젝트 설정의 모바일 리플레이도 켜져 있어야 함(웹과 공용 스위치 — 에이전트는 안 건드림).
 - 명령 (apps/native 에서):
   - `eas build --platform ios --profile production`
