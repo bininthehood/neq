@@ -36,8 +36,8 @@ import { colors, radius, spacing, durations, easings, fontsV2, useThemeColors } 
  *   - **애니메이션은 1회성 withTiming + cleanup.** feedback_reanimated_fabric_crash
  *     (무한 worklet × Fabric → cloneShadowTree 무한재귀 SIGABRT) 회피. 무한 loop /
  *     repeat / sequence 미사용. 모든 타이머는 unmount/교체 시 clear.
- *   - DESIGN.md Toast 토큰 준수: bottom 위치, surface-raised 배경, radius-lg,
- *     인디케이터 dot(성공=accent / 에러=danger / info=accent), 페이드+슬라이드.
+ *   - DESIGN.md Toast(Night Pool): 상단 44, radius 14, 라임 점 7px, 250ms enter,
+ *     체류 2.5s(되돌리기 3s). 유리는 4단계 — 지금은 불투명 raised + 1px border 대체.
  *
  * 사용:
  *   const toast = useToast();
@@ -179,7 +179,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (type: ToastType, options?: ToastOptions) => {
       clearHoldTimer();
       const id = ++idCounterRef.current;
-      const duration = options?.duration ?? defaultDurationFor(type);
+      // DESIGN.md States: 되돌리기 있으면 3s
+      const duration =
+        options?.duration ?? (options?.onAction ? 3000 : defaultDurationFor(type));
       // 새 entry 로 교체 — key 가 바뀌면서 ToastCard 가 재마운트, enter 애니메이션 재생.
       setEntry({
         id,
@@ -281,8 +283,8 @@ function ToastCard({
   const animStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
     transform: [
-      // 등장: translateY(20→0) — DESIGN.md Toast 모션 정합.
-      { translateY: (1 - progress.value) * 20 },
+      // 등장: 상단에서 translateY(-12→0) — Night Pool 토스트는 상단 44.
+      { translateY: (1 - progress.value) * -12 },
     ],
   }));
 
@@ -291,8 +293,8 @@ function ToastCard({
       pointerEvents="box-none"
       style={[
         styles.viewport,
-        // ActionBar(~64px) + BottomNav 위에 떠야 함. safe-area 보정.
-        { bottom: 92 + insets.bottom },
+        // DESIGN.md States: 상단 44 (safe-area 아래). 4단계에서 유리로 교체.
+        { top: insets.top + 44 },
       ]}
     >
       <Animated.View
@@ -380,22 +382,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     // 색(backgroundColor·borderColor)은 inline — Animated.View 정적 style 에 동적 색 금지
-    borderRadius: radius.lg,
+    borderRadius: radius.toast,
     borderWidth: 1,
     // DESIGN.md shadow-toast 톤 — 짙은 그림자.
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 6,
   },
   glyph: {
     flexShrink: 0,
   },
   dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     flexShrink: 0,
     // dot 은 6×6 라 glyph(16) 와 시각 정렬 — 좌우 5px 패딩으로 폭 보정.
     marginHorizontal: 5,
@@ -406,9 +408,8 @@ const styles = StyleSheet.create({
   },
   primary: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fontsV2.bodySemi,
     color: colors.textPrimary,
-    letterSpacing: -0.1,
   },
   secondary: {
     fontSize: 11,
@@ -429,12 +430,9 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   actionText: {
-    // Geist Mono medium (web font-data 정합) — _layout.tsx useFonts 로 로드.
-    // 미로드 시 RN 이 system 으로 graceful fallback.
-    fontFamily: fontsV2.dataMedium,
-    fontSize: 11,
-    fontWeight: '600',
+    // 한글 라벨 — SUIT 600, 넓은 자간 금지 (anti-slop #8)
+    fontFamily: fontsV2.bodySemi,
+    fontSize: 13,
     color: colors.aquaText,
-    letterSpacing: 1.6, // uppercase 톤 — Geist Mono eyebrow (web 0.15em ≈ 1.6px@11)
   },
 });

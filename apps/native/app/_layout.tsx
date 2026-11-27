@@ -7,7 +7,7 @@ import { View, Pressable } from 'react-native';
 import { Text } from '../components/Text';
 import * as SplashScreen from 'expo-splash-screen';
 import { hasOnboarded } from '../lib/store';
-import { colors } from '../lib/tokens';
+import { colors, fontsV2 } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
@@ -37,19 +37,23 @@ function TabItem({
   label: string;
   focused: boolean;
 }) {
-  const tint = focused ? colors.aquaText : colors.textMuted;
+  // 현재 탭 = 아쿠아 + 옅은 아쿠아 캡슐 (DESIGN.md Iconography). 라벨 11px SUIT 600.
+  const tint = focused ? colors.aquaText : colors.textSecondary;
   return (
-    <View style={{ alignItems: 'center', gap: 3, minWidth: 60 }}>
-      {icon({ color: tint, active: focused })}
-      <Text
+    <View style={{ alignItems: 'center', gap: 2, minWidth: 64 }}>
+      <View
         style={{
-          color: tint,
-          fontSize: 10,
-          fontWeight: focused ? '700' : '500',
+          width: 52,
+          height: 28,
+          borderRadius: 14,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: focused ? colors.aquaDim : 'transparent',
         }}
       >
-        {label}
-      </Text>
+        {icon({ color: tint, active: focused })}
+      </View>
+      <Text style={{ color: tint, fontSize: 11, fontFamily: fontsV2.bodySemi }}>{label}</Text>
     </View>
   );
 }
@@ -155,9 +159,9 @@ function TabsWithGuard() {
         tabBarStyle: isOnboarding
           ? { display: 'none' }
           : {
-              backgroundColor: colors.surface,
-              borderTopColor: colors.border,
-              height: 72,
+              backgroundColor: colors.bg,
+              borderTopColor: colors.borderSubtle,
+              height: 76,
               paddingTop: 8,
             },
         tabBarShowLabel: false,

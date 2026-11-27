@@ -8,17 +8,13 @@
  * - genres 없는(백필 미스) 항목은 '전체' 에선 보이고, 특정 장르 선택 시 제외
  *   (predicate 는 부모 saved.tsx 파이프라인에서 처리 — 본 컴포넌트는 칩 목록만).
  *
- * 칩 스타일 출처: DESIGN.md Decisions Log 2026-05-13 (M1 — Saved amber 위계 재배분).
- * selected = surface-raised 면 + text-primary (viewMode 토글 active 와 동일 non-amber
- * 패턴). Saved 화면 amber 예산(≤4, L33) 방어 — OTT/월 활성 칩(amber text) +
- * viewFilter underline + filter dot 과 동시 노출 시 amber 초과 방지. 칩 pattern(pill
- * + border)은 유지, selected 강조만 non-amber. 새 비주얼 토큰 도입 없음.
+ * 칩 스타일: 공용 Chip (Night Pool — 선택 = 라임 채움, 선택 칩 그룹은 라임 1개로 센다).
  */
-import { Pressable, StyleSheet, ScrollView } from 'react-native';
-import { Text } from '../Text';
+import { StyleSheet, ScrollView } from 'react-native';
+import { Chip } from '../Chip';
 import { getGenreLabels } from '@neq/core';
 import type { SavedItem } from '../../lib/types';
-import { colors, radius, spacing } from '../../lib/tokens';
+import { spacing } from '../../lib/tokens';
 
 /**
  * 저장 작품(tab/OTT 필터 적용 후)에서 실제 존재하는 장르 라벨을 빈도 내림차순으로.
@@ -93,18 +89,14 @@ function GenreChip({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Chip
+      label={label}
+      selected={active}
       onPress={onPress}
       accessibilityRole="tab"
       accessibilityLabel={`${label} 장르`}
       accessibilityState={{ selected: active }}
-      style={[styles.chip, active && styles.chipActive]}
-      hitSlop={4}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-      </Text>
-    </Pressable>
+    />
   );
 }
 
@@ -115,29 +107,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs,
-  },
-  // 칩 selected = surface-raised 면 + text-primary (DESIGN.md 2026-05-13 M1, non-amber).
-  chip: {
-    minHeight: 32,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm + 4,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'transparent',
-  },
-  chipActive: {
-    backgroundColor: colors.surfaceRaised,
-    borderColor: colors.border,
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  chipTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600',
   },
 });
 

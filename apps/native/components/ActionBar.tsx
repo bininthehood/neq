@@ -1,6 +1,6 @@
 import { forwardRef, useEffect } from 'react';
-import { View, StyleSheet, Pressable } from 'react-native';
-import { Text } from './Text';
+import { View, StyleSheet } from 'react-native';
+import { JellyPressable } from './JellyPressable';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -62,77 +62,50 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
   const t = useThemeColors();
 
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} pointerEvents="box-none">
       <View style={styles.left}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.iconBtn,
-            !canRewind && styles.iconDisabled,
-            pressed && styles.pressed,
-          ]}
+        <JellyPressable
+          style={styles.iconBtn}
+          containerStyle={!canRewind && styles.iconDisabled}
           onPress={onRewind}
           disabled={!canRewind}
           accessibilityLabel="처음으로"
           hitSlop={4}
         >
-          <IconRewind size={18} color={colors.textMuted} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          onPress={onShare}
-          accessibilityLabel="공유"
-          hitSlop={4}
-        >
-          {/* 2026-05-20 정합 — Rewind/Detail/Refresh 가 모두 18 인데 Share 만 20 이라
-              ActionBar 4 아이콘 사이즈가 비일관. native 18 통일.
-              (PWA 는 모두 17 — 추후 전체 정합 트랙에서 4개 동시 17 검토 가능.) */}
-          <IconShare size={18} color={colors.textMuted} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          onPress={onOpenDetail}
-          accessibilityLabel="상세보기"
-          hitSlop={4}
-        >
-          <IconDetail size={18} color={colors.textMuted} />
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          onPress={onRefresh}
-          accessibilityLabel="새 추천"
-          hitSlop={4}
-        >
-          <IconRefresh size={18} color={colors.textMuted} />
-        </Pressable>
+          <IconRewind size={18} color={colors.textPrimary} />
+        </JellyPressable>
+        <JellyPressable style={styles.iconBtn} onPress={onShare} accessibilityLabel="공유" hitSlop={4}>
+          <IconShare size={18} color={colors.textPrimary} />
+        </JellyPressable>
+        <JellyPressable style={styles.iconBtn} onPress={onOpenDetail} accessibilityLabel="상세보기" hitSlop={4}>
+          <IconDetail size={18} color={colors.textPrimary} />
+        </JellyPressable>
+        <JellyPressable style={styles.iconBtn} onPress={onRefresh} accessibilityLabel="새 추천" hitSlop={4}>
+          <IconRefresh size={18} color={colors.textPrimary} />
+        </JellyPressable>
       </View>
 
-      <Animated.View
-        ref={saveBtnRef}
-        style={[
-          styles.saveBtn,
-          saveActive
-            ? { backgroundColor: t.lime, borderColor: t.lime }
-            : { backgroundColor: t.surfaceRaised, borderColor: t.border },
-          saveFlash && [styles.saveBtnFlash, { shadowColor: t.lime }],
-          saveBtnAnimStyle,
-        ]}
+      <JellyPressable
+        size="large"
+        onPress={onToggleSave}
+        accessibilityLabel={isSaved ? '저장 해제' : '저장'}
+        style={styles.saveHit}
       >
-        <Pressable
-          onPress={onToggleSave}
-          accessibilityLabel={isSaved ? '저장 해제' : '저장'}
-          style={styles.saveBtnInner}
+        <Animated.View
+          ref={saveBtnRef}
+          style={[
+            styles.saveBtn,
+            saveActive
+              ? { backgroundColor: t.lime, borderColor: t.lime }
+              : { backgroundColor: t.surfaceRaised, borderColor: t.border },
+            saveFlash && [styles.saveBtnFlash, { shadowColor: t.lime }],
+            saveBtnAnimStyle,
+          ]}
         >
-          <IconSave
-            size={24}
-            // 신규-1 (2026-05-19 재검증) — Save 아이콘은 항상 어두운 bg 색.
-            // B-5b 로 saveBtnActive 배경이 amber 가 된 뒤 amber 아이콘이면 amber-on-amber
-            // 대비 소실. web ActionBar 정본도 항상 `var(--bg)` 고정.
-            // idle: surfaceRaised 배경 위 bg 색 = 충분한 대비. active: amber 배경 위 bg 색 = 또렷.
-            color={colors.textInverse}
-            filled={saveActive}
-          />
-        </Pressable>
-      </Animated.View>
+          {/* idle: raised 면 위 textPrimary / active: 라임 채움 위 textInverse */}
+          <IconSave size={24} color={saveActive ? colors.textInverse : colors.textPrimary} filled={saveActive} />
+        </Animated.View>
+      </JellyPressable>
     </View>
   );
 });
@@ -158,29 +131,34 @@ const styles = StyleSheet.create({
   },
   left: {
     flexDirection: 'row',
-    gap: spacing.sm + 4,
+    gap: spacing.sm,
   },
+  // 원형 버튼 (radius full). 카드 위에 뜨므로 불투명 raised + 1px border — 4단계 유리 전 대체 모양.
   iconBtn: {
     width: 44,
     height: 44,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   iconDisabled: {
-    opacity: 0.3,
+    opacity: 0.4,
   },
-  iconText: {
-    color: colors.textMuted,
-    fontSize: 17,
+  saveHit: {
+    width: 56,
+    height: 56,
   },
-  // 2026-05-06 A1 — Save 버튼 1.5px 잉크 윤곽 (idle border / active accent).
-  // web ActionBar 정합 — Quiet Ink 잉크 윤곽 정체성.
-  // T-2 — idle boxShadow var(--shadow-md). web ActionBar 가 항상 적용하는 깊이감.
+  // 저장 버튼 radius 16 (DESIGN.md Shape 위계). 색은 inline (Animated.View 정적 style 에 동적 색 금지).
   saveBtn: {
     width: 56,
     height: 56,
-    borderRadius: radius.xl,
+    borderRadius: radius.save,
     borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadowsNative.md,
   },
   saveBtnFlash: {
@@ -188,21 +166,5 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
     elevation: 8,
-  },
-  saveBtnInner: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveIcon: {
-    color: colors.textMuted,
-    fontSize: 22,
-  },
-  saveIconActive: {
-    color: colors.textInverse,
-  },
-  pressed: {
-    opacity: 0.7,
   },
 });

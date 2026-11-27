@@ -19,8 +19,9 @@ import {
   type FilterYear,
   type FilterRating,
 } from '@neq/core';
-import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
+import { colors, fontsV2, radius, spacing, shadowsNative } from '../lib/tokens';
 import { IconCheck, IconChevronDown } from './Icons';
+import { Chip as ChipBase, chipIconColor } from './Chip';
 
 type DropdownKey = 'type' | 'origin' | 'year' | 'rating' | 'ott' | null;
 
@@ -124,27 +125,15 @@ export default function FilterChips({
     onPress: () => void;
   }) {
     return (
-      <Pressable
+      <ChipBase
         onPress={onPress}
         disabled={disabled}
-        accessibilityRole="button"
+        label={label}
+        selected={active}
         accessibilityLabel={`${kind} 필터`}
         accessibilityState={{ expanded: isOpen, selected: active }}
-        style={[
-          styles.chip,
-          active && styles.chipActive,
-          isOpen && styles.chipOpen,
-          disabled && styles.chipDisabled,
-        ]}
-      >
-        <Text style={[styles.chipText, active && styles.chipTextActive]}>
-          {label}
-        </Text>
-        {/* 2026-05-20 — `▾` 텍스트 글리프(fontSize 11) 는 native 시스템 폰트에서
-            얇고 작게 렌더되어 사용자가 "아이콘이 너무 작음" 보고. SVG IconChevronDown
-            (size 12, strokeWidth 2) 로 교체해 가독성 확보. */}
-        <IconChevronDown size={12} color={colors.textMuted} />
-      </Pressable>
+        trailing={<IconChevronDown size={12} color={chipIconColor(active)} />}
+      />
     );
   }
 
@@ -200,7 +189,7 @@ export default function FilterChips({
               OFF : background = transparent + border / text = textPrimary
               dis : opacity 0.5 + textMuted (subscribedOtt 0건)
             DESIGN.md L227 Quiet Ink + L466 IconCheck SVG (raw ✓ 글리프 금지) 정합. */}
-        <Pressable
+        <ChipBase
           onPress={() => {
             if (disabled) return;
             if (!myOTTAvailable) {
@@ -218,31 +207,20 @@ export default function FilterChips({
             onMyOTTToggle(!myOTTToggle);
           }}
           disabled={disabled}
+          label="내 OTT"
+          selected={myOTTToggle && myOTTAvailable}
           accessibilityRole="switch"
           accessibilityLabel="내 OTT 만 보기"
           accessibilityState={{
             checked: myOTTToggle,
             disabled: disabled || !myOTTAvailable,
           }}
-          style={[
-            styles.myOTTChip,
-            myOTTToggle && myOTTAvailable && styles.myOTTChipActive,
-            (disabled || !myOTTAvailable) && styles.myOTTChipDisabled,
-          ]}
-        >
-          {myOTTToggle && myOTTAvailable && (
-            <IconCheck size={12} color={colors.textInverse} />
-          )}
-          <Text
-            style={[
-              styles.myOTTChipText,
-              myOTTToggle && myOTTAvailable && styles.myOTTChipTextActive,
-              !myOTTAvailable && styles.myOTTChipTextDisabled,
-            ]}
-          >
-            내 OTT
-          </Text>
-        </Pressable>
+          leading={
+            myOTTToggle && myOTTAvailable ? (
+              <IconCheck size={12} color={colors.textInverse} />
+            ) : undefined
+          }
+        />
         <Chip
           active={filterType !== 'all'}
           isOpen={openDropdown === 'type'}
@@ -312,7 +290,7 @@ export default function FilterChips({
               {
                 position: 'absolute',
                 top: chipRowRect
-                  ? chipRowRect.y + chipRowRect.h - spacing.sm
+                  ? chipRowRect.y + chipRowRect.h + 4
                   : 100,
                 left: spacing.md,
                 right: spacing.md,
@@ -421,43 +399,7 @@ const styles = StyleSheet.create({
   chipRow: {
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm + 4,
-    paddingTop: spacing.sm + 2,
-    paddingBottom: 6,
-    minHeight: 44,
-    gap: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  chipActive: {
-    borderBottomColor: colors.aquaText,
-  },
-  chipOpen: {
-    transform: [{ scale: 1.02 }],
-  },
-  chipDisabled: {
-    opacity: 0.5,
-  },
-  chipText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '400',
-  },
-  chipTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600',
-  },
-  // E-2 (2026-05-19 정합 audit) — caret 은 web 정합으로 fontSize 11 + opacity 0.3.
-  // web FilterChips 의 `<span aria-hidden style={{ fontSize: 11, opacity: 0.3 }}>` 정합.
-  caret: {
-    color: colors.textMuted,
-    fontSize: 11,
-    opacity: 0.3,
+    paddingVertical: 6,
   },
   panel: {
     position: 'absolute',
@@ -469,7 +411,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.sm,
     backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.lg,
+    borderRadius: radius.toast,
+    borderWidth: 1,
+    borderColor: colors.border,
     // T-2 — dropdown 그림자 var(--shadow-dropdown). shadowsNative 헬퍼 경유.
     ...shadowsNative.dropdown,
     zIndex: 100,
@@ -477,7 +421,7 @@ const styles = StyleSheet.create({
   option: {
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     backgroundColor: 'transparent',
   },
   // 2026-05-06 결정 — 칩 selected = solid amber fill + inverse text.
@@ -488,12 +432,11 @@ const styles = StyleSheet.create({
   },
   optionText: {
     color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '400',
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
   },
   optionTextActive: {
     color: colors.textInverse,
-    fontWeight: '600',
   },
   // 2026-06-10 (Phase C #6) — OTT 옵션 비활성 시각 — text-muted + opacity 0.5.
   // DESIGN.md L227 Quiet Ink: 추가 카피/아이콘 없이 단순 dim. 사용자에게 "결과 없음" 신호.
@@ -501,44 +444,6 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   optionTextDisabled: {
-    color: colors.textMuted,
-  },
-  // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — chip row leftmost.
-  // 시각 차별: 기존 chip 의 border-bottom 패턴 대신 filled toggle.
-  // - OFF (default): bg transparent / border 1px subtle / textPrimary
-  // - ON           : bg accent / IconCheck + textInverse / border 투명
-  // - disabled     : opacity 0.5 + textMuted (subscribedOtt 0건)
-  // DESIGN.md L466 IconCheck SVG 정본 + L227 Quiet Ink 정합.
-  myOTTChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.sm + 4,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
-    minHeight: 44,
-    gap: 4,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'transparent',
-  },
-  myOTTChipActive: {
-    backgroundColor: colors.lime,
-    borderColor: colors.lime,
-  },
-  myOTTChipDisabled: {
-    opacity: 0.5,
-  },
-  myOTTChipText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  myOTTChipTextActive: {
-    color: colors.textInverse,
-    fontWeight: '600',
-  },
-  myOTTChipTextDisabled: {
     color: colors.textMuted,
   },
 });
