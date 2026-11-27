@@ -41,6 +41,7 @@ import { useSearchTrigger } from '../lib/search-trigger';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
 import { buildSeededMixItems, mergeGenreQueueItems, mixLabelOf } from '../lib/mix-utils';
 import { prefetchRelated } from '../lib/data-prefetch';
+import { prefetchPosters } from '../lib/image-prefetch';
 import {
   consumePendingMixSeed,
   type MixStartSource,
@@ -67,7 +68,12 @@ import {
   hasSeenTutorialV3,
   markTutorialV3Seen,
   toggleSaved,
+  getHiddenKeys,
+  addHiddenKey,
+  removeHiddenKey,
 } from '../lib/store';
+import { filterHidden, hiddenKeyOf } from '../lib/hidden-keys';
+import { classifySwipe, lockAxis, resolveAxis, type Axis } from '../lib/swipe-classify';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
 import { usePersona } from '../contexts/PersonaContext';
@@ -91,8 +97,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 //
 // 사이클 2 단일화: 콜백 타이밍은 `@neq/design` durations.swipeSaveDismiss / swipePassDismiss.
 // (feedback_swipe_ux.md 잠금: save 480ms / pass 360ms)
-const SWIPE_THRESHOLD = 70;
-const PREV_OVERLAY_TRIGGER = 0.3;
+// 2026-11-27 Night Pool 5단계 — 임계·판정은 lib/swipe-classify.ts (순수 함수 + 경계 테스트).
 // ponytail: 8s first-card 타임아웃, cold-start 감안. 잦은 오폴백이면 상향.
 // release/Hermes 빌드에서 reader.read() 가 에러 없이 stall 하면 스트림 await 가
 // 영영 안 끝나 SkeletonCard 영원 → 첫 카드 미도착 시 스트림 중단 + 비스트리밍 폴백.
@@ -102,8 +107,6 @@ const FIRST_CARD_TIMEOUT_MS = 8000;
 // 좌/우/아래 모두 동일 패턴 적용 (좌·우는 velocityX, 아래는 velocityY).
 // PWA useSwipeGesture 의 velocity 보조 (안 B 권고) 정합.
 // 메모리 [Pan gesture offset 임계 충돌] 회피 — activeOffset/failOffset 도입 X.
-const VELOCITY_THRESHOLD = 800; // px/s
-const VELOCITY_TRIGGER_DISTANCE = 30; // px (임계 미달 시 최소 변위)
 const SAVE_ABSORB_MS = durations.swipeSaveDismiss; // 480
 
 // 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
@@ -118,6 +121,8 @@ const SWIPE_LEFT_BEZIER = Easing.bezier(...easings.spring);
 // ux-review WARN #3 — TutorialFlow snap-back 등 임계 미달 복귀는 durations.moderate(250) 미만
 // 으로 더 빠른 200ms (인지 가벼움). easings.spring 곡선은 유지.
 const SNAPBACK_MS = 200;
+// 관심 없음 퇴장 — 작아지며(0.6) 어둡게 가라앉기, 220ms ease-in (DESIGN.md Motion).
+const HIDE_SINK_MS = 220;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -204,6 +209,8 @@ export default function DiscoverScreen() {
   // (PWA 정합: promote 시 SharedValue 연속성 보장).
   const [isDragging, setIsDragging] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  // Night Pool 5단계 — "관심 없음" 숨김 키 (movie:1 / tv:1). 덱 파생 단계에서 거른다.
+  const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(new Set());
   // Stage 4 D1: save 흡수 모션 + flash
   const [saveAbsorbing, setSaveAbsorbing] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
@@ -271,6 +278,11 @@ export default function DiscoverScreen() {
   // pan.onEnd 가 step 별 허용/차단 결정에 참조. onUpdate 는 변경 없음 (drag 시각 따라옴
   // 유지) — onEnd 시점에서만 dismiss/prev 진행을 가드하여 사용자 자연 인지 보존.
   const tutorialStepSV = useSharedValue(0);
+  // Night Pool 5단계 — 방향 잠금(첫 10px 축, 0=미정) + 관심 없음 가라앉기.
+  // sinkCardIdSV 는 dismissCardIdSV 와 같은 패턴: tmdbId 매칭 카드만 sinkP 를 쓴다.
+  const axisSV = useSharedValue<Axis>(0);
+  const sinkCardIdSV = useSharedValue<number>(-1);
+  const sinkP = useSharedValue(0);
   // 2026-06-10 swipe anim 재설계 v2 — PWA 정합 정정.
   // dismissX SharedValue / dismissingTmdbId state 는 폐기 유지 (race source).
   // passAdvanceTimer ref 복원 — PWA `discover/page.tsx:215-224` 의 nextCard 패턴
@@ -494,6 +506,8 @@ export default function DiscoverScreen() {
         // PWA 의 `getSeenTitles + savedTitles` 200건 전송과 동등 효과.
         // route.ts:74 가 300개 캡 처리 — 합쳐도 안전.
         const historyActive = await getActiveExcludeIds({ cooldownDays: 7 });
+        // Night Pool 5단계 — 영구 숨김. 서버 PR #55 배포 전엔 무시되고 앱 덱 필터가 거른다.
+        const hidden = await getHiddenKeys();
         const baseExcludeIds = opts?.excludeIds ?? [];
         const excludeIds = Array.from(
           new Set<number>([
@@ -547,6 +561,7 @@ export default function DiscoverScreen() {
             favorites,
             savedCount: saved.length,
             excludeIds,
+            hiddenKeys: hidden,
             savedTmdbIds,
             feedback,
             ...v2.body,
@@ -633,6 +648,7 @@ export default function DiscoverScreen() {
             favorites,
             savedCount: saved.length,
             excludeIds,
+            hiddenKeys: hidden,
             savedTmdbIds,
             feedback,
             ...v2.body,
@@ -745,6 +761,7 @@ export default function DiscoverScreen() {
         // (clearRecHistory + load).
         // exhausted lock 페기 — EmptyState UI 자체 페기와 정합.
         // Tier 3 Phase A (server LLM 다양성) 완료 후 본 fallback 단순화 가능.
+        const hidden = await getHiddenKeys();
         const cooldownTiers: number[] = [7, 3, 1, 0];
         let appendedAny = false;
 
@@ -766,6 +783,7 @@ export default function DiscoverScreen() {
             favorites,
             savedCount: saved.length,
             excludeIds,
+            hiddenKeys: hidden,
             savedTmdbIds,
             feedback,
             ...v2.body,
@@ -982,6 +1000,8 @@ export default function DiscoverScreen() {
       getSaved().then((items) => {
         setSavedIds(new Set(items.map((s) => s.recommendation.tmdbId)));
       });
+      // 첫 진입 + 프로필 '모든 데이터 초기화' 후 복귀 시 숨김 목록 동기화.
+      getHiddenKeys().then((keys) => setHiddenKeys(new Set(keys)));
       // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train).
       // Profile 에서 subscribedOtt 변경 후 Discover 복귀 시 재로드 → 토글 가용성 동기화.
       // 본 effect 안에서 직접 myOTTToggle 자동 OFF 까지 처리하지 않는다 — 별도 useEffect
@@ -1021,13 +1041,16 @@ export default function DiscoverScreen() {
 
   // rating 클라이언트 사이드 필터 — web `apps/web/src/app/discover/page.tsx:141` 정합.
   // recs 자체는 그대로 두고 표시/swipe 단계에서만 자른다 (서버 재호출 X).
-  const filteredRecs = filterRating === 'all'
+  // Night Pool 5단계 — 숨김 필터(X2)도 여기 한 곳. 서버(PR #55)를 거치지 않는 인기작 대체·
+  // 이미 받아 둔 카드까지 거른다. 현재 카드를 숨기면 같은 topIdx 에 다음 카드가 와 자연히 넘어간다.
+  const ratedRecs = filterRating === 'all'
     ? recs
     : recs.filter((r) => r.rating >= parseFloat(filterRating));
+  const filteredRecs = filterHidden(ratedRecs, hiddenKeys);
   // 2026-07-08 Seeded Mix 2차 — mix 모드 시 덱 스왑. currentRec/prevRec/cardsToShow
   // 가 전부 이 파생값을 따르므로 제스처/DetailSheet/save 등 기존 인터랙션이 mix 덱
   // 에서도 동일 동작. rating 클라이언트 필터는 일반 덱 전용 (mix 는 후보 12 이하).
-  const activeDeck = inMix ? mixDeck : filteredRecs;
+  const activeDeck = inMix ? filterHidden(mixDeck, hiddenKeys) : filteredRecs;
   const activeTopIdx = inMix ? mixTopIdx : topIdx;
   const currentRec = activeDeck[activeTopIdx];
   const prevRec = activeTopIdx > 0 ? activeDeck[activeTopIdx - 1] : null;
@@ -1192,11 +1215,18 @@ export default function DiscoverScreen() {
       return;
     }
 
+    let nowSaved: boolean;
+    try {
+      nowSaved = await toggleSaved(currentRec);
+    } catch {
+      // save_failed 는 toggleSaved 가 발사. 흡수 모션 없이 카드 제자리 + 알림.
+      toast.show('error', { ctx: { message: '저장하지 못했어요' } });
+      return;
+    }
     track('card_saved', { tmdb_id: id, title: currentRec.title, source: reason });
     // W5 Task B — TutorialFlow v3: save 신호 emit (swipe_down / button 둘 다).
     // unsave 는 카운트 X — web 정본 정합.
     setSaveActionCount((c) => c + 1);
-    const nowSaved = await toggleSaved(currentRec);
     setSavedIds((prev) => {
       const next = new Set(prev);
       if (nowSaved) next.add(id);
@@ -1571,6 +1601,108 @@ export default function DiscoverScreen() {
     void triggerSaveAbsorption('swipe_down');
   }
 
+  // ── Night Pool 5단계 — "관심 없음" (위 스와이프 · 상세 시트 버튼) ──
+  // 되돌리기는 토스트가 3초 뒤 부를 수 있어 최신 덱을 ref 로 읽는다 (클로저 stale 방지).
+  const liveDeckRef = useRef({ ratedRecs, mixDeck, inMix, hiddenKeys });
+  liveDeckRef.current = { ratedRecs, mixDeck, inMix, hiddenKeys };
+
+  // 숨긴 카드가 덱에서 빠진 commit 뒤에 가라앉기 상태 해제 — 해제를 먼저 하면 옛 카드가
+  // 한 프레임 제자리로 튀어 보인다 (dismissCardIdSV 리셋과 같은 이유).
+  useEffect(() => {
+    sinkCardIdSV.value = -1;
+    sinkP.value = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hiddenKeys]);
+
+  // 성능(5단계) — 다음에 쌓일 카드(top+3~+5) 포스터를 미리 메모리 캐시에 디코드해 둔다.
+  // 카드 교체 때 새로 마운트되는 3번째 카드의 네트워크 로드·디코드가 교체 프레임에 겹치지 않게.
+  const upcomingPosterKey = activeDeck
+    .slice(activeTopIdx + 3, activeTopIdx + 6)
+    .map((r) => r.posterUrl ?? '')
+    .join('|');
+  useEffect(() => {
+    if (upcomingPosterKey) prefetchPosters(upcomingPosterKey.split('|'), 3);
+  }, [upcomingPosterKey]);
+
+  // card_viewed — 웹 discover/page.tsx 와 같은 이름·속성. (tmdbId, 위치) 가 바뀔 때 1회.
+  // 2026-11-27 PostHog 확인: 네이티브는 전 기간 0건이었음 → 주지표(저장률) 분모.
+  const lastViewedCardKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentRec || (state !== 'ready' && !inMix)) return;
+    const viewedKey = `${currentRec.tmdbId}:${activeTopIdx}`;
+    if (lastViewedCardKeyRef.current === viewedKey) return;
+    lastViewedCardKeyRef.current = viewedKey;
+    track('card_viewed', {
+      tmdb_id: currentRec.tmdbId,
+      title: currentRec.title,
+      source: inMix ? 'mix_deck' : 'discover_stack',
+      stack_index: activeTopIdx,
+      total_loaded: activeDeck.length,
+      providers_count: currentRec.providers.length,
+      saved: savedIds.has(currentRec.tmdbId),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRec, activeTopIdx, state, inMix]);
+
+  function commitHide(rec: Recommendation, source: 'swipe_up' | 'detail_button') {
+    const key = hiddenKeyOf(rec);
+    setHiddenKeys((prev) => new Set(prev).add(key));
+    void addHiddenKey(key);
+    track('not_interested', {
+      tmdb_id: rec.tmdbId,
+      media_type: rec.type === 'movie' ? 'movie' : 'tv',
+      title: rec.title,
+      source,
+      action: 'hide',
+    });
+    toast.show('hide', { ctx: { title: rec.title }, onAction: () => undoHide(rec, source) });
+  }
+
+  function undoHide(rec: Recommendation, source: 'swipe_up' | 'detail_button') {
+    const key = hiddenKeyOf(rec);
+    const live = liveDeckRef.current;
+    const next = new Set(live.hiddenKeys);
+    next.delete(key);
+    setHiddenKeys((prev) => {
+      const n = new Set(prev);
+      n.delete(key);
+      return n;
+    });
+    void removeHiddenKey(key);
+    track('not_interested', {
+      tmdb_id: rec.tmdbId,
+      media_type: rec.type === 'movie' ? 'movie' : 'tv',
+      title: rec.title,
+      source,
+      action: 'undo',
+    });
+    // 되돌린 카드를 다시 맨 위로 — 그 사이 넘겼어도 그 작품이 보이게.
+    const deck = filterHidden(live.inMix ? live.mixDeck : live.ratedRecs, next);
+    const idx = deck.findIndex((r) => r.tmdbId === rec.tmdbId && r.type === rec.type);
+    if (idx >= 0) {
+      if (live.inMix) setMixTopIdx(idx);
+      else setTopIdx(idx);
+    }
+    toast.show('info', { ctx: { message: '되돌렸어요' } });
+  }
+
+  function handleSwipeUp() {
+    const rec = currentRec;
+    // 좌 스와이프 진행 중·저장 흡수 중엔 무시 (handleSwipeLeft 의 연속 스와이프 가드와 같은 규칙)
+    if (!rec || passAdvanceTimer.current || saveAbsorbing || sinkCardIdSV.value !== -1) {
+      dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => {});
+    track('card_swiped', { direction: 'up', tmdb_id: rec.tmdbId, title: rec.title });
+    // 위 끌기는 카드를 올리지 않으므로(SwipeCard) dragY 를 바로 0 → 스티커만 사라지고 다음 카드는 제자리.
+    dragY.value = 0;
+    sinkCardIdSV.value = rec.tmdbId;
+    sinkP.value = 0;
+    sinkP.value = withTiming(1, { duration: HIDE_SINK_MS, easing: Easing.in(Easing.ease) });
+    setTimeout(() => commitHide(rec, 'swipe_up'), HIDE_SINK_MS);
+  }
+
   function handleSwipeLeft() {
     // 2026-06-11 사용자 피드백 #4 — 빠른 연속 swipe race fix.
     // 진단: 직전 swipe 의 passAdvanceTimer (360ms) 미처리 동안 새 swipe trigger
@@ -1609,12 +1741,14 @@ export default function DiscoverScreen() {
 
   const pan = Gesture.Pan()
     .onBegin(() => {
-      runOnJS(setIsDragging)(true);
+      axisSV.value = 0;
+      // 성능(5단계): isDragging 은 튜토리얼 데모만 읽는다 → 평소엔 터치마다 화면 전체 재렌더 2회를 내지 않음.
+      if (tutorialStepSV.value !== 0) runOnJS(setIsDragging)(true);
     })
     .onUpdate((e) => {
-      // Stage 4 D1: dominant axis 락 (|dx|>|dy| 면 horizontal, 아니면 vertical)
-      const absX = Math.abs(e.translationX);
-      const absY = Math.abs(e.translationY);
+      // Night Pool 5단계 — 방향 잠금: 처음 10px 움직인 축으로 고정 (그 전엔 큰 쪽).
+      axisSV.value = lockAxis(axisSV.value, e.translationX, e.translationY);
+      const horizontalNow = resolveAxis(axisSV.value, e.translationX, e.translationY) === 1;
 
       // TutorialFlow step whitelist — drag 자체 차단 (옵션 A 완전 잠금).
       // 인코딩: 0=비활성, 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
@@ -1623,7 +1757,7 @@ export default function DiscoverScreen() {
       if (tStep !== 0) {
         // tap (4) 단계: 모든 swipe 차단.
         if (tStep === 4) return;
-        if (absX > absY) {
+        if (horizontalNow) {
           // horizontal: 우 swipe(prev) → 2, 좌 swipe(next) → 1.
           if (e.translationX > 0 && prevRec) {
             if (tStep !== 2) return;
@@ -1631,15 +1765,15 @@ export default function DiscoverScreen() {
             if (tStep !== 1) return;
           }
         } else {
-          // vertical (down): 3.
-          if (tStep !== 3) return;
+          // vertical (down): 3. 위(관심 없음)는 튜토리얼 단계가 없어 잠금.
+          if (tStep !== 3 || e.translationY < 0) return;
         }
       }
 
       // 2026-06-06 (P1 애니메이션 Fix B) — dragX/dragY 를 worklet 안에서 직접
       // SharedValue 로 업데이트. 매 frame `runOnJS(setDragX)` JS thread 왕복 제거.
       // setPrevActive 만 React state 라 runOnJS 잔존 (state transition 1~2회/제스처).
-      if (absX > absY) {
+      if (horizontalNow) {
         // horizontal
         if (e.translationX > 0 && prevRec) {
           runOnJS(setPrevActive)(true);
@@ -1664,25 +1798,25 @@ export default function DiscoverScreen() {
           }
         }
       } else {
-        // vertical — G1-A: ↑ 추적 제거. 아래 방향 (save) 만 dragY 로 추적.
+        // vertical — 아래(저장)·위(관심 없음, Night Pool 5단계 재도입) 모두 dragY 로 추적.
         runOnJS(setPrevActive)(false);
         dragX.value = 0;
-        dragY.value = e.translationY > 0 ? Math.min(140, e.translationY) : 0;
+        dragY.value = Math.max(-160, Math.min(140, e.translationY));
       }
     })
     .onEnd((e) => {
-      runOnJS(setIsDragging)(false);
-      const absX = Math.abs(e.translationX);
-      const absY = Math.abs(e.translationY);
-      const horizontal = absX > absY;
-
-      // 03_p0-2 — velocity boost (한손 thumb flick 인식). 좌·우·아래 공통.
-      // 좌: velocityX < -800 + translationX < -30 → trigger
-      // 우: velocityX >  800 + translationX >  30 → trigger
-      // 아래: velocityY > 800 + translationY > 30 → trigger
-      // 거리 임계 (SWIPE_THRESHOLD / PREV_OVERLAY_TRIGGER) 도달 시는 종전대로.
-      const fastFlickX = Math.abs(e.velocityX) > VELOCITY_THRESHOLD;
-      const fastFlickY = Math.abs(e.velocityY) > VELOCITY_THRESHOLD;
+      if (tutorialStepSV.value !== 0) runOnJS(setIsDragging)(false);
+      // Night Pool 5단계 — 판정은 lib/swipe-classify (거리 임계 + 03_p0-2 튕김 보조 + 방향 잠금).
+      const horizontal = resolveAxis(axisSV.value, e.translationX, e.translationY) === 1;
+      const action = classifySwipe({
+        axis: axisSV.value,
+        dx: e.translationX,
+        dy: e.translationY,
+        vx: e.velocityX,
+        vy: e.velocityY,
+        hasPrev: !!prevRec,
+        screenWidth: SCREEN_WIDTH,
+      });
 
       // TutorialFlow step whitelist 가드.
       // 인코딩: 0=비활성, 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
@@ -1732,8 +1866,8 @@ export default function DiscoverScreen() {
             }
           }
         } else {
-          // 아래 swipe (save) — swipe_down (3) 만 허용.
-          if (tStep !== 3) {
+          // 아래 swipe (save) — swipe_down (3) 만 허용. 위(관심 없음)는 튜토리얼 중 차단.
+          if (tStep !== 3 || action === 'hide') {
             dragX.value = 0;
             dragY.value = 0;
             return;
@@ -1743,12 +1877,7 @@ export default function DiscoverScreen() {
 
       if (horizontal) {
         if (e.translationX > 0 && prevRec) {
-          const progress = 1 + prevOverlayX.value / SCREEN_WIDTH;
-          const velocityTrigger =
-            fastFlickX &&
-            e.velocityX > 0 &&
-            e.translationX > VELOCITY_TRIGGER_DISTANCE;
-          if (progress > PREV_OVERLAY_TRIGGER || velocityTrigger) {
+          if (action === 'prev') {
             // 2026-05-20 PWA 정합 — prev overlay 도착 시 깜빡임 fix.
             // 기존: withTiming(0, 220) → 콜백에서 `prevOverlayX = -SCREEN_WIDTH` 즉시
             // 점프 + setTopIdx + setPrevActive(false). UI 메시지 순서 때문에 overlay 가
@@ -1783,11 +1912,7 @@ export default function DiscoverScreen() {
           }
         } else {
           // 좌 (next) — 거리 임계 OR velocity 보조.
-          const leftVelocityTrigger =
-            fastFlickX &&
-            e.velocityX < 0 &&
-            e.translationX < -VELOCITY_TRIGGER_DISTANCE;
-          if (e.translationX < -SWIPE_THRESHOLD || leftVelocityTrigger) {
+          if (action === 'next') {
             // 2026-06-10 swipe anim 재설계 — handleSwipeLeft 가 setTopIdx + dragX
             // withTiming(0) 을 직접 처리. dragX 리셋 X — 옛/새 top 보간 연속성 유지.
             runOnJS(handleSwipeLeft)();
@@ -1800,18 +1925,16 @@ export default function DiscoverScreen() {
           }
         }
       } else {
-        // vertical — G1-A (Handoff v2 Phase B+C): ↑ 진입 제거.
-        // 아래 (save) 만 처리. 위 방향 변위는 무시 → snap-back.
-        // 아래 (save) — 거리 임계 OR velocity 보조.
-        const downVelocityTrigger =
-          fastFlickY &&
-          e.velocityY > 0 &&
-          e.translationY > VELOCITY_TRIGGER_DISTANCE;
-        if (e.translationY > SWIPE_THRESHOLD || downVelocityTrigger) {
+        // vertical — 아래 = 저장, 위 = 관심 없음 (Night Pool 5단계 재도입).
+        if (action === 'save') {
           runOnJS(handleSwipeDown)();
           // triggerSaveAbsorption 내부에서 흡수 모션 종료 시 dragX/dragY 리셋.
           dragX.value = 0;
           dragY.value = 0;
+        } else if (action === 'hide') {
+          // dragY 는 handleSwipeUp 이 가라앉기 시작점으로 넘긴 뒤 0 으로.
+          dragX.value = 0;
+          runOnJS(handleSwipeUp)();
         } else {
           // 임계 미달 snap-back — withTiming 으로 부드러운 복귀.
           dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
@@ -2068,7 +2191,6 @@ export default function DiscoverScreen() {
                       // 따라서 비탑도 dragX 를 받아야 promote 시 SharedValue 연속성 보장.
                       dragX={dragX}
                       dragY={dragY}
-                      isDragging={isDragging}
                       immersive={isTop && immersive}
                       absorbing={isTop && saveAbsorbing}
                       saveTargetPoint={saveTargetPoint}
@@ -2082,6 +2204,8 @@ export default function DiscoverScreen() {
                       dismissCardIdSV={dismissCardIdSV}
                       // 2026-07-10 — hold 눌림 램프 (top 카드만 worklet 에서 반영).
                       holdSV={holdSV}
+                      sinkCardIdSV={sinkCardIdSV}
+                      sinkP={sinkP}
                     />
                   );
                 });
@@ -2218,7 +2342,8 @@ export default function DiscoverScreen() {
               isSaved={isLiked}
               canRewind={activeTopIdx > 0}
               saveFlash={saveFlash}
-              savePulling={savePulling && isDragging}
+              savePulling={savePulling}
+              dragY={dragY}
               onRewind={() => (inMix ? setMixTopIdx(0) : setTopIdx(0))}
               onShare={handleShare}
               onOpenDetail={() => {
@@ -2288,6 +2413,14 @@ export default function DiscoverScreen() {
           setReturnToSearchAfterDetail(false);
           setReturnToDetailAfterSearch(false);
           handleMixStart(mixRec, 'native_detail_sheet');
+        }}
+        // Night Pool 5단계 — 위 스와이프 대체 수단 (DESIGN.md Accessibility).
+        onHide={(hideRec) => {
+          setDetailOpen(false);
+          setSearchSelectedRec(null);
+          setReturnToSearchAfterDetail(false);
+          setReturnToDetailAfterSearch(false);
+          commitHide(hideRec, 'detail_button');
         }}
       />
 

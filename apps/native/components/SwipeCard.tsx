@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { Text } from './Text';
 import { Image } from 'expo-image';
@@ -12,7 +12,8 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
-import { getOTTIcon, getGenreLabels } from '@neq/core';
+import { getOTTIcon, getGenreLabels, friendMemo } from '@neq/core';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import { displayProviders } from '../lib/providers';
 import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import { fontsV2, easings, durations } from '@neq/design';
@@ -94,6 +95,24 @@ interface Props {
    * hold 대기 450ms 동안 서서히 눌리는 active 피드백 (케밥 메뉴 오픈 예고).
    */
   holdSV?: SharedValue<number>;
+  /**
+   * Night Pool 5단계 — 관심 없음 가라앉기. sinkCardIdSV 가 이 카드 tmdbId 면 sinkP(0→1) 로
+   * 작아지며(0.6) 살짝 가라앉고 어둡게 사라진다.
+   */
+  sinkCardIdSV?: SharedValue<number>;
+  sinkP?: SharedValue<number>;
+}
+
+/** 스티커가 다 붙는 거리 (세로 스와이프 임계 100 과 같게) */
+const STICKER_FULL_PX = 100;
+
+function stickerFrame(y: number, reduced: boolean) {
+  'worklet';
+  const p = Number.isFinite(y) ? Math.min(1, Math.max(0, y / STICKER_FULL_PX)) : 0;
+  return {
+    opacity: p > 0.05 ? Math.min(1, p * 1.6) : 0,
+    transform: [{ rotate: '-6deg' }, { scale: reduced ? 1 : 0.6 + 0.5 * p }],
+  };
 }
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -118,6 +137,8 @@ const ON_INK = palette.dark;
 const HANGUL = /[\u3131-\uD79D]/;
 /** 액션바(64)와 떠 있는 탭바가 카드 아래를 덮으므로 정보 영역을 그만큼 올린다 (index.tsx·SkeletonCard 와 공유). */
 export const CARD_BOTTOM_OVERLAY = 64 + TAB_BAR_SPACE;
+/** 친구 메모 위치 — 발견 화면 케밥(top 60, 44) 바로 아래. index.tsx CARD_MENU_TOP 과 맞춤. */
+const MEMO_TOP = 60 + 44 + 14;
 
 const CAT_LABEL: Record<CardCategory, string> = {
   movie: '영화',
@@ -140,7 +161,10 @@ export default function SwipeCard({
   dismissX,
   dismissCardIdSV,
   holdSV,
+  sinkCardIdSV,
+  sinkP,
 }: Props) {
+  const reduced = useReducedMotion();
   const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
@@ -195,13 +219,27 @@ export default function SwipeCard({
 
     // tx/ty: dismiss 진행 카드는 dismissX 만. 그 외 isTop 만 dragX 반영.
     let tx = isDismissing ? dismissXSafe : isTop ? dragXSafe : 0;
-    let ty = isTop ? dragYSafe * 0.6 + yOffset : yOffset;
+    // 위 끌기(관심 없음)는 카드를 올리지 않는다 — 올리면 카드 위 친구 메모가 고정된 케밥 밑으로 들어감.
+    // 대신 살짝 작아지며 "가라앉기" 를 예고한다 (아래 scale 분기).
+    let ty = isTop ? Math.max(0, dragYSafe) * 0.6 + yOffset : yOffset;
     // 회전 — dismiss 중이면 dismissX, 아니면 dragX 기준
     const rotSource = isDismissing ? dismissXSafe : dragXSafe;
     let rot = (isDismissing || isTop) && rotSource < 0 ? Math.max(rotSource * 0.06, -15) : 0;
     let scale = baseScale;
     let opacity = 1;
-    if (isTop && dragYSafe > 30) {
+    const isSinking =
+      sinkCardIdSV !== undefined && sinkP !== undefined && sinkCardIdSV.value === rec.tmdbId;
+    if (isSinking) {
+      // 관심 없음 퇴장 — 손 뗀 높이에서 0.6 까지 작아지며 살짝 가라앉고, 끝에서 사라진다.
+      const p = safe(sinkP!.value);
+      ty = 40 * p;
+      tx = 0;
+      rot = 0;
+      scale = 1 - 0.4 * p;
+      opacity = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+    } else if (isTop && dragYSafe < -10) {
+      scale = Math.max(0.95, 1 + (dragYSafe + 10) * 0.0005);
+    } else if (isTop && dragYSafe > 30) {
       scale = Math.max(0.94, 1 - (dragYSafe - 30) * 0.0008);
     }
     // 2026-07-10 — hold 눌림 램프: top 카드가 hold 대기 동안 최대 4% 축소.
@@ -253,7 +291,56 @@ export default function SwipeCard({
       testID={`swipe-card-${rec.tmdbId}`}
     >
       <CardInner rec={rec} immersive={immersive} depth={depth} />
+      {isTop && dragY !== undefined ? (
+        <DragOverlays
+          tmdbId={rec.tmdbId}
+          dragY={dragY}
+          reduced={reduced}
+          sinkCardIdSV={sinkCardIdSV}
+          sinkP={sinkP}
+        />
+      ) : null}
     </Animated.View>
+  );
+}
+
+/**
+ * Night Pool 5단계 — 세로 끌기 스티커(아래 "찜!" 라임 / 위 "관심 없음" 청록 반투명) +
+ * 가라앉기 어둡게 층. top 카드에만 붙는다. RN 은 흑백 필터가 없어 어둡게만 (계획 5단계).
+ * Animated.* 색은 hex/rgba 문자열만 (0단계 — DynamicColorIOS 금지). 포스터 위라 테마 무관.
+ */
+function DragOverlays({
+  tmdbId,
+  dragY,
+  reduced,
+  sinkCardIdSV,
+  sinkP,
+}: {
+  tmdbId: number;
+  dragY: SharedValue<number>;
+  reduced: boolean;
+  sinkCardIdSV?: SharedValue<number>;
+  sinkP?: SharedValue<number>;
+}) {
+  // 0.6 → 1.1 로 붙는다 (DESIGN.md Motion). reduced-motion 이면 스케일 없이 바로.
+  const saveSticker = useAnimatedStyle(() => stickerFrame(dragY.value, reduced));
+  const hideSticker = useAnimatedStyle(() => stickerFrame(-dragY.value, reduced));
+  const dimStyle = useAnimatedStyle(() => {
+    'worklet';
+    const on = sinkCardIdSV !== undefined && sinkP !== undefined && sinkCardIdSV.value === tmdbId;
+    const p = on ? sinkP!.value : 0;
+    return { opacity: Number.isFinite(p) ? p * 0.7 : 0 };
+  });
+  return (
+    <>
+      <Animated.View pointerEvents="none" style={[styles.sinkDim, dimStyle]} />
+      <Animated.View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.dragSticker, styles.saveSticker, saveSticker]}>
+        <Text style={styles.saveStickerText}>찜!</Text>
+      </Animated.View>
+      <Animated.View pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={[styles.dragSticker, styles.hideSticker, hideSticker]}>
+        <Text style={styles.hideStickerText}>관심 없음</Text>
+      </Animated.View>
+    </>
   );
 }
 
@@ -262,7 +349,8 @@ export default function SwipeCard({
  * `SwipeCard` 와 `PrevCardOverlay` 양쪽에서 재사용 — 우 스와이프 도착 시점에
  * overlay → 새 top 으로 전환되어도 정보 영역이 100% 동일 → 깜빡임 0.
  */
-export function CardInner({
+// memo — 카드 교체 때 stack 의 남은 카드는 rec·immersive·depth 가 그대로라 다시 그리지 않는다.
+export const CardInner = memo(function CardInner({
   rec,
   immersive,
   depth,
@@ -286,6 +374,8 @@ export function CardInner({
   // Crunchyroll 류 비지원 provider 치유 포함. 최대 6개.
   const otts = displayProviders(rec.providers).slice(0, 6);
   const infoVisible = !immersive;
+  // 친구 메모 스티커 (packages/core 규칙 기반). null 이면 생략.
+  const memoText = friendMemo(rec);
 
   return (
     <>
@@ -319,6 +409,11 @@ export function CardInner({
 
       {depth <= 1 && (
         <>
+          {memoText && infoVisible ? (
+            <View style={styles.memoSticker} pointerEvents="none" testID={`friend-memo-${rec.tmdbId}`}>
+              <Text style={styles.memoText} numberOfLines={1}>{memoText}</Text>
+            </View>
+          ) : null}
           {/* bottom — year·titleEn / title+badges / reason / otts.
               4차-2 (2026-07-10) 피드백: 필을 타이틀 블록 최상단이 아닌 작품명 헤더
               오른쪽 인라인으로 (포스터 가림 최소화, 사용자 선택 A안). 제목이 길어
@@ -377,7 +472,7 @@ export function CardInner({
       )}
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   // 카드 radius 24, 좌우 6 (DESIGN.md Layout — 카드가 화면을 거의 채운다)
@@ -470,6 +565,40 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: 'center',
   },
+  // 친구 메모 — 카드 우상단(케밥 44 아래), 라임 채움, SUIT 800 12, -6°, radius 12 (DESIGN.md States)
+  memoSticker: {
+    position: 'absolute',
+    top: MEMO_TOP,
+    right: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: ON_INK.lime,
+    transform: [{ rotate: '-6deg' }],
+  },
+  memoText: {
+    fontFamily: fontsV2.bodyHeavy,
+    fontSize: 12,
+    color: ON_INK.textInverse,
+  },
+  // 세로 끌기 스티커 — 카드 위쪽 가운데. 색은 palette.dark 문자열(Animated 정적 style 규칙)
+  dragSticker: {
+    position: 'absolute',
+    top: '30%',
+    alignSelf: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  saveSticker: { backgroundColor: ON_INK.lime },
+  saveStickerText: { fontFamily: fontsV2.title, fontSize: 24, color: ON_INK.textInverse },
+  hideSticker: {
+    backgroundColor: 'rgba(7,27,32,0.72)',
+    borderWidth: 1.5,
+    borderColor: ON_INK.aqua,
+  },
+  hideStickerText: { fontFamily: fontsV2.title, fontSize: 22, color: ON_INK.textPrimary },
+  sinkDim: { ...StyleSheet.absoluteFillObject, backgroundColor: '#041418' },
   ottChip: {
     width: 22,
     height: 22,

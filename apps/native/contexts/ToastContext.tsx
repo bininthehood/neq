@@ -52,7 +52,7 @@ import { colors, radius, spacing, durations, easings, fontsV2, useThemeColors } 
 // ─────────────────────────────────────────────────────
 
 /** native 가 현재 사용하는 toast type. web 6종 중 의존 항목만. */
-export type ToastType = 'remove' | 'save' | 'info' | 'error';
+export type ToastType = 'remove' | 'save' | 'hide' | 'info' | 'error';
 
 export interface ToastContextData {
   /** 작품 제목 (save/remove) */
@@ -114,6 +114,9 @@ export function toastCopy(type: ToastType, ctx: ToastContextData = {}): ToastCop
       return { primary: '책장에서 뺐어요', secondary: title || null, action: '실행 취소' };
     case 'save':
       return { primary: '책장에 담았어요', secondary: title || null, action: '실행 취소' };
+    case 'hide':
+      // Night Pool 5단계 — DESIGN.md "다시 안 보여요 · 되돌리기"
+      return { primary: '다시 안 보여요', secondary: title || null, action: '되돌리기' };
     case 'error':
       return {
         primary: ctx.message || '문제가 생겼어요',

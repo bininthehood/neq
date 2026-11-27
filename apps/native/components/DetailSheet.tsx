@@ -108,6 +108,11 @@ interface Props {
    * 호스트(Discover 직접 시작 / Saved 브리지+router)가 이행 책임.
    */
   onStartMix?: (rec: Recommendation) => void;
+  /**
+   * Night Pool 5단계 — "관심 없음" (위 스와이프 대체 수단). 지금 보이는 작품(관련작 탐색 포함)을 넘긴다.
+   * 미지정 또는 share mode 면 버튼 미노출 (발견 화면만 지정).
+   */
+  onHide?: (rec: Recommendation) => void;
 }
 
 function metaInfo(r: Recommendation): string {
@@ -129,6 +134,7 @@ export default function DetailSheet({
   onSearchPerson,
   mode = 'detail',
   onStartMix,
+  onHide,
 }: Props) {
   const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const insets = useSafeAreaInsets();
@@ -669,7 +675,12 @@ export default function DetailSheet({
   //   ActionBar 가 없어 sheet 내부가 유일한 unsave 진입로). source=native_detail.
   const handleToggleSave = useCallback(async () => {
     if (!rec) return;
-    const next = await toggleSaved(rec);
+    let next: boolean;
+    try {
+      next = await toggleSaved(rec);
+    } catch {
+      return; // save_failed 는 toggleSaved 가 발사. 버튼 상태 그대로.
+    }
     setSavedStatus(next);
     if (next) {
       track('share_saved', {
@@ -1200,6 +1211,19 @@ export default function DetailSheet({
                     <Text style={styles.ctaGhostText}>추천 더 보기</Text>
                   </Pressable>
                 ) : (
+                  <>
+                  {onHide ? (
+                    <Pressable
+                      style={styles.ctaHide}
+                      onPress={() => onHide(rec)}
+                      accessibilityRole="button"
+                      accessibilityLabel="관심 없음"
+                      accessibilityHint="이 작품을 다시 추천하지 않아요"
+                      testID="detail-hide-button"
+                    >
+                      <Text style={styles.ctaHideText}>관심 없음</Text>
+                    </Pressable>
+                  ) : null}
                   <Pressable
                     style={styles.ctaGhostSquare}
                     onPress={handleShare}
@@ -1208,6 +1232,7 @@ export default function DetailSheet({
                   >
                     <IconShare size={16} color={colors.textSecondary} />
                   </Pressable>
+                  </>
                 )}
               </View>
             </View>
@@ -2114,6 +2139,22 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  // 관심 없음 — 저장(라임 primary) 옆 보조 버튼. 치우는 동작이라 라임·아쿠아 없이 중성 면.
+  ctaHide: {
+    minHeight: 48,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ctaHideText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   ctaGhostText: {
     color: colors.textPrimary,
