@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.98,
   },
   progress: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontFamily: fontsV2.data,
     fontSize: 11,
     marginTop: 8,
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   optionHint: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: fontSizePx.sm,
     lineHeight: 20,
   },

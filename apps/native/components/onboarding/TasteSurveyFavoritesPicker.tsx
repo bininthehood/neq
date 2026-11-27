@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Text, TextInput } from '../Text';
-import { colors, fontSizePx, spacing, fontsV2, radius } from '../../lib/tokens';
+import { colors, palette, fontSizePx, spacing, fontsV2, radius } from '../../lib/tokens';
 import { env } from '../../lib/env';
 import { getTrendingCached } from '../../lib/data-prefetch';
 import { FALLBACK_FAVORITES } from '@neq/core';
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   posterFallbackText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
   },
   searchInput: {
@@ -446,13 +446,13 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   searchingText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: fontSizePx.sm,
     textAlign: 'center',
     paddingVertical: 16,
   },
   sectionLabel: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     marginBottom: spacing.sm,
   },
@@ -487,10 +487,10 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(4,20,24,0.6)',
   },
   gridLabel: {
-    color: colors.textPrimary,
+    color: palette.dark.textPrimary, // 포스터 위 잉크 받침 — 테마 무관 밝은 글자
     fontSize: 11,
   },
   checkBadge: {
@@ -520,7 +520,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   moreBtnText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
     fontWeight: '500',
   },
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
     fontSize: fontSizePx.sm,
   },
   resultYear: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
   },
   resultCheck: {

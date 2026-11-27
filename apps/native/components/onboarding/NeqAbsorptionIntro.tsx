@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fallback: {
-    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
+    tintColor: colors.wordmark, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     width: '100%',
     height: '100%',
   },

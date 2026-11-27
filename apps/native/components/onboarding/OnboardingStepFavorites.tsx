@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
   slotFilled: { position: 'relative', width: 56, height: 80 },
   slotImage: { width: 56, height: 80, borderRadius: radius.thumb, backgroundColor: colors.surface },
   slotPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  slotPlaceholderText: { color: colors.textMuted, fontSize: fontSizePx.xs },
+  slotPlaceholderText: { color: colors.textMeta, fontSize: fontSizePx.xs },
   slotRemove: {
     position: 'absolute',
     top: -6,
@@ -546,12 +546,12 @@ const styles = StyleSheet.create({
   searchResultSelected: { backgroundColor: colors.aquaDim, borderColor: colors.aquaText },
   searchResultImage: { width: 48, height: 72, borderRadius: radius.badge, backgroundColor: colors.surface },
   searchResultTitle: { color: colors.textPrimary, fontSize: fontSizePx.base, fontWeight: '500' },
-  searchResultYear: { color: colors.textMuted, fontSize: fontSizePx.sm, marginTop: 2 },
+  searchResultYear: { color: colors.textMeta, fontSize: fontSizePx.sm, marginTop: 2 },
   checkMark: { color: colors.aquaText, fontSize: 18, marginLeft: 'auto' },
 
   carouselSection: {},
   carouselLabel: { color: colors.textPrimary, fontSize: fontSizePx.sm, fontWeight: '600', paddingHorizontal: spacing.lg, marginBottom: spacing.xs },
-  carouselLoading: { color: colors.textMuted, fontSize: fontSizePx.xs, paddingHorizontal: spacing.lg },
+  carouselLoading: { color: colors.textMeta, fontSize: fontSizePx.xs, paddingHorizontal: spacing.lg },
   carousel: { gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: 4 },
   carouselItem: { width: 80 },
   carouselImageWrap: {
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   carouselCheckText: { color: colors.textInverse, fontSize: 12, lineHeight: 14, fontWeight: '700' },
-  carouselTitle: { color: colors.textMuted, fontSize: fontSizePx.xs, marginTop: 4 },
+  carouselTitle: { color: colors.textMeta, fontSize: fontSizePx.xs, marginTop: 4 },
   carouselTitleSelected: { color: colors.textPrimary },
   carouselFooter: {
     width: 60,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
   ctaDisabled: { backgroundColor: colors.surface },
   ctaText: { fontSize: fontSizePx.base, fontFamily: fontsV2.bodySemi },
   ctaTextActive: { color: colors.textInverse },
-  ctaTextDisabled: { color: colors.textMuted },
+  ctaTextDisabled: { color: colors.textMeta },
   skip: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   skipText: { color: colors.textSecondary, fontSize: fontSizePx.sm },
 });

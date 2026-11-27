@@ -145,12 +145,12 @@ const styles = StyleSheet.create({
   },
   // web 정본 StepHeader `<img className="h-5">` (20px) 매핑.
   logo: {
-    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
+    tintColor: colors.wordmark, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     height: 20,
     width: 20 * WORDMARK_ASPECT_RATIO,
   },
   counter: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     fontFamily: fontsV2.data,
     minWidth: 32,

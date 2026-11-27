@@ -514,13 +514,13 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   brandLogo: {
-    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
+    tintColor: colors.wordmark, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     // StepHeader logo (20px) 와 정합 — onboarding 시 워드마크 시각 동일성 유지.
     height: 20,
     width: 20 * WORDMARK_ASPECT_RATIO,
   },
   headerProgress: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontFamily: fontsV2.data,
     fontSize: 11,
     minWidth: 36,

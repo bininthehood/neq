@@ -95,7 +95,7 @@ export default function OnboardingStepOTT({
                 styles.row,
                 {
                   backgroundColor: on ? colors.surfaceRaised : colors.surface,
-                  borderColor: on ? colors.lime : colors.border,
+                  borderColor: on ? colors.limeText : colors.border,
                   opacity: isComingSoon ? 0.5 : pressed ? 0.92 : 1,
                 },
               ]}
@@ -124,7 +124,7 @@ export default function OnboardingStepOTT({
                     styles.check,
                     {
                       backgroundColor: on ? colors.lime : 'transparent',
-                      borderColor: on ? colors.lime : colors.border,
+                      borderColor: on ? colors.limeText : colors.border,
                     },
                   ]}
                 >
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   comingSoonLabel: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     fontWeight: '500',
   },

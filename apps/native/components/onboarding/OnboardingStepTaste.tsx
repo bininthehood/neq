@@ -67,7 +67,7 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
         <Text
           style={[
             styles.counter,
-            { color: enough ? colors.limeText : colors.textMuted },
+            { color: enough ? colors.limeText : colors.textMeta },
           ]}
         >
           {genres.size} / {MIN_GENRES}+
