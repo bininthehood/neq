@@ -1,7 +1,7 @@
 # Night Pool 리디자인 구현 계획
 
 작성 2026-11-26 · 기준 문서 [DESIGN.md](../../DESIGN.md) · 브랜치 `design/night-pool`
-상태: **계획 확정(엔지니어링 검토 완료) · 0~3단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
+상태: **계획 확정(엔지니어링 검토 완료) · 0~4단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
 
 ## 목표와 범위
 - iOS 네이티브 앱(`apps/native`)을 Quiet Ink → Night Pool로 바꾼다. 웹(PWA)은 같은 토큰을 쓰지만 화면 반영은 마지막 단계에서 따로 한다.
@@ -278,3 +278,43 @@ NO UNRESOLVED DECISIONS
 | 2026-11-27 | 라이트 스플래시: `ios.splash` 기본 = 민트 #EAF6F5 + 콤마 #007B72(splash-icon-light.png, 알파 재색칠), `dark` = 기존. 최상위 splash(Android·레거시)는 다크 유지 | ios/ 가 gitignore 라 반영은 prebuild·네이티브 빌드(4단계 빌드에 같이) 후. `expo config` 로 설정 반영만 확인 |
 | 2026-11-27 | 라이트 진입 E2E `e2e/light-mode-2026-11-27.test.ts` 추가 + `wdio.conf.ts` 에 `IOS_SIM_UDID`·`IOS_SIM_VERSION` env 덮어쓰기 | T6 ②. 자동 판정은 RedBox·Invalid color 없음 + 탭 라벨 4종, 색은 스크린샷 검수. 부팅 시뮬 udid 가 conf 고정값과 달라 env 로 받음 |
 | 2026-11-27 | 3단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹(+core+design) 705/705·core 116/116, Appium `regression-2026-05-21` 12/12 · `light-mode` 2/2(iPhone 17 Pro iOS 26.5). 발견·상세·큐·저장·검색·프로필·온보딩(Welcome·이름·장르·취향) 다크·라이트 스크린샷 확인. 4단계로 넘김: 라이트 유리 틴트(DESIGN.md 라이트 값), 다크 raised 위 작은 글자(textMeta 3.9), 라이트 스플래시 실기기 확인 |
+| 2026-11-27 | `GlassSurface` 는 감싸는 컴포넌트가 아니라 누르는 요소 안 첫 자식으로 까는 배경 층(absoluteFill) + `GlassGroup`(GlassContainer) 두 개만 | JellyPressable·Pressable 구조를 그대로 두고 배경만 바꿈. 호출부 변경이 한 줄씩 |
+| 2026-11-27 | 유리 판정 = `isLiquidGlassAvailable() && isGlassEffectAPIAvailable()` && 투명도 줄이기 꺼짐. 투명도 줄이기면 대체(불투명 raised + 1px border)로 | DESIGN.md "가용성은 API 로". 시스템 유리의 자동 보정보다 대비가 확실. 구독은 앱 전체 1회(마운트마다 깜빡임 방지) |
+| 2026-11-27 | 대체 강제 스위치 `EXPO_PUBLIC_GLASS_FALLBACK=1` | 시뮬 런타임이 iOS 26.x 뿐 — iOS 26 미만 화면을 이 분기로 확인 |
+| 2026-11-27 | 유리 조상에 opacity 금지: 토스트 등장은 위에서 미끄러지기(transform)로, 비활성(처음으로·칩·상세 이전/다음)은 아이콘·글자만 흐리게 | 부모 opacity 0 이면 유리가 안 그려짐(DESIGN.md 구현 메모) |
+| 2026-11-27 | 유리 면은 그림자 끔(저장 버튼 idle·토스트) | 투명 면 그림자는 매 프레임 오프스크린 렌더 — 스와이프 중 비용 |
+| 2026-11-27 | 유리 적용처: 발견 칩 줄·케밥·액션바(저장 idle 포함)·큐 바, 상세 시트 헤더 버튼(히어로 위), 토스트, 저장 화면 작품 시트(반만 여는 시트), 탭바. 발견 헤더 프로필 버튼·필터 드롭다운·필터 시트(78% 목록)·검색 시트(90%)는 불투명 유지 | 발견 유리 묶음 = 칩 줄(또는 큐 바)·케밥·액션바·탭바 4개(D9). 드롭다운은 유리 칩 위에 겹쳐 유리 위 유리. 긴 목록 시트는 본문 규칙 |
+| 2026-11-27 | 유리 위 글자: 탭 라벨 11 → 13·비활성도 textPrimary, 칩 쉐브론 textPrimary, 토스트 보조 11 textSecondary → 13 SUIT 600 textPrimary(주 문구 800), 큐 바 카운트 13 textPrimary, 작품 시트 제목·취소 textPrimary | DESIGN.md "유리 위 글자: text 색, 13 이상, 600 이상" |
+| 2026-11-27 | 탭바 = 기존 JS `Tabs` + `tabBarBackground` 유리, absolute 떠 있는 알약(높이 64, 좌우 16, 아래 = 안전영역−10). 화면들은 `lib/tab-bar` `TAB_BAR_SPACE` 만큼 비킴(발견 카드 정보·액션바, 큐·저장·프로필 스크롤 끝) | 검색 tabPress preventDefault·탭 라벨 4종·lazy 설정을 그대로 유지. 카드가 탭바 뒤까지 내려가 "카드 위 유리"(DESIGN.md Layout) |
+| 2026-11-27 | `TAB_BAR_SPACE` 는 `initialWindowMetrics` 로 시작 시 고정 | 세로 고정 앱. StyleSheet 상수로 쓸 수 있어 카드·스켈레톤 수정이 상수 하나 |
+| 2026-11-27 | 라이트 유리 틴트 `rgba(234,246,245,0.92)` (DESIGN.md 값 흰색 0.55 에서 변경), 테두리는 그대로. 토큰 `glassTint`·`glassBorder` 신설(ts·css) | 흰색 0.55·민트 0.80 은 어두운 포스터 위에서 회색으로 탁해짐(3단계 이관 건, 시뮬 스크린샷 비교). 민트 0.92 는 검은 포스터 위에서도 민트 유지 |
+| 2026-11-27 | 다크 `textMeta` #74918F → #82A09E (raised 3.9 → 4.7, bg 6.3, surface 5.7). 토큰 테스트에 raised 쌍 추가 | 3단계 이관 건. textSecondary(#A9C2C0)보다는 낮게 유지해 위계 보존 |
+| 2026-11-27 | app.json `version` 1.0.4 → 1.1.0 (buildNumber 48 유지 — production 프로필 autoIncrement) | 계획 결정 2(1.1.0 묶음). runtimeVersion appVersion → 1.1.0 이라 main 의 1.0.4 OTA 가 이 빌드에 섞이지 않음 |
+| 2026-11-27 | 4단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹(+core+design) 705/705·core 116/116, Appium `regression-2026-05-21` 12/12 · `light-mode` 2/2 (iPhone 17 Pro iOS 26.5, 새 dev 빌드). 발견·큐 덱·상세·큐·저장(+작품 시트)·검색·프로필·토스트 다크·라이트, 대체 표현(강제 분기) 다크·라이트, 투명도 줄이기 on → 대체/off → 유리 확인. 5단계로 넘김: 저장 버튼 끌기 1.14배, 위 스와이프·스티커 |
+
+### 4단계 결과 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
+
+**시뮬 프레임 (카드 좌 스와이프 15회, Reanimated `useFrameCallback` UI 스레드, 임시 계측 — 커밋 안 함)**
+| 조건 | 평균 | 최악 프레임 | 25ms 초과 프레임 |
+|---|---|---|---|
+| 유리 켬 | 60fps | 50ms | 22 |
+| 대체(불투명) | 60fps | 74ms | 21 |
+- 유리 유무 차이 없음. 25ms 초과는 스와이프 1회당 ~1.4개로 두 조건 같음 → 카드 교체(JS·이미지) 시점 비용이지 유리 비용 아님. 시뮬은 Mac GPU 라 실기기 GPU 부하를 대표하지 않는다 → TestFlight 실기기에서 재측정.
+
+**실기기 테스트 준비 (제임스 실행 — 에이전트는 실행하지 않음)**
+- 버전: `app.json` 1.1.0 / runtimeVersion(appVersion) 1.1.0 / buildNumber 48 → production autoIncrement 로 49. `eas.json` `appVersionSource: local`.
+- 빌드에 들어가는 네이티브 변경: `expo-glass-effect` 0.1.10, 폰트 내장(SUIT·Unbounded·Recursive, expo-font 플러그인), 라이트·다크 스플래시. 전부 OTA 불가 → 새 빌드 필수.
+- 확인할 것: 글래스는 iOS 26 SDK(Xcode 26)로 빌드해야 켜진다. EAS 기본 이미지가 Xcode 26 인지 빌드 로그에서 확인, 아니면 `eas.json` production `ios.image` 를 Xcode 26 이미지로 지정.
+- 명령 (apps/native 에서):
+  - `eas build --platform ios --profile production`
+  - `eas submit --platform ios --profile production --latest` → TestFlight
+- 실기기 체크리스트:
+  1. 발견 카드 스와이프 중 60fps (iPhone 15 Plus, Instruments Animation Hitches 또는 체감) — 미달 시 칩 줄부터 대체로(D9)
+  2. 라이트·다크 스플래시 → 첫 화면 이음매(콤마 색·바탕색)
+  3. 폰트 즉시 적용(깜빡임 없음), SUIT·Unbounded·Recursive
+  4. 유리: 라이트 틴트가 어두운 포스터 위에서 회색으로 탁해지지 않는지, 다크 대비
+  5. 설정 > 손쉬운 사용 > 투명도 줄이기 켜고 앱 → 불투명 대체
+  6. iOS 26 미만 기기가 있으면 대체 표현 확인 (최소 지원 iOS 15.1 — 없으면 시뮬 강제 분기 결과로 갈음)
+  7. 탭바: 검색 탭 = 시트 열기, 탭 전환, 프로필·저장·큐 스크롤 끝이 탭바에 가리지 않음, 홈 인디케이터와 간격
+  8. 토스트(첫 카드에서 우 스와이프 "첫 번째 작품이에요")가 위에서 내려오고 유리로 보임
+- 주의: 5단계 전 빌드라 위 스와이프 "관심 없음"·친구 메모는 아직 없음. 심사 제출용 빌드는 5단계·PR-S 배포 뒤.
