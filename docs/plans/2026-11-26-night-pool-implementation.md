@@ -1,7 +1,7 @@
 # Night Pool 리디자인 구현 계획
 
 작성 2026-11-26 · 기준 문서 [DESIGN.md](../../DESIGN.md) · 브랜치 `design/night-pool`
-상태: **계획 확정(엔지니어링 검토 완료) · 0~4단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
+상태: **계획 확정(엔지니어링 검토 완료) · 0~5단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
 
 ## 목표와 범위
 - iOS 네이티브 앱(`apps/native`)을 Quiet Ink → Night Pool로 바꾼다. 웹(PWA)은 같은 토큰을 쓰지만 화면 반영은 마지막 단계에서 따로 한다.
@@ -291,6 +291,29 @@ NO UNRESOLVED DECISIONS
 | 2026-11-27 | 다크 `textMeta` #74918F → #82A09E (raised 3.9 → 4.7, bg 6.3, surface 5.7). 토큰 테스트에 raised 쌍 추가 | 3단계 이관 건. textSecondary(#A9C2C0)보다는 낮게 유지해 위계 보존 |
 | 2026-11-27 | app.json `version` 1.0.4 → 1.1.0 (buildNumber 48 유지 — production 프로필 autoIncrement) | 계획 결정 2(1.1.0 묶음). runtimeVersion appVersion → 1.1.0 이라 main 의 1.0.4 OTA 가 이 빌드에 섞이지 않음 |
 | 2026-11-27 | 4단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹(+core+design) 705/705·core 116/116, Appium `regression-2026-05-21` 12/12 · `light-mode` 2/2 (iPhone 17 Pro iOS 26.5, 새 dev 빌드). 발견·큐 덱·상세·큐·저장(+작품 시트)·검색·프로필·토스트 다크·라이트, 대체 표현(강제 분기) 다크·라이트, 투명도 줄이기 on → 대체/off → 유리 확인. 5단계로 넘김: 저장 버튼 끌기 1.14배, 위 스와이프·스티커 |
+| 2026-11-27 | 위 스와이프 임계 100px(튕김은 800px/s + 60px), 좌·아래는 기존 70px 유지, 우는 진행률 0.3 유지 | 계획 5단계 "위 100". DESIGN.md 터치 임계(수평 80·세로 100)와 다르지만 좌·아래를 바꾸면 기존 회귀 스펙·손에 익은 감도가 바뀜. 숨기기는 되돌릴 수 있어도 저장보다 보수적으로 |
+| 2026-11-27 | 방향 잠금 = 처음 10px 움직인 축 고정(`lib/swipe-classify.ts` `lockAxis`), 10px 전에 끝나면 큰 축(동률 세로 — 기존 규칙) | DESIGN.md "방향 잠금: 첫 10px". 매 프레임 큰 축 판정은 대각선 끌기가 끝에서 저장/숨김으로 바뀌는 오인 경로(계획 Failure modes) |
+| 2026-11-27 | 판정을 순수 함수 `classifySwipe` 로 옮기고 index.tsx 는 결과(next/prev/save/hide/none)만 분기. 경계·회귀 테스트 `swipe-classify.test.ts` 13개 | 계획 5단계 테스트 항목. 99/100·70/71·30px 튕김·대각선·탭 크기 경계 |
+| 2026-11-27 | 위로 끄는 동안 카드는 올라가지 않고 최대 0.95 로 줄어듦 + 스티커. 판정 후 220ms ease-in 으로 0.6·어둡게(#041418 0.7)·끝 40% 에서 사라짐, 아래로 40px 가라앉음 | 카드를 올리면 카드 위 친구 메모가 고정된 케밥 밑으로 들어감(시뮬 확인). RN 에 흑백 필터가 없어 계획대로 어둡게만 |
+| 2026-11-27 | 아래 끌기 "찜!" 라임 스티커도 함께 붙임 (위 "관심 없음" 청록 반투명 + 아쿠아 테두리), 둘 다 -6°·0.6→1.1·reduced-motion 이면 스케일 없음, VoiceOver 에서 숨김 | DESIGN.md Motion 이 두 스티커를 한 규칙으로 정의. 같은 컴포넌트라 추가 비용 0. 라임 3개 규칙의 "드래그 중 스티커" 예외 |
+| 2026-11-27 | 숨김 필터는 덱 파생 한 곳(`filteredRecs` = 별점 필터 뒤 `filterHidden`, 큐는 `filterHidden(mixDeck)`). 현재 카드를 숨기면 같은 topIdx 에 다음 카드가 와서 따로 넘기지 않음 | 계획 X2 "화면에 카드를 올리는 공통 지점". 인기작 대체(`/api/trending`)·관련작·장르 큐·이미 받은 카드·prefetch 모두 이 파생값을 지남. 숨김 0개면 같은 배열 반환 |
+| 2026-11-27 | 되돌리기 = 키 제거 + 그 카드를 다시 맨 위(topIdx 재설정), 토스트 "되돌렸어요" | 3초 안에 다른 카드를 넘겼어도 되돌린 작품이 바로 보여야 "되돌리기" 의미가 맞음. DESIGN.md 마이크로카피 |
+| 2026-11-27 | `hiddenKeys` 저장: AsyncStorage `neq_hidden_keys`, `{key, hiddenAt}` 최근 순 500개, 중복은 앞으로, 발견 화면 포커스마다 다시 읽음 | 서버 PR #55 `HIDDEN_KEYS_MAX=500`·"앞에서부터" 와 같게. 포커스 재읽기로 프로필 '모든 데이터 초기화' 직후에도 덱이 맞음 |
+| 2026-11-27 | 추천 요청 3곳(스트리밍·비스트리밍 폴백·prefetch)에 `hiddenKeys` 추가, `@neq/core` `RecommendRequest.hiddenKeys?: string[]` | 서버 미배포 동안은 필드가 무시되고 앱 필터가 거름. 웹은 아직 안 보냄(6단계) — 타입만 선택 필드라 웹 영향 없음 |
+| 2026-11-27 | 상세 시트 "관심 없음" = 하단 CTA 줄 저장 옆 중성 알약(raised + border, SUIT 600 15), 발견 화면만(`onHide` 지정 시), 누르면 시트 닫고 같은 토스트 | DESIGN.md 접근성 "상세 시트에 관심 없음 버튼". 치우는 동작이라 라임·아쿠아 안 씀. 저장 화면 시트에선 저장한 작품을 숨길 이유가 약해 미노출 |
+| 2026-11-27 | 숨기기 햅틱 rigid 1회 | DESIGN.md "스와이프 임계 통과 rigid" |
+| 2026-11-27 | 저장 버튼 끌기 확대 = dragY 0→100px 비례 최대 1.14배를 worklet 에서 직접, 저장 직후 번쩍 1.15 는 그대로 | DESIGN.md Motion. 기존 1.05 boolean 은 임계 통과 순간에만 바뀌어 "비례" 가 아니었음 |
+| 2026-11-27 | 친구 메모 스티커: 카드 우상단 중 케밥(top 60, 44) 바로 아래 top 118·right 16, 라임 채움·SUIT 800 12·-6°·radius 12, `friendMemo()` null 이면 생략, 정보 숨김(몰입) 모드에선 같이 숨김 | 카드 맨 위 오른쪽은 칩 줄·케밥 자리. 테마 무관(포스터 위) 라임/어두운 글자 고정 |
+| 2026-11-27 | 분석: `not_interested` {tmdb_id, media_type, title, source: swipe_up·detail_button, action: hide·undo}. 기존 `card_swiped` 에 direction 'up' 값 추가(키 그대로), 옛 `card_not_interested` 이름은 손대지 않음 | 숨기기와 되돌리기를 한 이벤트로 — 순 숨김 = hide − undo. 기존 이름·속성 변경 금지 규칙 |
+| 2026-11-27 | 네이티브 `saved_viewed` {saved_count, has_saved_items} — 저장 탭 포커스마다 1회 | 웹 saved/page.tsx 는 페이지 진입마다 1회. 네이티브 탭은 미리 마운트돼 있어 포커스가 "여는 순간" |
+| 2026-11-27 | 네이티브 `card_viewed` (웹과 같은 속성 tmdb_id·title·source·stack_index·total_loaded·providers_count·saved), (tmdbId, 위치) 바뀔 때 1회, 큐 덱은 source 'mix_deck' | PostHog 확인: 네이티브 전 기간 0건 → 주지표(첫 세션 저장률) 분모. 웹과 같은 중복 방지 키 |
+| 2026-11-27 | 모든 이벤트에 `$app_version`·`$app_build` — PostHog `customAppProperties` 로 `Constants.expoConfig` 의 version·ios.buildNumber 보강 | SDK 는 expo-application(네이티브 모듈, 미설치)이 있을 때만 채움. EAS production autoIncrement + appVersionSource local 이라 빌드에 내장되는 app.json 값 = 실제 빌드 번호 |
+| 2026-11-27 | 내부 표시 = 슈퍼 속성 `is_internal_build: true` (`register`), dev 빌드(`__DEV__`)만. 스토어 빌드는 미설정 | 네이티브 익명 사용자는 사람 프로필이 없어 사람 속성이 저장 안 됨(코디네이터 확인). **TestFlight 는 표시 못 함**: TestFlight 와 스토어가 같은 production 바이너리라 빌드 env 로 못 가르고, JS 로는 판별 API 가 없음. 방법이 필요하면 ① 로컬 Expo 모듈(Swift ~15줄)로 `Bundle.main.appStoreReceiptURL.lastPathComponent == "sandboxReceipt"` 확인 — 네이티브 코드 추가·새 빌드, iOS 18 에서 API deprecated 지만 동작 ② PostHog 에서 제임스 기기 distinct_id 로 거르기. 지금은 미적용 |
+| 2026-11-27 | `first_open` {platform} — 설치 후 첫 실행 1회(AsyncStorage `neq_first_open_tracked`, 데이터 초기화에도 유지). 1.1.0 으로 업데이트한 기존 사용자(온보딩 완료 또는 저장 있음)는 보내지 않음. `captureAppLifecycleEvents` 는 안 켬 | SDK "Application Installed" 는 이전 버전에서 lifecycle 기록이 없던 기존 사용자도 설치로 셈 → 업데이트 첫날 신규가 부풀려짐. `app_open` 과 이름이 겹치지 않는 별도 이벤트. 한계: 온보딩 전 이탈했던 기존 사용자는 신규로 셈 |
+| 2026-11-27 | `save_failed` {reason: storage_write, error_name, tmdb_id} — `toggleSaved` 쓰기 실패 한 곳(발견·상세 공통 경로). 발견은 오류 토스트 "저장하지 못했어요" 후 카드 제자리, `card_saved` 는 저장 성공 뒤에 발사하도록 순서만 바꿈 | 읽기 실패는 safeGet 이 빈 값으로 삼켜 실패 지점이 쓰기뿐. 예전엔 쓰기가 실패해도 card_saved 가 먼저 나가 저장률이 부풀 수 있었음(이름·속성은 그대로) |
+| 2026-11-27 | 세션 리플레이 켬: `posthog-react-native-session-replay` 1.6.0(PostHog iOS 3.58.3, peer react·react-native *, iOS 13+ — SDK 54/RN 0.81 pod install·Release 빌드 확인). `maskAllTextInputs`·`maskAllImages`·`maskAllSandboxedViews` true(기본값 명시), `captureLog` false, `captureNetworkTelemetry` true, `throttleDelayMs` 1000(기본), `sampleRate` = `EXPO_PUBLIC_POSTHOG_REPLAY_SAMPLE_RATE`, 기본 스토어·TestFlight 1.0 / dev 0 | 실트래픽 일 1~3 명(표본 하한 메모리)이라 샘플을 버리면 볼 세션이 없음. 트래픽이 늘면 env 로 낮춤(코드 변경 없이 새 빌드). 콘솔 로그는 dev 에서 작품 제목 등 track 페이로드가 찍혀 끔. dev 0 은 시뮬 기록이 섞이지 않게. PostHog 프로젝트 스위치는 안 건드림 |
+| 2026-11-27 | 성능: 튜토리얼 밖에서는 `isDragging` state 를 안 바꿈(터치 시작·끝마다 발견 화면 전체 재렌더 2회 제거), SwipeCard `CardInner` memo, 다음에 쌓일 카드(top+3~+5) 포스터 메모리 prefetch | 결과·원인 분석은 아래 "5단계 결과" |
+| 2026-11-27 | 5단계 완료 판정 | 아래 "5단계 결과". 계측 추가(card_viewed·saved_viewed·not_interested·first_open·save_failed·앱 버전·is_internal_build·세션 리플레이)는 코디네이터 요청 반영. 남은 것: PR #55 배포, 실기기 끊김 확인, TestFlight 내부 표시 방법 결정 |
 
 ### 4단계 결과 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
 
@@ -301,20 +324,47 @@ NO UNRESOLVED DECISIONS
 | 대체(불투명) | 60fps | 74ms | 21 |
 - 유리 유무 차이 없음. 25ms 초과는 스와이프 1회당 ~1.4개로 두 조건 같음 → 카드 교체(JS·이미지) 시점 비용이지 유리 비용 아님. 시뮬은 Mac GPU 라 실기기 GPU 부하를 대표하지 않는다 → TestFlight 실기기에서 재측정.
 
+### 5단계 결과 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
+
+**검증:** tsc 네이티브·웹 0 · vitest 네이티브 67/67(새 24개: swipe-classify 13 · hidden-keys 6 · hidden-filter 5)·웹(+core+design) 705/705·core 116/116 · eslint 오류 0(경고 33 = 변경 전과 같음) · Appium `regression-2026-05-21` 12/12 · `light-mode` 2/2 · 새 `not-interested-2026-11-27` 2/2 (탭 라벨 4종 유지 포함). 발견(친구 메모·찜!/관심 없음 스티커·저장 버튼 1.14배)·상세("관심 없음" 버튼)·토스트 다크·라이트 스크린샷 확인.
+
+**카드 교체 프레임 — 측정 방법을 바꿈.** 4단계 수치(스와이프당 ~1.4)는 Appium 드래그로 쟀는데, 카드가 안 바뀌는 40px 짧은 끌기도 제스처당 1.67개가 나왔다(JS 지연 0) → XCTest 터치 주입이 시뮬 메인 스레드를 멈추는 계측 오염. 그래서 앱 안에서 좌 스와이프를 프로그램으로 15회 발생시키고 그동안 XCTest 호출 없이 `useFrameCallback`(UI)·rAF(JS) 간격을 쟀다 (임시 계측, 커밋 안 함).
+
+| 빌드 | 조건 | UI 25ms 초과 / 15회 | UI 최악 | JS 25ms 초과 / 15회 | JS 최악 |
+|---|---|---|---|---|---|
+| Debug (Metro) | HEAD 38de155 (Appium 드래그) | 34~39 | 89ms | 56~57 | 193ms |
+| Debug (Metro) | 5단계 + isDragging 수정 (Appium 드래그) | 36~42 | 96ms | 40~42 | 140ms |
+| Debug (Metro) | 5단계 최종 (앱 안 스와이프) | 22~26 | 44~77ms | 36~47 | 89~100ms |
+| Release | 5단계, 리플레이 끔 | 24 · 24 | 53~72ms | 31~39 | 40~51ms |
+| Release | 5단계, 리플레이 켬(샘플 1.0) | 21 · 22 | 67~71ms | 36~44 | 53~84ms |
+
+- **원인 위치:** UI 프레임 지연은 모두 스와이프 시작 후 420~520ms — 좌 스와이프 퇴장 애니메이션(300ms)이 끝나고 360ms 에 오는 덱 전진 commit 직후다. 발견 화면 전체(index.tsx ~2,500줄) 재렌더가 Release 에서도 JS 40~50ms 이고, 그 commit 이 UI 스레드에 반영될 때 1~2프레임이 밀린다.
+- **원인 아님(실험으로 배제):** 3번째 카드 마운트(덱 2장으로 줄여도 같음), 카드 그림자(`shadowsNative.lg` 제거해도 같음), 유리(4단계), 닫힌 상세 시트 재렌더(rec 를 null 로 줘도 같음), 세션 리플레이(위 표).
+- **넣은 것:** 튜토리얼 밖 `isDragging` state 토글 제거 → 터치마다 화면 전체 재렌더 2회 제거(Debug JS 지연 56 → 41), `CardInner` memo, 다음 카드 포스터 prefetch(시뮬은 네트워크가 빨라 수치 변화 없음 — 실기기 셀룰러에서 팝인 방지용).
+- **체감 영향:** 밀리는 프레임이 퇴장 애니메이션이 끝난 뒤라 한 장씩 넘길 땐 화면에 움직이는 것이 없다. 보일 수 있는 경우는 360ms 직후 바로 다음 카드를 끌기 시작할 때뿐(그 전 끌기는 연속 스와이프 가드가 막음).
+- **더 줄이려면 (구조 변경이라 이번엔 안 함):** ① 덱 전진을 발견 화면 state 에서 떼어 덱 전용 컴포넌트(카드 스택 + 액션바)로 분리 — 전진 commit 이 화면 전체가 아니라 스택만 다시 그림. 가장 효과 클 것으로 봄, 반나절~1일 + 제스처 회귀 위험 ② 전진 commit 을 퇴장 애니메이션 중간이 아니라 지금처럼 뒤에 두되 `startTransition` 으로 낮은 우선순위 렌더 — 작은 변경이지만 Fabric 에서 UI 반영 프레임이 줄어드는지는 미검증 ③ 실기기 Instruments 로 먼저 확인 — 시뮬 xctrace Time Profiler 는 이번에 기록 후 처리 단계에서 멈춰 결과를 못 얻음.
+- **앱 크기:** 세션 리플레이는 PostHog iOS 3.58.3 정적 링크(시뮬 `libPostHog.a` 32MB 는 심볼 포함이라 대표값 아님). 실제 증가분은 이번에 못 쟀다 → EAS 빌드 후 App Store Connect "앱 크기"를 1.0.4 와 비교.
+
 **실기기 테스트 준비 (제임스 실행 — 에이전트는 실행하지 않음)**
 - 버전: `app.json` 1.1.0 / runtimeVersion(appVersion) 1.1.0 / buildNumber 48 → production autoIncrement 로 49. `eas.json` `appVersionSource: local`.
-- 빌드에 들어가는 네이티브 변경: `expo-glass-effect` 0.1.10, 폰트 내장(SUIT·Unbounded·Recursive, expo-font 플러그인), 라이트·다크 스플래시. 전부 OTA 불가 → 새 빌드 필수.
+- 빌드에 들어가는 네이티브 변경: `expo-glass-effect` 0.1.10, 폰트 내장(SUIT·Unbounded·Recursive, expo-font 플러그인), 라이트·다크 스플래시, **`posthog-react-native-session-replay` 1.6.0(5단계)**. 전부 OTA 불가 → 새 빌드 필수.
 - 확인할 것: 글래스는 iOS 26 SDK(Xcode 26)로 빌드해야 켜진다. EAS 기본 이미지가 Xcode 26 인지 빌드 로그에서 확인, 아니면 `eas.json` production `ios.image` 를 Xcode 26 이미지로 지정.
+- EAS production 환경 변수: `EXPO_PUBLIC_POSTHOG_KEY`·`EXPO_PUBLIC_POSTHOG_HOST` 는 기존 그대로. 리플레이 샘플링을 바꾸려면 `EXPO_PUBLIC_POSTHOG_REPLAY_SAMPLE_RATE`(0~1, 미설정 = 1.0). 리플레이가 실제로 쌓이려면 PostHog 프로젝트 설정의 모바일 리플레이도 켜져 있어야 함(웹과 공용 스위치 — 에이전트는 안 건드림).
 - 명령 (apps/native 에서):
   - `eas build --platform ios --profile production`
   - `eas submit --platform ios --profile production --latest` → TestFlight
 - 실기기 체크리스트:
-  1. 발견 카드 스와이프 중 60fps (iPhone 15 Plus, Instruments Animation Hitches 또는 체감) — 미달 시 칩 줄부터 대체로(D9)
-  2. 라이트·다크 스플래시 → 첫 화면 이음매(콤마 색·바탕색)
-  3. 폰트 즉시 적용(깜빡임 없음), SUIT·Unbounded·Recursive
-  4. 유리: 라이트 틴트가 어두운 포스터 위에서 회색으로 탁해지지 않는지, 다크 대비
-  5. 설정 > 손쉬운 사용 > 투명도 줄이기 켜고 앱 → 불투명 대체
-  6. iOS 26 미만 기기가 있으면 대체 표현 확인 (최소 지원 iOS 15.1 — 없으면 시뮬 강제 분기 결과로 갈음)
-  7. 탭바: 검색 탭 = 시트 열기, 탭 전환, 프로필·저장·큐 스크롤 끝이 탭바에 가리지 않음, 홈 인디케이터와 간격
-  8. 토스트(첫 카드에서 우 스와이프 "첫 번째 작품이에요")가 위에서 내려오고 유리로 보임
-- 주의: 5단계 전 빌드라 위 스와이프 "관심 없음"·친구 메모는 아직 없음. 심사 제출용 빌드는 5단계·PR-S 배포 뒤.
+  1. 발견 카드 스와이프 중 끊김 없음 (iPhone 15 Plus, Instruments Animation Hitches 또는 체감) — 특히 한 장 넘긴 직후 바로 다음 카드를 끌 때. 미달 시 위 "더 줄이려면" ①
+  2. 위로 밀기(100px) → 카드가 작아지며 어둡게 가라앉음 → 상단 토스트 "다시 안 보여요 · 되돌리기" → 되돌리기 누르면 그 카드가 다시 맨 위 + "되돌렸어요"
+  3. 끄는 동안 스티커: 아래 "찜!"(라임)·위 "관심 없음"(청록), 저장 버튼이 끄는 만큼 커짐(최대 1.14), 대각선으로 끌 때 처음 방향으로 고정
+  4. 상세 시트 하단 "관심 없음" → 시트 닫히고 같은 토스트, 앱 재시작·새 추천 뒤에도 그 작품이 다시 안 나옴
+  5. 친구 메모 스티커(카드 우상단 케밥 아래)가 포스터 위에서 읽히는지, 메모 없는 작품은 스티커 없음
+  6. 라이트·다크 스플래시 → 첫 화면 이음매(콤마 색·바탕색)
+  7. 폰트 즉시 적용(깜빡임 없음), SUIT·Unbounded·Recursive
+  8. 유리: 라이트 틴트가 어두운 포스터 위에서 회색으로 탁해지지 않는지, 다크 대비
+  9. 설정 > 손쉬운 사용 > 투명도 줄이기 켜고 앱 → 불투명 대체
+  10. iOS 26 미만 기기가 있으면 대체 표현 확인 (최소 지원 iOS 15.1 — 없으면 시뮬 강제 분기 결과로 갈음)
+  11. 탭바: 검색 탭 = 시트 열기, 탭 전환, 프로필·저장·큐 스크롤 끝이 탭바에 가리지 않음, 홈 인디케이터와 간격
+  12. 토스트(첫 카드에서 우 스와이프 "첫 번째 작품이에요")가 위에서 내려오고 유리로 보임
+  13. PostHog: TestFlight 기기 이벤트에 `$app_version` 1.1.0 · `$app_build` 49, `card_viewed`·`saved_viewed`·`not_interested`·`first_open`(새로 설치한 경우) 도착, 세션 리플레이에서 포스터·입력이 가려져 보이는지. TestFlight 이벤트는 `is_internal_build` 가 안 붙으므로(결정 기록) 제임스 기기 distinct_id 로 거를 것
+- 주의: 서버 PR #55(hiddenKeys)는 아직 main 미배포 — 앱 필터만으로 숨김이 동작하지만, 숨긴 작품이 서버 응답에 섞여 한 배치의 카드 수가 줄 수 있다. 심사 제출용 빌드는 PR #55 배포 뒤.
