@@ -1,7 +1,7 @@
 # Night Pool 리디자인 구현 계획
 
 작성 2026-11-26 · 기준 문서 [DESIGN.md](../../DESIGN.md) · 브랜치 `design/night-pool`
-상태: **계획 확정(엔지니어링 검토 완료) · 0단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
+상태: **계획 확정(엔지니어링 검토 완료) · 0~2단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
 
 ## 목표와 범위
 - iOS 네이티브 앱(`apps/native`)을 Quiet Ink → Night Pool로 바꾼다. 웹(PWA)은 같은 토큰을 쓰지만 화면 반영은 마지막 단계에서 따로 한다.
@@ -248,3 +248,23 @@ NO UNRESOLVED DECISIONS
 | 2026-11-27 | 토큰 테스트는 web vitest include 에 추가해 실행 | `packages/design` 에 자체 러너가 없음. 새 러너 대신 기존 CI 경로 재사용 |
 | 2026-11-27 | Reanimated 색 가드 테스트 `apps/native/lib/__tests__/reanimated-colors.test.ts` 추가 | 0단계에서 `useAnimatedStyle` 동적색이 조용히 사라짐을 확인 → 정적 검사로 재발 차단 |
 | 2026-11-27 | 1단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹 611/611, 시뮬(iPhone 17 Pro) 다크·라이트 전환·재실행 크래시 0. 남은 옛 색(온보딩 갈색 글로우·금색 Lottie, 라이트 카드 흐린 글자, 스플래시 #12110E, 상태표시줄 고정)은 2·3단계 범위 |
+| 2026-11-27 | 친구 메모(T8) `bininthehood/night-pool-memo`(d7bcec4) 를 이 브랜치에 병합만, 화면 연결은 5단계 | packages/core 순수 함수뿐이라 충돌 없음. 스티커 UI 는 위 스와이프와 같은 단계에서 붙임 |
+| 2026-11-27 | `JellyPressable` 은 바깥 `Animated.View`(transform 만) + 안쪽 `Pressable`(style·색) 구조, 바깥 배치는 `containerStyle` | 호출부 StyleSheet 의 DynamicColorIOS 가 Animated.* 정적 style 에 들어가면 크래시(0단계) — 구조로 원천 차단 |
+| 2026-11-27 | 젤리 프레스는 햅틱을 울리지 않음 | 기존 onPress 들이 이미 햅틱을 내므로 이중 발화(DESIGN.md 연속 발화 금지) 방지 |
+| 2026-11-27 | 공용 `Chip`(알약 32·hitSlop 6=44·선택 라임)·`Button`(primary/secondary/ghost) 신설, 유리 전에는 raised + 1px border | DESIGN.md "iOS 26 미만 대체" 모양과 같아 4단계에서 `GlassSurface` 로 감싸기만 하면 됨 |
+| 2026-11-27 | Discover: 헤더(워드마크)는 카드 위에 띄우지 않고, 칩 줄·큐 바·액션바·케밥만 카드 위 오버레이 | 워드마크를 포스터 위에 올리면 대비가 흔들리고 워드마크 여백 규칙을 못 지킴. 계획 2단계 문구("액션바·칩을 카드 위로") 범위 그대로 |
+| 2026-11-27 | 카드 위 글자·뱃지는 테마 무관 밝은 값(`palette.dark`) + 청록 잉크 받침 rgba(4,20,24,…) | 포스터 하단 잉크는 라이트에서도 어두움 → 라이트 카드 흐린 글자(1단계 잔여) 중 카드 부분은 여기서 해소 |
+| 2026-11-27 | 카드 제목 34 는 `numberOfLines={2}` | DESIGN.md 3xl 그대로 두고 긴 제목이 정보 영역을 밀어 올리지 않게 |
+| 2026-11-27 | 저장 버튼 끌기 비례 확대(최대 1.14)는 5단계로 | 위 스와이프와 같은 Pan 수정에서 dragY 를 넘겨야 함. 지금은 기존 1.05 유지 |
+| 2026-11-27 | 토스트는 상단 44 로 이동, 유리 전까지 불투명 raised | DESIGN.md States. 하단 토스트가 액션바·탭바와 겹치던 문제도 함께 사라짐 |
+| 2026-11-27 | 영문 섹션 접두("Synopsis ·", "Cast ·", "RECENT ·", "Library ·", "Channels ·", "NAME ·", "CURATED · NEQ,")는 한글만 남기고 제거 | DESIGN.md 영문 마케팅 카피 금지 + 한글 uppercase·넓은 자간 금지. 섹션 라벨은 SUIT 600 13 textSecondary 로 통일 |
+| 2026-11-27 | 10px 이하 허용은 영문·숫자 전용 Recursive 2곳만(관련작 'POSTER · N/A', 월 스크러버 연도) | anti-slop #8 예외 조건 그대로 |
+| 2026-11-27 | 이유 박스(borderLeft 인용)는 raised 면 radius 14 로 | anti-slop #6. Quiet Ink 예외 2 는 Night Pool 에서 폐기 |
+| 2026-11-27 | 저장 그리드 비대칭은 "가운데 열 14px 내림"으로 바꾸고 높이 변주(1.6배) 폐기 | DESIGN.md Layout 정의 그대로, 포스터 2:3 유지 |
+| 2026-11-27 | 프로필 분포 막대: 1위 아쿠아, 나머지 `borderStrong`/`textMuted` | 금색·보라·코랄 하드코딩은 팔레트 밖 + 막대마다 라임이면 라임 3개 초과 |
+| 2026-11-27 | 빈 상태(저장·큐)에 아이콘 48 + "발견하러 가기" secondary CTA 추가 | DESIGN.md States Empty 구조. 라임 아님(주요 CTA 아님) |
+| 2026-11-27 | 흡수 Lottie 는 이미지 레이어라 `colorFilters` 불가 → 레이어 PNG 를 sharp 로 아쿠아 재색칠한 다크·라이트 JSON 두 벌, 금색 원본 삭제 | 워드마크 색별 PNG 를 새로 굽지 않는다는 규칙의 취지(형태 동일, 색만)를 지키면서 Lottie 가 tint 를 못 받는 제약 우회 |
+| 2026-11-27 | 온보딩 Welcome 세리프 이탤릭 heading PNG → SUIT 900 텍스트, 갈색 vignette·앰버 glow 제거(글로우 대체 없음) | 세리프는 워드마크에만, 워드마크 글로우 금지 |
+| 2026-11-27 | 스플래시: 콤마 아쿠아·투명 바탕 + 배경 #071B20 (다크 고정) | 라이트 스플래시는 3단계. ios/ 가 gitignore 라 실제 반영은 prebuild·네이티브 빌드 후 |
+| 2026-11-27 | 온보딩 완료 화면 pulse halo 라임 → 아쿠아 | 대기·안내는 아쿠아 역할, 라임은 행동 |
+| 2026-11-27 | 2단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹+core+design 694/694, Appium `regression-2026-05-21` 12/12(시뮬 iPhone 17 Pro iOS 26.5), 화면별 다크 스크린샷 확인. 3단계로 넘김: 상태표시줄 밝기 연동, 라이트 스플래시, 라이트 키보드·흐린 글자 점검, 밝은 바탕 라임 테두리(프로필 OTT 선택 링·장르 칩 등 라임 border) |
