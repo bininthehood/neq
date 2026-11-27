@@ -19,6 +19,7 @@ const ENV_VARS: Record<string, string | undefined> = {
   SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
   POSTHOG_KEY: process.env.EXPO_PUBLIC_POSTHOG_KEY,
   POSTHOG_HOST: process.env.EXPO_PUBLIC_POSTHOG_HOST,
+  POSTHOG_REPLAY_SAMPLE_RATE: process.env.EXPO_PUBLIC_POSTHOG_REPLAY_SAMPLE_RATE,
 };
 
 function pick(key: keyof typeof ENV_VARS, fallback: string): string {
@@ -35,7 +36,16 @@ export const env = {
   // PostHog — 키가 비어 있으면 analytics는 no-op 처리 (개발/테스트 안전)
   POSTHOG_KEY: pick('POSTHOG_KEY', ''),
   POSTHOG_HOST: pick('POSTHOG_HOST', 'https://us.i.posthog.com'),
+  // 세션 리플레이 샘플링 0~1. 기본: 스토어·TestFlight 1(전부), dev 0(꺼짐 — 시뮬 기록이 섞이지 않게).
+  // 실트래픽 일 1~3 명이라 표본을 버릴 여유가 없다. 트래픽이 늘면 env 로 낮춘다.
+  POSTHOG_REPLAY_SAMPLE_RATE: replayRate(pick('POSTHOG_REPLAY_SAMPLE_RATE', '')),
 } as const;
+
+function replayRate(raw: string): number {
+  const n = raw === '' ? NaN : Number(raw);
+  if (Number.isFinite(n)) return Math.min(1, Math.max(0, n));
+  return typeof __DEV__ !== 'undefined' && __DEV__ ? 0 : 1;
+}
 
 // ─────────────────────────────────────────────
 // Feature Flags — Onboarding V2 (P0-1, P0-2 위임 D4b)

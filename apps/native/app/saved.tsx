@@ -251,6 +251,10 @@ export default function SavedScreen() {
   useFocusEffect(
     useCallback(() => {
       void refreshAll();
+      // 저장 목록 열기 — 웹 saved/page.tsx 와 같은 이름·속성. 탭이 미리 마운트돼도 포커스(=여는 순간)마다 1회.
+      void getSaved().then((list) =>
+        track('saved_viewed', { saved_count: list.length, has_saved_items: list.length > 0 }),
+      );
     }, [refreshAll]),
   );
 

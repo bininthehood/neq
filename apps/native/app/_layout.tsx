@@ -6,7 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { View, Pressable } from 'react-native';
 import { Text } from '../components/Text';
 import * as SplashScreen from 'expo-splash-screen';
-import { hasOnboarded } from '../lib/store';
+import { consumeFirstOpen, hasOnboarded } from '../lib/store';
 import { colors, fontsV2 } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
@@ -106,6 +106,10 @@ export default function RootLayout() {
   // app_open — root mount 1회 발사. PostHog 미초기화 상태에서도 큐잉되어 안전.
   useEffect(() => {
     track('app_open', { platform: 'native' });
+    // 2026-11-27 — 설치 후 첫 실행 1회 (app_open 과 별개 이벤트). 업데이트로 들어온 기존 사용자는 제외.
+    void consumeFirstOpen().then((kind) => {
+      if (kind === 'new') track('first_open', { platform: 'native' });
+    });
   }, []);
 
   // W5 Task A 회귀 fix — root 레벨 onboarding 가드.
