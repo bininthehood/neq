@@ -10,7 +10,7 @@ import {
 import { Text } from './Text';
 import Svg, { Path, Polyline } from 'react-native-svg';
 import type { Persona } from '../lib/types';
-import { colors, radius, spacing } from '../lib/tokens';
+import { colors, fontsV2, radius, spacing } from '../lib/tokens';
 import { IconUser } from './Icons';
 import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './onboarding/data';
 
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   dropdown: {
     position: 'absolute',
     paddingVertical: spacing.xs + 2,
-    borderRadius: radius.lg,
+    borderRadius: radius.toast,
     backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
     borderColor: colors.border,
@@ -346,10 +346,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs + 2,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
+    color: colors.textSecondary,
   },
   option: {
     flexDirection: 'row',

@@ -37,7 +37,8 @@ import { displayProviders } from '../lib/providers';
 import { setPendingMixSeed } from '../lib/mix-bridge';
 import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
-import { IconUser, IconArchive, IconBang, IconCheckPop } from '../components/Icons';
+import { IconUser, IconArchive, IconBang, IconCheckPop, IconBookmark } from '../components/Icons';
+import { Button } from '../components/Button';
 import { useSearchTrigger } from '../lib/search-trigger';
 import Animated, {
   useSharedValue,
@@ -72,7 +73,8 @@ const CARD_W = (SCREEN_WIDTH - spacing.md * (COLS + 1)) / COLS;
 // 3열 카드는 폭이 좁아 240/200 고정 높이가 과도하게 세로로 길어짐. 포스터 2:3
 // 비율(height = width × 3/2)로 높이를 폭에 연동 — 비대칭(tall)은 유지하되 비율 기반.
 const CARD_H = Math.round(CARD_W * 1.5); // 2:3 포스터
-const CARD_H_TALL = Math.round(CARD_W * 1.6); // 살짝 긴 변주 (Pinterest 식 비대칭 보존)
+// Night Pool 비대칭 = 가운데 열 14px 내림 (DESIGN.md Layout — 높이 변주 대신)
+const MID_COL_DROP = 14;
 
 /**
  * Saved 뷰 모드.
@@ -763,10 +765,12 @@ export default function SavedScreen() {
       {items.length === 0 ? (
         // P3 — 빈 상태 카피 정본 일치 (web saved/page.tsx:673-678 책장 메타포, Round 3 v2 잠금).
         <View style={styles.empty}>
+          <IconBookmark size={48} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>책장이 비어 있어요</Text>
           <Text style={styles.emptyHint}>
-            Discover에서 마음에 드는 걸{'\n'}하나씩 담아 보세요
+            발견에서 마음에 드는 걸{'\n'}하나씩 담아 보세요
           </Text>
+          <Button label="발견하러 가기" onPress={() => router.navigate('/')} containerStyle={styles.emptyCta} />
         </View>
       ) : sortedItems.length === 0 ? (
         // view filter / OTT / 장르 / 연·월 필터 적용 후 결과 0.
@@ -1166,7 +1170,7 @@ function PosterCard({
   onArchiveToggle: (tmdbId: number) => void;
 }) {
   const rec = item.recommendation;
-  const tall = index % 3 === 0;
+  const midCol = index % COLS === 1;
 
   return (
     // a11y: 카드 root 는 accessible={false} — 카드 탭과 reaction 칩이 각각
@@ -1177,7 +1181,7 @@ function PosterCard({
       // (ListCard 기존 pressed 패턴 정합). long-press 인식 순간까지 유지된다.
       style={({ pressed }) => [
         styles.card,
-        { width: CARD_W, height: tall ? CARD_H_TALL : CARD_H },
+        { width: CARD_W, height: CARD_H, marginTop: midCol ? MID_COL_DROP : 0 },
         pressed && styles.cardPressed,
       ]}
       // W5 Task E — 카드 탭 = DetailSheet 진입.
@@ -1556,12 +1560,11 @@ const styles = StyleSheet.create({
   },
   viewFilterLabel: {
     color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
   },
   viewFilterLabelActive: {
     color: colors.textPrimary,
-    fontWeight: '600',
   },
   viewFilterCount: {
     color: colors.textMuted,
@@ -1581,9 +1584,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   filterTriggerText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
     color: colors.textSecondary,
+    fontFamily: fontsV2.bodySemi,
   },
   filterTriggerDot: {
     position: 'absolute',
@@ -1617,12 +1620,12 @@ const styles = StyleSheet.create({
   activeChipIcon: {
     width: 14,
     height: 14,
-    borderRadius: radius.sm,
+    borderRadius: 6,
   },
   activeChipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
     color: colors.aquaText,
+    fontFamily: fontsV2.bodySemi,
   },
   activeChipX: {
     fontSize: 11,
@@ -1636,19 +1639,23 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
   },
+  // DESIGN.md States Empty: 아이콘 48 → 제목 15/600 → 설명 13 → CTA, 최대 폭 260
   emptyTitle: {
     color: colors.textPrimary,
-    fontSize: 18,
-    fontFamily: fontsV2.title,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
+    marginTop: spacing.sm,
   },
   emptyHint: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 19,
+    maxWidth: 260,
   },
+  emptyCta: { marginTop: spacing.md },
   card: {
-    borderRadius: radius.lg,
+    borderRadius: radius.thumb,
     overflow: 'hidden',
     backgroundColor: colors.surface,
   },
@@ -1669,8 +1676,8 @@ const styles = StyleSheet.create({
   },
   menuSheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
@@ -1684,15 +1691,15 @@ const styles = StyleSheet.create({
   },
   menuTitle: {
     color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
     textAlign: 'center',
     marginBottom: spacing.sm,
+    fontFamily: fontsV2.bodySemi,
   },
   menuRow: {
     minHeight: 52,
     justifyContent: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
     paddingHorizontal: spacing.sm,
   },
   menuRowPressed: {
@@ -1701,7 +1708,7 @@ const styles = StyleSheet.create({
   menuRowText: {
     color: colors.textPrimary,
     fontSize: 15,
-    fontWeight: '500',
+    fontFamily: fontsV2.bodySemi,
   },
   menuRowDanger: {
     color: colors.danger,
@@ -1712,28 +1719,28 @@ const styles = StyleSheet.create({
   },
   menuCancelText: {
     color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   // 2026-07-10 — 시청 리포트 시트 (ReactionOverlay 옵션 팔레트 재사용).
   reportSheetHeadline: {
     color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
     textAlign: 'center',
     marginBottom: spacing.md,
+    fontFamily: fontsV2.bodyHeavy,
   },
   reportOption: {
     minHeight: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
     borderWidth: 1,
     marginBottom: spacing.sm,
   },
   reportOptionText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: fontsV2.bodySemi,
   },
   cardDim: {
     backgroundColor: colors.overlay,
@@ -1747,7 +1754,7 @@ const styles = StyleSheet.create({
   fallbackText: {
     color: colors.textMuted,
     fontSize: 40,
-    fontWeight: '700',
+    fontFamily: fontsV2.en,
   },
   label: {
     position: 'absolute',
@@ -1761,7 +1768,7 @@ const styles = StyleSheet.create({
   labelText: {
     color: colors.textPrimary,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: fontsV2.bodySemi,
   },
   labelMetaRow: {
     flexDirection: 'row',
@@ -1777,7 +1784,7 @@ const styles = StyleSheet.create({
   labelOttIcon: {
     width: 16,
     height: 16,
-    borderRadius: radius.sm,
+    borderRadius: 6,
   },
   // 좌상단 reaction 입력 칩 — web PosterCard 의 '봤어요?' 버튼 정합.
   // 2026-07-10 — 시청 리포트 유도 배지: '봤어요?' 텍스트 칩 → 노란 느낌표(!).
@@ -1833,13 +1840,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.sm + 2,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.thumb,
     overflow: 'hidden',
   },
   listPosterFrame: {
     width: 60,
     height: 90,
-    borderRadius: radius.sm,
+    borderRadius: radius.badge,
     overflow: 'hidden',
     backgroundColor: colors.surfaceRaised,
     flexShrink: 0,
@@ -1847,7 +1854,7 @@ const styles = StyleSheet.create({
   listPosterFallback: {
     color: colors.textMuted,
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: fontsV2.en,
   },
   listBody: {
     flex: 1,
@@ -1855,8 +1862,8 @@ const styles = StyleSheet.create({
   },
   listTitle: {
     color: colors.textPrimary,
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   listMetaRow: {
     flexDirection: 'row',
@@ -1889,9 +1896,9 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   listReportChipText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
     color: colors.textSecondary,
+    fontFamily: fontsV2.bodySemi,
   },
   // #6 — 연·월 모드 in-screen 토글 (캘린더 아이콘 버튼). filterTrigger 와 나란히.
   monthToggle: {
@@ -1913,7 +1920,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm + 4,
     padding: spacing.sm + 4,
-    borderRadius: radius.lg,
+    borderRadius: radius.toast,
     backgroundColor: colors.surface,
     ...shadowsNative.sm,
   },
@@ -1921,9 +1928,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statsLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
     color: colors.textMuted,
+    fontFamily: fontsV2.bodySemi,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1951,9 +1958,8 @@ const styles = StyleSheet.create({
   // web "font-data text-2xl font-bold" — Geist Mono 24px bold.
   statsTotal: {
     fontSize: 24,
-    fontWeight: '700',
     color: colors.textPrimary,
-    fontFamily: fontsV2.data,
+    fontFamily: fontsV2.dataMedium,
   },
   // 2026-06-06 (P2 history 제거) — historyScroll / historyGroup / historyGroupLabel
   // / historyRow / historyCard / historyPosterFrame / historyPosterFallback /

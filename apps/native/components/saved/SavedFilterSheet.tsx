@@ -324,8 +324,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     maxHeight: '78%',
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     borderTopWidth: 1,
   },
   grabberWrap: {
@@ -390,10 +390,9 @@ const styles = StyleSheet.create({
     borderTopColor: colors.borderSubtle,
   },
   sectionLabel: {
-    fontSize: 10,
-    letterSpacing: 1.2,
     color: colors.textSecondary,
-    fontFamily: fontsV2.data,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     marginTop: spacing.sm,
     marginBottom: spacing.xs,
   },
@@ -423,7 +422,7 @@ const styles = StyleSheet.create({
   ottIcon: {
     width: 20,
     height: 20,
-    borderRadius: radius.sm,
+    borderRadius: radius.badge,
   },
   rowTitle: {
     fontSize: 14,

@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
   errorButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     backgroundColor: colors.surface,
   },
   errorButtonText: { color: colors.textPrimary, fontWeight: '600' },

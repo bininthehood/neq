@@ -414,7 +414,7 @@ export default function ProfileScreen() {
             우측 값 = 퍼센트. 라벨 폭 좁음(48). */}
         {typeDist.length > 0 && (
           <DistributionChart
-            title="Library · 작품 비중"
+            title="작품 비중"
             rows={typeDist}
             valueMode="percent"
             labelWidth={48}
@@ -426,7 +426,7 @@ export default function ProfileScreen() {
             우측 값 = 작품 수(count). 라벨 폭 넓음(72, OTT 이름 김). */}
         {ottDist.length > 0 && (
           <DistributionChart
-            title="Channels · 자주 모인 OTT"
+            title="자주 보는 OTT"
             rows={ottDist}
             valueMode="count"
             labelWidth={72}
@@ -581,7 +581,7 @@ export default function ProfileScreen() {
             accessibilityLabel="모든 데이터 초기화"
             accessibilityHint="저장한 작품, 시청 기록, 취향이 모두 사라져요"
           >
-            <IconClose size={18} color={colors.danger ?? '#d54e4e'} />
+            <IconClose size={18} color={colors.danger} />
             <View style={styles.resetBody}>
               <Text style={styles.resetTitle}>모든 데이터 초기화</Text>
               <Text style={styles.resetSub}>
@@ -660,11 +660,9 @@ const styles = StyleSheet.create({
   },
   lastSection: { marginBottom: spacing['2xl'] },
   sectionTitle: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     marginBottom: spacing.sm + 4,
   },
   chipRow: {
@@ -676,7 +674,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: 6,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
   },
   chipText: {
     color: colors.textSecondary,
@@ -705,7 +703,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: spacing.md,
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
     ...shadowsNative.sm,
   },
   // 2026-06-15 (build 27 Phase 8 fix) — UX 리뷰 amber #13 정합 (Saved L464 패턴).
@@ -717,7 +715,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.data,
   },
   statValueAccent: {
-    color: colors.limeText,
+    color: colors.aquaText,
   },
   statLabel: {
     color: colors.textMuted,
@@ -748,11 +746,8 @@ const styles = StyleSheet.create({
   },
   monthlyHeader: {
     color: colors.textSecondary,
-    fontSize: 10,
-    fontFamily: fontsV2.data,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     marginBottom: spacing.sm + 4,
   },
   monthlyBars: {
@@ -779,13 +774,11 @@ const styles = StyleSheet.create({
   },
   monthlyMonthLabel: {
     color: colors.textMuted,
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: fontsV2.data,
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
   },
   monthlyMonthLabelCurrent: {
-    color: colors.limeText,
+    color: colors.aquaText,
   },
   monthlyFooter: {
     color: colors.textMuted,
@@ -793,8 +786,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   monthlyFooterAccent: {
-    color: colors.limeText,
-    fontWeight: '600',
+    color: colors.aquaText,
+    fontFamily: fontsV2.bodySemi,
   },
   // 구독 OTT 섹션 (2026-06-15) — onboarding step 9 (`OnboardingStepOTT.tsx`)
   // 의 row 스타일 정합. 헤딩만 sectionTitle 패턴 (uppercase + tracking) 으로 통일.
@@ -860,7 +853,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 4,
     backgroundColor: colors.dangerDim,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
   },
   resetIcon: {
     color: colors.danger,

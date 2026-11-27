@@ -18,7 +18,8 @@ import type { SavedItem } from '../lib/types';
 // @neq/design 재export 이지만, 헤더 3화면이 같은 출처를 보도록 맞춘다.
 import { colors, spacing, radius, fontsV2 } from '../lib/tokens';
 import SearchSheet from '../components/SearchSheet';
-import { IconUser } from '../components/Icons';
+import { IconUser, IconMix } from '../components/Icons';
+import { Button } from '../components/Button';
 import { useSearchTrigger } from '../lib/search-trigger';
 
 /**
@@ -94,8 +95,10 @@ export default function MixScreen() {
 
       {empty ? (
         <View style={styles.emptyContainer}>
+          <IconMix size={48} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>저장작이 아직 없어요</Text>
           <Text style={styles.emptyHint}>작품을 저장하면 테마 큐를 제안해요</Text>
+          <Button label="발견하러 가기" onPress={() => router.navigate('/')} containerStyle={styles.emptyCta} />
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -229,9 +232,8 @@ const styles = StyleSheet.create({
   // 섹션 라벨 — ChapterMark 위계 (amber 는 화면당 1개 규칙이라 전부 secondary).
   sectionTitle: {
     color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.6,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.sm,
   },
@@ -240,7 +242,7 @@ const styles = StyleSheet.create({
   poster: {
     width: 104,
     aspectRatio: 2 / 3,
-    borderRadius: radius.md,
+    borderRadius: radius.thumb,
     backgroundColor: colors.surface,
   },
   posterFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -262,12 +264,12 @@ const styles = StyleSheet.create({
   themeCard: {
     flexBasis: '47%',
     flexGrow: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
   },
   themeImage: {
     width: '100%',
     aspectRatio: 16 / 10,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
     backgroundColor: colors.surface,
   },
   themeImageFallback: { alignItems: 'center', justifyContent: 'center' },
@@ -282,6 +284,8 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: spacing.lg,
   },
-  emptyTitle: { color: colors.textPrimary, fontSize: 15, fontWeight: '500' },
-  emptyHint: { color: colors.textMuted, fontSize: 13 },
+  // DESIGN.md States Empty: 아이콘 48 → 제목 15/600 → 설명 13 → CTA, 최대 폭 260
+  emptyTitle: { color: colors.textPrimary, fontSize: 15, fontFamily: fontsV2.bodySemi, marginTop: spacing.md - 4 },
+  emptyHint: { color: colors.textSecondary, fontSize: 13, textAlign: 'center', maxWidth: 260 },
+  emptyCta: { marginTop: spacing.lg - 4 },
 });

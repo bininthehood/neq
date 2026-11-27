@@ -43,13 +43,13 @@ export function calcTypeDistribution(saved: SavedItem[]): DistributionRow[] {
       label: '영화',
       value: Math.round((movie / total) * 100),
       count: movie,
-      color: colors.catMovie,
+      color: colors.aqua,
     },
     {
       label: '시리즈',
       value: Math.round((series / total) * 100),
       count: series,
-      color: colors.catSeries,
+      color: colors.borderStrong,
     },
   ];
   if (variety > 0) {
@@ -57,7 +57,7 @@ export function calcTypeDistribution(saved: SavedItem[]): DistributionRow[] {
       label: '예능',
       value: Math.round((variety / total) * 100),
       count: variety,
-      color: colors.catVariety,
+      color: colors.textMuted,
     });
   }
   return rows;
@@ -80,7 +80,8 @@ export function calcOTTDistribution(saved: SavedItem[]): DistributionRow[] {
   }
   if (counts.size === 0) return [];
   const max = Math.max(...counts.values());
-  const palette = [colors.lime, '#9B8AE0', '#E08A6C', '#7BA08A', '#5B9BC4'];
+  // Night Pool — 1위만 아쿠아, 나머지는 청록 중성 (보라·코랄 등 팔레트 밖 색 금지)
+  const palette = [colors.aqua];
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
@@ -88,7 +89,7 @@ export function calcOTTDistribution(saved: SavedItem[]): DistributionRow[] {
       label,
       value: Math.round((count / max) * 100),
       count,
-      color: palette[i] ?? colors.textMuted,
+      color: palette[i] ?? colors.borderStrong,
     }));
 }
 

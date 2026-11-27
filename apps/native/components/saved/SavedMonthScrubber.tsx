@@ -293,11 +293,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   yearLabel: {
-    height: 11,
+    height: 12,
     fontFamily: fontsV2.data,
-    fontSize: 9,
-    lineHeight: 11,
-    letterSpacing: 0.7,
+    fontSize: 10, // 숫자 전용 Recursive — anti-slop #8 예외
+    lineHeight: 12,
     color: colors.textSecondary,
   },
   dotRow: {
@@ -327,9 +326,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   monthLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    letterSpacing: -0.2,
+    fontSize: 11,
+    fontFamily: fontsV2.bodySemi,
     color: colors.textSecondary,
   },
   monthLabelLive: {

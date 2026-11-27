@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   // web 의 backdrop-blur + 그라디언트 대신 불투명 surface (의존성 금지).
   overlayRoot: {
     backgroundColor: colors.overlayHeavy,
-    borderRadius: radius.lg,
+    borderRadius: radius.thumb,
     overflow: 'hidden',
   },
   // backdrop — 닫기 전용 투명 레이어. root 면이 색을 담당하므로 투명.
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   reactionBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
     borderWidth: 1,
   },
   reactionLabel: {

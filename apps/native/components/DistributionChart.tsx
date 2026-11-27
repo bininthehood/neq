@@ -7,7 +7,7 @@ import { colors, spacing, fontsV2 } from '../lib/tokens';
  * DistributionChart — Profile 인사이트의 가로 막대 분포 차트.
  *
  * web `apps/web/src/components/profile/InsightSections.tsx` 의
- * "Library · 작품 비중"(typeDist) / "Channels · 자주 모인 OTT"(ottDist)
+ * "작품 비중"(typeDist) / "자주 보는 OTT"(ottDist)
  * 두 섹션이 동일 구조라 재사용 컴포넌트로 통합.
  *
  * web 정본 구조: [라벨] [가로 막대 트랙] [우측 값]
@@ -23,7 +23,7 @@ import { colors, spacing, fontsV2 } from '../lib/tokens';
  */
 
 interface DistributionChartProps {
-  /** 섹션 헤더 — 예: "Library · 작품 비중" */
+  /** 섹션 헤더 — 예: "작품 비중" */
   title: string;
   rows: DistributionRow[];
   /** 우측 값 표기 방식 — 'percent' = `${value}%`, 'count' = count */
@@ -86,11 +86,8 @@ const styles = StyleSheet.create({
   // monthlyHeader 와 완전 동일한 시각 — 인사이트 섹션 헤더 통일.
   distHeader: {
     color: colors.textSecondary,
-    fontSize: 10,
-    fontFamily: fontsV2.data,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
     marginBottom: spacing.sm + 4,
   },
   rows: {
@@ -122,7 +119,7 @@ const styles = StyleSheet.create({
     width: 40,
     textAlign: 'right',
     color: colors.textSecondary,
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: fontsV2.data,
   },
 });
