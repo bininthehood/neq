@@ -8,3 +8,4 @@ export * from './persona';
 export * from './static-survey';
 export * from './fallback-favorites';
 export * from './genres';
+export * from './memo';
