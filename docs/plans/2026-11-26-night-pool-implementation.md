@@ -55,7 +55,7 @@ main ─┬─ PR-S (서버만): hiddenKeys 검증·필터 ──▶ 배포 (앱
 
 **후속 규칙:** 공용 `GlassSurface`·`JellyPressable` 등 Reanimated 를 쓰는 공용 컴포넌트는 처음부터 `useThemeColors()` 를 쓴다. 정적 동적색이 `Animated.*` 에 들어가면 개발 모드에서 빨간 오류 화면으로 바로 드러나지만, `useAnimatedStyle` 반환은 조용히 사라지므로 라이트·다크 스크린샷 E2E(D8 ②)로 잡는다.
 
-### 1. 토큰·폰트 기반 (OTA 가능)
+### 1. 토큰·폰트 기반 (네이티브 빌드 필요 — 폰트 내장)
 - `packages/design/src/tokens.ts`: Night Pool 다크·라이트 팔레트, radius·motion(jelly·sheet) 토큰. 중립 키(`bg`, `surface`, `textPrimary` …)는 이름 유지·값만 교체. **`accent`·`accentDim`·`accentBorder*`·`accentHover`는 삭제**하고 `lime`(채움)·`limeText`(글자)·`aqua`·`aquaText`만 둔다 → 타입 오류로 117곳(94 + 23)을 빠짐없이 용도별 치환(D5).
 - `tokens.css`: 같은 값의 CSS 변수 + `prefers-color-scheme: light` 블록. 웹은 이 단계에서 `tokens-quiet-ink.css`(옛 값 사본)를 가리키게 해 화면 변화 0(X1).
 - **색 전환 층(X4):** 공유 `@neq/design` 에는 순수 값(`palette.dark`·`palette.light`)만 둔다. iOS용 `DynamicColorIOS` 묶음은 네이티브 전용 `apps/native/lib/tokens.ts` 에서 만들어 기존처럼 `colors` 로 내보낸다 → 웹 번들에 RN 의존 없음, 네이티브 호출부 609곳 변경 없음.
@@ -233,3 +233,18 @@ main ─┬─ PR-S (서버만): hiddenKeys 검증·필터 ──▶ 배포 (앱
 **VERDICT:** 계획 확정 — 0단계 스파이크(라이트 변환층·글래스 성능·탭바 4칸) 결과에 따라 3·4단계 세부만 조정. 착수 순서는 PR-S(T1)와 0단계를 병렬로.
 
 NO UNRESOLVED DECISIONS
+
+## 에이전트 결정 기록
+
+2026-11-27 인수 이후 에이전트가 DESIGN.md·이 계획을 기준으로 정한 세부. 한 줄 이유 포함.
+
+| 날짜 | 결정 | 이유 |
+|---|---|---|
+| 2026-11-27 | 1단계는 OTA 불가로 표기 정정 | 폰트를 `expo-font` 플러그인으로 빌드에 내장(D2) → 네이티브 빌드 필요. 출시는 어차피 1.1.0 한 번(결정 2)이라 일정 영향 없음 |
+| 2026-11-27 | 보조 토큰 추가: `borderSubtle` #183539 / 라이트 #CFE3E1, `borderStrong` #335A60 / #98BAB7, `aquaDim`·`aquaBorder`·`limeDim` | 옛 `accent*` 삭제 후 테두리·옅은 채움 용도가 남아 있었음. DESIGN.md 팔레트 사이 값으로 보간 |
+| 2026-11-27 | `info` = aqua, `success` = lime, 라이트 scrim = rgba(15,42,47,…) | 상태색을 새 팔레트 밖에서 늘리지 않음. scrim 은 라이트 글자색 기반이라 회색 얼룩 없음 |
+| 2026-11-27 | 기본 글꼴은 공용 `components/Text.tsx` 래퍼(39파일 전환) + eslint `no-restricted-imports` 로 RN `Text` 직접 import 차단 | 전역 defaultProps 패치보다 명시적이고, lint 가 누락을 빌드 전에 잡음 |
+| 2026-11-27 | motion(jelly·sheet) 은 radius 와 별도 객체로 토큰에 둠 | 2단계 `JellyPressable` 이 바로 가져다 쓰도록. 값은 DESIGN.md 그대로 |
+| 2026-11-27 | 토큰 테스트는 web vitest include 에 추가해 실행 | `packages/design` 에 자체 러너가 없음. 새 러너 대신 기존 CI 경로 재사용 |
+| 2026-11-27 | Reanimated 색 가드 테스트 `apps/native/lib/__tests__/reanimated-colors.test.ts` 추가 | 0단계에서 `useAnimatedStyle` 동적색이 조용히 사라짐을 확인 → 정적 검사로 재발 차단 |
+| 2026-11-27 | 1단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹 611/611, 시뮬(iPhone 17 Pro) 다크·라이트 전환·재실행 크래시 0. 남은 옛 색(온보딩 갈색 글로우·금색 Lottie, 라이트 카드 흐린 글자, 스플래시 #12110E, 상태표시줄 고정)은 2·3단계 범위 |
