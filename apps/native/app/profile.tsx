@@ -477,7 +477,7 @@ export default function ProfileScreen() {
                       backgroundColor: on
                         ? colors.surfaceRaised
                         : colors.surface,
-                      borderColor: on ? colors.lime : colors.border,
+                      borderColor: on ? colors.limeText : colors.border,
                       opacity: isComingSoon ? 0.5 : pressed ? 0.92 : 1,
                     },
                   ]}
@@ -513,7 +513,7 @@ export default function ProfileScreen() {
                         styles.ottCheck,
                         {
                           backgroundColor: on ? colors.lime : 'transparent',
-                          borderColor: on ? colors.lime : colors.border,
+                          borderColor: on ? colors.limeText : colors.border,
                         },
                       ]}
                     >
@@ -685,11 +685,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   chipPlusText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
   },
   empty: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -718,7 +718,7 @@ const styles = StyleSheet.create({
     color: colors.aquaText,
   },
   statLabel: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
     marginTop: 4,
   },
@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
   // 인생작 동시 노출 시 6번째 cluster 차단 (Saved L464 reaction loved 박탈 패턴 정합).
   reactionLoved: { color: colors.textPrimary },
   reactionGood: { color: colors.textSecondary },
-  reactionMeh: { color: colors.textMuted },
+  reactionMeh: { color: colors.textMeta },
   reactionDropped: { color: colors.danger },
   // W5 Task F — 월별 시청 분포 (minimal 막대 차트).
   // web `InsightSections.tsx` 의 borderTop / accent / accentDim 색상 정합.
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   monthlyMonthLabel: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     fontFamily: fontsV2.data,
   },
@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
     color: colors.aquaText,
   },
   monthlyFooter: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ottComingSoon: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     fontWeight: '500',
   },
@@ -879,7 +879,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   infoLabel: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
   },
   infoValue: {
@@ -888,7 +888,7 @@ const styles = StyleSheet.create({
   },
   // TMDB attribution — web profile/page.tsx:198 의 mt-4 pt-3 border-t 정합.
   attribution: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     lineHeight: 16,
     marginTop: spacing.md,

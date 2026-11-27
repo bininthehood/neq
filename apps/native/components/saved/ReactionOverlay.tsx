@@ -15,7 +15,7 @@
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Text } from '../Text';
 import type { WatchReaction } from '../../lib/types';
-import { colors, radius, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, palette, radius, spacing, fontsV2 } from '../../lib/tokens';
 
 /** web SavedList 의 isReporting overlay 버튼 정합 — 라벨/색/배경.
  *  2026-07-10 — export: 리포트 입력이 하단 시트 (saved.tsx) 로 이동하며 옵션 공유.
@@ -45,7 +45,7 @@ export const REACTION_OPTIONS: {
     key: 'meh',
     label: '별로였어',
     bg: colors.surface,
-    color: colors.textMuted,
+    color: colors.textMeta,
     border: colors.border,
   },
   {
@@ -150,11 +150,11 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 14,
     fontFamily: fontsV2.title,
-    color: colors.textPrimary,
+    color: palette.dark.textPrimary, // overlayHeavy 는 두 테마 모두 어두운 잉크
   },
   sub: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: palette.dark.textMeta,
     marginTop: 2,
   },
   btnRow: {

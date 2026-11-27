@@ -43,7 +43,7 @@ export function calcTypeDistribution(saved: SavedItem[]): DistributionRow[] {
       label: '영화',
       value: Math.round((movie / total) * 100),
       count: movie,
-      color: colors.aqua,
+      color: colors.aquaText, // 라이트 흰 트랙 위 3:1 이상 (aqua 는 1.6)
     },
     {
       label: '시리즈',
@@ -81,7 +81,7 @@ export function calcOTTDistribution(saved: SavedItem[]): DistributionRow[] {
   if (counts.size === 0) return [];
   const max = Math.max(...counts.values());
   // Night Pool — 1위만 아쿠아, 나머지는 청록 중성 (보라·코랄 등 팔레트 밖 색 금지)
-  const palette = [colors.aqua];
+  const palette = [colors.aquaText];
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)

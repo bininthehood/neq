@@ -19,7 +19,7 @@ export const REACTION_BADGES: Record<
   // 통일. 사용자가 '괜찮았어' 선택 후 표시 '재밌었어' 로 바뀌어 불일치 보고.
   loved: { label: '인생작', color: colors.textPrimary, bg: colors.limeDim },
   good: { label: '괜찮았어', color: colors.textSecondary, bg: colors.surfaceRaised },
-  meh: { label: '별로였어', color: colors.textMuted, bg: colors.surface },
+  meh: { label: '별로였어', color: colors.textMeta, bg: colors.surface },
   dropped: { label: '안 맞았어', color: colors.danger, bg: colors.dangerDim },
 };
 

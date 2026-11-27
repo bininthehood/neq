@@ -30,7 +30,7 @@ import {
 } from '../lib/store';
 import { fetchGenresForIds } from '../lib/api';
 import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
-import { colors, radius, spacing, fontsV2, shadowsNative, useThemeColors } from '../lib/tokens';
+import { colors, palette, radius, spacing, fontsV2, shadowsNative, useThemeColors } from '../lib/tokens';
 import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import { displayProviders } from '../lib/providers';
@@ -1559,7 +1559,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.aquaText,
   },
   viewFilterLabel: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 13,
     fontFamily: fontsV2.bodySemi,
   },
@@ -1567,7 +1567,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   viewFilterCount: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     // 2026-04-29 fontsV2 — data = Geist Mono. web 카운터 tabular-nums 정합.
     fontFamily: fontsV2.data,
@@ -1690,7 +1690,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   menuTitle: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -1718,7 +1718,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuCancelText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 15,
     fontFamily: fontsV2.bodySemi,
   },
@@ -1765,8 +1765,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.overlayHeavy,
   },
+  // overlayHeavy 는 라이트에서도 어두운 잉크 → 글자는 테마 무관 밝은 값
   labelText: {
-    color: colors.textPrimary,
+    color: palette.dark.textPrimary,
     fontSize: 13,
     fontFamily: fontsV2.bodySemi,
   },
@@ -1777,7 +1778,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   labelRating: {
-    color: colors.textMuted,
+    color: palette.dark.textMeta,
     fontSize: 11,
     fontFamily: fontsV2.data,
   },
@@ -1878,7 +1879,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.data,
   },
   listMeta: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
   },
   listSubRow: {
@@ -1888,7 +1889,7 @@ const styles = StyleSheet.create({
     minHeight: 18,
   },
   listProviders: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
   },
   // 트레일링 reaction 칩 — web ListCard 의 '봤어요?'/'✓' 정합.
@@ -1929,7 +1930,7 @@ const styles = StyleSheet.create({
   },
   statsLabel: {
     fontSize: 13,
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontFamily: fontsV2.bodySemi,
   },
   statsRow: {
@@ -1949,7 +1950,7 @@ const styles = StyleSheet.create({
   },
   statMeh: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textMeta,
   },
   statDropped: {
     fontSize: 12,

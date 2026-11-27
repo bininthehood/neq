@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
     color: colors.aquaText,
   },
   personaFavorites: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
   },
   activeMark: {
@@ -315,11 +315,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   createBtnText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 13,
   },
   maxNotice: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     paddingHorizontal: 4,
     marginTop: spacing.xs,
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: colors.overlay,
   },
   modalCard: {
     width: '100%',

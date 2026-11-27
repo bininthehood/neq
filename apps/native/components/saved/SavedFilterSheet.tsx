@@ -435,12 +435,12 @@ const styles = StyleSheet.create({
   },
   rowCount: {
     fontSize: 11,
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontFamily: fontsV2.data,
   },
   rowDesc: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textMeta,
     marginTop: 2,
   },
   check: {

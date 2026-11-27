@@ -276,7 +276,7 @@ const styles = StyleSheet.create({
   themeImageFallbackText: { color: colors.textMuted, fontSize: 24, fontWeight: '600' },
   rowPressed: { opacity: 0.7 },
   rowTitle: { color: colors.textPrimary, fontSize: 14, fontWeight: '600', marginTop: 8 },
-  rowSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+  rowSubtitle: { color: colors.textMeta, fontSize: 12, marginTop: 2 },
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
