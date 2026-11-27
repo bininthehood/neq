@@ -17,7 +17,7 @@ import { env } from '../../lib/env';
 import { getAccountPrefs } from '../../lib/store';
 import { addSaved, archiveItem } from '../../lib/store';
 import { track } from '../../lib/analytics';
-import { colors, spacing, radius, fontSizePx } from '../../lib/tokens';
+import { colors, spacing, radius, fontSizePx, fontsV2 } from '../../lib/tokens';
 import type { Recommendation } from '../../lib/types';
 
 /**
@@ -476,12 +476,12 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-  title: { color: colors.textPrimary, fontSize: 26, fontWeight: '700', marginBottom: spacing.xs, lineHeight: 32 },
+  title: { color: colors.textPrimary, fontSize: 28, fontFamily: fontsV2.title, letterSpacing: -0.98, marginBottom: spacing.xs, lineHeight: 34 },
   subtitle: { color: colors.textSecondary, fontSize: fontSizePx.sm, lineHeight: 22 },
 
   slots: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.md, marginBottom: spacing.sm, paddingHorizontal: spacing.lg },
   slotFilled: { position: 'relative', width: 56, height: 80 },
-  slotImage: { width: 56, height: 80, borderRadius: radius.sm, backgroundColor: colors.surface },
+  slotImage: { width: 56, height: 80, borderRadius: radius.thumb, backgroundColor: colors.surface },
   slotPlaceholder: { alignItems: 'center', justifyContent: 'center' },
   slotPlaceholderText: { color: colors.textMuted, fontSize: fontSizePx.xs },
   slotRemove: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.danger ?? '#d54e4e',
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
   slotEmpty: {
     width: 56,
     height: 80,
-    borderRadius: radius.sm,
+    borderRadius: radius.thumb,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderStyle: 'dashed',
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radius.full,
     paddingRight: spacing.sm,
   },
   searchInput: {
@@ -539,12 +539,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   searchResultSelected: { backgroundColor: colors.aquaDim, borderColor: colors.aquaText },
-  searchResultImage: { width: 48, height: 72, borderRadius: radius.sm, backgroundColor: colors.surface },
+  searchResultImage: { width: 48, height: 72, borderRadius: radius.badge, backgroundColor: colors.surface },
   searchResultTitle: { color: colors.textPrimary, fontSize: fontSizePx.base, fontWeight: '500' },
   searchResultYear: { color: colors.textMuted, fontSize: fontSizePx.sm, marginTop: 2 },
   checkMark: { color: colors.aquaText, fontSize: 18, marginLeft: 'auto' },
@@ -557,7 +557,7 @@ const styles = StyleSheet.create({
   carouselImageWrap: {
     width: 80,
     height: 112,
-    borderRadius: radius.sm,
+    borderRadius: radius.thumb,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -586,10 +586,10 @@ const styles = StyleSheet.create({
   },
 
   footer: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, paddingTop: spacing.xs, gap: spacing.xs },
-  cta: { paddingVertical: 14, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
+  cta: { paddingVertical: 14, borderRadius: radius.full, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
   ctaActive: { backgroundColor: colors.lime },
   ctaDisabled: { backgroundColor: colors.surface },
-  ctaText: { fontSize: fontSizePx.base, fontWeight: '700' },
+  ctaText: { fontSize: fontSizePx.base, fontFamily: fontsV2.bodySemi },
   ctaTextActive: { color: colors.textInverse },
   ctaTextDisabled: { color: colors.textMuted },
   skip: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },

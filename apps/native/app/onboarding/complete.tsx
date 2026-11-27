@@ -203,9 +203,9 @@ export default function OnboardingCompleteScreen() {
         >
           {/* Orbit + glow 컨테이너 — 포스터의 절대 배치 anchor */}
           <View style={styles.orbitArea}>
-            {/* 중앙 amber pulse halo */}
+            {/* 중앙 아쿠아 pulse halo (Night Pool — 대기는 길 안내 색) */}
             <Animated.View
-              style={[styles.glow, { backgroundColor: t.limeDim, shadowColor: t.lime }, pulseStyle]}
+              style={[styles.glow, { backgroundColor: t.aquaDim, shadowColor: t.aqua }, pulseStyle]}
               importantForAccessibility="no"
             />
             {/* 5장 포스터 orbit */}
@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 64,
     height: 96,
-    borderRadius: 6,
+    borderRadius: 8,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOpacity: 0.25,
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
     textAlign: 'center',
-    letterSpacing: -0.4,
+    letterSpacing: -0.66,
     marginTop: spacing.xl,
     marginBottom: spacing.md - 4,
   },

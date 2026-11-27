@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { View, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image, useColorScheme } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { colors } from '../../lib/tokens';
@@ -8,7 +8,7 @@ import { colors } from '../../lib/tokens';
  * neq, 흡수 인트로 (NeqAbsorptionIntro) — 4차 라운드 (정본 Lottie)
  *
  * Onboarding Welcome 화면 진입 시 1회 재생되는 브랜드 흡수 모션.
- * 정본 자산: `assets/lottie/neq-absorption.lottie.json` (After Effects export, 300×133, 60fps, 78 frames ≈ 1.3s).
+ * 정본 자산: `assets/lottie/neq-absorption.{dark,light}.lottie.json` (After Effects export, 300×133, 60fps, 78 frames ≈ 1.3s).
  *
  * 이전 라운드 (자체 Reanimated 키프레임) 의 디테일 차이 — easing, breath peak, overshoot,
  * letter stagger 정확도 — 를 정본 Lottie JSON 그대로 재생해 해결.
@@ -42,15 +42,19 @@ interface Props {
   startDelayMs?: number;
 }
 
-// 정본 Lottie 자산 (After Effects export).
-// 확장자 `.lottie.json` 끝이 `.json` 이라 Metro bundler 가 JSON 으로 처리 가능.
-const absorption = require('../../assets/lottie/neq-absorption.lottie.json');
+// 정본 Lottie 자산 (After Effects export) — 이미지 레이어라 colorFilters 로는 못 바꾼다.
+// Night Pool 아쿠아로 레이어 PNG 를 재색칠한 다크(#58DCCB)·라이트(#007B72) 두 벌 (2026-11-27).
+const ABSORPTION = {
+  dark: require('../../assets/lottie/neq-absorption.dark.lottie.json'),
+  light: require('../../assets/lottie/neq-absorption.light.lottie.json'),
+};
 
 // reduced motion 폴백용 정적 wordmark.
 const STATIC_WORDMARK = require('../../assets/neq-logo.png');
 
 export default function NeqAbsorptionIntro({ onComplete, width, height, startDelayMs = 0 }: Props) {
   const reduced = useReducedMotion();
+  const scheme = useColorScheme();
   const lottieRef = useRef<LottieView>(null);
 
   useEffect(() => {
@@ -90,7 +94,7 @@ export default function NeqAbsorptionIntro({ onComplete, width, height, startDel
     >
       <LottieView
         ref={lottieRef}
-        source={absorption}
+        source={ABSORPTION[scheme === 'light' ? 'light' : 'dark']}
         // startDelayMs > 0 면 autoPlay 끄고 useEffect 의 setTimeout 으로 수동 play.
         // 0 일 때는 기존 동작 (mount 직후 즉시 호흡) 유지.
         autoPlay={startDelayMs === 0}

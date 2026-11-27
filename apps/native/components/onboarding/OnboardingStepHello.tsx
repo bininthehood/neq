@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Text, TextInput } from '../Text';
-import { colors, spacing, fontSizePx, fontsV2 } from '../../lib/tokens';
+import { colors, spacing, fontSizePx, fontsV2, radius } from '../../lib/tokens';
 import { setUserNickname } from '../../lib/user-prefs';
 
 /**
@@ -42,7 +42,7 @@ export default function OnboardingStepHello({ onNext, initialName = '' }: Props)
             { borderColor: hasValue ? colors.aquaBorder : colors.border },
           ]}
         >
-          <Text style={styles.inputLabel}>NAME · 이름</Text>
+          <Text style={styles.inputLabel}>이름</Text>
           <TextInput
             value={name}
             onChangeText={setName}
@@ -97,9 +97,9 @@ const styles = StyleSheet.create({
   heading: {
     color: colors.textPrimary,
     fontFamily: fontsV2.title,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.98,
     marginBottom: spacing.sm + 2,
   },
   subtitle: {
@@ -117,10 +117,8 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontFamily: fontsV2.bodySemi,
-    fontSize: 9,
-    color: colors.textMuted,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
+    fontSize: 13,
+    color: colors.textSecondary,
     marginBottom: 4,
   },
   input: {
@@ -151,11 +149,11 @@ const styles = StyleSheet.create({
   cta: {
     width: '100%',
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
   ctaPressed: { opacity: 0.85 },
-  ctaLabel: { fontSize: 14, fontWeight: '600' },
+  ctaLabel: { fontSize: 15, fontFamily: fontsV2.bodySemi },
   skipBtn: { alignItems: 'center', paddingVertical: 12 },
-  skipLabel: { color: colors.textSecondary, fontSize: 12 },
+  skipLabel: { color: colors.textSecondary, fontSize: 13 },
 });

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../Text';
 import type { SurveyOption, SurveyStepOutput } from '@neq/core';
-import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2, radius } from '../../lib/tokens';
 
 /**
  * Persona v2 - LLM 분기 질문 한 단계 (native).
@@ -46,7 +46,7 @@ export default function TasteSurveyStep({
         </View>
 
         {output.axisHint ? (
-          <Text style={styles.axisHint}>{output.axisHint.toUpperCase()}</Text>
+          <Text style={styles.axisHint}>{output.axisHint}</Text>
         ) : (
           <View style={styles.axisHintSpacer} />
         )}
@@ -165,22 +165,20 @@ const styles = StyleSheet.create({
     flex: 1,
     color: colors.textPrimary,
     fontFamily: fontsV2.title,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.98,
   },
   progress: {
     color: colors.textMuted,
     fontFamily: fontsV2.data,
     fontSize: 11,
-    letterSpacing: 0.5,
     marginTop: 8,
   },
   axisHint: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontFamily: fontsV2.bodySemi,
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 13,
     marginBottom: spacing.xl,
   },
   axisHintSpacer: { marginBottom: spacing.xl },
@@ -225,8 +223,8 @@ const styles = StyleSheet.create({
   cta: {
     width: '100%',
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
-  ctaLabel: { fontSize: 14, fontWeight: '600' },
+  ctaLabel: { fontSize: 15, fontFamily: fontsV2.bodySemi },
 });

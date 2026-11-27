@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   buttonIdle: {
     backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: 'rgba(196, 163, 90, 0.25)', // --accent-border
+    borderColor: colors.aquaBorder,
   },
   buttonDone: {
     backgroundColor: colors.surface,

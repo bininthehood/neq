@@ -1,7 +1,7 @@
 import { useRef, useCallback } from 'react';
-import { View, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, Image } from 'react-native';
+import { View, StyleSheet, useWindowDimensions, Animated, Easing } from 'react-native';
 import { Text } from '../Text';
-import Svg, { Defs, RadialGradient as SvgRadialGradient, Stop, Rect } from 'react-native-svg';
+import { Button } from '../Button';
 import { colors, spacing, fontsV2 } from '../../lib/tokens';
 import { WORDMARK_ASPECT_RATIO } from './data';
 import NeqAbsorptionIntro from './NeqAbsorptionIntro';
@@ -10,34 +10,15 @@ interface Props {
   onNext: () => void;
 }
 
-// 2026-06-01 4차 라운드 (b1b0d5a) — Lottie 정본 + Vignette amber glow + splash 자연 연결
-// 2026-06-02 4-1차 — 4차 라운드 미해결 2건 close:
-//   (1) splash 자산은 b1b0d5a 시점에 이미 콤마 단독 PNG (1024×1024, #12110E bg) 로 교체
-//       완료. 시뮬레이터에 보이던 이전 자산은 native ios/ storyboard 재생성 미실행
-//       (`prebuild --clean`) 때문. 자산 교체 불필요, native 동기화만 필요.
-//   (2) 메인 카피 — 워드마크 직하단에 PNG 이미지 자산 '당신의 취향을 발견하세요'.
-//       BRAND-EXTRAS-SPEC.md B (OG) 의 메인 카피 정합. Warm Vignette + Lottie +
-//       footer "CURATED · NEQ," + CTA 는 b1b0d5a 그대로 유지 (롤백 금지).
-//       fade-in 은 footer/CTA 와 같은 contentOpacity 에 묶여 Lottie 흡수 완료 후
-//       한 묶음 등장.
-//   왜 이미지: 한글 italic Serif 폰트가 시스템/Google Fonts 양쪽 가용성 매우 낮고,
-//   iOS RN 의 fontStyle:'italic' + 한글 fallback 폰트 (Apple SD Gothic Neo,
-//   italic variant 없음) 조합에서 syn-italic 신호 무시되는 케이스 다수 — Fraunces
-//   Italic 등록 + skewX transform 시도 모두 사용자 검수 통과 실패.
-// 2026-06-02 4-2차 — heading 자산 정본 시각 정합 (디자인 팀 산출물 교체):
-//   이전 자산 (AppleSDGothicNeo + shear 10°, 271×26) 의 폰트 family / 사이즈 /
-//   letter-forms 가 정본 spec 과 어긋남:
-//     - 폰트: sans-serif Gothic → serif (정본 fontsV2.displayItalic =
-//       InstrumentSerif_400Regular_Italic). Latin 정본은 Instrument Serif Italic,
-//       한글은 동등 Korean serif italic 매칭.
-//     - letter-spacing -0.02em, color #EDEDEF, transparent bg.
-//   교체 자산 (assets/welcome-heading{,@2x,@3x}.png): @1x 146×15 / @2x 292×30
-//   / @3x 438×45, 단일 라인 serif italic, PNG-32 alpha 보존.
-//   RN Image 가 디바이스 scale 자동 선택.
+// 2026-11-27 Night Pool — Quiet Ink 잔재 정리:
+//   - 갈색 vignette + 앰버 glow SVG 제거 → 평평한 bg (DESIGN.md 워드마크: 글로우·그라디언트 금지).
+//   - Lottie 워드마크는 아쿠아 재색칠본 (NeqAbsorptionIntro).
+//   - 세리프 이탤릭 heading PNG → SUIT 900 텍스트 (세리프는 워드마크에만).
+//   - 영문 푸터 "CURATED · NEQ," 제거 (영문 마케팅 카피 금지).
 
 export default function OnboardingStepWelcome({ onNext }: Props) {
   // useWindowDimensions — 회전/멀티태스킹 대응. 모듈 레벨 Dimensions.get 대신 hook 사용.
-  const { width: SCREEN_W, height: SCREEN_H } = useWindowDimensions();
+  const { width: SCREEN_W } = useWindowDimensions();
   const LOGO_WIDTH = SCREEN_W * 0.6;
   const LOGO_HEIGHT = LOGO_WIDTH / WORDMARK_ASPECT_RATIO;
 
@@ -56,50 +37,6 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
 
   return (
     <View style={styles.wrap}>
-      {/* Warm Vignette 배경 — splash 톤 정합 (BRAND-EXTRAS-SPEC.md A).
-          base : radial-gradient(120% 90% at 50% 38%, #1c1813, #12110E 56%, #0c0b09)
-          glow : amber #C4A35A 0.18 → 0 (워드마크 발산 효과)
-          2 레이어 합성 = splash 자산과 같은 따뜻한 emission.
-          정적 svg, worklet 0, leaf 추가만. */}
-      <Svg
-        width={SCREEN_W}
-        height={SCREEN_H}
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents="none"
-      >
-        <Defs>
-          <SvgRadialGradient
-            id="welcomeVignette"
-            cx={SCREEN_W * 0.5}
-            cy={SCREEN_H * 0.38}
-            rx={SCREEN_W * 1.2}
-            ry={SCREEN_H * 0.9}
-            gradientUnits="userSpaceOnUse"
-          >
-            <Stop offset="0" stopColor="#1c1813" />
-            <Stop offset="0.56" stopColor="#12110E" />
-            <Stop offset="1" stopColor="#0c0b09" />
-          </SvgRadialGradient>
-          {/* amber glow — 워드마크 뒤에서 발산. cy 는 base 와 동일 (0.38) 로
-              splash 의 focal point 유지. 반경은 작게 잡아 화면 전체가 amber 로
-              물들지 않고 중앙에 집중되도록 한다. anti-slop: 네온/오버글로우 회피. */}
-          <SvgRadialGradient
-            id="welcomeAmberGlow"
-            cx={SCREEN_W * 0.5}
-            cy={SCREEN_H * 0.38}
-            rx={SCREEN_W * 0.55}
-            ry={SCREEN_W * 0.55}
-            gradientUnits="userSpaceOnUse"
-          >
-            <Stop offset="0" stopColor="#C4A35A" stopOpacity="0.18" />
-            <Stop offset="0.6" stopColor="#C4A35A" stopOpacity="0.04" />
-            <Stop offset="1" stopColor="#C4A35A" stopOpacity="0" />
-          </SvgRadialGradient>
-        </Defs>
-        <Rect width={SCREEN_W} height={SCREEN_H} fill="url(#welcomeVignette)" />
-        <Rect width={SCREEN_W} height={SCREEN_H} fill="url(#welcomeAmberGlow)" />
-      </Svg>
-
       <View style={styles.body}>
         {/* 2026-06-01 NeqAbsorptionIntro — 4차 라운드 정본 Lottie.
             assets/lottie/neq-absorption.lottie.json (After Effects export, 300×133, 60fps, 78f ≈ 1.3s).
@@ -122,35 +59,20 @@ export default function OnboardingStepWelcome({ onNext }: Props) {
           />
         </View>
 
-        {/* 2026-06-02 4-2차 — 워드마크 직하단 PNG 자산 (디자인 팀 정본 산출물).
-            assets/welcome-heading.png (@2x/@3x 세트) — Instrument Serif Italic 인상
-            (한글은 동등 Korean serif italic) + #EDEDEF transparent, 단일 라인.
-            RN Image 가 디바이스 scale 자동 선택.
-            contentOpacity 그룹에 묶여 흡수 완료(~1.3s) + 400ms fade-in. */}
-        <Animated.Image
-          source={require('../../assets/welcome-heading.png')}
-          style={[styles.heading, { opacity: contentOpacity }]}
-          resizeMode="contain"
-          accessibilityLabel="당신의 취향을 발견하세요"
-        />
+        <Animated.View style={{ opacity: contentOpacity }}>
+          <Text style={styles.heading}>당신의 취향을 발견하세요</Text>
+        </Animated.View>
       </View>
 
-      {/* splash 자산 푸터 정합 — Geist Mono uppercase + letter-spacing. */}
-      <Animated.View style={[styles.footer, { opacity: contentOpacity }]} pointerEvents="none">
-        <Text style={styles.footerText}>CURATED · NEQ,</Text>
-      </Animated.View>
-
       <Animated.View style={[styles.ctaWrap, { opacity: contentOpacity }]}>
-        <Pressable onPress={onNext} style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}>
-          <Text style={styles.ctaLabel}>시작하기</Text>
-        </Pressable>
+        <Button label="시작하기" variant="primary" onPress={onNext} />
       </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1 },
+  wrap: { flex: 1, backgroundColor: colors.bg },
   // body — 화면 정중앙 정렬. 워드마크 + heading 한 묶음 수직 center.
   body: {
     flex: 1,
@@ -163,44 +85,18 @@ const styles = StyleSheet.create({
   logoBox: {
     marginBottom: 14,
   },
-  // heading — PNG 이미지 자산 박스 (welcome-heading.png).
-  // @1x 146×15 / @2x 292×30 / @3x 438×45. logical size = 146×15 (단일 라인).
-  // resizeMode 'contain' + width/height 명시로 자동 scale-down 시 비율 보존.
+  // 한글 제목 SUIT 900 + 음수 자간 (DESIGN.md Typography 시그니처)
   heading: {
-    width: 146,
-    height: 15,
-  },
-  // splash 자산 푸터 — 화면 하단 (CTA 위) Geist Mono uppercase + letter-spacing.
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 96,
-    alignItems: 'center',
-  },
-  footerText: {
-    color: colors.textMuted,
-    fontFamily: fontsV2.data,
-    fontSize: 11,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+    fontFamily: fontsV2.title,
+    fontSize: 22,
+    lineHeight: 29,
+    letterSpacing: -0.66,
+    color: colors.textPrimary,
+    textAlign: 'center',
   },
   ctaWrap: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     paddingTop: spacing.sm + 4,
-  },
-  cta: {
-    width: '100%',
-    paddingVertical: 15,
-    borderRadius: 10,
-    backgroundColor: colors.lime,
-    alignItems: 'center',
-  },
-  ctaPressed: { opacity: 0.85 },
-  ctaLabel: {
-    color: colors.textInverse,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

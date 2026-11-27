@@ -523,7 +523,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontFamily: fontsV2.data,
     fontSize: 11,
-    letterSpacing: 0.5,
     minWidth: 36,
     textAlign: 'right',
   },

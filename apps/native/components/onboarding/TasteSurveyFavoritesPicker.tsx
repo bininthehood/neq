@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Text, TextInput } from '../Text';
-import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2, radius } from '../../lib/tokens';
 import { env } from '../../lib/env';
 import { getTrendingCached } from '../../lib/data-prefetch';
 import { FALLBACK_FAVORITES } from '@neq/core';
@@ -367,9 +367,9 @@ const styles = StyleSheet.create({
   heading: {
     color: colors.textPrimary,
     fontFamily: fontsV2.title,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.98,
     marginBottom: spacing.sm,
   },
   subtitle: {
@@ -411,8 +411,8 @@ const styles = StyleSheet.create({
   },
   removeBadgeText: {
     color: colors.textPrimary,
-    fontSize: 10,
-    lineHeight: 12,
+    fontSize: 11,
+    lineHeight: 13,
   },
   posterPlaceholder: {
     alignItems: 'center',
@@ -567,10 +567,10 @@ const styles = StyleSheet.create({
   cta: {
     width: '100%',
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
-  ctaLabel: { fontSize: 14, fontWeight: '600' },
+  ctaLabel: { fontSize: 15, fontFamily: fontsV2.bodySemi },
   // 2026-05-27 (sub-bug c) — 다른 onboarding step skip 패턴 정합. border 제거 + 텍스트만.
   skipBtn: {
     width: '100%',

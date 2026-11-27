@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Text } from '../Text';
 import type { PersonaContext } from '@neq/core';
-import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2, radius } from '../../lib/tokens';
 
 /**
  * Persona v2 - 컨텍스트 선택 (native).
@@ -182,9 +182,9 @@ const styles = StyleSheet.create({
   heading: {
     color: colors.textPrimary,
     fontFamily: fontsV2.title,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.98,
     marginBottom: spacing.sm + 2,
   },
   subtitle: {
@@ -228,9 +228,9 @@ const styles = StyleSheet.create({
   cta: {
     width: '100%',
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
   ctaPressed: { opacity: 0.85 },
-  ctaLabel: { fontSize: 14, fontWeight: '600' },
+  ctaLabel: { fontSize: 15, fontFamily: fontsV2.bodySemi },
 });

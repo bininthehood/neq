@@ -153,7 +153,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 11,
     fontFamily: fontsV2.data,
-    letterSpacing: 0.5,
     minWidth: 32,
     textAlign: 'right',
   },

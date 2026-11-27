@@ -23,6 +23,7 @@
 
 import type { ReactNode } from "react";
 import { View, type ViewStyle } from "react-native";
+import { colors } from "../lib/tokens";
 import Svg, {
   Circle,
   Ellipse,
@@ -64,12 +65,15 @@ export interface IllustProps {
 // Color tokens — web Illust.tsx와 동일 hex
 // ─────────────────────────────────────────────────────
 
-export const ILLUST_AMBER = "#C4A35A";
-export const ILLUST_AMBER_DIM = "rgba(196,163,90,0.20)";
-export const ILLUST_INK = "#6B6C75";
-export const ILLUST_STROKE = "#3A3833";
-export const ILLUST_PAPER = "#24231E";
-export const ILLUST_BG = "#12110E";
+// Night Pool (2026-11-27): Quiet Ink 앰버·웜 그레이 → 청록 중성 + 아쿠아 강조.
+// react-native-svg 는 DynamicColorIOS 를 받으므로(0단계) 테마 연동 colors 를 그대로 쓴다.
+// 이름(AMBER 등)은 호출부 diff 를 줄이려 유지 — 값은 aqua.
+export const ILLUST_AMBER = colors.aquaText;
+export const ILLUST_AMBER_DIM = colors.aquaDim;
+export const ILLUST_INK = colors.textMuted;
+export const ILLUST_STROKE = colors.border;
+export const ILLUST_PAPER = colors.surfaceRaised;
+export const ILLUST_BG = colors.bg;
 
 // ─────────────────────────────────────────────────────
 // Pure logic — web과 동기화

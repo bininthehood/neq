@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     // 03_p1-1#1: 약한 pill 백판 — surface 70% (dim 위 가독성 확보).
-    backgroundColor: 'rgba(26, 25, 22, 0.7)',
+    backgroundColor: colors.overlay,
   },
   skipText: {
     // 03_p1-1#1: dataReg(Geist Mono — 한글 폴백 깨짐) → fontsV2.body
@@ -316,12 +316,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepNumber: {
-    // 03_p1-1#5: textMuted → accent (amber). web tut-step-label 정합.
-    // transient overlay 카운트 제외 정책 (DESIGN L34) — amber 안전.
     color: colors.aquaText,
-    fontSize: 11,
-    fontFamily: fontsV2.data,
-    letterSpacing: 1.5,
+    fontSize: 12,
+    fontFamily: fontsV2.dataMedium,
   },
   bodyWrap: {
     // 2026-06-04 통합: 풀사이즈 데모 카드 대응. Demo 컴포넌트가 자체 absoluteFill 로

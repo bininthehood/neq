@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    borderRadius: radius.xl,
+    borderRadius: radius.card,
     overflow: 'hidden',
     // 반투명 — 실제 SwipeCard 와 시각 정합 100% 이라 사용자가 가이드 카드를 실제 카드로
     // 착각 (첫 step 인지 실패 → 무의식 swipe 후 두 번째 step 만 인지). overlay 톤 (0.7)

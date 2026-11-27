@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../Text';
 import type { SurveySummaryOutput } from '@neq/core';
-import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2, radius } from '../../lib/tokens';
 
 /**
  * Persona v2 - 통합 요약 preview (native).
@@ -45,7 +45,7 @@ export default function TasteSummaryPreview({
                   },
                 ]}
               >
-                <Text style={styles.axisName}>{axis.name.toUpperCase()}</Text>
+                <Text style={styles.axisName}>{axis.name}</Text>
                 <Text style={styles.axisValue}>{axis.value}</Text>
               </View>
             ))}
@@ -91,9 +91,9 @@ const styles = StyleSheet.create({
   heading: {
     color: colors.textPrimary,
     fontFamily: fontsV2.title,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.98,
     marginBottom: spacing.sm,
   },
   subtitle: {
@@ -126,10 +126,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm + 4,
   },
   axisName: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontFamily: fontsV2.bodySemi,
-    fontSize: 11,
-    letterSpacing: 1,
+    fontSize: 13,
     minWidth: 96,
   },
   axisValue: {
@@ -147,7 +146,7 @@ const styles = StyleSheet.create({
   acceptCta: {
     width: '100%',
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
     backgroundColor: colors.lime,
   },

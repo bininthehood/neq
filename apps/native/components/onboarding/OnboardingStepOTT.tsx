@@ -8,7 +8,7 @@ import {
 import { Text } from '../Text';
 import { Image } from 'expo-image';
 import { getOTTIcon } from '@neq/core';
-import { colors, spacing, fontSizePx, fontsV2 } from '../../lib/tokens';
+import { colors, spacing, fontSizePx, fontsV2, radius } from '../../lib/tokens';
 import { setSubscribedOtt } from '../../lib/store';
 import { OTT_OPTIONS } from './data';
 import { IconCheck } from '../Icons';
@@ -174,9 +174,9 @@ const styles = StyleSheet.create({
   heading: {
     color: colors.textPrimary,
     fontFamily: fontsV2.title,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.4,
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: -0.98,
     marginBottom: spacing.sm + 2,
   },
   subtitle: {
@@ -245,10 +245,10 @@ const styles = StyleSheet.create({
   cta: {
     width: '100%',
     paddingVertical: 15,
-    borderRadius: 10,
+    borderRadius: radius.full,
     alignItems: 'center',
   },
-  ctaLabel: { fontSize: 14, fontWeight: '600' },
+  ctaLabel: { fontSize: 15, fontFamily: fontsV2.bodySemi },
   skipBtn: { alignItems: 'center', paddingVertical: 12 },
-  skipLabel: { color: colors.textSecondary, fontSize: 12 },
+  skipLabel: { color: colors.textSecondary, fontSize: 13 },
 });
