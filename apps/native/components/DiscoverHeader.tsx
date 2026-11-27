@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   logo: {
-    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
+    tintColor: colors.wordmark, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     height: WORDMARK_HEIGHT,
     width: WORDMARK_HEIGHT * WORDMARK_ASPECT_RATIO,
   },
@@ -385,13 +385,13 @@ const styles = StyleSheet.create({
   },
   addOptionLabel: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.textMeta,
   },
   maxNotice: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     fontSize: 11,
-    color: colors.textMuted,
+    color: colors.textMeta,
   },
 });
 

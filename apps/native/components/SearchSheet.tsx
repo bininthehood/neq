@@ -1129,7 +1129,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
-  hint: { color: colors.textMuted, fontSize: 14 },
+  hint: { color: colors.textMeta, fontSize: 14 },
   // 2026-05-29 — IdleContent (Recent + Trending) 스타일. PWA D10b 정합.
   idleScroll: { flex: 1 },
   idleContent: { paddingBottom: spacing.md },
@@ -1167,7 +1167,7 @@ const styles = StyleSheet.create({
     paddingRight: 6,
     paddingVertical: 6,
   },
-  recentChipMark: { color: colors.textMuted, fontSize: 12 },
+  recentChipMark: { color: colors.textMeta, fontSize: 12 },
   recentChipText: { color: colors.textPrimary, fontSize: 13, fontFamily: fontsV2.bodySemi },
   recentChipRemove: {
     paddingLeft: 4,
@@ -1251,7 +1251,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.bodySemi,
   },
   sectionCount: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     fontFamily: fontsV2.data,
   },
@@ -1280,7 +1280,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   workPosterFallbackText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
     textAlign: 'center',
   },
@@ -1293,7 +1293,7 @@ const styles = StyleSheet.create({
   workMeta: {
     // anti-slop #8 정합 (web a3bbf94, SearchResults.tsx:330) — 한글 메타 ("시리즈 · 2024 · 평점")
     // uppercase tracking 부적합 → 10→11 상향 (DESIGN.md L?? 일반 폰트 최소 11px).
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     marginTop: 2,
     fontFamily: fontsV2.data,
@@ -1332,7 +1332,7 @@ const styles = StyleSheet.create({
   personKnownFor: {
     // anti-slop #8 정합 (web a3bbf94, SearchResults.tsx:456) — known-for 텍스트 (배우 대표작 한글).
     // uppercase tracking 부적합 → 10→11 상향.
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     marginTop: 2,
     textAlign: 'center',
@@ -1363,7 +1363,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   personWorksErrorText: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 13,
   },
   // 2026-05-29 — 3열 그리드 (PWA `grid grid-cols-3 gap-2.5` 정합).

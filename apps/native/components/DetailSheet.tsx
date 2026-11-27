@@ -32,6 +32,7 @@ import Animated, {
   withTiming,
   cancelAnimation,
   runOnJS,
+  useAnimatedReaction,
   Easing,
   interpolate,
   Extrapolation,
@@ -46,8 +47,9 @@ import type {
 import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
 import { ArrivalProbe } from './ArrivalProbe';
+import { StatusBar } from 'expo-status-bar';
 import { fontsV2, easings, durations } from '@neq/design';
-import { colors, radius, spacing, shadowsNative, useThemeColors } from '../lib/tokens';
+import { colors, palette, radius, spacing, shadowsNative, useThemeColors } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env, isArrivalProbeEnabled } from '../lib/env';
 import { isSaved, toggleSaved } from '../lib/store';
@@ -143,6 +145,15 @@ export default function DetailSheet({
       scrollY.value = e.contentOffset.y;
     },
   });
+  // 상태표시줄 — 포스터 히어로 위에서는 밝은 글자(라이트 모드에서도 포스터는 어두움),
+  // 히어로를 지나 본문(bg) 위로 올라가면 시스템 밝기 따름.
+  const [overHero, setOverHero] = useState(true);
+  useAnimatedReaction(
+    () => scrollY.value < HERO_HEIGHT - 80,
+    (now, prev) => {
+      if (now !== prev) runOnJS(setOverHero)(now);
+    },
+  );
 
   // 2026-06-15 (build 27) — DetailSheet history navigation.
   //
@@ -1244,6 +1255,7 @@ export default function DetailSheet({
       onRequestClose={closeAnimated}
       statusBarTranslucent
     >
+      {visible && <StatusBar style={overHero ? 'light' : 'auto'} />}
       {ContainerView}
     </Modal>
   );
@@ -1857,7 +1869,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(4,20,24,0.55)',
   },
   typePillText: {
-    color: colors.textPrimary,
+    color: palette.dark.textPrimary, // 어두운 받침 — 테마 무관 밝은 글자
     fontSize: 12,
     fontFamily: fontsV2.bodySemi,
   },
@@ -1871,7 +1883,7 @@ const styles = StyleSheet.create({
   },
   // C3 — titleEn Fraunces italic 15 별행
   titleEn: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 14,
     fontFamily: fontsV2.en,
     letterSpacing: 0.28,
@@ -1879,7 +1891,7 @@ const styles = StyleSheet.create({
   },
   // C3 — meta GeistMono 11 + 국가 포함
   meta: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 12,
     fontFamily: fontsV2.data,
     marginTop: 8,
@@ -1944,7 +1956,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.bodySemi,
   },
   castRole: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     marginTop: 2,
     textAlign: 'center',
@@ -1982,7 +1994,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.bodySemi,
   },
   noProviders: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 14,
     paddingVertical: spacing.sm,
   },
@@ -2187,7 +2199,7 @@ const styles = StyleSheet.create({
   relatedFallbackEyebrow: {
     fontFamily: fontsV2.data,
     fontSize: 10, // 영문 전용 Recursive — anti-slop #8 예외
-    color: colors.textMuted,
+    color: colors.textMeta,
     textAlign: 'center',
   },
   relatedTitle: {
@@ -2197,7 +2209,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.bodySemi,
   },
   relatedYear: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     marginTop: 2,
     fontFamily: fontsV2.data,
@@ -2267,7 +2279,7 @@ const styles = StyleSheet.create({
   },
   // year 는 11px 유지 (anti-slop #8 마지노선). Geist Mono / textMuted 약 위계.
   subScreenItemYear: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 11,
     fontFamily: fontsV2.data,
     marginTop: 2,

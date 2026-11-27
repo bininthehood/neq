@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   buttonTextDone: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 14,
     fontWeight: '500',
   },

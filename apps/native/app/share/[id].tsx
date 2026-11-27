@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
   },
-  errorText: { color: colors.textMuted, fontSize: fontSizePx.base },
+  errorText: { color: colors.textMeta, fontSize: fontSizePx.base },
   errorButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

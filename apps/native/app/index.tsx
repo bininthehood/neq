@@ -2481,7 +2481,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
-  loadingText: { color: colors.textMuted, fontSize: 14, marginTop: spacing.sm },
+  loadingText: { color: colors.textMeta, fontSize: 14, marginTop: spacing.sm },
   // 2026-06-06 (P1 종료 화면 DESIGN.md 정합) — DESIGN.md §Empty State (230~241):
   //   center 정렬 / 아이콘 48px text-muted / 아이콘→제목 gap space-md(16) /
   //   제목 text-base(15) 500 text-primary / 설명 text-sm(13) 400 text-muted /
@@ -2507,7 +2507,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyHint: {
-    color: colors.textMuted,
+    color: colors.textMeta,
     fontSize: 13,        // text-sm
     fontWeight: '400',
     textAlign: 'center',
