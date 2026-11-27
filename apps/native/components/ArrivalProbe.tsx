@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from './Text';
 import type { Recommendation } from '../lib/types';
 import { track } from '../lib/analytics';
 import { fetchForeignAvailability } from '../lib/api';

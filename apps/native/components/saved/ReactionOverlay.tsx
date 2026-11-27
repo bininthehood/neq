@@ -12,7 +12,8 @@
  * REACTION_OPTIONS 는 SavedReactionCard 의 배지 라벨과 공유 (ReactionLabel).
  */
 
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../Text';
 import type { WatchReaction } from '../../lib/types';
 import { colors, radius, spacing, fontsV2 } from '../../lib/tokens';
 
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     fontSize: 14,
-    fontFamily: fontsV2.display,
+    fontFamily: fontsV2.title,
     color: colors.textPrimary,
   },
   sub: {

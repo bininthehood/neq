@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Text } from '../Text';
 import type { PersonaContext } from '@neq/core';
-import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
 
 /**
  * Persona v2 - 컨텍스트 선택 (native).
@@ -180,8 +181,7 @@ const styles = StyleSheet.create({
   // 기존 xl+8 (40) 은 다른 step 보다 8px 더 떨어져 있어 어색했음.
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,

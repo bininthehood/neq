@@ -22,13 +22,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ScrollView,
   Pressable,
-  Text,
   View,
   StyleSheet,
   useWindowDimensions,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
+import { Text } from '../Text';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { SavedItem } from '../../lib/types';
 import { colors, spacing, fontsV2, useThemeColors } from '../../lib/tokens';

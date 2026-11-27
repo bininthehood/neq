@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Modal,
   Pressable,
@@ -11,6 +10,7 @@ import {
   Share,
   ActivityIndicator,
 } from 'react-native';
+import { Text } from './Text';
 import { Image } from 'expo-image';
 import { prefetchPosters } from '../lib/image-prefetch';
 import { getRelatedCached, putRelatedCache } from '../lib/data-prefetch';
@@ -46,7 +46,7 @@ import type {
 import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
 import { ArrivalProbe } from './ArrivalProbe';
-import { fonts, fontsV2, easings, durations } from '@neq/design';
+import { fontsV2, easings, durations } from '@neq/design';
 import { colors, radius, spacing, shadowsNative, useThemeColors } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env, isArrivalProbeEnabled } from '../lib/env';
@@ -1863,7 +1863,7 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 28,
-    fontFamily: fontsV2.display,
+    fontFamily: fontsV2.title,
     lineHeight: 32,
     letterSpacing: -0.56, // -0.02em on 28
   },
@@ -1871,8 +1871,7 @@ const styles = StyleSheet.create({
   titleEn: {
     color: colors.textMuted,
     fontSize: 15,
-    fontFamily: fontsV2.displayItalic,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.en,
     letterSpacing: -0.15,
     marginTop: 4,
   },
@@ -1899,8 +1898,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 13,
     lineHeight: 19,
-    fontFamily: fontsV2.displayItalic,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.body,
   },
   // 위임 O #1.1 — Cast row 가로 스크롤. PR2 hero 풀폭이라 left 22 으로 직접 indent.
   castSection: {
@@ -1933,7 +1931,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 22,
     // Italic 변형 (web 정본 OS-mediated italic 과 일치)
-    fontFamily: fontsV2.displayItalic,
+    fontFamily: fontsV2.title,
     lineHeight: 22,
   },
   castName: {
@@ -1949,7 +1947,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
     textAlign: 'center',
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.body,
   },
   section: {
     marginTop: spacing.md + 4,
@@ -2184,9 +2182,8 @@ const styles = StyleSheet.create({
   // 제목 — Instrument Serif italic, text-base(16), weight 500,
   // letterSpacing -0.02em(≈-0.32), lineHeight 1.05(≈17). web PosterFallback 정합.
   relatedFallbackTitle: {
-    fontFamily: fontsV2.displayItalic,
+    fontFamily: fontsV2.bodyHeavy,
     fontSize: 16,
-    fontWeight: '500',
     letterSpacing: -0.32,
     lineHeight: 17,
     color: colors.textPrimary,
@@ -2211,7 +2208,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 10,
     marginTop: 2,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.data,
   },
   // 2026-06-15 (build 27 fix iter2) — RelatedRow 더보기 카드 (dashed) 폐기.
   // 사유: 사용자 결정 — 스크롤 끝까지 가야 접근하는 UX 회피, iOS 표준 "See All"
@@ -2280,7 +2277,7 @@ const styles = StyleSheet.create({
   subScreenItemYear: {
     color: colors.textMuted,
     fontSize: 11,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.data,
     marginTop: 2,
   },
   // 2026-06-15 (build 27 iter3) — person-works sub-screen 의 loading/error/empty 상태.

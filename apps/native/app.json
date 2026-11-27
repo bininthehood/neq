@@ -68,7 +68,20 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/SUIT-Regular.ttf",
+            "./assets/fonts/SUIT-SemiBold.ttf",
+            "./assets/fonts/SUIT-ExtraBold.ttf",
+            "./assets/fonts/SUIT-Heavy.ttf",
+            "./assets/fonts/Unbounded-Bold.ttf",
+            "./assets/fonts/RecursiveMonoLnrSt-Regular.ttf",
+            "./assets/fonts/RecursiveMonoLnrSt-Med.ttf"
+          ]
+        }
+      ],
       "expo-secure-store"
     ],
     "locales": {

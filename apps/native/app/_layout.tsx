@@ -3,31 +3,10 @@ import { Tabs, router, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, Pressable } from 'react-native';
+import { View, Pressable } from 'react-native';
+import { Text } from '../components/Text';
 import * as SplashScreen from 'expo-splash-screen';
 import { hasOnboarded } from '../lib/store';
-import {
-  useFonts,
-  Fraunces_400Regular,
-  Fraunces_400Regular_Italic,
-  Fraunces_700Bold,
-} from '@expo-google-fonts/fraunces';
-import {
-  Outfit_400Regular,
-  Outfit_600SemiBold,
-} from '@expo-google-fonts/outfit';
-// 2026-05-18 Fix B — fontsV2 native 적용. web (next/font Instrument Serif + Geist Mono) 정합.
-// 단 SwipeCard 의 영화/시리즈 + 별점 라벨 (fonts.data) 은 현 디자인 유지 (사용자 요청).
-// Pretendard Variable 은 Expo Google Fonts 미존재 — 시스템 폰트 fallback (iOS San Francisco
-// 가 한글/영문 본문 가독성 우수). 후속 작업에서 expo-font 로 직접 로드 검토.
-import {
-  InstrumentSerif_400Regular,
-  InstrumentSerif_400Regular_Italic,
-} from '@expo-google-fonts/instrument-serif';
-import {
-  GeistMono_400Regular,
-  GeistMono_500Medium,
-} from '@expo-google-fonts/geist-mono';
 import { colors } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
@@ -102,37 +81,13 @@ function ActiveTabBarButton(props: any) {
 export default function RootLayout() {
   useSync();
 
-  // useFonts 호출은 유지 — 폰트 자체는 background 로드 후 swap. 반환값은
-  // 더 이상 mount gate 에 사용하지 않는다 (2026-05-28 mount race fix).
-  useFonts({
-    // 기존 Fraunces/Outfit — SwipeCard 의 영화/시리즈 + 별점 라벨 (fonts.data) 유지용
-    Fraunces_400Regular,
-    // 2026-06-02 — Fraunces_400Regular_Italic 등록.
-    // OnboardingStepWelcome 의 메인 카피 '당신의 취향을 발견하세요' 가 디자인 정본
-    // (neko-onboarding.jsx StepWelcome heading: `fontFamily: 'Fraunces, serif',
-    // fontStyle: 'italic'`) 정합을 위해 추가. 한글은 iOS 시스템 fallback (Apple
-    // SD Gothic Neo) + fontStyle:'italic' 자동 syn-italic skew.
-    Fraunces_400Regular_Italic,
-    Fraunces_700Bold,
-    Outfit_400Regular,
-    Outfit_600SemiBold,
-    // fontsV2 (web 정합) — display + data 신규
-    InstrumentSerif_400Regular,
-    InstrumentSerif_400Regular_Italic,
-    GeistMono_400Regular,
-    GeistMono_500Medium,
-  });
+  // Night Pool 폰트(SUIT·Unbounded·Recursive)는 app.json expo-font 플러그인으로 빌드에 내장 —
+  // 실행 즉시 등록돼 있어 런타임 useFonts·로딩 게이트가 없다 (2026-05 mount race 이력, 계획 D2).
 
   // 2026-05-28 mount race fix (build 9 회귀):
   // splash dismiss 는 더 이상 `fontsLoaded` 를 기다리지 않는다. root mount 직후
   // 즉시 hide → Tabs/헤더가 첫 frame 에 a11y tree 에 노출되어 E2E 의 5s 폴 안에
   // 잡힌다 (build 9: 4 regression + hybrid + persona 6 케이스 mount race FAIL 원인).
-  //
-  // 폰트는 background 에서 계속 로드. RN 의 Text 는 미정의 fontFamily 자동 fallback
-  // (iOS = San Francisco, Android = Roboto). Instrument Serif / Geist Mono / Fraunces
-  // / Outfit 은 도착 시 swap → 사용자가 인지하는 변화는 카드 메타 글꼴이 첫 100~300ms
-  // 동안 시스템 폰트로 표시 후 디자인 폰트로 전환 (FOUT 패턴). 모바일 cold start 의
-  // 일반적인 폰트 swap 정책 정합.
   //
   // 이전 구조: `if (!fontsLoaded && !fontError) return <View />` 가 PostHogProvider
   // → PersonaProvider → Tabs 전체 mount 를 차단. 폰트 8개 디코드/등록이 Hermes init
@@ -165,9 +120,7 @@ export default function RootLayout() {
 
   // 2026-05-28 mount race fix — `if (!fontsLoaded) return <View />` 게이트 제거.
   // 위 useEffect 주석 참조. Tabs 즉시 mount → 첫 frame a11y tree 노출 보장.
-  // (FOUT 잠깐 — 폰트는 background 에서 swap. layout shift 우려보다 mount race
-  // 해소 우선. 폰트 swap 시점 shift 도 RN Text 는 자체 measure 캐시로 1 frame 후
-  // 정합 → 시각 영향 최소.)
+  // 2026-11-27 — 폰트 빌드 내장으로 FOUT 자체가 없다. 게이트를 다시 만들지 말 것.
 
   return (
     <PostHogProvider>

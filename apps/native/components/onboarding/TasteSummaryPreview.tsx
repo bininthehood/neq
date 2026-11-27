@@ -1,6 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../Text';
 import type { SurveySummaryOutput } from '@neq/core';
-import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
 
 /**
  * Persona v2 - 통합 요약 preview (native).
@@ -89,8 +90,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,
@@ -112,8 +112,7 @@ const styles = StyleSheet.create({
   },
   quote: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.body,
     fontSize: 17,
     lineHeight: 27,
     letterSpacing: -0.2,
@@ -128,7 +127,7 @@ const styles = StyleSheet.create({
   },
   axisName: {
     color: colors.textMuted,
-    fontFamily: fonts.dataReg,
+    fontFamily: fontsV2.bodySemi,
     fontSize: 11,
     letterSpacing: 1,
     minWidth: 96,

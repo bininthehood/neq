@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Pressable,
   FlatList,
@@ -9,6 +8,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
+import { Text } from '../components/Text';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
@@ -1489,10 +1489,9 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 28,
-    fontWeight: '500',
     letterSpacing: -0.7,
     lineHeight: 36,
-    fontFamily: fontsV2.display,
+    fontFamily: fontsV2.en,
   },
   // viewMode segmented 컨테이너 + 버튼 (3-way grid/list/preview).
   segmented: {
@@ -1640,7 +1639,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontFamily: fontsV2.display,
+    fontFamily: fontsV2.title,
   },
   emptyHint: {
     color: colors.textMuted,

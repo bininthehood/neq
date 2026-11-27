@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text } from '../../components/Text';
 import { router, useLocalSearchParams, Stack } from 'expo-router';
 import type { Recommendation } from '../../lib/types';
 import { env } from '../../lib/env';

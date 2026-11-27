@@ -27,9 +27,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'; // useCallback 활용 (WorkCard)
 import {
   View,
-  Text,
   StyleSheet,
-  TextInput,
   FlatList,
   Pressable,
   Keyboard,
@@ -37,6 +35,7 @@ import {
   Dimensions,
   ScrollView,
 } from 'react-native';
+import { Text, TextInput, type TextInputHandle } from './Text';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector, type NativeGesture } from 'react-native-gesture-handler';
 import Animated, {
@@ -73,7 +72,7 @@ import {
 import { colors, radius, spacing, useThemeColors } from '../lib/tokens';
 import { IconClose } from './Icons';
 import ApertureBreathLoader from './feedback/ApertureBreathLoader';
-import { fonts, easings } from '@neq/design';
+import { easings, fontsV2 } from '@neq/design';
 import { Illust } from './Illust';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -137,7 +136,7 @@ export default function SearchSheet({
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<TextInputHandle>(null);
   const translateY = useSharedValue(SHEET_MAX_HEIGHT);
 
   // Reanimated 4 Fabric crash 메모리 정합 (feedback_reanimated_fabric_crash) —
@@ -1208,7 +1207,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: colors.textPrimary,
     fontSize: 18,
-    fontFamily: fonts.display,
+    fontFamily: fontsV2.title,
     textAlign: 'center',
   },
   emptyHint: {
@@ -1249,14 +1248,14 @@ const styles = StyleSheet.create({
   sectionLabel: {
     color: colors.aquaText,
     fontSize: 11,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.bodySemi,
     textTransform: 'uppercase',
     letterSpacing: 1.6,
   },
   sectionCount: {
     color: colors.textMuted,
     fontSize: 11,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.data,
   },
 
   // carousel content
@@ -1321,7 +1320,7 @@ const styles = StyleSheet.create({
   personAvatarFallback: {
     color: colors.aquaText,
     fontSize: 24,
-    fontFamily: fonts.display,
+    fontFamily: fontsV2.title,
   },
   personName: {
     color: colors.textPrimary,

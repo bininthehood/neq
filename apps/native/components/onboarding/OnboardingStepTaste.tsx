@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   Pressable,
   StyleSheet,
   ScrollView,
 } from 'react-native';
-import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
+import { Text } from '../Text';
+import { colors, spacing, fontSizePx, fontsV2 } from '../../lib/tokens';
 import { setTasteGenres } from '../../lib/store';
 import { GENRE_CHIPS, type GenreChip } from './data';
 
@@ -144,8 +144,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,
@@ -158,7 +157,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   counter: {
-    fontFamily: fonts.dataReg,
+    fontFamily: fontsV2.data,
     fontSize: 11,
     letterSpacing: 0.5,
   },

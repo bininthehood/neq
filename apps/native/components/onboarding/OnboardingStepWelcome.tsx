@@ -1,5 +1,6 @@
 import { useRef, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, Image } from 'react-native';
+import { View, Pressable, StyleSheet, useWindowDimensions, Animated, Easing, Image } from 'react-native';
+import { Text } from '../Text';
 import Svg, { Defs, RadialGradient as SvgRadialGradient, Stop, Rect } from 'react-native-svg';
 import { colors, spacing, fontsV2 } from '../../lib/tokens';
 import { WORDMARK_ASPECT_RATIO } from './data';

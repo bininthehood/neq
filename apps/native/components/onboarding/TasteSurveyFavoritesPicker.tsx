@@ -5,11 +5,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
-import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
+import { Text, TextInput } from '../Text';
+import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
 import { env } from '../../lib/env';
 import { getTrendingCached } from '../../lib/data-prefetch';
 import { FALLBACK_FAVORITES } from '@neq/core';
@@ -367,8 +366,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,

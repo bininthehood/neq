@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions } from 'react-native';
+import { Text } from './Text';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 // 2026-06-10 (Phase C #3) — BlurView 제거. CatChip/RatingChip 가 `--bg-overlay` solid 면으로 회귀.
@@ -387,7 +388,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   fallbackText: {
-    fontFamily: fontsV2.display, // PosterFallback: font-display 'N' (web parts.tsx)
+    fontFamily: fontsV2.en,
     color: colors.textMuted,
     fontSize: 48,
   },
@@ -433,8 +434,7 @@ const styles = StyleSheet.create({
   },
   // year · titleEn — Instrument Serif italic, text-sm(13), accent, letterSpacing 0.02em
   subTitle: {
-    fontFamily: fontsV2.displayItalic,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.bodySemi,
     fontSize: 13,
     color: colors.aqua, // 포스터 그라디언트 위 — 테마 무관 원색
     letterSpacing: 0.26,

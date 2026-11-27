@@ -1,13 +1,13 @@
 import { useRef, useState } from 'react';
 import {
   View,
-  Text,
   Pressable,
   StyleSheet,
   ScrollView,
   Modal,
   Alert,
 } from 'react-native';
+import { Text } from './Text';
 import {
   TYPE_LABELS,
   ORIGIN_LABELS,

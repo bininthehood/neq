@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '../../components/Text';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, Stack } from 'expo-router';
@@ -14,7 +15,7 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { colors, spacing, fonts, fontSizePx, easings, useThemeColors } from '../../lib/tokens';
+import { colors, spacing, fontSizePx, easings, useThemeColors, fontsV2 } from '../../lib/tokens';
 import { track } from '../../lib/analytics';
 import { getActivePersona } from '../../lib/store';
 import type { FavoriteMeta } from '../../lib/types';
@@ -273,8 +274,7 @@ const styles = StyleSheet.create({
   },
   title: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 22,
     lineHeight: 28,
     textAlign: 'center',

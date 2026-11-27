@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from './Text';
 import type { DistributionRow } from '../lib/profile-stats';
 import { colors, spacing, fontsV2 } from '../lib/tokens';
 

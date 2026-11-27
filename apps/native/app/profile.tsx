@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   ScrollView,
   Pressable,
   Alert,
 } from 'react-native';
+import { Text } from '../components/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import Animated, {
@@ -642,10 +642,9 @@ const styles = StyleSheet.create({
   title: {
     color: colors.textPrimary,
     fontSize: 28,
-    fontWeight: '500',
     letterSpacing: -0.7,
     lineHeight: 36,
-    fontFamily: fontsV2.display,
+    fontFamily: fontsV2.en,
   },
   searchBtn: {
     width: 44,

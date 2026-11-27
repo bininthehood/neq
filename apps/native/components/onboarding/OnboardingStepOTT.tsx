@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import {
   View,
-  Text,
   Pressable,
   StyleSheet,
   ScrollView,
 } from 'react-native';
+import { Text } from '../Text';
 import { Image } from 'expo-image';
 import { getOTTIcon } from '@neq/core';
-import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
+import { colors, spacing, fontSizePx, fontsV2 } from '../../lib/tokens';
 import { setSubscribedOtt } from '../../lib/store';
 import { OTT_OPTIONS } from './data';
 import { IconCheck } from '../Icons';
@@ -173,8 +173,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,

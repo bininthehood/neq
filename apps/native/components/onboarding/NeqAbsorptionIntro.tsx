@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { View, StyleSheet, Image } from 'react-native';
 import LottieView from 'lottie-react-native';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { colors } from '../../lib/tokens';
 
 /**
  * neq, 흡수 인트로 (NeqAbsorptionIntro) — 4차 라운드 (정본 Lottie)
@@ -109,6 +110,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fallback: {
+    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     width: '100%',
     height: '100%',
   },

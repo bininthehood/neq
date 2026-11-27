@@ -5,7 +5,8 @@
  * Saved 카드(grid/list)에서 reaction 이 기록된 작품의 라벨 배지로 사용.
  */
 
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Text } from '../Text';
 import type { WatchReaction } from '../../lib/types';
 import { colors, radius } from '../../lib/tokens';
 

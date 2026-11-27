@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   Pressable,
-  TextInput,
   StyleSheet,
   ActivityIndicator,
   FlatList,
 } from 'react-native';
+import { Text, TextInput, type TextInputHandle } from '../Text';
 import { Image } from 'expo-image';
 import { prefetchPosters } from '../../lib/image-prefetch';
 import { GENRE_CHIPS, type GenreChip } from './data';
@@ -68,7 +67,7 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
   const [results, setResults] = useState<SearchItem[]>([]);
   const [searching, setSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<TextInputHandle>(null);
 
   // mount: 직전 Genre 단계의 tasteGenres 슬러그 로드 + 장르별 추천 fetch
   useEffect(() => {

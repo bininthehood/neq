@@ -23,12 +23,12 @@ import { useCallback, useEffect } from 'react';
 import {
   Modal,
   View,
-  Text,
   Pressable,
   ScrollView,
   StyleSheet,
   Dimensions,
 } from 'react-native';
+import { Text } from '../Text';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
-    fontFamily: fontsV2.display,
+    fontFamily: fontsV2.title,
     color: colors.textPrimary,
   },
   headerActions: {

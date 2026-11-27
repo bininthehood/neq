@@ -5,9 +5,9 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
+import { Text } from './Text';
 import Svg, { Path, Polyline } from 'react-native-svg';
 import type { Persona } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
@@ -278,6 +278,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   logo: {
+    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     height: WORDMARK_HEIGHT,
     width: WORDMARK_HEIGHT * WORDMARK_ASPECT_RATIO,
   },

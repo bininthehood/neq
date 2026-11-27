@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   Pressable,
   Dimensions,
   Share,
   type LayoutRectangle,
 } from 'react-native';
+import { Text } from '../components/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -2445,8 +2445,7 @@ const styles = StyleSheet.create({
   mixBarTitle: {
     color: colors.textPrimary,
     fontSize: 17,
-    fontFamily: fontsV2.display,
-    fontWeight: '500',
+    fontFamily: fontsV2.title,
     letterSpacing: -0.34,
   },
   // 진행 카운트 — 데이터 위계 (Geist Mono, textMuted).

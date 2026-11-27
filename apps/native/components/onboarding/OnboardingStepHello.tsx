@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { colors, spacing, fonts, fontSizePx } from '../../lib/tokens';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { Text, TextInput } from '../Text';
+import { colors, spacing, fontSizePx, fontsV2 } from '../../lib/tokens';
 import { setUserNickname } from '../../lib/user-prefs';
 
 /**
@@ -95,8 +96,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   inputLabel: {
-    fontFamily: fonts.dataReg,
+    fontFamily: fontsV2.bodySemi,
     fontSize: 9,
     color: colors.textMuted,
     letterSpacing: 1,
@@ -138,8 +138,7 @@ const styles = StyleSheet.create({
   },
   previewText: {
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.body,
     fontSize: 14,
     lineHeight: 21,
   },

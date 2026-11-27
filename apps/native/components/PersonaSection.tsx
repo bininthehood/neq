@@ -4,13 +4,12 @@ import {
   Modal,
   Pressable,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
+import { Text, TextInput } from './Text';
 import type { Persona } from '../lib/types';
 import { colors, radius, spacing } from '../lib/tokens';
-import { fonts } from '@neq/design';
+import { fontsV2 } from '@neq/design';
 import { IconClose } from './Icons';
 
 /**
@@ -348,8 +347,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     color: colors.textPrimary,
     fontSize: 17,
-    fontFamily: fonts.display,
-    fontWeight: '700',
+    fontFamily: fontsV2.title,
     marginBottom: spacing.xs,
   },
   modalDesc: {

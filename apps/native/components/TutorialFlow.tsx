@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, type LayoutRectangle } from 'react-native';
+import { View, Pressable, StyleSheet, type LayoutRectangle } from 'react-native';
+import { Text } from './Text';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -14,7 +15,7 @@ import SwipeRightDemo from './tutorial/SwipeRightDemo';
 import SwipeDownDemo from './tutorial/SwipeDownDemo';
 import TapDemo from './tutorial/TapDemo';
 import { colors, spacing, radius, useThemeColors } from '../lib/tokens';
-import { easings, durations, fonts, fontsV2 } from '@neq/design';
+import { easings, durations, fontsV2 } from '@neq/design';
 
 /**
  * TutorialFlow v3 — Discover 첫 진입 4단계 튜토리얼 (native).
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     // transient overlay 카운트 제외 정책 (DESIGN L34) — amber 안전.
     color: colors.aquaText,
     fontSize: 11,
-    fontFamily: fonts.data,
+    fontFamily: fontsV2.data,
     letterSpacing: 1.5,
   },
   bodyWrap: {

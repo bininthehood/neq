@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { View, Text, StyleSheet, type LayoutRectangle } from 'react-native';
+import { View, StyleSheet, type LayoutRectangle } from 'react-native';
+import { Text } from '../Text';
 import {
   useSharedValue,
   withRepeat,

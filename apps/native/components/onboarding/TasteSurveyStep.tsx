@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '../Text';
 import type { SurveyOption, SurveyStepOutput } from '@neq/core';
-import { colors, fonts, fontSizePx, spacing } from '../../lib/tokens';
+import { colors, fontSizePx, spacing, fontsV2 } from '../../lib/tokens';
 
 /**
  * Persona v2 - LLM 분기 질문 한 단계 (native).
@@ -163,22 +164,21 @@ const styles = StyleSheet.create({
   heading: {
     flex: 1,
     color: colors.textPrimary,
-    fontFamily: fonts.displayReg,
-    fontStyle: 'italic',
+    fontFamily: fontsV2.title,
     fontSize: 26,
     lineHeight: 32,
     letterSpacing: -0.4,
   },
   progress: {
     color: colors.textMuted,
-    fontFamily: fonts.dataReg,
+    fontFamily: fontsV2.data,
     fontSize: 11,
     letterSpacing: 0.5,
     marginTop: 8,
   },
   axisHint: {
     color: colors.textMuted,
-    fontFamily: fonts.dataReg,
+    fontFamily: fontsV2.bodySemi,
     fontSize: 11,
     letterSpacing: 1,
     marginBottom: spacing.xl,

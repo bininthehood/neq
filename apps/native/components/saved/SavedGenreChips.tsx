@@ -14,7 +14,8 @@
  * viewFilter underline + filter dot 과 동시 노출 시 amber 초과 방지. 칩 pattern(pill
  * + border)은 유지, selected 강조만 non-amber. 새 비주얼 토큰 도입 없음.
  */
-import { Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Text } from '../Text';
 import { getGenreLabels } from '@neq/core';
 import type { SavedItem } from '../../lib/types';
 import { colors, radius, spacing } from '../../lib/tokens';

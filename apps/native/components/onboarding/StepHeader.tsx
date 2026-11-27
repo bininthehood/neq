@@ -1,11 +1,12 @@
-import { View, Text, Pressable, Image, StyleSheet } from 'react-native';
+import { View, Pressable, Image, StyleSheet } from 'react-native';
+import { Text } from '../Text';
 import Animated, {
   useAnimatedStyle,
   useDerivedValue,
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { colors, spacing, durations, easings, fonts, useThemeColors } from '../../lib/tokens';
+import { colors, spacing, durations, easings, useThemeColors, fontsV2 } from '../../lib/tokens';
 import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 
 /**
@@ -144,13 +145,14 @@ const styles = StyleSheet.create({
   },
   // web 정본 StepHeader `<img className="h-5">` (20px) 매핑.
   logo: {
+    tintColor: colors.aquaText, // 워드마크 = 아쿠아 (DESIGN.md Brand — 단색 알파 PNG 재색칠)
     height: 20,
     width: 20 * WORDMARK_ASPECT_RATIO,
   },
   counter: {
     color: colors.textMuted,
     fontSize: 11,
-    fontFamily: fonts.dataReg,
+    fontFamily: fontsV2.data,
     letterSpacing: 0.5,
     minWidth: 32,
     textAlign: 'right',
