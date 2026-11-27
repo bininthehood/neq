@@ -13,6 +13,14 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  waitVisibleCardId,
+  swipeFeed,
+  swipeTab,
+  isCardSaved,
+  selectedTab,
+  dismissSavePromptIfAny,
+} from './_helpers';
 
 const SHOT_DIR = path.resolve(__dirname, 'screenshots');
 
@@ -103,44 +111,6 @@ async function closeTopSheetByXButton(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-async function swipe(direction: 'left' | 'right' | 'up' | 'down', strength = 0.6) {
-  const { width, height } = await browser.getWindowSize();
-  let startX = width * 0.5;
-  let startY = height * 0.5;
-  let endX = startX;
-  let endY = startY;
-
-  if (direction === 'left') {
-    startX = width * 0.8;
-    endX = width * (0.8 - strength);
-  } else if (direction === 'right') {
-    startX = width * 0.2;
-    endX = width * (0.2 + strength);
-  } else if (direction === 'up') {
-    startY = height * 0.8;
-    endY = height * (0.8 - strength);
-  } else if (direction === 'down') {
-    startY = height * 0.3;
-    endY = height * (0.3 + strength);
-  }
-
-  await browser.performActions([
-    {
-      type: 'pointer',
-      id: 'finger1',
-      parameters: { pointerType: 'touch' },
-      actions: [
-        { type: 'pointerMove', duration: 0, x: startX, y: startY },
-        { type: 'pointerDown', button: 0 },
-        { type: 'pause', duration: 100 },
-        { type: 'pointerMove', duration: 300, x: endX, y: endY },
-        { type: 'pointerUp', button: 0 },
-      ],
-    },
-  ]);
-  await browser.releaseActions();
 }
 
 // ──────────────────────────────────────────────────────────
@@ -440,22 +410,67 @@ describe('P0 — 최근 변경 회귀 (ce94e02 + 0499bb3 revert)', () => {
 // P1 — 핵심 사용자 플로우
 // ──────────────────────────────────────────────────────────
 describe('P1 — 핵심 사용자 플로우', () => {
-  it('Discover — 좌 스와이프 (Pass) 카드 전환', async () => {
-    await capture('p1-01-before-left');
-    await swipe('left');
-    await browser.pause(700);
-    await capture('p1-02-after-left');
+  // 2026-11-27 — 1.1.0 숏폼식 조작: 위 = 다음, 아래 = 이전, 더블탭 = 저장, 좌우 = 탭 이동.
+  // (옛 "좌 = Pass / 우 = Save" 케이스는 이제 탭 이동이라 오류 없음만 보고 통과하던 거짓 통과였음)
+  it('Discover — 위로 넘기기 → 다음 작품, 아래로 → 같은 작품 복귀', async () => {
+    await dismissSavePromptIfAny();
+    await capture('p1-01-before-up');
+    const a = await waitVisibleCardId();
+    await swipeFeed('up');
+    await browser.pause(800);
+    const b = await waitVisibleCardId();
+    await capture('p1-02-after-up');
+    expect(b).not.toBe(a);
+    await swipeFeed('down');
+    await browser.pause(800);
+    expect(await waitVisibleCardId()).toBe(a);
     const { hasError } = await pageSourceHasError();
     expect(hasError).toBe(false);
   });
 
-  it('Discover — 우 스와이프 (Save) 동작', async () => {
-    await capture('p1-03-before-right');
-    await swipe('right');
-    await browser.pause(700);
-    await capture('p1-04-after-right');
-    const { hasError } = await pageSourceHasError();
-    expect(hasError).toBe(false);
+  it('Discover — 더블탭 = 저장, 카드 제자리, 두 번째 더블탭은 저장 취소 안 됨', async () => {
+    // 아직 저장 안 된 카드까지 넘김 (시뮬 저장소에 이전 실행 저장분이 남을 수 있음)
+    for (let i = 0; i < 6 && (await isCardSaved()); i++) {
+      await swipeFeed('up');
+      await browser.pause(800);
+    }
+    expect(await isCardSaved()).toBe(false);
+    const id = await waitVisibleCardId();
+    const { width, height } = await browser.getWindowSize();
+    await browser.execute('mobile: doubleTap', { x: Math.round(width * 0.5), y: Math.round(height * 0.55) });
+    await browser.pause(1200);
+    await capture('p1-03-after-double-tap');
+    await dismissSavePromptIfAny(); // 신규(A안) 첫 저장이면 OTT 시트
+    expect(await isCardSaved()).toBe(true);
+    expect(await waitVisibleCardId()).toBe(id);
+    await browser.execute('mobile: doubleTap', { x: Math.round(width * 0.5), y: Math.round(height * 0.55) });
+    await browser.pause(1000);
+    expect(await isCardSaved()).toBe(true);
+    // 저장 취소는 버튼 — 다음 실행을 위해 원상복구
+    expect(await tapByLabel('저장 해제')).toBe(true);
+    await browser.pause(600);
+    expect(await isCardSaved()).toBe(false);
+  });
+
+  it('좌우 스와이프 = 탭 이동 (발견 → 큐 → 저장 → 큐 → 발견)', async () => {
+    expect(await selectedTab()).toBe('발견');
+    await swipeTab('left');
+    await browser.pause(1000);
+    expect(await selectedTab()).toBe('큐');
+    await swipeTab('left');
+    await browser.pause(1000);
+    expect(await selectedTab()).toBe('저장');
+    // 저장이 끝 — 더 밀어도 그대로 (프로필은 순서에 없음)
+    await swipeTab('left');
+    await browser.pause(1000);
+    expect(await selectedTab()).toBe('저장');
+    await swipeTab('right');
+    await browser.pause(1000);
+    expect(await selectedTab()).toBe('큐');
+    await swipeTab('right');
+    await browser.pause(1000);
+    expect(await selectedTab()).toBe('발견');
+    await capture('p1-04-tab-swipe-back');
   });
 
   it('Discover — 카드 탭 → DetailSheet 진입', async () => {
@@ -541,12 +556,16 @@ describe('P1 — 핵심 사용자 플로우', () => {
 // P2 — 엣지/시각
 // ──────────────────────────────────────────────────────────
 describe('P2 — 엣지/시각', () => {
-  it('연속 스와이프 4회 — 스택 안정성', async () => {
-    for (let i = 0; i < 4; i++) {
-      await swipe(i % 2 === 0 ? 'left' : 'right');
-      await browser.pause(500);
+  it('연속 넘김 4회 — 피드 안정성 (위 3 · 아래 1)', async () => {
+    const start = await waitVisibleCardId();
+    for (const d of ['up', 'up', 'up', 'down'] as const) {
+      await swipeFeed(d, { duration: 0.2 });
+      await browser.pause(350);
     }
+    await browser.pause(600);
     await capture('p2-01-after-4-swipes');
+    expect(await waitVisibleCardId()).not.toBe(start);
+    expect(await selectedTab()).toBe('발견');
     const { hasError } = await pageSourceHasError();
     expect(hasError).toBe(false);
   });

@@ -22,6 +22,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { ensureOnboardedOrSkip, tapTab, visibleCardId, waitVisibleCardId, dismissSavePromptIfAny } from './_helpers';
 
 const SHOT_DIR = path.resolve(__dirname, 'screenshots');
 
@@ -51,11 +52,13 @@ async function isElementVisible(label: string): Promise<boolean> {
   }
 }
 
-async function performSwipeLeft(): Promise<void> {
+// 1.1.0 숏폼식 조작 — 다음 작품 = 위로 밀기. 2026-11-27 전까지는 가로였는데, 가로는 이제 탭 이동이라
+// 로딩 화면이 원래 안 뜨는 "거짓 통과" 가 된다 → 세로로 바꾸고 실제로 카드가 넘어갔는지도 확인.
+async function performSwipeUp(): Promise<void> {
   const { width, height } = await browser.getWindowSize();
-  const startX = width * 0.7;
-  const endX = width * 0.1;
-  const y = height * 0.5;
+  const x = width * 0.5;
+  const startY = height * 0.7;
+  const endY = height * 0.4;
 
   await browser.performActions([
     {
@@ -63,10 +66,10 @@ async function performSwipeLeft(): Promise<void> {
       id: 'finger1',
       parameters: { pointerType: 'touch' },
       actions: [
-        { type: 'pointerMove', duration: 0, x: startX, y },
+        { type: 'pointerMove', duration: 0, x, y: startY },
         { type: 'pointerDown', button: 0 },
         { type: 'pause', duration: 50 },
-        { type: 'pointerMove', duration: 200, x: endX, y },
+        { type: 'pointerMove', duration: 200, x, y: endY },
         { type: 'pointerUp', button: 0 },
       ],
     },
@@ -76,17 +79,22 @@ async function performSwipeLeft(): Promise<void> {
 
 describe('Neko — P2 swipe loading 버그 fix 회귀 (2026-06-18)', () => {
   before(async () => {
+    await ensureOnboardedOrSkip();
+    await dismissSavePromptIfAny();
+    await tapTab('발견');
     // Discover 화면이 fully ready 까지 대기.
     await browser.pause(3000);
   });
 
-  it('T1 — 빠른 연속 swipe 5회 동안 loading 화면 노출 0회 (auto_hard_refresh 폐기 확인)', async () => {
+  it('T1 — 빠른 연속 위 넘김 5회 동안 loading 화면 노출 0회 (auto_hard_refresh 폐기 확인)', async () => {
     await capture('p2-loading-T1-00-baseline');
+    const firstCard = await waitVisibleCardId();
+    const seen = new Set<string>([firstCard]);
 
     let loadingExposureCount = 0;
 
     for (let i = 0; i < 5; i += 1) {
-      await performSwipeLeft();
+      await performSwipeUp();
       // 옛 분기: swipe → triggerPrefetch → cooldown 4 tier fail → auto_hard_refresh → load() → setState('loading').
       // 본 분기 폐기 후에는 swipe 직후 ~수 초 내내 loading 라벨이 나타나면 안 된다.
       // 100ms × 6 = 600ms 윈도우로 sampling — emit 직후 frame 부터 ready 복귀까지 충분.
@@ -101,7 +109,12 @@ describe('Neko — P2 swipe loading 버그 fix 회귀 (2026-06-18)', () => {
       }
       // swipe 간 자연 간격 — 너무 빠르면 stack 깊이가 0 으로 떨어져 fallback loader 노출 가능.
       await browser.pause(300);
+      const now = await visibleCardId();
+      if (now) seen.add(now);
     }
+    // 거짓 통과 방지: 실제로 여러 카드를 넘겼어야 한다 (탭 이동·무반응이면 1장).
+    console.log(`T1: 본 카드 ${seen.size}장`);
+    expect(seen.size).toBeGreaterThanOrEqual(4);
 
     await capture('p2-loading-T1-99-final');
 

@@ -21,6 +21,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pageSourceContains } from './_helpers';
 
 const SHOT_DIR = path.resolve(__dirname, 'screenshots');
 

@@ -198,8 +198,10 @@ export async function skipTutorialIfActive(): Promise<void> {
 
 export async function ensureOnboardedOrSkip(): Promise<boolean> {
   // 이미 Discover (또는 다른 onboarded 화면) 면 튜토리얼 잔재만 정리 후 no-op.
+  // 1.1.0 온보딩 A안 — 강제 온보딩이 없어 보통 여기서 끝난다. 신규(A안) 저장 뒤 제안만 닫는다.
   if (!(await pageSourceContains('시작하기'))) {
     await skipTutorialIfActive();
+    await dismissSavePromptIfAny();
     return true;
   }
 
@@ -361,4 +363,106 @@ export async function ensureOnboardedOrSkip(): Promise<boolean> {
     await skipTutorialIfActive();
   }
   return reached;
+}
+
+// ── 1.1.0 숏폼식 세로 피드 (2026-11-27) ──────────────────────────────
+// 위 = 다음, 아래 = 이전, 좌우 = 탭 이동, 더블탭 = 저장, 길게 누르기 = 메뉴(관심 없음).
+// 피드는 이전 1장 + 현재 + 다음 3장을 마운트하고 화면 밖 카드는 y 가 ±화면높이 → page source 의
+// y 좌표로 "지금 보이는 카드"를 고른다 (렌더 순서로 맨 위 카드를 고르던 옛 방식은 더 이상 안 맞음).
+
+/** 마운트된 카드 id 전부 (화면 밖 포함) */
+export async function feedCardIds(): Promise<string[]> {
+  const src = await browser.getPageSource();
+  return [...src.matchAll(/name="swipe-card-(\d+)"/g)].map((m) => m[1]);
+}
+
+/** 지금 화면에 보이는 카드 id (없으면 null) */
+export async function visibleCardId(): Promise<string | null> {
+  const src = await browser.getPageSource();
+  const { height } = await browser.getWindowSize();
+  for (const m of src.matchAll(/name="swipe-card-(\d+)"[^>]*?\sy="(-?\d+)"/g)) {
+    const y = Number(m[2]);
+    if (y >= 0 && y < height * 0.4) return m[1];
+  }
+  return null;
+}
+
+export async function waitVisibleCardId(timeout = 15000): Promise<string> {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    const id = await visibleCardId();
+    if (id) return id;
+    await browser.pause(500);
+  }
+  throw new Error('보이는 카드가 없어요');
+}
+
+/** 세로 넘김. 'up' = 다음 작품, 'down' = 이전 작품. 190pt 느린 끌기(임계 80 넉넉히, 튕김 보조와 무관). */
+export async function swipeFeed(dir: 'up' | 'down', opts: { duration?: number } = {}): Promise<void> {
+  const { width, height } = await browser.getWindowSize();
+  const x = Math.round(width / 2);
+  const a = Math.round(height * 0.62);
+  const b = a - 190;
+  await browser.execute('mobile: dragFromToForDuration', {
+    fromX: x,
+    fromY: dir === 'up' ? a : b,
+    toX: x,
+    toY: dir === 'up' ? b : a,
+    duration: opts.duration ?? 0.3,
+  });
+}
+
+/** 좌우 = 탭 이동. 'left' = 손가락 왼쪽 = 다음 탭(발견 → 큐 → 저장). */
+export async function swipeTab(dir: 'left' | 'right'): Promise<void> {
+  const { width, height } = await browser.getWindowSize();
+  const y = Math.round(height * 0.5);
+  const l = Math.round(width * 0.15);
+  const r = Math.round(width * 0.85);
+  await browser.execute('mobile: dragFromToForDuration', {
+    fromX: dir === 'left' ? r : l,
+    fromY: y,
+    toX: dir === 'left' ? l : r,
+    toY: y,
+    duration: 0.25,
+  });
+}
+
+/** 카드 길게 누르기 → 메뉴 → "관심 없음" (testID card-menu-hide) */
+export async function hideViaLongPress(): Promise<boolean> {
+  const { width, height } = await browser.getWindowSize();
+  await browser.execute('mobile: touchAndHold', {
+    x: Math.round(width * 0.4),
+    y: Math.round(height * 0.65),
+    duration: 0.9,
+  });
+  await browser.pause(500);
+  return tapByLabel('card-menu-hide', { timeout: 3000 });
+}
+
+/** 저장 버튼 상태 (ActionBar 라벨 "저장"/"저장 해제" — 탭바 '저장'과 구분하려고 Button 타입 + 라벨로) */
+export async function isCardSaved(): Promise<boolean> {
+  return pageSourceContains('label="저장 해제"');
+}
+
+/**
+ * 온보딩 A안 — 신규(variant A) 첫 저장 직후 OTT 시트·저장 3개 뒤 취향 제안. 회귀 스펙 진행을 막지 않게 닫는다.
+ */
+export async function dismissSavePromptIfAny(): Promise<void> {
+  if (await pageSourceContains('어디서 보세요')) {
+    await tapByLabel('나중에 설정', { timeout: 2000 });
+    await browser.pause(800);
+  }
+  if (await pageSourceContains('taste-prompt')) {
+    await tapByLabel('나중에', { timeout: 2000 });
+    await browser.pause(500);
+  }
+}
+
+/** 지금 선택된 탭 라벨 (탭 버튼 traits 의 Selected) */
+export async function selectedTab(): Promise<string | null> {
+  const src = await browser.getPageSource();
+  for (const m of src.matchAll(/<XCUIElementTypeButton[^>]*label="(발견|큐|저장|프로필)"[^>]*traits="([^"]*)"/g)) {
+    if (m[2].includes('Selected')) return m[1];
+  }
+  return null;
 }

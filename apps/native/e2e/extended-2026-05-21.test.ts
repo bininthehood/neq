@@ -142,7 +142,7 @@ describe('B1 — Onboarding 진입 경로', () => {
     await capture('b1-01-profile');
 
     const source = await browser.getPageSource();
-    // profile.tsx:392 "모든 데이터 초기화" — reset → setOnboarded 클리어 → router.replace('/onboarding')
+    // profile.tsx "모든 데이터 초기화" — reset → router.replace('/') (1.1.0 온보딩 A안: 온보딩 화면 강제 진입 없음)
     const hasResetEntry = source.includes('모든 데이터 초기화');
     console.log(`reset entry 존재: ${hasResetEntry}`);
     expect(hasResetEntry).toBe(true);
@@ -154,8 +154,7 @@ describe('B1 — Onboarding 진입 경로', () => {
     //  - hasOnboarded gate (_layout.tsx:128) 통과 검증 — 이미 Discover 진입한 사실 자체가 증명
     //  - reset entry (b1-01) 가 onboarding 으로 router.replace 한다는 코드 패스 보호
     // 즉 spec 은 entry 존재 (b1-01) 로 충분. 본 step 은 documentation only PASS.
-    console.log('Onboarding 진입 경로 코드 패스: profile reset → setOnboarded clear → router.replace');
-    console.log('full walk-through (Welcome→Hello→Genre→Persona→OTT) 은 destructive 라 별도 트랙');
+    console.log('1.1.0 온보딩 A안: 강제 진입 없음 — 초기화 후 바로 발견은 onboarding-a-2026-11-27 스펙');
     expect(true).toBe(true);
   });
 });

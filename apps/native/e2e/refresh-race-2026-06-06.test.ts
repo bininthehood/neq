@@ -1,5 +1,5 @@
 /**
- * Neko native E2E 회귀 — 2026-06-06 새로고침 직후 빠른 좌 스와이프 race 차단
+ * Neko native E2E 회귀 — 2026-06-06 새로고침 직후 빠른 넘김 race 차단
  *
  * 컨텍스트: commit 22f52e7 (`_workspace/02_p0_stack_overlap.md`).
  *
@@ -16,9 +16,9 @@
  *
  * 검증 범위 (R1~R4):
  *   R1 — 첫 세트 도착 직후 작품 시그니처 캡처 (page source 의 title Text)
- *   R2 — 카드 N장 좌 스와이프 (next 진행, topIdx 증가)
+ *   R2 — 카드 N장 위로 넘김 (next 진행, topIdx 증가) — 1.1.0 숏폼식 조작
  *   R3 — ActionBar "새 추천" tap → 새 stream B 트리거
- *   R4 — 새 세트 첫 카드 도착 직후 즉시 좌 스와이프 → 후방 카드 시그니처가
+ *   R4 — 새 세트 첫 카드 도착 직후 즉시 위 넘김 → 후방 카드 시그니처가
  *        세트 A 작품과 disjoint 여야 함 (= race 차단됐다는 신호)
  *
  * 진입 경로:
@@ -34,7 +34,7 @@
  *   서버 LLM warm latency 가 4~6s → 새로고침 후 부분 stream 윈도우 안에서
  *   swipe 입력해야 race 가 열린다. 그래서:
  *     1) 새 stream B 첫 카드 도착 직후 (~1.5s 대기, fix 전엔 옛 stream A 가 살아
- *        있는 시점) 즉시 좌 스와이프 N 회 — fix 전 시나리오에선 옛 set 카드가
+ *        있는 시점) 즉시 위 넘김 N 회 — fix 전 시나리오에선 옛 set 카드가
  *        후방으로 끼어들 수 있는 윈도우.
  *     2) 추가 2~4s 대기 후 stack 안정 — 이 시점에 보이는 카드들 시그니처가
  *        세트 A 와 disjoint 여야 fix PASS.
@@ -48,6 +48,8 @@ import {
   forceResetApp,
   tapByLabel,
   tapByPredicate,
+  visibleCardId,
+  waitVisibleCardId,
 } from './_helpers';
 
 // 2026-06-06 B-3 — testID 정확 매칭 전환 (commit B-3).
@@ -68,21 +70,22 @@ async function snapshotCardSignatures(): Promise<Set<string>> {
   return sigs;
 }
 
-async function swipeLeftOnCard(strength = 0.6): Promise<void> {
+// 1.1.0 숏폼식 조작 — "다음 작품" 은 위로 밀기 (좌우는 탭 이동이라 발견을 떠나 버린다).
+async function swipeUpOnCard(strength = 0.3): Promise<void> {
   const { width, height } = await browser.getWindowSize();
-  const startX = width * 0.8;
-  const endX = width * (0.8 - strength);
-  const y = height * 0.5;
+  const x = width * 0.5;
+  const startY = height * 0.7;
+  const endY = height * (0.7 - strength);
   await browser.performActions([
     {
       type: 'pointer',
       id: 'finger1',
       parameters: { pointerType: 'touch' },
       actions: [
-        { type: 'pointerMove', duration: 0, x: startX, y },
+        { type: 'pointerMove', duration: 0, x, y: startY },
         { type: 'pointerDown', button: 0 },
         { type: 'pause', duration: 80 },
-        { type: 'pointerMove', duration: 220, x: endX, y },
+        { type: 'pointerMove', duration: 220, x, y: endY },
         { type: 'pointerUp', button: 0 },
       ],
     },
@@ -102,7 +105,7 @@ async function tapRefreshButton(): Promise<boolean> {
 // ──────────────────────────────────────────────────────────
 // R — 새로고침 race 회귀
 // ──────────────────────────────────────────────────────────
-describe('R — 새로고침 직후 빠른 좌 스와이프 race 차단 (commit 22f52e7)', () => {
+describe('R — 새로고침 직후 빠른 넘김 race 차단 (commit 22f52e7)', () => {
   before(async () => {
     // spec audit (2026-05-28) — 이전 spec leak 방지 + 추천 로드 대기.
     await forceResetApp();
@@ -127,13 +130,16 @@ describe('R — 새로고침 직후 빠른 좌 스와이프 race 차단 (commit 
     (globalThis as Record<string, unknown>).__sigsA = sigsA;
   });
 
-  it('R2 — 좌 스와이프 3회 진행 (세트 A 일부 소비)', async () => {
+  it('R2 — 위로 3회 넘김 (세트 A 일부 소비)', async () => {
+    const first = await waitVisibleCardId();
     for (let i = 0; i < 3; i++) {
-      await swipeLeftOnCard();
-      // pass dismiss 360ms (index.tsx:79) + advance 여유 = 600ms 대기.
+      await swipeUpOnCard();
+      // 넘김 보간 280ms + 여유
       await browser.pause(600);
     }
-    await capture('R-01-after-3-left-swipes');
+    await capture('R-01-after-3-up-swipes');
+    // 실제로 넘어갔는지 (좌우 탭 이동으로 발견을 떠나는 거짓 통과 방지)
+    expect(await waitVisibleCardId(5000)).not.toBe(first);
     // 스택이 깨지지 않았는지 — 시그니처 잡힘 확인.
     const sigsMid = await snapshotCardSignatures();
     expect(sigsMid.size).toBeGreaterThan(0);
@@ -153,20 +159,22 @@ describe('R — 새로고침 직후 빠른 좌 스와이프 race 차단 (commit 
     await capture('R-03-after-refresh-pause');
   });
 
-  it('R4 — 첫 카드 도착 직후 빠른 좌 스와이프 → 후방 카드 시그니처가 세트 A 와 disjoint', async () => {
-    // race window 안에서 빠른 좌 스와이프 4회. fix 전엔 이 사이에 옛 set 카드가
+  it('R4 — 첫 카드 도착 직후 빠른 위 넘김 → 후방 카드 시그니처가 세트 A 와 disjoint', async () => {
+    // race window 안에서 빠른 위 넘김 4회. fix 전엔 이 사이에 옛 set 카드가
     // 새 stack 뒤에 끼어들 수 있음. fix 가 정상 동작 시 옛 stream onCard 는
     // ref 가드 또는 abort 로 무시됨.
     for (let i = 0; i < 4; i++) {
-      await swipeLeftOnCard(0.7);
-      // 빠른 스와이프 — pass dismiss 360ms 만 대기.
-      await browser.pause(400);
+      await swipeUpOnCard(0.35);
+      // 빠른 연속 넘김 — 보간(280ms) 중에도 다음 넘김을 받는다.
+      await browser.pause(300);
     }
     await capture('R-04-after-fast-swipes');
 
     // stack 안정 대기 — 새 세트 stream 완전 도착.
     await browser.pause(4000);
     await capture('R-05-stack-settled');
+    // 여전히 발견 피드 위인지 (보이는 카드 있음)
+    expect(await visibleCardId()).not.toBeNull();
 
     // 세트 B (현재 stack) 시그니처 수집.
     const sigsB = await snapshotCardSignatures();
