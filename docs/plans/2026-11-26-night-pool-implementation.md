@@ -1,7 +1,7 @@
 # Night Pool 리디자인 구현 계획
 
 작성 2026-11-26 · 기준 문서 [DESIGN.md](../../DESIGN.md) · 브랜치 `design/night-pool`
-상태: **계획 확정(엔지니어링 검토 완료) · 0~2단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
+상태: **계획 확정(엔지니어링 검토 완료) · 0~3단계 완료** · PR-S(T1) 브랜치 `fix/hidden-keys` 준비됨
 
 ## 목표와 범위
 - iOS 네이티브 앱(`apps/native`)을 Quiet Ink → Night Pool로 바꾼다. 웹(PWA)은 같은 토큰을 쓰지만 화면 반영은 마지막 단계에서 따로 한다.
@@ -268,3 +268,13 @@ NO UNRESOLVED DECISIONS
 | 2026-11-27 | 스플래시: 콤마 아쿠아·투명 바탕 + 배경 #071B20 (다크 고정) | 라이트 스플래시는 3단계. ios/ 가 gitignore 라 실제 반영은 prebuild·네이티브 빌드 후 |
 | 2026-11-27 | 온보딩 완료 화면 pulse halo 라임 → 아쿠아 | 대기·안내는 아쿠아 역할, 라임은 행동 |
 | 2026-11-27 | 2단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹+core+design 694/694, Appium `regression-2026-05-21` 12/12(시뮬 iPhone 17 Pro iOS 26.5), 화면별 다크 스크린샷 확인. 3단계로 넘김: 상태표시줄 밝기 연동, 라이트 스플래시, 라이트 키보드·흐린 글자 점검, 밝은 바탕 라임 테두리(프로필 OTT 선택 링·장르 칩 등 라임 border) |
+| 2026-11-27 | 상태표시줄 `style="auto"`(시스템 밝기 연동), 상세 시트는 포스터 히어로 위에서만 `light` 고정(스크롤로 히어로를 지나면 auto) | T9. 라이트에서 상세 히어로(어두운 포스터) 위 시간·배터리가 안 보였음 |
+| 2026-11-27 | `textMeta` 토큰 신설(다크 #74918F · 라이트 #4F6D73) — 13px 이하 메타·캡션 63곳을 textMuted → textMeta. textMuted 는 큰 글리프·아이콘·placeholder·비활성 라벨에만 남김 | 라이트 textMuted 3.6 은 큰 글자·힌트 전용 규칙. 다크 textMuted 도 surface 위 4.49 라 다크 값도 아주 조금 밝힘 |
+| 2026-11-27 | 라임 테두리: 채움 없는 링(OTT 행 선택, 저장됨 CTA)·작은 체크 원은 `limeText`, 라임 채움 칩·버튼은 테두리도 `lime` | 밝은 바탕 위 라임 선은 1.1:1 로 안 보임. 채움 면은 색상 차로 구분되고 올리브 외곽선은 무거워 보여 제외 |
+| 2026-11-27 | 라이트 `aquaText` #007B72 → #00716A, 워드마크는 새 `wordmark` 토큰(#58DCCB / #007B72)으로 분리 | 옅은 아쿠아 면(검색 제안 칩·선택 칩·탭 캡슐) 위 4.1 → 4.6. 워드마크 색은 사용자 결정이라 그대로 고정. DESIGN.md 표·Decisions Log 반영 |
+| 2026-11-27 | 어두운 잉크·scrim 위 글자는 `palette.dark` 고정: 저장 그리드 카드 라벨, 상세 히어로 뱃지, 시청 리포트 오버레이, 취향 고르기 포스터 라벨, 튜토리얼 전체 | overlay 토큰은 라이트에서도 어두운 잉크(1단계 결정) → 라이트 글자색이면 어두운 위 어두운 글자 |
+| 2026-11-27 | 프로필 분포 막대 1위 `aqua` → `aquaText` | 라이트 흰 트랙 위 aqua 1.6:1, 그래픽 3:1 미달. 다크는 같은 값 |
+| 2026-11-27 | 하드코딩 정리: 페르소나 모달 backdrop rgba(0,0,0,.6) → `overlay`, 포스터 라벨 받침 검정 → 청록 잉크. OTT 브랜드색 위 흰 글자·Icons 기본값 '#000'(항상 color 전달)·카드 잉크는 유지 | 테마 무관이 맞는 값만 남김 |
+| 2026-11-27 | 라이트 스플래시: `ios.splash` 기본 = 민트 #EAF6F5 + 콤마 #007B72(splash-icon-light.png, 알파 재색칠), `dark` = 기존. 최상위 splash(Android·레거시)는 다크 유지 | ios/ 가 gitignore 라 반영은 prebuild·네이티브 빌드(4단계 빌드에 같이) 후. `expo config` 로 설정 반영만 확인 |
+| 2026-11-27 | 라이트 진입 E2E `e2e/light-mode-2026-11-27.test.ts` 추가 + `wdio.conf.ts` 에 `IOS_SIM_UDID`·`IOS_SIM_VERSION` env 덮어쓰기 | T6 ②. 자동 판정은 RedBox·Invalid color 없음 + 탭 라벨 4종, 색은 스크린샷 검수. 부팅 시뮬 udid 가 conf 고정값과 달라 env 로 받음 |
+| 2026-11-27 | 3단계 완료 판정 | tsc 네이티브·웹 0, vitest 네이티브 43/43·웹(+core+design) 705/705·core 116/116, Appium `regression-2026-05-21` 12/12 · `light-mode` 2/2(iPhone 17 Pro iOS 26.5). 발견·상세·큐·저장·검색·프로필·온보딩(Welcome·이름·장르·취향) 다크·라이트 스크린샷 확인. 4단계로 넘김: 라이트 유리 틴트(DESIGN.md 라이트 값), 다크 raised 위 작은 글자(textMeta 3.9), 라이트 스플래시 실기기 확인 |
