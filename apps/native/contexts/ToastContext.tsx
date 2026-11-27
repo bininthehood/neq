@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from '../components/Text';
+import { GlassSurface, useGlassEnabled } from '../components/GlassSurface';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Easing,
@@ -280,12 +281,11 @@ function ToastCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const glass = useGlassEnabled();
+  // 등장: 화면 위에서 미끄러져 내려온다 — opacity 를 쓰지 않는다(유리 조상 opacity 0 이면 유리가 안 그려짐).
+  const hiddenY = -(insets.top + 44 + 96);
   const animStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [
-      // 등장: 상단에서 translateY(-12→0) — Night Pool 토스트는 상단 44.
-      { translateY: (1 - progress.value) * -12 },
-    ],
+    transform: [{ translateY: (1 - progress.value) * hiddenY }],
   }));
 
   return (
@@ -301,8 +301,13 @@ function ToastCard({
         // role=status — RN 접근성. 에러는 alert 톤.
         accessibilityLiveRegion="polite"
         accessibilityRole={entry.type === 'error' ? 'alert' : 'text'}
-        style={[styles.card, { backgroundColor: t.surfaceRaised, borderColor: t.border }, animStyle]}
+        style={[
+          styles.card,
+          glass ? styles.cardGlass : { backgroundColor: t.surfaceRaised, borderColor: t.border },
+          animStyle,
+        ]}
       >
+        {glass && <GlassSurface radius={radius.toast} />}
         {/* 인디케이터 dot — DESIGN.md L256 (6×6). info/save/remove=accent, error=danger. */}
         {entry.type === 'error' ? (
           <Svg width={16} height={16} viewBox="0 0 16 16" style={styles.glyph}>
@@ -391,6 +396,8 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 6,
   },
+  // 유리 토스트 — 면은 GlassSurface, 투명 면 그림자는 오프스크린 렌더라 끈다
+  cardGlass: { borderColor: 'transparent', shadowOpacity: 0, elevation: 0 },
   glyph: {
     flexShrink: 0,
   },
@@ -406,14 +413,16 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
+  // 유리 위 글자 = text 색·13 이상·600 이상 (DESIGN.md Material). 위계는 굵기로.
   primary: {
     fontSize: 13,
-    fontFamily: fontsV2.bodySemi,
+    fontFamily: fontsV2.bodyHeavy,
     color: colors.textPrimary,
   },
   secondary: {
-    fontSize: 11,
-    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fontsV2.bodySemi,
+    color: colors.textPrimary,
     marginTop: 2,
   },
   action: {

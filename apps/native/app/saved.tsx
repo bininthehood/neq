@@ -39,6 +39,8 @@ import DetailSheet from '../components/DetailSheet';
 import SearchSheet from '../components/SearchSheet';
 import { IconUser, IconArchive, IconBang, IconCheckPop, IconBookmark } from '../components/Icons';
 import { Button } from '../components/Button';
+import { GlassSurface, useGlassEnabled } from '../components/GlassSurface';
+import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import { useSearchTrigger } from '../lib/search-trigger';
 import Animated, {
   useSharedValue,
@@ -831,7 +833,7 @@ export default function SavedScreen() {
           data={sortedItems}
           keyExtractor={(s) => String(s.recommendation.tmdbId)}
           numColumns={COLS}
-          contentContainerStyle={{ padding: spacing.md, gap: spacing.md }}
+          contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.md + TAB_BAR_SPACE, gap: spacing.md }}
           columnWrapperStyle={{ gap: spacing.md }}
           renderItem={({ item, index }) => (
             <PosterCard
@@ -1114,6 +1116,7 @@ function SavedActionSheet({
   children: React.ReactNode;
 }) {
   const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
+  const glass = useGlassEnabled();
   const translateY = useSharedValue(SHEET_SLIDE_RANGE);
   useEffect(() => {
     return () => cancelAnimation(translateY);
@@ -1137,7 +1140,9 @@ function SavedActionSheet({
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
       </Animated.View>
       <Animated.View style={[styles.menuSheetWrap, sheetStyle]} pointerEvents="box-none">
-        <View style={[styles.menuSheet, { paddingBottom }]}>
+        {/* 4단계 — 반만 여는 시트는 유리 (DESIGN.md 시트 규칙). 끝까지 올리는 시트가 아니라 항상 유리. */}
+        <View style={[styles.menuSheet, glass && styles.menuSheetGlass, { paddingBottom }]}>
+          {glass && <GlassSurface radius={radius.sheet} style={styles.menuSheetGlassFill} />}
           <View style={styles.menuGrabber} />
           {children}
         </View>
@@ -1681,6 +1686,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
   },
+  menuSheetGlass: { backgroundColor: 'transparent' },
+  // 화면 아래로 이어지는 시트 — 아래 모서리는 각지게
+  menuSheetGlassFill: { borderBottomLeftRadius: 0, borderBottomRightRadius: 0, borderBottomWidth: 0 },
   menuGrabber: {
     alignSelf: 'center',
     width: 36,
@@ -1689,8 +1697,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
     marginBottom: spacing.sm,
   },
+  // 유리 시트 위 글자 = text 색 (DESIGN.md Material)
   menuTitle: {
-    color: colors.textMeta,
+    color: colors.textPrimary,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: spacing.sm,
@@ -1718,7 +1727,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   menuCancelText: {
-    color: colors.textMeta,
+    color: colors.textPrimary,
     fontSize: 15,
     fontFamily: fontsV2.bodySemi,
   },
@@ -1832,7 +1841,8 @@ const styles = StyleSheet.create({
   // List 뷰 스타일.
   listContent: {
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md + TAB_BAR_SPACE, // 떠 있는 탭바 뒤로 지나감
   },
   listCard: {
     flexDirection: 'row',

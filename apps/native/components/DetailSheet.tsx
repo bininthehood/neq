@@ -47,6 +47,7 @@ import type {
 import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
 import { ArrivalProbe } from './ArrivalProbe';
+import { GlassSurface, useGlassEnabled } from './GlassSurface';
 import { StatusBar } from 'expo-status-bar';
 import { fontsV2, easings, durations } from '@neq/design';
 import { colors, palette, radius, spacing, shadowsNative, useThemeColors } from '../lib/tokens';
@@ -131,6 +132,7 @@ export default function DetailSheet({
 }: Props) {
   const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const insets = useSafeAreaInsets();
+  const glass = useGlassEnabled();
   // 2026-07-13 — translateY 가 진입/드래그/퇴장 슬라이드 전부 담당 (SearchSheet 정합).
   // Modal 은 transparent + animationType="none" — OS 애니메이션 주체 제거로
   // 닫힘 모션 2회 재생 클래스 원천 차단 + 드래그 중 후방(Discover) 노출.
@@ -1041,7 +1043,8 @@ export default function DetailSheet({
                   <Pressable
                     style={[
                       styles.topNavBtn,
-                      !canGoBack && styles.topNavBtnDisabled,
+                      glass && styles.topNavBtnGlass,
+                      !canGoBack && !glass && styles.topNavBtnDisabled,
                     ]}
                     onPress={handleHistoryBack}
                     disabled={!canGoBack}
@@ -1050,6 +1053,7 @@ export default function DetailSheet({
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canGoBack }}
                   >
+                    {glass && <GlassSurface radius={22} />}
                     <IconChevronLeft
                       size={18}
                       color={canGoBack ? colors.textPrimary : colors.textMuted}
@@ -1058,7 +1062,8 @@ export default function DetailSheet({
                   <Pressable
                     style={[
                       styles.topNavBtn,
-                      !canGoForward && styles.topNavBtnDisabled,
+                      glass && styles.topNavBtnGlass,
+                      !canGoForward && !glass && styles.topNavBtnDisabled,
                     ]}
                     onPress={handleHistoryForward}
                     disabled={!canGoForward}
@@ -1067,6 +1072,7 @@ export default function DetailSheet({
                     accessibilityRole="button"
                     accessibilityState={{ disabled: !canGoForward }}
                   >
+                    {glass && <GlassSurface radius={22} />}
                     <IconChevronRight
                       size={18}
                       color={canGoForward ? colors.textPrimary : colors.textMuted}
@@ -1081,23 +1087,25 @@ export default function DetailSheet({
               <View style={styles.topNavRightGroup}>
                 {mode !== 'share' && onStartMix ? (
                   <Pressable
-                    style={styles.topNavBtn}
+                    style={[styles.topNavBtn, glass && styles.topNavBtnGlass]}
                     onPress={() => setDetailMenuOpen((v) => !v)}
                     hitSlop={12}
                     accessibilityLabel="상세 메뉴"
                     accessibilityRole="button"
                     testID="detail-menu-button"
                   >
+                    {glass && <GlassSurface radius={22} />}
                     <IconMoreVertical size={18} color={colors.textPrimary} />
                   </Pressable>
                 ) : null}
                 <Pressable
-                  style={styles.topNavBtn}
+                  style={[styles.topNavBtn, glass && styles.topNavBtnGlass]}
                   onPress={closeAnimated}
                   hitSlop={12}
                   accessibilityLabel="닫기"
                   accessibilityRole="button"
                 >
+                  {glass && <GlassSurface radius={22} />}
                   <IconClose size={20} color={colors.textPrimary} />
                 </Pressable>
               </View>
@@ -1823,6 +1831,8 @@ const styles = StyleSheet.create({
   // 2026-06-15 (build 27) — disabled 상태 (회색, 사용자 결정). hidden 아님.
   // surfaceRaised 그대로 두고 opacity 만 낮춰 면적 인지는 유지, 색채 위계만 강등.
   // 아이콘 색은 button 자체가 아닌 IconChevron color prop 으로 textMuted 전달.
+  // 히어로·본문 위에 뜨는 헤더 버튼 — 유리 (DESIGN.md Material). 비활성은 아이콘 색만.
+  topNavBtnGlass: { backgroundColor: 'transparent', borderWidth: 0 },
   topNavBtnDisabled: {
     opacity: 0.55,
   },
