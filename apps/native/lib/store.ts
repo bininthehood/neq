@@ -6,6 +6,8 @@ import {
   MAX_PERSONAS,
 } from '@neq/core';
 import { clearAllProgress as clearAllSurveyProgress } from './survey-storage';
+import { addHiddenEntry, type HiddenEntry } from './hidden-keys';
+import { track } from './analytics';
 import type {
   AccountPrefs,
   FavoriteMeta,
@@ -42,6 +44,10 @@ const ACTIVE_PERSONA_KEY = 'neq_active_persona_id';
 // web `localStorage.tutorialV3Shown === "1"` 과 동일한 의미/값.
 // 양 플랫폼이 같은 익명 식별자를 공유하지 않으므로 디바이스별 1회만 노출.
 const TUTORIAL_V3_KEY = 'tutorialV3Shown';
+// Night Pool 5단계 — "관심 없음" 영구 숨김. 기기 기준(계획 X3), 재설치 시 사라짐. sync 대상 아님.
+const HIDDEN_KEY = 'neq_hidden_keys';
+// 첫 실행 계측 1회 표시. device_id 처럼 '모든 데이터 초기화' 에도 유지 (설치 단위).
+const FIRST_OPEN_KEY = 'neq_first_open_tracked';
 
 async function safeGet<T>(key: string, fallback: T): Promise<T> {
   try {
@@ -83,7 +89,17 @@ export async function toggleSaved(rec: Recommendation): Promise<boolean> {
     await removeSaved(rec.tmdbId);
     return false;
   }
-  await addSaved(rec);
+  try {
+    await addSaved(rec);
+  } catch (e) {
+    // 2026-11-27 — 저장 시도 실패 계측 (읽기는 safeGet 이 삼키므로 실패 = 쓰기). 개인정보 없음.
+    track('save_failed', {
+      reason: 'storage_write',
+      error_name: e instanceof Error ? e.name : 'unknown',
+      tmdb_id: rec.tmdbId,
+    });
+    throw e;
+  }
   return true;
 }
 
@@ -662,6 +678,45 @@ export async function clearTutorialV3(): Promise<void> {
   await AsyncStorage.removeItem(TUTORIAL_V3_KEY);
 }
 
+// ---------- hidden ("관심 없음") ----------
+
+/** 최근 숨김부터. 추천 요청 `hiddenKeys` 에 이 순서 그대로 보낸다(서버가 앞에서 500개). */
+export async function getHiddenEntries(): Promise<HiddenEntry[]> {
+  return safeGet<HiddenEntry[]>(HIDDEN_KEY, []);
+}
+
+export async function getHiddenKeys(): Promise<string[]> {
+  return (await getHiddenEntries()).map((e) => e.key);
+}
+
+export async function addHiddenKey(key: string): Promise<void> {
+  const next = addHiddenEntry(await getHiddenEntries(), key, Date.now());
+  await AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
+}
+
+/** 되돌리기 */
+export async function removeHiddenKey(key: string): Promise<void> {
+  const next = (await getHiddenEntries()).filter((e) => e.key !== key);
+  await AsyncStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
+}
+
+// ---------- first open ----------
+
+/**
+ * 설치 후 첫 실행이면 'new', 1.1.0 이전부터 쓰던 기기의 첫 실행이면 'existing', 이미 처리했으면 null.
+ * 기존 사용자 판정 = 온보딩 완료 또는 저장 작품 있음 (그 외 업데이트 사용자는 신규로 셈 — 한계).
+ */
+export async function consumeFirstOpen(): Promise<'new' | 'existing' | null> {
+  try {
+    if (await AsyncStorage.getItem(FIRST_OPEN_KEY)) return null;
+    const existing = (await hasOnboarded()) || (await getSaved()).length > 0;
+    await AsyncStorage.setItem(FIRST_OPEN_KEY, '1');
+    return existing ? 'existing' : 'new';
+  } catch {
+    return null;
+  }
+}
+
 // ---------- reset ----------
 
 export async function clearAllUserData(): Promise<void> {
@@ -675,6 +730,7 @@ export async function clearAllUserData(): Promise<void> {
     TUTORIAL_V3_KEY,
     PERSONAS_KEY,
     ACTIVE_PERSONA_KEY,
+    HIDDEN_KEY,
   ]);
   // 설문 진행 상태 (neq_taste_survey_progress:*) — 별도 prefix 키 묶음이라
   // multiRemove 목록과 분리. 누락 시 reset 후 동일 컨텍스트 재선택에서

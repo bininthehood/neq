@@ -122,6 +122,11 @@ export type NekoEvent =
   | 'card_saved'
   | 'card_unsaved'
   | 'card_not_interested'
+  // Night Pool 5단계 (2026-11-27) — 관심 없음 숨기기/되돌리기. props: tmdb_id, media_type, title, source(swipe_up|detail_button), action(hide|undo)
+  | 'not_interested'
+  // 2026-11-27 — 저장 실패 (reason, error_name, tmdb_id) · 설치 후 첫 실행 (app_open 과 별개)
+  | 'save_failed'
+  | 'first_open'
   | 'detail_opened'
   | 'detail_related_clicked'
   // 2026-07-08 — Native Seeded Mix MVP (Discover 카드 MIX 버튼).
@@ -142,6 +147,8 @@ export type NekoEvent =
   // 2026-06-15 (build 27 iter3) — Cast 클릭 → DetailSheet 내부 person-works sub-screen
   | 'detail_cast_works_opened'
   // 위임 O — Saved 뷰 모드 토글
+  // 저장 목록 열기 — 웹과 같은 이름·속성 (saved_count, has_saved_items)
+  | 'saved_viewed'
   | 'saved_view_changed'
   // 시청 리포트
   | 'watch_report_submitted'

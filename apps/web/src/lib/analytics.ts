@@ -103,6 +103,10 @@ export type NekoEvent =
   | "card_saved"
   | "card_unsaved"
   | "card_not_interested"
+  // Night Pool 5단계 (2026-11-27) — 네이티브 관심 없음 (웹은 6단계에서 연결)
+  | "not_interested"
+  | "save_failed"
+  | "first_open"
   | "detail_opened"
   | "detail_related_clicked"
   // 시청 리포트

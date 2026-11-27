@@ -20,6 +20,11 @@ export interface RecommendRequest {
    * 그쪽으로 이동". LLM 프롬프트/모드엔 영향 없음. 서버가 최대 50개로 캡.
    */
   savedTmdbIds?: number[];
+  /**
+   * "관심 없음" 영구 숨김 — `movie:123` / `tv:123`, 최근 숨김부터. 서버가 형식 검증 후 500개로 캡하고
+   * 카드 내보내기 직전에 거른다 (PR #55). 그 서버가 배포되기 전엔 무시되며, 앱이 한 번 더 거른다.
+   */
+  hiddenKeys?: string[];
   /** 저장한 작품 총 개수 — 모드 판정(탐색/혼합/개인화)에 signal로 사용 */
   savedCount?: number;
   /** 온보딩에서 선택한 초기 취향 작품 수 — 모드 판정 signal */
