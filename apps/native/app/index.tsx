@@ -29,6 +29,7 @@ import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar, { ACTION_BAR_HEIGHT } from '../components/ActionBar';
+import { Button } from '../components/Button';
 import { IconArchive, IconRefresh, IconMoreVertical } from '../components/Icons';
 import TutorialFlow, {
   type TutorialStep,
@@ -1949,64 +1950,6 @@ export default function DiscoverScreen() {
         onProfileOpen={() => router.push('/profile')}
       />
 
-      {/* 2026-07-08 Seeded Mix 2차 — 큐 중엔 FilterChips 대신 큐 바.
-          필터는 일반 덱 전용 (큐 덱은 후보 12 이하 고정 셋이라 서버 필터 무의미).
-          3차 업스케일 — seed 미니 포스터(작품 큐만) + display 위계 라벨 + 진행 카운트.
-          테마 큐는 포스터 생략 + 테마 title (seed 작품 비노출 정책 — 2차 확정 유지). */}
-      {inMix && mixSeed ? (
-        <View style={styles.mixBar} testID="mix-bar">
-          {!mixTheme && mixSeed.posterUrl ? (
-            <Image
-              source={{ uri: mixSeed.posterUrl }}
-              style={styles.mixBarPoster}
-              contentFit="cover"
-              transition={0}
-            />
-          ) : null}
-          <View style={styles.mixBarLabelGroup}>
-            <Text style={styles.mixBarTitle} numberOfLines={1}>
-              {mixTheme ? mixTheme.title : mixLabelOf(mixSeed.title)}
-            </Text>
-            {mixCandidatesLoaded && mixTotal > 0 ? (
-              <Text style={styles.mixBarCount} testID="mix-count">
-                {Math.min(mixTopIdx + 1, mixTotal)} / {mixTotal}
-              </Text>
-            ) : null}
-          </View>
-          <Pressable
-            style={styles.mixBarRelease}
-            onPress={handleMixRelease}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="큐 종료"
-            testID="mix-release"
-          >
-            <Text style={styles.mixBarReleaseText}>종료</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <FilterChips
-          filterType={filterType}
-          filterOrigin={filterOrigin}
-          filterYear={filterYear}
-          filterRating={filterRating}
-          filterOTTs={filterOTTs}
-          availableOTTs={availableOTTs}
-          disabled={state === 'loading'}
-          onFilterChange={(t, o) => applyFilterChange({ type: t, origin: o })}
-          onYearChange={(y) => applyFilterChange({ year: y })}
-          onRatingChange={(r) => applyFilterChange({ rating: r })}
-          onOTTChange={(otts) => applyFilterChange({ otts })}
-          // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — FilterChips leftmost 신규.
-          myOTTToggle={myOTTToggle}
-          myOTTAvailable={subscribedOtt.length > 0}
-          onMyOTTToggle={handleMyOTTToggle}
-          onMyOTTSetupNavigate={handleMyOTTSetupNavigate}
-          // 4차 — 필터 dropdown 열림 시 케밥 인메뉴 닫기 (동시 오픈 방지).
-          onDropdownOpen={() => setCardMenuOpen(false)}
-        />
-      )}
-
       <View
         style={styles.stackWrap}
         onLayout={(e) => setStackRect(e.nativeEvent.layout)}
@@ -2053,12 +1996,10 @@ export default function DiscoverScreen() {
                 </Text>
               </View>
               <View style={styles.emptyActions}>
-                <Pressable
-                  style={styles.ghostBtn}
+                <Button
+                  label="다시 시도"
                   onPress={() => load(undefined, { excludeIds: recs.map((r) => r.tmdbId) })}
-                >
-                  <Text style={styles.ghostBtnText}>다시 시도</Text>
-                </Pressable>
+                />
               </View>
             </View>
           </View>
@@ -2193,57 +2134,118 @@ export default function DiscoverScreen() {
             </View>
           </>
         )}
-      </View>
 
-      {/* 2026-05-19 native↔PWA 정합 (항목 1, 증상 B) — ActionBar 자리 항상 확보.
-          기존: ActionBar 가 `state==='ready' && currentRec` 조건부 렌더 → loading→ready
-          전환·탭 재진입 시 ActionBar 가 mount/unmount 되며 stackWrap(flex:1) 이
-          ACTION_BAR_HEIGHT(64px) 만큼 재배분 → 카드(absolute top0/bottom8)가 한 프레임
-          "늘어났다 줄어드는" jank.
-          해결: 항상 높이 ACTION_BAR_HEIGHT 인 slot 을 두고, ready 가 아닐 땐 내부를
-          비워둔다. slot 자체 높이가 불변 → stackWrap 이 어느 상태에서나 동일 공간.
-          (web 은 loading/error/empty 를 전체화면 컴포넌트로 early-return 하므로 ready
-          상태의 ActionBar 가 항상 렌더 — 구조상 jank 가 없다. native 는 같은
-          SafeAreaView 안에서 분기하므로 slot 고정으로 동등 효과를 만든다.) */}
-      <View style={styles.actionBarSlot}>
-        {/* 2026-07-08 Seeded Mix 2차 — mix 덱에서도 ActionBar 동작 (save/share/detail).
-            rewind 는 활성 덱 처음으로, refresh 는 믹스 해제 후 일반 새로고침. */}
-        {(state === 'ready' || inMix) && currentRec && (
-          <ActionBar
-            ref={saveBtnRef}
-            isSaved={isLiked}
-            canRewind={activeTopIdx > 0}
-            saveFlash={saveFlash}
-            savePulling={savePulling && isDragging}
-            onRewind={() => (inMix ? setMixTopIdx(0) : setTopIdx(0))}
-            onShare={handleShare}
-            onOpenDetail={() => {
-              // W5 Task C 7.1 — ActionBar Detail 버튼은 web 정본 source='action_bar'.
-              // (web `apps/web/src/app/discover/page.tsx:683` 정합.)
-              track('detail_opened', {
-                tmdb_id: currentRec.tmdbId,
-                title: currentRec.title,
-                providers_count: currentRec.providers.length,
-                source: 'action_bar',
-              });
-              setDetailOpen(true);
-              // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
-              setDetailOpenCount((c) => c + 1);
-            }}
-            onRefresh={() => {
-              // 4차 — 큐 중 새로고침 = 해제가 아니라 같은 seed/테마로 큐 재생성
-              // (recHistory/saved 제외 적용 → 이미 본 카드 걷어낸 새 목록).
-              if (inMix && mixSeed) {
-                handleMixStart(mixSeed, mixSourceRef.current, mixTheme ?? undefined, {
-                  refresh: true,
+        {/* Night Pool — 칩(또는 큐 바)·액션바가 카드 위에 뜬다 (DESIGN.md Layout). */}
+        <View style={styles.topOverlay} pointerEvents="box-none">
+          {/* 2026-07-08 Seeded Mix 2차 — 큐 중엔 FilterChips 대신 큐 바.
+              필터는 일반 덱 전용 (큐 덱은 후보 12 이하 고정 셋이라 서버 필터 무의미).
+              3차 업스케일 — seed 미니 포스터(작품 큐만) + display 위계 라벨 + 진행 카운트.
+              테마 큐는 포스터 생략 + 테마 title (seed 작품 비노출 정책 — 2차 확정 유지). */}
+          {inMix && mixSeed ? (
+            <View style={styles.mixBar} testID="mix-bar">
+              {!mixTheme && mixSeed.posterUrl ? (
+                <Image
+                  source={{ uri: mixSeed.posterUrl }}
+                  style={styles.mixBarPoster}
+                  contentFit="cover"
+                  transition={0}
+                />
+              ) : null}
+              <View style={styles.mixBarLabelGroup}>
+                <Text style={styles.mixBarTitle} numberOfLines={1}>
+                  {mixTheme ? mixTheme.title : mixLabelOf(mixSeed.title)}
+                </Text>
+                {mixCandidatesLoaded && mixTotal > 0 ? (
+                  <Text style={styles.mixBarCount} testID="mix-count">
+                    {Math.min(mixTopIdx + 1, mixTotal)} / {mixTotal}
+                  </Text>
+                ) : null}
+              </View>
+              <Button
+                label="종료"
+                size="sm"
+                variant="ghost"
+                onPress={handleMixRelease}
+                accessibilityLabel="큐 종료"
+                testID="mix-release"
+              />
+            </View>
+          ) : (
+            <FilterChips
+              filterType={filterType}
+              filterOrigin={filterOrigin}
+              filterYear={filterYear}
+              filterRating={filterRating}
+              filterOTTs={filterOTTs}
+              availableOTTs={availableOTTs}
+              disabled={state === 'loading'}
+              onFilterChange={(t, o) => applyFilterChange({ type: t, origin: o })}
+              onYearChange={(y) => applyFilterChange({ year: y })}
+              onRatingChange={(r) => applyFilterChange({ rating: r })}
+              onOTTChange={(otts) => applyFilterChange({ otts })}
+              // 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — FilterChips leftmost 신규.
+              myOTTToggle={myOTTToggle}
+              myOTTAvailable={subscribedOtt.length > 0}
+              onMyOTTToggle={handleMyOTTToggle}
+              onMyOTTSetupNavigate={handleMyOTTSetupNavigate}
+              // 4차 — 필터 dropdown 열림 시 케밥 인메뉴 닫기 (동시 오픈 방지).
+              onDropdownOpen={() => setCardMenuOpen(false)}
+            />
+          )}
+
+        </View>
+
+        {/* 2026-05-19 native↔PWA 정합 (항목 1, 증상 B) — ActionBar 자리 항상 확보.
+            기존: ActionBar 가 `state==='ready' && currentRec` 조건부 렌더 → loading→ready
+            전환·탭 재진입 시 ActionBar 가 mount/unmount 되며 stackWrap(flex:1) 이
+            ACTION_BAR_HEIGHT(64px) 만큼 재배분 → 카드(absolute top0/bottom8)가 한 프레임
+            "늘어났다 줄어드는" jank.
+            해결: 항상 높이 ACTION_BAR_HEIGHT 인 slot 을 두고, ready 가 아닐 땐 내부를
+            비워둔다. slot 자체 높이가 불변 → stackWrap 이 어느 상태에서나 동일 공간.
+            (web 은 loading/error/empty 를 전체화면 컴포넌트로 early-return 하므로 ready
+            상태의 ActionBar 가 항상 렌더 — 구조상 jank 가 없다. native 는 같은
+            SafeAreaView 안에서 분기하므로 slot 고정으로 동등 효과를 만든다.) */}
+        <View style={styles.actionBarSlot} pointerEvents="box-none">
+          {/* 2026-07-08 Seeded Mix 2차 — mix 덱에서도 ActionBar 동작 (save/share/detail).
+              rewind 는 활성 덱 처음으로, refresh 는 믹스 해제 후 일반 새로고침. */}
+          {(state === 'ready' || inMix) && currentRec && (
+            <ActionBar
+              ref={saveBtnRef}
+              isSaved={isLiked}
+              canRewind={activeTopIdx > 0}
+              saveFlash={saveFlash}
+              savePulling={savePulling && isDragging}
+              onRewind={() => (inMix ? setMixTopIdx(0) : setTopIdx(0))}
+              onShare={handleShare}
+              onOpenDetail={() => {
+                // W5 Task C 7.1 — ActionBar Detail 버튼은 web 정본 source='action_bar'.
+                // (web `apps/web/src/app/discover/page.tsx:683` 정합.)
+                track('detail_opened', {
+                  tmdb_id: currentRec.tmdbId,
+                  title: currentRec.title,
+                  providers_count: currentRec.providers.length,
+                  source: 'action_bar',
                 });
-                return;
-              }
-              void handleRefresh();
-            }}
-            onToggleSave={toggleLike}
-          />
-        )}
+                setDetailOpen(true);
+                // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
+                setDetailOpenCount((c) => c + 1);
+              }}
+              onRefresh={() => {
+                // 4차 — 큐 중 새로고침 = 해제가 아니라 같은 seed/테마로 큐 재생성
+                // (recHistory/saved 제외 적용 → 이미 본 카드 걷어낸 새 목록).
+                if (inMix && mixSeed) {
+                  handleMixStart(mixSeed, mixSourceRef.current, mixTheme ?? undefined, {
+                    refresh: true,
+                  });
+                  return;
+                }
+                void handleRefresh();
+              }}
+              onToggleSave={toggleLike}
+            />
+          )}
+        </View>
+
       </View>
 
       <DetailSheet
@@ -2340,6 +2342,9 @@ export default function DiscoverScreen() {
   );
 }
 
+// 칩 줄(top 8 + 높이 44) 아래 케밥 버튼
+const CARD_MENU_TOP = 60;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   // 헤더는 DiscoverHeader 컴포넌트로 분리 (워드마크 + 페르소나 chip + search).
@@ -2347,9 +2352,23 @@ const styles = StyleSheet.create({
   // 항목 1 (증상 B) — ActionBar 고정 높이 slot. ready 여부와 무관하게 항상
   // ACTION_BAR_HEIGHT(64px) 점유 → stackWrap flex 재배분으로 인한 카드 점프 차단.
   // ActionBar 컴포넌트 자체 높이(saveBtn 56 + pb 8)도 64 라 slot 을 정확히 채운다.
+  // 카드 위에 뜨는 액션바 — 카드 하단(bottom 6) 안쪽.
   actionBarSlot: {
+    position: 'absolute',
+    left: 6,
+    right: 6,
+    bottom: 6,
     height: ACTION_BAR_HEIGHT,
     justifyContent: 'flex-end',
+    zIndex: 20,
+  },
+  // 카드 위에 뜨는 칩 줄 / 큐 바 — 카드 상단 안쪽.
+  topOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 6,
+    right: 6,
+    zIndex: 20,
   },
   stack: { flex: 1, position: 'relative' },
   // 3차 — 케밥(⋮) 버튼. DetailSheet topNavBtn 정본 계열 (44×44 원형, surfaceRaised).
@@ -2357,14 +2376,17 @@ const styles = StyleSheet.create({
   // 수직 중심 정렬. right 26 = 카드 인셋 12 + 내부 14.
   cardMenuBtn: {
     position: 'absolute',
-    top: 14,
-    right: 26,
+    top: CARD_MENU_TOP,
+    right: 18,
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+    zIndex: 20,
   },
   // 인라인 메뉴 — 케밥 바로 아래 anchor. surface + border, Quiet Ink (그림자/amber 無).
   cardMenuBackdrop: {
@@ -2375,98 +2397,82 @@ const styles = StyleSheet.create({
   // surfaceRaised + radius.lg + shadow-dropdown + option 패딩/타이포.
   cardMenu: {
     position: 'absolute',
-    top: 66,
-    right: 26,
+    top: CARD_MENU_TOP + 52,
+    right: 18,
     minWidth: 180,
     maxWidth: 260,
-    padding: spacing.sm + 4,
+    padding: spacing.sm,
     backgroundColor: colors.surfaceRaised,
-    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.toast,
+    zIndex: 30,
     ...shadowsNative.dropdown,
   },
   cardMenuItem: {
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.toast,
   },
   cardMenuItemPressed: {
     backgroundColor: colors.overlayLight,
   },
   cardMenuItemText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '400',
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
   },
   // 큐 바 — FilterChips 자리 대체. 4차: 인셋 8 (아웃라인 프레임과 동일) + 상단
   // radius 20 (카드 16 + 옵셋 4 정합). accentDim 솔리드 캡은 유지 — 아래 아웃라인과
   // 합쳐 "하이라이트 컨테이너" 로 읽힘 (amber 1건 예산 내).
+  // 큐 바 — 카드 위에 뜨는 바 (칩 줄 자리). 불투명 raised + border (4단계 유리 전 대체).
   mixBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56,
-    marginHorizontal: 8,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-    backgroundColor: colors.aquaDim,
+    minHeight: 52,
+    marginHorizontal: 6,
+    borderRadius: radius.toast,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm + 4,
+    paddingVertical: 6,
+    gap: spacing.sm + 4,
+    backgroundColor: colors.surfaceRaised,
   },
-  // 큐 하이라이트 플레이트 — 아웃라인 폐기 (4차-2 피드백: 선이 조악) → 솔리드
-  // 컨테이너 복귀 + 카드가 4px 패딩으로 안에 앉는 구조. 플레이트 인셋 8 vs 카드
-  // 인셋 12(좌우)/8(하단, 플레이트 bottom 4) + stack marginTop 4 = 사방 4px 패딩.
-  // 하단은 bottom 4 에서 끝나 하트 버튼과 안 겹침. radius 20 = 카드 16 + 패딩 4.
+  // 큐 하이라이트 플레이트 — 카드 둘레 4px 아쿠아 옅은 면 (카드 radius 24 + 4).
   mixFrame: {
     position: 'absolute',
-    left: 8,
-    right: 8,
+    left: 2,
+    right: 2,
     top: 0,
-    bottom: 4,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    bottom: 2,
+    borderRadius: radius.card + 4,
     backgroundColor: colors.aquaDim,
   },
-  // 큐 중 카드 스택 상단 4px 내림 — 큐 바와 카드 사이에도 패딩 밴드 노출.
   mixStackInset: {
     marginTop: 4,
   },
-  // seed 미니 포스터 (작품 큐만) — 2:3 비율 28×42, 카드 radius 계열 sm.
+  // seed 미니 포스터 (작품 큐만) — 2:3 비율 26×39, radius 6.
   mixBarPoster: {
-    width: 28,
-    height: 42,
-    borderRadius: radius.sm,
+    width: 26,
+    height: 39,
+    borderRadius: 6,
     backgroundColor: colors.surface,
   },
   mixBarLabelGroup: {
     flex: 1,
     gap: 1,
   },
-  // display 폰트 위계 업스케일 (구 15/700 body → 17 display).
   mixBarTitle: {
     color: colors.textPrimary,
-    fontSize: 17,
+    fontSize: 15,
     fontFamily: fontsV2.title,
-    letterSpacing: -0.34,
+    letterSpacing: -0.3,
   },
-  // 진행 카운트 — 데이터 위계 (Geist Mono, textMuted).
   mixBarCount: {
-    color: colors.textMuted,
+    color: colors.textSecondary,
     fontSize: 11,
     fontFamily: fontsV2.data,
-    letterSpacing: 0.2,
-  },
-  // Ghost variant — 배경 투명 + 보더 (DESIGN.md §Buttons).
-  mixBarRelease: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-  },
-  mixBarReleaseText: {
-    color: colors.textPrimary,
-    fontSize: 12,
-    fontWeight: '500',
   },
   centered: {
     flex: 1,
@@ -2497,7 +2503,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     color: colors.textPrimary,
     fontSize: 15,        // text-base
-    fontWeight: '500',
+    fontFamily: fontsV2.bodySemi,
     textAlign: 'center',
   },
   emptyHint: {
@@ -2512,19 +2518,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: spacing.lg, // 설명→CTA gap = space-lg(24)
-  },
-  // Ghost variant — 배경 투명, 보더 only (DESIGN.md §Buttons Ghost 정합).
-  ghostBtn: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 999,
-  },
-  ghostBtnText: {
-    color: colors.textPrimary,
-    fontSize: 13,
-    fontWeight: '500',
   },
 });

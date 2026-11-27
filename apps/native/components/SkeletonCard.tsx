@@ -10,6 +10,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { colors, radius, shadowsNative, useThemeColors } from '../lib/tokens';
+import { CARD_BOTTOM_OVERLAY } from './SwipeCard';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
@@ -90,12 +91,6 @@ export default function SkeletonCard() {
       // DESIGN.md L219 — Skeleton: aria-busy 부모, 자식 aria-hidden.
       accessibilityState={{ busy: true }}
     >
-      {/* top row — 카테고리 칩(좌) + 별점 칩(우) */}
-      <View style={styles.topRow} pointerEvents="none">
-        <Animated.View style={[styles.catChip, pulseStyle]} />
-        <Animated.View style={[styles.ratingChip, pulseStyle]} />
-      </View>
-
       {/* bottom info — subtitle / title / meta 2라인 / OTT 3칩 */}
       <View style={styles.bottomInfo} pointerEvents="none">
         <Animated.View style={[styles.subTitleBar, pulseStyle]} />
@@ -117,68 +112,46 @@ const styles = StyleSheet.create({
   card: {
     position: 'absolute',
     top: 0,
-    bottom: 8,
-    left: 12,
-    right: 12,
-    borderRadius: radius.xl,
+    bottom: 6,
+    left: 6,
+    right: 6,
+    borderRadius: radius.card,
     overflow: 'hidden',
     backgroundColor: colors.surface,
     ...shadowsNative.lg,
-  },
-  // SwipeCard topRow 정합 — top/left/right 14, space-between.
-  topRow: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  // 카테고리 칩 placeholder — CatChip(~48×24) 근사, radius-sm.
-  catChip: {
-    width: 52,
-    height: 24,
-    borderRadius: radius.sm,
-  },
-  // 별점 칩 placeholder — RatingChip(~52×24) 근사, radius-sm.
-  ratingChip: {
-    width: 52,
-    height: 24,
-    borderRadius: radius.sm,
   },
   // SwipeCard bottomInfo 정합 — left/right 18, bottom 16.
   bottomInfo: {
     position: 'absolute',
     left: 18,
     right: 18,
-    bottom: 16,
+    bottom: CARD_BOTTOM_OVERLAY + 12,
   },
   // subtitle(year·titleEn) — text-sm 한 줄, marginBottom 6 (SwipeCard subTitle 정합).
   subTitleBar: {
     width: '45%',
     height: 13,
-    borderRadius: radius.sm,
+    borderRadius: radius.badge,
     marginBottom: 8,
   },
   // title — text-2xl(28) 한 줄, marginBottom 10 (SwipeCard title 정합).
   titleBar: {
     width: '70%',
-    height: 26,
-    borderRadius: radius.sm,
+    height: 34,
+    borderRadius: radius.badge,
     marginBottom: 12,
   },
   // meta(reason) — 2라인, lineHeight 18 (SwipeCard reason 정합).
   metaBar: {
     width: '85%',
     height: 13,
-    borderRadius: radius.sm,
+    borderRadius: radius.badge,
     marginBottom: 6,
   },
   metaBarShort: {
     width: '60%',
     height: 13,
-    borderRadius: radius.sm,
+    borderRadius: radius.badge,
     marginBottom: 14,
   },
   // OTT row — gap 6, 22×22 radius-sm (SwipeCard ottRow/ottChip 정합).
@@ -190,6 +163,6 @@ const styles = StyleSheet.create({
   ottChip: {
     width: 22,
     height: 22,
-    borderRadius: radius.sm,
+    borderRadius: radius.badge,
   },
 });

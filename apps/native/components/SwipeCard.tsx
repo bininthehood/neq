@@ -15,7 +15,7 @@ import type { Recommendation } from '../lib/types';
 import { getOTTIcon, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
 import { fontsV2, easings, durations } from '@neq/design';
-import { colors, radius, shadowsNative, useThemeColors } from '../lib/tokens';
+import { colors, palette, radius, shadowsNative, useThemeColors } from '../lib/tokens';
 
 // 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
 //   - dismissX / isDismissing prop 폐기. dragX 단일 SharedValue 로 PWA 정합.
@@ -109,6 +109,14 @@ const SPRING_BEZIER = Easing.bezier(...easings.spring);
 // ─────────────────────────────────────────────────────
 
 type CardCategory = 'movie' | 'series' | 'variety';
+
+// 카드 하단 청록 잉크 (DESIGN.md Color — 검정 아님). 포스터 위라 테마 무관.
+const CARD_INK = ['rgba(4,20,24,0)', 'rgba(4,20,24,0.82)', 'rgba(4,20,24,0.96)'] as const;
+// 포스터·잉크 위 글자는 테마 무관 밝은 값 (라이트 모드에서도 어두운 잉크 위)
+const ON_INK = palette.dark;
+const HANGUL = /[\u3131-\uD79D]/;
+/** ActionBar 가 카드 위에 뜨므로 정보 영역을 그만큼 올린다 (index.tsx 와 공유). */
+export const CARD_BOTTOM_OVERLAY = 64;
 
 const CAT_LABEL: Record<CardCategory, string> = {
   movie: '영화',
@@ -262,7 +270,6 @@ export function CardInner({
   immersive: boolean;
   depth: number;
 }) {
-  const t = useThemeColors(); // LinearGradient 색은 hex (lib/tokens.ts)
   // 2026-05-20 — Recommendation.type 3종 (`'movie' | 'series' | 'variety'`) 확장 완료.
   // 서버 enrichment 가 TV + Reality/Talk 장르 통과 시 'variety' 라벨. as string 캐스팅
   // 제거하고 직접 매핑.
@@ -303,8 +310,8 @@ export function CardInner({
       {/* bottom gradient overlay — 텍스트 가독. CardVariantA 정합 3-stop:
           50% transparent → 92% bg-overlay-heavy → 100% bg-overlay-solid. */}
       <LinearGradient
-        colors={['transparent', t.overlayHeavy, t.overlaySolid]}
-        locations={[0.5, 0.92, 1]}
+        colors={CARD_INK}
+        locations={[0.45, 0.8, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -320,10 +327,12 @@ export function CardInner({
             pointerEvents="none"
           >
             <Text style={styles.subTitle} numberOfLines={1}>
-              {year ? `${year} · ${titleEn}` : titleEn}
+              {year ? <Text style={styles.subYear}>{year} · </Text> : null}
+              {/* Unbounded 에는 한글이 없다 — 한글이 섞인 제목은 SUIT 로 */}
+              <Text style={HANGUL.test(titleEn) ? styles.subKo : styles.subEn}>{titleEn}</Text>
             </Text>
             {/* 2026-06-06 B-3 — refresh-race spec testID 정확 매칭 (root 와 동일 tmdbId). */}
-            <Text style={styles.title} testID={`swipe-card-title-${rec.tmdbId}`}>
+            <Text style={styles.title} numberOfLines={2} testID={`swipe-card-title-${rec.tmdbId}`}>
               {rec.title}
             </Text>
             {/* 4차-3 (2026-07-10) — 필을 타이틀 아래 고정 row 로. 인라인(A안)은 제목
@@ -370,16 +379,16 @@ export function CardInner({
 }
 
 const styles = StyleSheet.create({
+  // 카드 radius 24, 좌우 6 (DESIGN.md Layout — 카드가 화면을 거의 채운다)
   card: {
     position: 'absolute',
     top: 0,
-    bottom: 8,
-    left: 12,
-    right: 12,
-    borderRadius: radius.xl, // T-1 정정 후 16px (PWA --radius-xl 정합)
+    bottom: 6,
+    left: 6,
+    right: 6,
+    borderRadius: radius.card,
     overflow: 'hidden',
     // backgroundColor 는 inline (useThemeColors) — Animated.View 정적 style 에 동적 색 금지
-    // C-2 / T-2 — CardVariantA boxShadow var(--shadow-lg). shadowsNative 헬퍼 경유.
     ...shadowsNative.lg,
   },
   fallback: {
@@ -392,75 +401,69 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 48,
   },
-  // 배지 row — 타이틀 아래 고정 (제목 길이와 무관한 일정 위치).
   badgeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 6,
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 10,
   },
-  // DetailSheet heroBadges 정본 (DetailSheet.tsx styles.ratingPill/typePill 동일값):
-  // bg rgba(0,0,0,0.5), radius-sm, padding 10×4, fontSize 11, Geist Mono, ls 0.2.
+  // 뱃지 radius 8, 청록 잉크 받침
   ratingPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    height: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderRadius: radius.badge,
+    backgroundColor: 'rgba(4,20,24,0.55)',
   },
   ratingPillText: {
-    color: colors.lime, // 포스터 위 어두운 받침 — 테마 무관
-    fontSize: 11,
-    fontFamily: fontsV2.data,
-    letterSpacing: 0.2,
+    color: ON_INK.textPrimary,
+    fontSize: 12,
+    fontFamily: fontsV2.dataMedium,
   },
   typePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    height: 24,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderRadius: radius.badge,
+    backgroundColor: 'rgba(4,20,24,0.55)',
   },
   typePillText: {
-    color: colors.textPrimary,
-    fontSize: 11,
-    fontFamily: fontsV2.data,
-    letterSpacing: 0.2,
+    color: ON_INK.textSecondary,
+    fontSize: 12,
+    fontFamily: fontsV2.bodySemi,
   },
-  // bottom info — CardVariantA: left/right 18, bottom 16
   bottomInfo: {
     position: 'absolute',
     left: 18,
     right: 18,
-    bottom: 16,
+    bottom: CARD_BOTTOM_OVERLAY + 12,
   },
-  // year · titleEn — Instrument Serif italic, text-sm(13), accent, letterSpacing 0.02em
   subTitle: {
-    fontFamily: fontsV2.bodySemi,
-    fontSize: 13,
-    color: colors.aqua, // 포스터 그라디언트 위 — 테마 무관 원색
-    letterSpacing: 0.26,
+    fontSize: 12,
+    color: ON_INK.aqua,
     marginBottom: 6,
   },
-  // title — font-body(Pretendard→RN system) 700, text-2xl(28), letterSpacing -0.025em,
-  // lineHeight 1.15. native 가 거꾸로 세리프를 쓰던 오류 정정 → 시스템 폰트 700.
+  subYear: { fontFamily: fontsV2.data },
+  // 영문 원제 Unbounded 700 + 0.02em
+  subEn: { fontFamily: fontsV2.en, letterSpacing: 0.24 },
+  subKo: { fontFamily: fontsV2.bodySemi, fontSize: 13 },
+  // 카드 한글 제목 — SUIT 900, 34 / 1.15 / -0.035em (시그니처)
   title: {
-    fontFamily: fontsV2.body, // undefined → RN system font (iOS San Francisco)
-    fontWeight: '700',
-    fontSize: 28,
-    color: colors.textPrimary,
-    letterSpacing: -0.7,
-    lineHeight: 32,
+    fontFamily: fontsV2.title,
+    fontSize: 34,
+    lineHeight: 39,
+    letterSpacing: -1.2,
+    color: ON_INK.textPrimary,
   },
-  // reason — font-body 400, text-sm(13), rgba(237,237,239,0.85), lineHeight 1.4, maxWidth 85%
   reason: {
     fontFamily: fontsV2.body,
-    fontWeight: '400',
-    fontSize: 13,
-    color: 'rgba(237,237,239,0.85)',
-    lineHeight: 18,
+    fontSize: 14,
+    color: 'rgba(243,250,248,0.86)',
+    lineHeight: 20,
     marginBottom: 12,
-    maxWidth: '85%',
+    maxWidth: '88%',
   },
-  // OTT — gap 6, OttChip 22×22 radius-sm
   ottRow: {
     flexDirection: 'row',
     gap: 6,
@@ -469,7 +472,7 @@ const styles = StyleSheet.create({
   ottChip: {
     width: 22,
     height: 22,
-    borderRadius: radius.sm,
+    borderRadius: 6,
     backgroundColor: colors.surface,
   },
 });
