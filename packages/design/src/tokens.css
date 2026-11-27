@@ -1,77 +1,62 @@
 /* ─────────────────────────────────────────────────────
-   Neko Design System — Quiet Ink (amber pivot)
-   Foundation tokens: colors, typography, motion, radii.
+   neq Design System — Night Pool (2026-11-26, DESIGN.md 정본)
+   Foundation tokens: colors (다크·라이트), typography, motion, radii.
    ─────────────────────────────────────────────────────
-   출처: _workspace/design-handoff/_incoming/neq-design/project/system/colors_and_type.css
-   적용: apps/web/src/app/globals.css 에 @import "@neq/design/tokens.css" 또는 직접 link
-   상태: 신규. 기존 Fraunces/Outfit/Pretendard 시스템과 병행 가능 (Stage 4 D1~D5 진입 시 전환)
-   참조: stage4-prep.md, day25-aux-summary (디자인 산출물 분석)
+   - 색 값은 packages/design/src/tokens.ts 의 palette.dark / palette.light 와 같아야 한다
+     (__tests__/tokens.test.ts 가 검사).
+   - 웹(PWA)은 1.1.0 전까지 tokens-quiet-ink.css(옛 값 사본)를 import 한다 (계획 X1).
+     이 파일은 6단계 웹 반영에서 globals.css 가 다시 가리킨다.
+   - 옛 amber 강조 변수는 삭제했다 (계획 D5). --lime(채움) / --lime-text / --aqua / --aqua-text 를 쓴다.
    ───────────────────────────────────────────────────── */
 
-/* Webfonts — 폰트 로드는 layout.tsx 의 next/font 또는 <link> 로 처리.
-   이유: globals.css 에서 @import "@neq/design/tokens.css" 시 Turbopack inline 결과
-   이 @import url(...) 이 tailwindcss 규칙 뒤로 밀려 CSS spec 위반 (Day 25 Day 26 회귀).
-   - Pretendard Variable: 이미 layout.tsx <head> 에서 <link> preload 중
-   - Instrument Serif, Geist Mono: Stage 4 D1 진입 시 next/font/google 로 추가 권장
-     (참조: _workspace/day25-aux-summary.md §6, _workspace/stage4-prep.md §0.5.3)
-*/
-/* @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css"); */
-/* @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist+Mono:wght@400;500;600&display=swap"); */
+/* Webfonts — 폰트 로드는 layout.tsx(next/font) 또는 <link> 로 처리한다 (globals.css 의 @import url(...) 은
+   Turbopack inline 결과 tailwindcss 규칙 뒤로 밀려 CSS spec 위반 — Day 25/26 회귀). 6단계 웹 반영에서 추가. */
 
 :root {
   /* ── Background hierarchy ─────────────────────── */
-  --bg:               #12110E;   /* app background — neutral warm dark */
-  --surface:          #1A1916;   /* cards, modal */
-  --surface-raised:   #24231E;   /* hover, active, selected */
-  --surface-sunken:   #0B0A07;   /* inset, input bg */
+  --bg:               #071B20;   /* 깊은 청록 밤 */
+  --surface:          #0E252A;
+  --surface-raised:   #17343A;
+  --surface-sunken:   #04141A;
 
   /* ── Borders ──────────────────────────────────── */
-  --border:           #2E2D27;
-  --border-subtle:    #1F1E1A;
-  --border-strong:    #3A3833;
+  --border:           #23444A;
+  --border-subtle:    #183539;
+  --border-strong:    #335A60;
 
   /* ── Text ─────────────────────────────────────── */
-  --text-primary:     #EDEDEF;   /* 15.2:1 AAA */
-  --text-secondary:   #8E8F9A;   /* 5.8:1 AA */
-  --text-muted:       #6B6C75;   /* 3.2:1 large-text AA */
-  --text-inverse:     #12110E;
+  --text-primary:     #F3FAF8;
+  --text-secondary:   #A9C2C0;
+  --text-muted:       #6F8E8C;
+  --text-inverse:     #071B20;   /* lime·danger 채움 위 글자 */
+  --text-primary-dim: rgba(243, 250, 248, 0.07);
 
-  /* ── Accent — amber/gold (서점·아카이브) ───── */
-  --accent:           #C4A35A;
-  --accent-hover:     #D4B36A;
-  --accent-dim:       rgba(196, 163, 90, 0.12);
-  --accent-border:    rgba(196, 163, 90, 0.25);
-  --accent-border-light: rgba(196, 163, 90, 0.15);
+  /* ── Brand — lime(행동) / aqua(길 안내) ───────── */
+  --lime:             #D8F547;
+  --lime-text:        #D8F547;
+  --lime-dim:         rgba(216, 245, 71, 0.14);
+  --aqua:             #58DCCB;
+  --aqua-text:        #58DCCB;
+  --aqua-dim:         rgba(88, 220, 203, 0.14);
+  --aqua-border:      rgba(88, 220, 203, 0.30);
 
   /* ── Semantic ─────────────────────────────────── */
-  --danger:           #E05A4F;
-  --danger-dim:       rgba(224, 90, 79, 0.14);
-  --danger-overlay:   rgba(224, 90, 79, 0.22);
-  --warning:          #D4A245;
-  --warning-dim:      rgba(212, 162, 69, 0.14);
-  --info:             #7BA3D4;       /* desaturated teal-blue, separated from accent */
-  --info-dim:         rgba(123, 163, 212, 0.12);
-  --success:          #4DB06A;
-  --success-dim:      rgba(77, 176, 106, 0.14);
+  --danger:           #FF7A6B;
+  --danger-dim:       rgba(255, 122, 107, 0.14);
+  --danger-overlay:   rgba(255, 122, 107, 0.22);
+  --warning:          #FFC857;
+  --warning-dim:      rgba(255, 200, 87, 0.14);
+  --info:             #58DCCB;
+  --info-dim:         rgba(88, 220, 203, 0.14);
+  --success:          #D8F547;
+  --success-dim:      rgba(216, 245, 71, 0.14);
 
-  /* ── Overlay tokens — bg(18,17,14) ────────────── */
-  --bg-overlay-light: rgba(18, 17, 14, 0.4);
-  --bg-overlay:       rgba(18, 17, 14, 0.7);
-  --bg-overlay-heavy: rgba(18, 17, 14, 0.85);
-  --bg-overlay-dense: rgba(18, 17, 14, 0.92);
-  --bg-overlay-solid: rgba(18, 17, 14, 0.97);
-
-  --text-primary-dim: rgba(237, 237, 239, 0.07);
-
-  /* ── Category colors (badges only) ─────────────
-     도메인 카테고리 3종 (DECISIONS.md #26, Day 26):
-     - movie   = amber (브랜드 액센트 동조)
-     - series  = violet (TV/시리즈 톤)
-     - variety = coral  (예능 — 따뜻하고 활기, 디자인 산출물 neko-data.jsx variety 색)
-     음악·책은 V1 배제. show → variety 로 rename. 5종 → 3종 정리. */
-  --cat-movie:   #C4A35A;
-  --cat-series:  #9B8AE0;
-  --cat-variety: #E08A6C;
+  /* ── Overlay — 청록 잉크 scrim ────────────────── */
+  --bg-overlay-light: rgba(7, 27, 32, 0.4);
+  --bg-overlay:       rgba(7, 27, 32, 0.7);
+  --bg-overlay-heavy: rgba(7, 27, 32, 0.85);
+  --bg-overlay-dense: rgba(7, 27, 32, 0.92);
+  --bg-overlay-solid: rgba(7, 27, 32, 0.97);
 
   /* ── Spacing ──────────────────────────────────── */
   --space-2xs: 2px;
@@ -88,6 +73,14 @@
   --radius-md:   8px;   /* inputs, backdrop image */
   --radius-lg:   12px;  /* cards, buttons */
   --radius-xl:   16px;  /* main card, sheet */
+  /* Night Pool 위계 (DESIGN.md Layout & Shape) */
+  --radius-badge: 8px;
+  --radius-thumb: 14px;
+  --radius-chip:  14px;
+  --radius-toast: 14px;
+  --radius-save:  16px;
+  --radius-card:  24px;
+  --radius-sheet: 32px;
   --radius-full: 9999px;
 
   /* ── Shadows ──────────────────────────────────── */
@@ -98,9 +91,9 @@
   --shadow-toast:    0 2px 12px rgba(0,0,0,0.40);
 
   /* ── Typography — families ────────────────────── */
-  --font-display: 'Instrument Serif', Georgia, 'Noto Serif KR', serif;
-  --font-body:    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-data:    'Geist Mono', 'JetBrains Mono', 'SF Mono', monospace;
+  --font-body:    'SUIT Variable', SUIT, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-en:      'Unbounded', 'SUIT Variable', SUIT, sans-serif;   /* 영문 전용 — 한글 글리프 없음 */
+  --font-data:    'Recursive', 'SF Mono', monospace;              /* MONO 1, CASL 0 */
 
   /* ── Typography — scale ───────────────────────── */
   --text-xs:      0.6875rem;   /* 11 — badges, captions */
@@ -110,7 +103,7 @@
   --text-xl:      1.375rem;    /* 22 — page title */
   --text-2xl:     1.75rem;     /* 28 — large title */
   --text-3xl:     2.25rem;     /* 36 — hero */
-  --text-display: 3rem;        /* 48 — display (Instrument Serif) */
+  --text-display: 3rem;        /* 48 — display */
 
   /* ── Motion — easing ──────────────────────────── */
   --ease-enter:  cubic-bezier(0.25, 1, 0.5, 1);
@@ -118,31 +111,75 @@
   --ease-move:   cubic-bezier(0.45, 0, 0.55, 1);
   --ease-spring: cubic-bezier(0.34, 1.3, 0.64, 1);
   --ease-soft:   cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-jelly:  cubic-bezier(0.3, 1.6, 0.5, 1);
+  --ease-sheet:  cubic-bezier(0.32, 0.72, 0.24, 1);
 
   /* ── Motion — duration ────────────────────────── */
-  --duration-instant:  80ms;
+  --duration-instant:  90ms;
   --duration-quick:    150ms;
   --duration-moderate: 250ms;
-  --duration-steady:   350ms;
+  --duration-steady:   320ms;
   --duration-slow:     500ms;
+  --duration-jelly-release: 280ms;
+  --duration-sheet-enter:   450ms;
+  --duration-sheet-exit:    350ms;
+}
+
+/* ── Light — 시스템 설정을 따른다 ──────────────────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:               #EAF6F5;   /* 연한 민트 */
+    --surface:          #FFFFFF;
+    --surface-raised:   #D8EBE9;
+    --surface-sunken:   #DCEDEB;
+
+    --border:           #B9D4D2;
+    --border-subtle:    #CFE3E1;
+    --border-strong:    #98BAB7;
+
+    --text-primary:     #0F2A2F;
+    --text-secondary:   #43626A;
+    --text-muted:       #6A858A;   /* 큰 글자·힌트 전용 */
+    --text-inverse:     #0F2A2F;
+    --text-primary-dim: rgba(15, 42, 47, 0.07);
+
+    --lime:             #D8F547;   /* 채움 전용 */
+    --lime-text:        #4E6E00;
+    --lime-dim:         rgba(78, 110, 0, 0.12);
+    --aqua:             #58DCCB;
+    --aqua-text:        #007B72;
+    --aqua-dim:         rgba(0, 123, 114, 0.10);
+    --aqua-border:      rgba(0, 123, 114, 0.30);
+
+    --danger:           #C0392B;
+    --danger-dim:       rgba(192, 57, 43, 0.10);
+    --danger-overlay:   rgba(192, 57, 43, 0.18);
+    --warning:          #8A6100;
+    --warning-dim:      rgba(138, 97, 0, 0.12);
+    --info:             #007B72;
+    --info-dim:         rgba(0, 123, 114, 0.10);
+    --success:          #4E6E00;
+    --success-dim:      rgba(78, 110, 0, 0.12);
+
+    --bg-overlay-light: rgba(15, 42, 47, 0.4);
+    --bg-overlay:       rgba(15, 42, 47, 0.7);
+    --bg-overlay-heavy: rgba(15, 42, 47, 0.85);
+    --bg-overlay-dense: rgba(15, 42, 47, 0.92);
+    --bg-overlay-solid: rgba(15, 42, 47, 0.97);
+  }
 }
 
 /* ─────────────────────────────────────────────────────
    Semantic typography classes — use these in markup.
    ───────────────────────────────────────────────────── */
 
-.t-display { /* "오늘 뭐 볼까?" hero */
-  font-family: var(--font-display);
+.t-display { /* "오늘 뭐 볼까?" hero — SUIT 900 + 음수 자간 */
+  font-family: var(--font-body);
   font-size: var(--text-display);
-  font-weight: 400;
+  font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.03em;
   color: var(--text-primary);
-}
-.t-display-italic {
-  font-family: var(--font-display);
-  font-style: italic;
-  font-weight: 400;
 }
 
 .t-h1, .t-page-title {
@@ -170,9 +207,9 @@
   color: var(--text-primary);
 }
 .t-card-title {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: var(--text-3xl);
-  font-weight: 700;
+  font-weight: 900;
   line-height: 1.1;
   letter-spacing: -0.025em;
   color: var(--text-primary);

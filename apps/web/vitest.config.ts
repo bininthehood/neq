@@ -10,6 +10,7 @@ export default defineConfig({
     include: [
       'src/**/*.{test,spec}.?(c|m)[jt]s?(x)',
       '../../packages/core/src/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+      '../../packages/design/src/**/*.{test,spec}.?(c|m)[jt]s?(x)',
     ],
   },
   resolve: {

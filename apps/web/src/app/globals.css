@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "@neq/design/tokens.css";
+@import "@neq/design/tokens-quiet-ink.css";
 
 :root {
   /* Quiet Ink — Design Tokens */

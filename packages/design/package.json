@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens": "./src/tokens.ts",
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./tokens-quiet-ink.css": "./src/tokens-quiet-ink.css"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

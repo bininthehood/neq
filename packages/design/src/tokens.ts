@@ -1,67 +1,122 @@
 /**
- * Quiet Ink 디자인 토큰 — 공유 색상/간격/반경/모션/타이포.
- * 웹은 CSS 변수(`tokens.css`)로, 네이티브는 JS 상수로 사용.
+ * neq 디자인 토큰 — Night Pool (2026-11-26 리디자인, DESIGN.md 정본).
+ * 웹은 CSS 변수(`tokens.css`)로, 네이티브는 `apps/native/lib/tokens.ts` 변환층을 거쳐 사용.
  *
- * 갱신 (Day 25, 보조 세션, 2026-04-30):
- *   - 디자인 산출물 `_workspace/design-handoff/_incoming/neq-design/project/system/colors_and_type.css`
- *     기준으로 누락 항목 보강 (색상 12종 / 간격 2종 / 반경 1종 / 그림자 5종 / 타이포 scale 8종 / 모션 10종)
- *   - 기존 키는 호환 유지 (호출처 영향 0). 신규 키만 추가.
- *   - 폰트는 신규 `fontsV2` 키로 추가 (기존 `fonts.display = Fraunces_700Bold` 유지). Stage 4 D1~D5 진입 시 메인 세션이 전환 결정.
+ * - `palette.dark` / `palette.light`: 순수 문자열 값만 둔다 (react-native import 금지 — 웹 번들 공유).
+ *   iOS 다크·라이트 전환(DynamicColorIOS)은 네이티브 변환층에서 만든다 (계획 X4).
+ * - `accent*` 키는 삭제했다 (계획 D5). 용도별로 `lime`(채움)·`limeText`(라임 의미 글자)·
+ *   `aqua`(원색: 틴트·옅은 면)·`aquaText`(글자·아이콘·선)를 쓴다.
+ *   lime 위 글자는 `textInverse`.
+ * - `tokens.css` 와 값이 같아야 한다 → `__tests__/tokens.test.ts` 가 검사.
+ * - 웹(PWA)은 1.1.0 전까지 `tokens-quiet-ink.css`(옛 값 사본)에 고정돼 있다 (계획 X1).
  */
 
 // ─────────────────────────────────────────────────────
-// Colors — Quiet Ink amber pivot
+// Colors — Night Pool
 // ─────────────────────────────────────────────────────
 
-export const colors = {
+const dark = {
   // Background hierarchy
-  bg: '#12110E',
-  surface: '#1A1916',
-  surfaceRaised: '#24231E',
-  surfaceSunken: '#0B0A07',           // 신규 — input bg, inset
+  bg: '#071B20',
+  surface: '#0E252A',
+  surfaceRaised: '#17343A',
+  surfaceSunken: '#04141A',
 
   // Borders
-  border: '#2E2D27',
-  borderSubtle: '#1F1E1A',            // 신규
-  borderStrong: '#3A3833',            // 신규
+  border: '#23444A',
+  borderSubtle: '#183539',
+  borderStrong: '#335A60',
 
   // Text
-  textPrimary: '#EDEDEF',
-  textSecondary: '#8E8F9A',
-  textMuted: '#6B6C75',
-  textInverse: '#12110E',             // 신규 — accent 위 텍스트
-  textPrimaryDim: 'rgba(237, 237, 239, 0.07)', // 신규
+  textPrimary: '#F3FAF8',
+  textSecondary: '#A9C2C0',
+  textMuted: '#6F8E8C',
+  textInverse: '#071B20', // lime·danger 채움 위 글자
+  textPrimaryDim: 'rgba(243, 250, 248, 0.07)',
 
-  // Accent
-  accent: '#C4A35A',
-  accentHover: '#D4B36A',             // 신규
-  // accentStrong 제거 (2026-05-13, Task D 정합) — web 6bda81e 와 정합.
-  // 사용처 0건 dead token. 향후 strong variant 필요 시 재정의.
-  accentDim: 'rgba(196, 163, 90, 0.12)',
-  accentBorder: 'rgba(196, 163, 90, 0.25)',
-  accentBorderLight: 'rgba(196, 163, 90, 0.15)', // 신규
+  // Brand — lime = 행동(저장·선택·주요 CTA·인생작), aqua = 길 안내(워드마크·현재 탭·링크·평가 선택·포커스)
+  lime: '#D8F547',
+  limeText: '#D8F547',
+  limeDim: 'rgba(216, 245, 71, 0.14)',
+  aqua: '#58DCCB',
+  aquaText: '#58DCCB',
+  aquaDim: 'rgba(88, 220, 203, 0.14)',
+  aquaBorder: 'rgba(88, 220, 203, 0.30)',
 
   // Semantic
-  danger: '#E05A4F',
-  dangerDim: 'rgba(224, 90, 79, 0.14)',
-  dangerOverlay: 'rgba(224, 90, 79, 0.22)', // 신규
-  warning: '#D4A245',                 // 신규
-  warningDim: 'rgba(212, 162, 69, 0.14)', // 신규
-  info: '#7BA3D4',                    // 신규
-  infoDim: 'rgba(123, 163, 212, 0.12)', // 신규
-  success: '#4DB06A',                 // 신규
-  successDim: 'rgba(77, 176, 106, 0.14)', // 신규
+  danger: '#FF7A6B',
+  dangerDim: 'rgba(255, 122, 107, 0.14)',
+  dangerOverlay: 'rgba(255, 122, 107, 0.22)',
+  warning: '#FFC857',
+  warningDim: 'rgba(255, 200, 87, 0.14)',
+  info: '#58DCCB',
+  infoDim: 'rgba(88, 220, 203, 0.14)',
+  success: '#D8F547', // DESIGN.md: success = 라임
+  successDim: 'rgba(216, 245, 71, 0.14)',
 
-  // Overlay
-  overlayLight: 'rgba(18, 17, 14, 0.4)',
-  overlay: 'rgba(18, 17, 14, 0.7)',
-  overlayHeavy: 'rgba(18, 17, 14, 0.85)',
-  overlayDense: 'rgba(18, 17, 14, 0.92)', // 신규
-  overlaySolid: 'rgba(18, 17, 14, 0.97)', // 신규
+  // Overlay — 청록 잉크 scrim (검정 아님)
+  overlayLight: 'rgba(7, 27, 32, 0.4)',
+  overlay: 'rgba(7, 27, 32, 0.7)',
+  overlayHeavy: 'rgba(7, 27, 32, 0.85)',
+  overlayDense: 'rgba(7, 27, 32, 0.92)',
+  overlaySolid: 'rgba(7, 27, 32, 0.97)',
+} as const;
 
-  // Category badges (3종 — DECISIONS.md #26, Day 26)
-  // movie = amber / series = violet / variety = coral.
-  // 음악·책은 V1 배제. show → variety 로 rename. 5종 → 3종.
+type PaletteKey = keyof typeof dark;
+
+const light: Record<PaletteKey, string> = {
+  bg: '#EAF6F5',
+  surface: '#FFFFFF',
+  surfaceRaised: '#D8EBE9',
+  surfaceSunken: '#DCEDEB',
+
+  border: '#B9D4D2',
+  borderSubtle: '#CFE3E1',
+  borderStrong: '#98BAB7',
+
+  textPrimary: '#0F2A2F',
+  textSecondary: '#43626A',
+  textMuted: '#6A858A', // 3.6:1 — 큰 글자·힌트 전용
+  textInverse: '#0F2A2F',
+  textPrimaryDim: 'rgba(15, 42, 47, 0.07)',
+
+  lime: '#D8F547', // 채움 전용 (밝은 배경 위 글자 금지)
+  limeText: '#4E6E00',
+  limeDim: 'rgba(78, 110, 0, 0.12)',
+  aqua: '#58DCCB',
+  aquaText: '#007B72',
+  aquaDim: 'rgba(0, 123, 114, 0.10)',
+  aquaBorder: 'rgba(0, 123, 114, 0.30)',
+
+  danger: '#C0392B',
+  dangerDim: 'rgba(192, 57, 43, 0.10)',
+  dangerOverlay: 'rgba(192, 57, 43, 0.18)',
+  warning: '#8A6100',
+  warningDim: 'rgba(138, 97, 0, 0.12)',
+  info: '#007B72',
+  infoDim: 'rgba(0, 123, 114, 0.10)',
+  success: '#4E6E00',
+  successDim: 'rgba(78, 110, 0, 0.12)',
+
+  // scrim 은 라이트에서도 어두운 청록 잉크 (포스터 위 글자·모달 뒤 dim)
+  overlayLight: 'rgba(15, 42, 47, 0.4)',
+  overlay: 'rgba(15, 42, 47, 0.7)',
+  overlayHeavy: 'rgba(15, 42, 47, 0.85)',
+  overlayDense: 'rgba(15, 42, 47, 0.92)',
+  overlaySolid: 'rgba(15, 42, 47, 0.97)',
+};
+
+export const palette = { dark, light } as const;
+export type Palette = Record<PaletteKey, string>;
+
+/**
+ * 하위 호환 — 다크 팔레트의 순수 문자열 값. 웹 테스트·기타 소비처가 컴파일되도록 유지.
+ * 네이티브는 이 객체 대신 `apps/native/lib/tokens.ts` 의 동적 `colors` 를 쓴다.
+ */
+export const colors = {
+  ...dark,
+  // Category badges (DECISIONS.md #26) — Quiet Ink 잔재. DESIGN.md 2026-11-26 에서 표 폐기,
+  // 카테고리 확장 시 Night Pool 기준으로 다시 정한다. 웹 회귀 테스트가 값을 고정하므로 유지.
   catMovie: '#C4A35A',
   catSeries: '#9B8AE0',
   catVariety: '#E08A6C',
@@ -97,6 +152,14 @@ export const radius = {
   md: 8,
   lg: 12,                             // 카드, 버튼 (tokens.css --radius-lg)
   xl: 16,                             // 메인 카드, 바텀시트 (tokens.css --radius-xl)
+  // Night Pool 위계 (DESIGN.md Layout & Shape) — 2단계 화면 적용에서 위 sm~xl 을 대체한다.
+  badge: 8,
+  thumb: 14,
+  chip: 14,                           // 높이 28이면 full(알약형)
+  toast: 14,
+  save: 16,
+  card: 24,
+  sheet: 32,                          // 시트 상단
   full: 9999,
 } as const;
 
@@ -210,38 +273,27 @@ export const fontSizePx = {
 // ─────────────────────────────────────────────────────
 
 /**
- * 기존 폰트 매핑 (Day 14~ 시점). 호환 유지 — 호출처 (apps/native/components 다수) 영향 0.
- * Stage 4 D1~D5 진입 시 메인 세션이 fontsV2 로 전환 결정.
- */
-export const fonts = {
-  display: 'Fraunces_700Bold',
-  displayReg: 'Fraunces_400Regular',
-  data: 'Outfit_600SemiBold',
-  dataReg: 'Outfit_400Regular',
-} as const;
-
-/**
- * 디자인 산출물 (Day 25 분석) 신규 폰트 매핑.
- * - body: Pretendard Variable (한글 + 영문 본문/UI)
- * - display: Instrument Serif (큰 헤더, hero, italic 액센트)
- * - data: Geist Mono (수치 tabular, 라벨)
+ * Night Pool 폰트 (DESIGN.md Typography). 모두 OFL, `apps/native/assets/fonts/` TTF 를
+ * `app.json` expo-font 플러그인으로 빌드에 내장한다 (런타임 useFonts 없음).
  *
- * 2026-05-18 Fix B 적용 — 네이티브 사용 시점:
- *  - InstrumentSerif/GeistMono 는 `@expo-google-fonts/*` 패키지로 로드 (apps/native/app/_layout.tsx)
- *  - 폰트 패밀리 키는 useFonts 등록 이름과 일치 (`InstrumentSerif_400Regular`, `GeistMono_400Regular`)
- *  - Pretendard 는 Expo Google Fonts 미존재 → 시스템 폰트 (iOS San Francisco) 사용
- *    `body` 키를 undefined 로 두면 RN 기본 system font 자동 적용
+ * 값은 iOS 가 등록하는 PostScript 이름 (TTF name table 확인, 2026-11-27):
+ *   SUIT-Regular / SUIT-SemiBold / SUIT-ExtraBold / SUIT-Heavy  (family "SUIT")
+ *   Unbounded-Bold                                              (family "Unbounded")
+ *   RecursiveMonoLnrSt-Regular / RecursiveMonoLnrSt-Med         (family "Recursive Mono Linear Static")
+ * RN iOS 는 PostScript 이름 + fontWeight 를 받으면 같은 family 안에서 가장 가까운 굵기를 고른다.
+ * SUIT 는 400·600·800·900 만 넣었으므로 700 같은 중간 값은 인접 굵기로 붙는다 — 굵기를 명시하려면 아래 키를 쓴다.
+ *
+ * - Unbounded 에는 한글이 없다 → 영문 원제·영문 숫자 강조에만.
+ * - 웹은 6단계 전까지 tokens-quiet-ink.css 의 --font-* 를 그대로 쓴다.
  */
 export const fontsV2 = {
-  // Pretendard 미설치 → undefined 로 RN system font fallback. iOS San Francisco 가
-  // 한글 가독성 우수. 웹은 next/font Pretendard 로딩 시 같은 키 override.
-  body: undefined as string | undefined,
-  bodyMedium: undefined as string | undefined,
-  bodyBold: undefined as string | undefined,
-  display: 'InstrumentSerif_400Regular',
-  displayItalic: 'InstrumentSerif_400Regular_Italic',
-  data: 'GeistMono_400Regular',
-  dataMedium: 'GeistMono_500Medium',
+  body: 'SUIT-Regular',          // 본문 400
+  bodySemi: 'SUIT-SemiBold',     // 라벨·버튼 600
+  bodyHeavy: 'SUIT-ExtraBold',   // 한글 제목 800
+  title: 'SUIT-Heavy',           // 한글 제목 900 (시그니처)
+  en: 'Unbounded-Bold',          // 영문 원제·영문 강조 700
+  data: 'RecursiveMonoLnrSt-Regular',  // 숫자·데이터 (tabular)
+  dataMedium: 'RecursiveMonoLnrSt-Med',
 } as const;
 
 // ─────────────────────────────────────────────────────
@@ -294,6 +346,29 @@ export const durations = {
   swipePassDismiss: 360,
 } as const;
 
+/**
+ * Night Pool 모션 (DESIGN.md Motion & Touch). 위 `easings`/`durations` 는 웹이 1.1.0 전까지
+ * 옛 값으로 쓰므로(X1) 건드리지 않고, 새 값은 여기 둔다. 2단계에서 네이티브가 이쪽으로 옮긴다.
+ */
+export const motion = {
+  easing: {
+    enter: [0.25, 1, 0.5, 1] as const,
+    exit: [0.5, 0, 0.75, 0] as const,
+    move: [0.45, 0, 0.55, 1] as const,
+    jelly: [0.3, 1.6, 0.5, 1] as const,   // 젤리 프레스 복귀 (280ms)
+    sheet: [0.32, 0.72, 0.24, 1] as const,
+  },
+  duration: {
+    instant: 90,      // 젤리 프레스 찌그러짐
+    quick: 150,
+    moderate: 250,
+    steady: 320,
+    jellyRelease: 280,
+    sheetEnter: 450,
+    sheetExit: 350,
+  },
+} as const;
+
 // 헬퍼: 웹 CSS string
 export const cubicBezierCss = (e: readonly [number, number, number, number]): string =>
   `cubic-bezier(${e[0]}, ${e[1]}, ${e[2]}, ${e[3]})`;
@@ -309,7 +384,7 @@ export type Shadows = typeof shadows;
 export type ShadowsNative = typeof shadowsNative;
 export type FontSize = typeof fontSize;
 export type FontSizePx = typeof fontSizePx;
-export type Fonts = typeof fonts;
 export type FontsV2 = typeof fontsV2;
 export type Easings = typeof easings;
 export type Durations = typeof durations;
+export type Motion = typeof motion;
