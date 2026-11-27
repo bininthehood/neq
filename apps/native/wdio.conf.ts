@@ -40,13 +40,13 @@ const udid = isTestFlight
   ? (process.env.IOS_DEVICE_UDID ?? (() => {
       throw new Error('E2E_TARGET=testflight 시 IOS_DEVICE_UDID 환경변수 필요');
     })())
-  : '4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29';
+  : (process.env.IOS_SIM_UDID ?? '4EDF2CB4-81BE-41B2-9D5C-AEB1DDE14E29');
 const deviceName = isTestFlight
   ? (process.env.IOS_DEVICE_NAME ?? 'iPhone')
   : 'iPhone 17 Pro';
 const platformVersion = isTestFlight
   ? (process.env.IOS_PLATFORM_VERSION ?? '26.5')
-  : '26.4';
+  : (process.env.IOS_SIM_VERSION ?? '26.4');
 
 // 실기기 (TestFlight) 전용 — WDA 자동 빌드를 위한 dev signing.
 // xcodeOrgId 는 eas.json submit profile 의 appleTeamId 와 동일.
