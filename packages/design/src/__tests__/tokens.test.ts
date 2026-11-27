@@ -94,7 +94,8 @@ describe('대비', () => {
       expect(contrast(p.aquaText, p.bg)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(p.danger, p.bg)).toBeGreaterThanOrEqual(4.5);
     });
-    it(`${theme}: 작은 보조 글자 textMeta ≥ 4.5 (bg·surface)`, () => {
+    it(`${theme}: 작은 보조 글자 textMeta ≥ 4.5 (bg·surface·raised)`, () => {
+      expect(contrast(p.textMeta, p.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(p.textMeta, p.bg)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(p.textMeta, p.surface)).toBeGreaterThanOrEqual(4.5);
     });

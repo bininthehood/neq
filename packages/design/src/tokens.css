@@ -28,7 +28,7 @@
   --text-primary:     #F3FAF8;
   --text-secondary:   #A9C2C0;
   --text-muted:       #6F8E8C;
-  --text-meta:        #74918F;   /* 작은 보조 글자 (bg 5.2 · surface 4.7) */
+  --text-meta:        #82A09E;   /* 작은 보조 글자 (bg 6.3 · surface 5.7 · raised 4.7) */
   --text-inverse:     #071B20;   /* lime·danger 채움 위 글자 */
   --text-primary-dim: rgba(243, 250, 248, 0.07);
 
@@ -41,6 +41,8 @@
   --wordmark:         #58DCCB;
   --aqua-dim:         rgba(88, 220, 203, 0.14);
   --aqua-border:      rgba(88, 220, 203, 0.30);
+  --glass-tint:       rgba(7, 27, 32, 0.40);
+  --glass-border:     rgba(160, 240, 230, 0.18);
 
   /* ── Semantic ─────────────────────────────────── */
   --danger:           #FF7A6B;
@@ -154,6 +156,8 @@
     --wordmark:         #007B72;
     --aqua-dim:         rgba(0, 123, 114, 0.10);
     --aqua-border:      rgba(0, 123, 114, 0.30);
+    --glass-tint:       rgba(234, 246, 245, 0.92);
+    --glass-border:     rgba(15, 42, 47, 0.10);
 
     --danger:           #C0392B;
     --danger-dim:       rgba(192, 57, 43, 0.10);

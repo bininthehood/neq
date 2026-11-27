@@ -31,7 +31,7 @@ const dark = {
   textPrimary: '#F3FAF8',
   textSecondary: '#A9C2C0',
   textMuted: '#6F8E8C',
-  textMeta: '#74918F', // 작은 보조 글자(메타·캡션) — bg 5.2 · surface 4.7 (muted 는 surface 4.49)
+  textMeta: '#82A09E', // 작은 보조 글자(메타·캡션) — bg 6.3 · surface 5.7 · raised 4.7 (muted 는 surface 4.49)
   textInverse: '#071B20', // lime·danger 채움 위 글자
   textPrimaryDim: 'rgba(243, 250, 248, 0.07)',
 
@@ -44,6 +44,10 @@ const dark = {
   wordmark: '#58DCCB', // 워드마크 tint 전용 (사용자 결정 2026-11-26 — UI 글자색과 분리)
   aquaDim: 'rgba(88, 220, 203, 0.14)',
   aquaBorder: 'rgba(88, 220, 203, 0.30)',
+
+  // Liquid Glass 틴트·테두리 (DESIGN.md Material) — GlassView tintColor 와 대체 없는 유리 테두리
+  glassTint: 'rgba(7, 27, 32, 0.40)',
+  glassBorder: 'rgba(160, 240, 230, 0.18)',
 
   // Semantic
   danger: '#FF7A6B',
@@ -91,6 +95,9 @@ const light: Record<PaletteKey, string> = {
   wordmark: '#007B72', // 워드마크는 DESIGN.md 결정값 그대로
   aquaDim: 'rgba(0, 123, 114, 0.10)',
   aquaBorder: 'rgba(0, 123, 114, 0.30)',
+
+  glassTint: 'rgba(234, 246, 245, 0.92)', // 민트(bg) 0.92 — 흰색 0.55·민트 0.80 은 어두운 포스터 위에서 회색으로 탁해짐(4단계 시뮬 확인)
+  glassBorder: 'rgba(15, 42, 47, 0.10)',
 
   danger: '#C0392B',
   dangerDim: 'rgba(192, 57, 43, 0.10)',
