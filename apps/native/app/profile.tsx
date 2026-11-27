@@ -37,6 +37,7 @@ import {
 } from '../lib/profile-stats';
 import type { WatchReport, SavedItem } from '../lib/types';
 import { colors, radius, spacing, fontsV2, shadowsNative, useThemeColors } from '../lib/tokens';
+import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
 import SearchSheet from '../components/SearchSheet';
@@ -653,7 +654,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scroll: { flex: 1 },
-  scrollContent: { paddingBottom: spacing.xl },
+  scrollContent: { paddingBottom: spacing.xl + TAB_BAR_SPACE }, // 떠 있는 탭바 뒤로 지나감
   section: {
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,

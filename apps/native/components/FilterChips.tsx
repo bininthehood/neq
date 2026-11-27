@@ -22,6 +22,7 @@ import {
 import { colors, fontsV2, radius, spacing, shadowsNative } from '../lib/tokens';
 import { IconCheck, IconChevronDown } from './Icons';
 import { Chip as ChipBase, chipIconColor } from './Chip';
+import { GlassGroup } from './GlassSurface';
 
 type DropdownKey = 'type' | 'origin' | 'year' | 'rating' | 'ott' | null;
 
@@ -126,6 +127,7 @@ export default function FilterChips({
   }) {
     return (
       <ChipBase
+        glass
         onPress={onPress}
         disabled={disabled}
         label={label}
@@ -180,8 +182,10 @@ export default function FilterChips({
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chipRow}
+        contentContainerStyle={styles.chipScroll}
       >
+        {/* 4단계 — 칩 줄 = 유리 묶음 1개 (D9) */}
+        <GlassGroup style={styles.chipRow} spacing={spacing.sm}>
         {/* 2026-06-18 ("내 OTT 만 보기" 토글 — 1.0.3 train) — chip row 의 leftmost.
             기존 5칩 (유형/국가/년도/별점/OTT) 은 dropdown picker → 시각: border-bottom amber.
             본 chip 은 단발 액션 토글 → 시각 구분 위해 *filled chip*:
@@ -190,6 +194,7 @@ export default function FilterChips({
               dis : opacity 0.5 + textMuted (subscribedOtt 0건)
             DESIGN.md L227 Quiet Ink + L466 IconCheck SVG (raw ✓ 글리프 금지) 정합. */}
         <ChipBase
+          glass
           onPress={() => {
             if (disabled) return;
             if (!myOTTAvailable) {
@@ -260,6 +265,7 @@ export default function FilterChips({
           kind="OTT"
           onPress={() => toggle('ott')}
         />
+        </GlassGroup>
       </ScrollView>
 
       {/* 2026-05-20 — dropdown 외부 탭 시 닫기 (사용자 보고). PWA FilterChips 는
@@ -396,10 +402,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 10,
   },
-  chipRow: {
-    gap: spacing.sm,
+  chipScroll: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   panel: {
     position: 'absolute',

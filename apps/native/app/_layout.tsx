@@ -15,6 +15,8 @@ import { ToastProvider } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import { IconDiscover, IconBookmark, IconSearch, IconMix } from '../components/Icons';
 import { emitSearchOpen } from '../lib/search-trigger';
+import { GlassSurface } from '../components/GlassSurface';
+import { TAB_BAR_BOTTOM, TAB_BAR_HEIGHT } from '../lib/tab-bar';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 // 2026-06-01 splash → Welcome (Lottie frame 0) 자연 연결.
@@ -37,8 +39,9 @@ function TabItem({
   label: string;
   focused: boolean;
 }) {
-  // 현재 탭 = 아쿠아 + 옅은 아쿠아 캡슐 (DESIGN.md Iconography). 라벨 11px SUIT 600.
-  const tint = focused ? colors.aquaText : colors.textSecondary;
+  // 현재 탭 = 아쿠아 + 옅은 아쿠아 캡슐 (DESIGN.md Iconography).
+  // 유리 위 글자 규칙(text 색·13 이상·600 이상, DESIGN.md Material) — 비활성도 textPrimary.
+  const tint = focused ? colors.aquaText : colors.textPrimary;
   return (
     <View style={{ alignItems: 'center', gap: 2, minWidth: 64 }}>
       <View
@@ -53,7 +56,7 @@ function TabItem({
       >
         {icon({ color: tint, active: focused })}
       </View>
-      <Text style={{ color: tint, fontSize: 11, fontFamily: fontsV2.bodySemi }}>{label}</Text>
+      <Text style={{ color: tint, fontSize: 13, fontFamily: fontsV2.bodySemi }}>{label}</Text>
     </View>
   );
 }
@@ -156,14 +159,26 @@ function TabsWithGuard() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        // 2026-11-27 Night Pool 4단계 — 떠 있는 유리 탭바 (0단계 결정: 시스템 native tabs 는
+        // tabPress preventDefault 가 없어 검색=시트 열기를 못 지킴 → JS Tabs + GlassSurface 배경).
+        // absolute 라 화면 콘텐츠가 뒤로 지나간다 → 각 화면은 lib/tab-bar TAB_BAR_SPACE 만큼 비켜 준다.
         tabBarStyle: isOnboarding
           ? { display: 'none' }
           : {
-              backgroundColor: colors.bg,
-              borderTopColor: colors.borderSubtle,
-              height: 76,
-              paddingTop: 8,
+              position: 'absolute',
+              marginHorizontal: 16, // left/right 는 BottomTabBar 기본값에 덮여 margin 으로
+              bottom: TAB_BAR_BOTTOM,
+              height: TAB_BAR_HEIGHT,
+              paddingTop: 0,
+              paddingBottom: 0,
+              borderRadius: TAB_BAR_HEIGHT / 2,
+              borderTopWidth: 0,
+              backgroundColor: 'transparent',
+              elevation: 0,
+              shadowOpacity: 0,
             },
+        tabBarBackground: () => <GlassSurface radius={TAB_BAR_HEIGHT / 2} />,
+        tabBarItemStyle: { justifyContent: 'center', alignItems: 'center' },
         tabBarShowLabel: false,
         sceneStyle: { backgroundColor: colors.bg },
         // 2026-05-20 (v3) — 시장 표준 정합. 즉시 전환 (no animation).

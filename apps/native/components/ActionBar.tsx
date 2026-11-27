@@ -8,6 +8,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { colors, radius, spacing, easings, durations, shadowsNative, useThemeColors } from '../lib/tokens';
+import { GlassGroup, GlassSurface, useGlassEnabled } from './GlassSurface';
 import { IconRewind, IconShare, IconDetail, IconRefresh, IconSave } from './Icons';
 
 interface Props {
@@ -60,27 +61,35 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
   const saveActive = isSaved || saveFlash || savePulling;
   // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙) — StyleSheet 대신 inline.
   const t = useThemeColors();
+  const glass = useGlassEnabled();
 
   return (
     <View style={styles.wrap} pointerEvents="box-none">
+      {/* 4단계 — 액션바 = 유리 묶음 1개 (D9). 비활성은 아이콘만 흐리게(유리 조상 opacity 금지). */}
+      <GlassGroup style={styles.wrapInner} spacing={spacing.sm}>
       <View style={styles.left}>
         <JellyPressable
           style={styles.iconBtn}
-          containerStyle={!canRewind && styles.iconDisabled}
           onPress={onRewind}
           disabled={!canRewind}
           accessibilityLabel="처음으로"
           hitSlop={4}
         >
-          <IconRewind size={18} color={colors.textPrimary} />
+          <GlassSurface radius={22} />
+          <View style={!canRewind && styles.iconDisabled}>
+            <IconRewind size={18} color={colors.textPrimary} />
+          </View>
         </JellyPressable>
         <JellyPressable style={styles.iconBtn} onPress={onShare} accessibilityLabel="공유" hitSlop={4}>
+          <GlassSurface radius={22} />
           <IconShare size={18} color={colors.textPrimary} />
         </JellyPressable>
         <JellyPressable style={styles.iconBtn} onPress={onOpenDetail} accessibilityLabel="상세보기" hitSlop={4}>
+          <GlassSurface radius={22} />
           <IconDetail size={18} color={colors.textPrimary} />
         </JellyPressable>
         <JellyPressable style={styles.iconBtn} onPress={onRefresh} accessibilityLabel="새 추천" hitSlop={4}>
+          <GlassSurface radius={22} />
           <IconRefresh size={18} color={colors.textPrimary} />
         </JellyPressable>
       </View>
@@ -97,15 +106,19 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
             styles.saveBtn,
             saveActive
               ? { backgroundColor: t.lime, borderColor: t.lime }
-              : { backgroundColor: t.surfaceRaised, borderColor: t.border },
+              : glass
+                ? { backgroundColor: 'transparent', borderColor: 'transparent', shadowOpacity: 0 } // 유리는 그림자 없이(투명 면 그림자 = 오프스크린 렌더)
+                : { backgroundColor: t.surfaceRaised, borderColor: t.border },
             saveFlash && [styles.saveBtnFlash, { shadowColor: t.lime }],
             saveBtnAnimStyle,
           ]}
         >
-          {/* idle: raised 면 위 textPrimary / active: 라임 채움 위 textInverse */}
+          {/* idle: 유리(대체 raised) 위 textPrimary / active: 라임 채움 위 textInverse */}
+          {!saveActive && glass && <GlassSurface radius={radius.save} />}
           <IconSave size={24} color={saveActive ? colors.textInverse : colors.textPrimary} filled={saveActive} />
         </Animated.View>
       </JellyPressable>
+      </GlassGroup>
     </View>
   );
 });
@@ -129,20 +142,23 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: spacing.sm,
   },
+  wrapInner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   left: {
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  // 원형 버튼 (radius full). 카드 위에 뜨므로 불투명 raised + 1px border — 4단계 유리 전 대체 모양.
+  // 원형 버튼 44. 배경은 GlassSurface(유리 또는 raised + 1px border 대체).
   iconBtn: {
     width: 44,
     height: 44,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   iconDisabled: {
     opacity: 0.4,

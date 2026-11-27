@@ -30,6 +30,8 @@ import DiscoverHeader from '../components/DiscoverHeader';
 import DetailSheet from '../components/DetailSheet';
 import ActionBar, { ACTION_BAR_HEIGHT } from '../components/ActionBar';
 import { Button } from '../components/Button';
+import { GlassSurface } from '../components/GlassSurface';
+import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import { IconArchive, IconRefresh, IconMoreVertical } from '../components/Icons';
 import TutorialFlow, {
   type TutorialStep,
@@ -2107,6 +2109,7 @@ export default function DiscoverScreen() {
             accessibilityLabel="카드 메뉴"
             testID="card-menu-button"
           >
+            <GlassSurface radius={22} />
             <IconMoreVertical size={18} color={colors.textPrimary} />
           </Pressable>
         )}
@@ -2143,6 +2146,7 @@ export default function DiscoverScreen() {
               테마 큐는 포스터 생략 + 테마 title (seed 작품 비노출 정책 — 2차 확정 유지). */}
           {inMix && mixSeed ? (
             <View style={styles.mixBar} testID="mix-bar">
+              <GlassSurface radius={radius.toast} />
               {!mixTheme && mixSeed.posterUrl ? (
                 <Image
                   source={{ uri: mixSeed.posterUrl }}
@@ -2357,7 +2361,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 6,
     right: 6,
-    bottom: 6,
+    // 카드는 떠 있는 탭바 뒤까지 내려가고, 액션바는 탭바 위에 뜬다
+    bottom: TAB_BAR_SPACE + 6,
     height: ACTION_BAR_HEIGHT,
     justifyContent: 'flex-end',
     zIndex: 20,
@@ -2380,12 +2385,9 @@ const styles = StyleSheet.create({
     right: 18,
     width: 44,
     height: 44,
-    borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceRaised,
-    borderWidth: 1,
-    borderColor: colors.border,
+    // 배경은 GlassSurface (유리 묶음 1개 — 칩 줄·액션바·탭바와 합쳐 발견 화면 4묶음, D9)
     zIndex: 20,
   },
   // 인라인 메뉴 — 케밥 바로 아래 anchor. surface + border, Quiet Ink (그림자/amber 無).
@@ -2425,19 +2427,16 @@ const styles = StyleSheet.create({
   // 큐 바 — FilterChips 자리 대체. 4차: 인셋 8 (아웃라인 프레임과 동일) + 상단
   // radius 20 (카드 16 + 옵셋 4 정합). accentDim 솔리드 캡은 유지 — 아래 아웃라인과
   // 합쳐 "하이라이트 컨테이너" 로 읽힘 (amber 1건 예산 내).
-  // 큐 바 — 카드 위에 뜨는 바 (칩 줄 자리). 불투명 raised + border (4단계 유리 전 대체).
+  // 큐 바 — 카드 위에 뜨는 바 (칩 줄 자리). 유리(대체 raised + border).
   mixBar: {
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 52,
     marginHorizontal: 6,
-    borderRadius: radius.toast,
-    borderWidth: 1,
-    borderColor: colors.border,
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: 6,
     gap: spacing.sm + 4,
-    backgroundColor: colors.surfaceRaised,
+    // 배경은 GlassSurface (칩 줄 자리 — 같은 유리 묶음 수)
   },
   // 큐 하이라이트 플레이트 — 카드 둘레 4px 아쿠아 옅은 면 (카드 radius 24 + 4).
   mixFrame: {
@@ -2470,8 +2469,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   mixBarCount: {
-    color: colors.textSecondary,
-    fontSize: 11,
+    // 유리 위 글자 = text 색·13 이상 (DESIGN.md Material)
+    color: colors.textPrimary,
+    fontSize: 13,
     fontFamily: fontsV2.data,
   },
   centered: {

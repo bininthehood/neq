@@ -17,6 +17,7 @@ import type { SavedItem } from '../lib/types';
 // 2026-08-12 — fontsV2 를 lib/tokens 경유로 통일 (saved/profile 정합). 값은 동일하게
 // @neq/design 재export 이지만, 헤더 3화면이 같은 출처를 보도록 맞춘다.
 import { colors, spacing, radius, fontsV2 } from '../lib/tokens';
+import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import SearchSheet from '../components/SearchSheet';
 import { IconUser, IconMix } from '../components/Icons';
 import { Button } from '../components/Button';
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     fontFamily: fontsV2.en,
   },
-  scrollContent: { paddingBottom: spacing.xl },
+  scrollContent: { paddingBottom: spacing.xl + TAB_BAR_SPACE }, // 떠 있는 탭바 뒤로 지나감
   section: { marginTop: spacing.lg },
   // 섹션 라벨 — ChapterMark 위계 (amber 는 화면당 1개 규칙이라 전부 secondary).
   sectionTitle: {

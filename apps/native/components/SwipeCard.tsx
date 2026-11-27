@@ -14,6 +14,7 @@ import Animated, {
 import type { Recommendation } from '../lib/types';
 import { getOTTIcon, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
+import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import { fontsV2, easings, durations } from '@neq/design';
 import { colors, palette, radius, shadowsNative, useThemeColors } from '../lib/tokens';
 
@@ -115,8 +116,8 @@ const CARD_INK = ['rgba(4,20,24,0)', 'rgba(4,20,24,0.82)', 'rgba(4,20,24,0.96)']
 // 포스터·잉크 위 글자는 테마 무관 밝은 값 (라이트 모드에서도 어두운 잉크 위)
 const ON_INK = palette.dark;
 const HANGUL = /[\u3131-\uD79D]/;
-/** ActionBar 가 카드 위에 뜨므로 정보 영역을 그만큼 올린다 (index.tsx 와 공유). */
-export const CARD_BOTTOM_OVERLAY = 64;
+/** 액션바(64)와 떠 있는 탭바가 카드 아래를 덮으므로 정보 영역을 그만큼 올린다 (index.tsx·SkeletonCard 와 공유). */
+export const CARD_BOTTOM_OVERLAY = 64 + TAB_BAR_SPACE;
 
 const CAT_LABEL: Record<CardCategory, string> = {
   movie: '영화',
