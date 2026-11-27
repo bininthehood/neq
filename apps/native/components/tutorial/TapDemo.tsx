@@ -12,7 +12,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Recommendation } from '../../lib/types';
 import { easings, fontsV2 } from '@neq/design';
-import { colors, spacing } from '../../lib/tokens';
+import { colors, spacing, useThemeColors } from '../../lib/tokens';
 import TutorialDemoCard from './TutorialDemoCard';
 
 /**
@@ -89,6 +89,7 @@ export default function TapDemo({ recForDemo, stackRect }: Props) {
     };
   }, [cardScale, ringScale, ringOpacity]);
 
+  const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const ringStyle = useAnimatedStyle(() => ({
     opacity: ringOpacity.value,
     transform: [{ scale: ringScale.value }],
@@ -102,7 +103,7 @@ export default function TapDemo({ recForDemo, stackRect }: Props) {
 
       {/* ripple ring — 카드 중앙 영역 펄스. transient overlay 라 amber 카운트 제외 (DESIGN.md L34). */}
       <View style={styles.ringSlot} pointerEvents="none">
-        <Animated.View pointerEvents="none" style={[styles.ring, ringStyle]} />
+        <Animated.View pointerEvents="none" style={[styles.ring, { borderColor: t.aquaText }, ringStyle]} />
       </View>
 
       {/* 안내 카피 — 카드 위 dim 상단 영역.
@@ -143,7 +144,6 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 9999,
     borderWidth: 2,
-    borderColor: colors.accent,
   },
   // Polish 사이클 1 (ux-reviewer WARN): top 은 인라인에서 insets.top + 60 동적 계산.
   copyBlock: {

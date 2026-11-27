@@ -54,7 +54,7 @@ function CheckMark() {
     <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
       <Polyline
         points="20 6 9 17 4 12"
-        stroke={colors.accent}
+        stroke={colors.aquaText}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -70,7 +70,7 @@ function Chevron({ open }: { open: boolean }) {
       <Svg width={9} height={9} viewBox="0 0 8 8" fill="none">
         <Path
           d="M1 2.5L4 5.5L7 2.5"
-          stroke={open ? colors.accent : colors.textMuted}
+          stroke={open ? colors.aquaText : colors.textMuted}
           strokeWidth={1.4}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -296,8 +296,8 @@ const styles = StyleSheet.create({
     borderColor: colors.borderSubtle,
   },
   chipOpen: {
-    backgroundColor: colors.accentDim,
-    borderColor: colors.accentBorder,
+    backgroundColor: colors.aquaDim,
+    borderColor: colors.aquaBorder,
   },
   chipPressed: {
     opacity: 0.85,
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
   },
   chipLabel: {
     fontSize: 12,
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     maxWidth: 120,
   },
   chipLabelOpen: {
-    color: colors.accent,
+    color: colors.aquaText,
   },
   searchBtn: {
     width: 40,
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     height: 48,
   },
   optionActive: {
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.aquaDim,
   },
   optionPressed: {
     opacity: 0.7,
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   optionLabelActive: {
-    color: colors.accent,
+    color: colors.aquaText,
   },
   divider: {
     height: 1,

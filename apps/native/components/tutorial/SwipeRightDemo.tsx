@@ -109,10 +109,10 @@ export default function SwipeRightDemo({ recForDemo, stackRect }: Props) {
       <View style={styles.arrowHint} pointerEvents="none">
         <Animated.View style={arrowStyle}>
           <Svg width={32} height={32} viewBox="0 0 24 24">
-            <Line x1={5} y1={12} x2={19} y2={12} stroke={colors.accent} strokeWidth={2} strokeLinecap="round" />
+            <Line x1={5} y1={12} x2={19} y2={12} stroke={colors.aquaText} strokeWidth={2} strokeLinecap="round" />
             <Polyline
               points="12 5 19 12 12 19"
-              stroke={colors.accent}
+              stroke={colors.aquaText}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"

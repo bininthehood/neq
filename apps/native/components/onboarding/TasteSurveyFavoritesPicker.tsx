@@ -291,7 +291,7 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
                   accessibilityLabel={`${item.title} ${isSelected ? '선택 해제' : '선택'}`}
                   style={[
                     styles.resultRow,
-                    isSelected && { backgroundColor: colors.accentDim },
+                    isSelected && { backgroundColor: colors.aquaDim },
                   ]}
                 >
                   {item.posterUrl ? (
@@ -331,11 +331,11 @@ export default function TasteSurveyFavoritesPicker({ onNext, onSkip }: Props) {
           accessibilityState={{ disabled: !canNext }}
           style={({ pressed }) => [
             styles.cta,
-            { backgroundColor: canNext ? colors.accent : colors.surfaceRaised },
+            { backgroundColor: canNext ? colors.lime : colors.surfaceRaised },
             pressed && canNext && { opacity: 0.85 },
           ]}
         >
-          <Text style={[styles.ctaLabel, { color: canNext ? colors.bg : colors.textMuted }]}>
+          <Text style={[styles.ctaLabel, { color: canNext ? colors.textInverse : colors.textMuted }]}>
             {reachedMin ? '다음' : `${RECOMMENDED_SELECT - selected.length}개 더 권장`}
           </Text>
         </Pressable>
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
   },
   gridCellSelected: {
     borderWidth: 2,
-    borderColor: colors.accent,
+    borderColor: colors.aquaText,
   },
   gridPoster: {
     width: '100%',
@@ -502,12 +502,12 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkBadgeText: {
-    color: colors.bg,
+    color: colors.textInverse,
     fontSize: 11,
     lineHeight: 13,
     fontWeight: '700',
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
   },

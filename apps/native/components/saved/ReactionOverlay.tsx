@@ -29,9 +29,9 @@ export const REACTION_OPTIONS: {
   {
     key: 'loved',
     label: '인생작',
-    bg: colors.accentDim,
+    bg: colors.limeDim,
     color: colors.textPrimary,
-    border: colors.accentBorderLight,
+    border: colors.limeDim,
   },
   {
     key: 'good',

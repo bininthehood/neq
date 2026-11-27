@@ -84,7 +84,7 @@ export default function TasteSurveyStep({
             styles.cta,
             {
               backgroundColor:
-                selectedId !== null ? colors.accent : colors.surfaceRaised,
+                selectedId !== null ? colors.lime : colors.surfaceRaised,
             },
             pressed && selectedId !== null && { opacity: 0.85 },
           ]}
@@ -92,7 +92,7 @@ export default function TasteSurveyStep({
           <Text
             style={[
               styles.ctaLabel,
-              { color: selectedId !== null ? colors.bg : colors.textMuted },
+              { color: selectedId !== null ? colors.textInverse : colors.textMuted },
             ]}
           >
             다음
@@ -123,7 +123,7 @@ function OptionRow({
       <View
         style={[
           styles.radioMark,
-          { borderColor: selected ? colors.accent : colors.borderStrong },
+          { borderColor: selected ? colors.aquaText : colors.borderStrong },
         ]}
       >
         {selected ? <View style={styles.radioDot} /> : null}
@@ -133,7 +133,7 @@ function OptionRow({
           style={[
             styles.optionLabel,
             {
-              color: selected ? colors.accent : colors.textPrimary,
+              color: selected ? colors.aquaText : colors.textPrimary,
               textDecorationLine: selected ? 'underline' : 'none',
             },
           ]}
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.aquaText,
   },
   optionTextCol: { flex: 1, gap: 2 },
   optionLabel: {

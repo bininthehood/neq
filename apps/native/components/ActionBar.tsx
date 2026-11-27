@@ -6,7 +6,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { colors, radius, spacing, easings, durations, shadowsNative } from '../lib/tokens';
+import { colors, radius, spacing, easings, durations, shadowsNative, useThemeColors } from '../lib/tokens';
 import { IconRewind, IconShare, IconDetail, IconRefresh, IconSave } from './Icons';
 
 interface Props {
@@ -57,6 +57,8 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
   });
 
   const saveActive = isSaved || saveFlash || savePulling;
+  // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙) — StyleSheet 대신 inline.
+  const t = useThemeColors();
 
   return (
     <View style={styles.wrap}>
@@ -107,8 +109,10 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
         ref={saveBtnRef}
         style={[
           styles.saveBtn,
-          saveActive && styles.saveBtnActive,
-          saveFlash && styles.saveBtnFlash,
+          saveActive
+            ? { backgroundColor: t.lime, borderColor: t.lime }
+            : { backgroundColor: t.surfaceRaised, borderColor: t.border },
+          saveFlash && [styles.saveBtnFlash, { shadowColor: t.lime }],
           saveBtnAnimStyle,
         ]}
       >
@@ -123,7 +127,7 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
             // B-5b 로 saveBtnActive 배경이 amber 가 된 뒤 amber 아이콘이면 amber-on-amber
             // 대비 소실. web ActionBar 정본도 항상 `var(--bg)` 고정.
             // idle: surfaceRaised 배경 위 bg 색 = 충분한 대비. active: amber 배경 위 bg 색 = 또렷.
-            color={colors.bg}
+            color={colors.textInverse}
             filled={saveActive}
           />
         </Pressable>
@@ -174,18 +178,11 @@ const styles = StyleSheet.create({
   saveBtn: {
     width: 56,
     height: 56,
-    backgroundColor: colors.surfaceRaised,
     borderRadius: radius.xl,
     borderWidth: 1.5,
-    borderColor: colors.border,
     ...shadowsNative.md,
   },
-  saveBtnActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
   saveBtnFlash: {
-    shadowColor: colors.accent,
     shadowOpacity: 0.6,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
@@ -202,7 +199,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
   },
   saveIconActive: {
-    color: colors.bg,
+    color: colors.textInverse,
   },
   pressed: {
     opacity: 0.7,

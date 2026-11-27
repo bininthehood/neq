@@ -31,7 +31,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { SavedItem } from '../../lib/types';
-import { colors, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, spacing, fontsV2, useThemeColors } from '../../lib/tokens';
 import { rulerSlotsOf, resolveSnapIndex } from './SavedSortControl';
 
 type Props = {
@@ -49,6 +49,7 @@ const NEEDLE_H = 12; // 바늘 행 높이 (fade top 기준)
 const FLASH_MS = 320;
 
 export default function SavedMonthScrubber({ items, selected, onSelect }: Props) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const { width } = useWindowDimensions();
   const scrollRef = useRef<ScrollView>(null);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -145,7 +146,7 @@ export default function SavedMonthScrubber({ items, selected, onSelect }: Props)
     commit(idx);
   };
 
-  const needleColor = flash ? colors.accent : colors.textPrimary;
+  const needleColor = flash ? colors.aquaText : colors.textPrimary;
 
   return (
     <View style={styles.wrap}>
@@ -241,7 +242,7 @@ export default function SavedMonthScrubber({ items, selected, onSelect }: Props)
       {/* 축 양끝 fade — 연속 축 강조. 바늘 행 아래부터. */}
       <LinearGradient
         pointerEvents="none"
-        colors={[colors.bg, 'rgba(18, 17, 14, 0)']}
+        colors={[t.bg, `${t.bg}00`]}
         locations={[0.15, 1]}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}
@@ -249,7 +250,7 @@ export default function SavedMonthScrubber({ items, selected, onSelect }: Props)
       />
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(18, 17, 14, 0)', colors.bg]}
+        colors={[`${t.bg}00`, t.bg]}
         locations={[0, 0.85]}
         start={{ x: 0, y: 0.5 }}
         end={{ x: 1, y: 0.5 }}

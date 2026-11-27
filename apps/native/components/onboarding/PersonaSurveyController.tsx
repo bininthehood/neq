@@ -467,7 +467,7 @@ function SurveyHeader({
               styles.progressSeg,
               {
                 backgroundColor:
-                  i + 1 <= current ? colors.accent : colors.border,
+                  i + 1 <= current ? colors.aquaText : colors.border,
                 opacity: i + 1 < current ? 0.7 : 1,
               },
             ]}

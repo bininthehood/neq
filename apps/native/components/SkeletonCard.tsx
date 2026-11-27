@@ -9,7 +9,7 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { colors, radius, shadowsNative } from '../lib/tokens';
+import { colors, radius, shadowsNative, useThemeColors } from '../lib/tokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
@@ -73,9 +73,12 @@ export default function SkeletonCard() {
   }, [reduced]);
 
   // opacity 1 ↔ 0.4 (DESIGN.md L226). reduced 시 pulse=0.5 → opacity 0.7 고정.
+  // 펄스 요소 색도 여기서 hex 로 준다 — Animated.View 정적 style 에 동적 색(colors.*) 금지
+  // (lib/tokens.ts Reanimated 규칙).
+  const raised = useThemeColors().surfaceRaised;
   const pulseStyle = useAnimatedStyle(() => {
     const opacity = interpolate(pulse.value, [0, 1], [0.4, 1.0]);
-    return { opacity };
+    return { opacity, backgroundColor: raised };
   });
 
   // bar(텍스트/칩 placeholder) 헬퍼 — surfaceRaised + pulse opacity.
@@ -137,14 +140,12 @@ const styles = StyleSheet.create({
     width: 52,
     height: 24,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
   },
   // 별점 칩 placeholder — RatingChip(~52×24) 근사, radius-sm.
   ratingChip: {
     width: 52,
     height: 24,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
   },
   // SwipeCard bottomInfo 정합 — left/right 18, bottom 16.
   bottomInfo: {
@@ -158,7 +159,6 @@ const styles = StyleSheet.create({
     width: '45%',
     height: 13,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
     marginBottom: 8,
   },
   // title — text-2xl(28) 한 줄, marginBottom 10 (SwipeCard title 정합).
@@ -166,7 +166,6 @@ const styles = StyleSheet.create({
     width: '70%',
     height: 26,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
     marginBottom: 12,
   },
   // meta(reason) — 2라인, lineHeight 18 (SwipeCard reason 정합).
@@ -174,14 +173,12 @@ const styles = StyleSheet.create({
     width: '85%',
     height: 13,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
     marginBottom: 6,
   },
   metaBarShort: {
     width: '60%',
     height: 13,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
     marginBottom: 14,
   },
   // OTT row — gap 6, 22×22 radius-sm (SwipeCard ottRow/ottChip 정합).
@@ -194,6 +191,5 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: radius.sm,
-    backgroundColor: colors.surfaceRaised,
   },
 });

@@ -2410,7 +2410,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     gap: spacing.sm,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.aquaDim,
   },
   // 큐 하이라이트 플레이트 — 아웃라인 폐기 (4차-2 피드백: 선이 조악) → 솔리드
   // 컨테이너 복귀 + 카드가 4px 패딩으로 안에 앉는 구조. 플레이트 인셋 8 vs 카드
@@ -2424,7 +2424,7 @@ const styles = StyleSheet.create({
     bottom: 4,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.aquaDim,
   },
   // 큐 중 카드 스택 상단 4px 내림 — 큐 바와 카드 사이에도 패딩 밴드 노출.
   mixStackInset: {

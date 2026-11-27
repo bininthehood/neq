@@ -38,7 +38,7 @@ export default function OnboardingStepHello({ onNext, initialName = '' }: Props)
         <View
           style={[
             styles.inputBox,
-            { borderColor: hasValue ? colors.accentBorderLight : colors.border },
+            { borderColor: hasValue ? colors.aquaBorder : colors.border },
           ]}
         >
           <Text style={styles.inputLabel}>NAME · 이름</Text>
@@ -68,12 +68,12 @@ export default function OnboardingStepHello({ onNext, initialName = '' }: Props)
           disabled={!hasValue}
           style={({ pressed }) => [
             styles.cta,
-            { backgroundColor: hasValue ? colors.accent : colors.surfaceRaised },
+            { backgroundColor: hasValue ? colors.lime : colors.surfaceRaised },
             pressed && hasValue && styles.ctaPressed,
           ]}
         >
           <Text
-            style={[styles.ctaLabel, { color: hasValue ? colors.bg : colors.textMuted }]}
+            style={[styles.ctaLabel, { color: hasValue ? colors.textInverse : colors.textMuted }]}
           >
             다음
           </Text>
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.aquaDim,
     borderRadius: 8,
   },
   previewText: {

@@ -18,7 +18,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { colors, radius, spacing, durations, easings, fontsV2 } from '../lib/tokens';
+import { colors, radius, spacing, durations, easings, fontsV2, useThemeColors } from '../lib/tokens';
 
 /**
  * ToastContext — native 글로벌 토스트/스낵바.
@@ -126,7 +126,7 @@ export function toastCopy(type: ToastType, ctx: ToastContextData = {}): ToastCop
 
 /** type → 인디케이터 dot 색. DESIGN.md L256: 성공=accent / 에러=danger. */
 function toastDotColor(type: ToastType): string {
-  return type === 'error' ? colors.danger : colors.accent;
+  return type === 'error' ? colors.danger : colors.lime;
 }
 
 // ─────────────────────────────────────────────────────
@@ -234,6 +234,7 @@ function ToastCard({
   onRemoved: () => void;
   onActionPress: () => void;
 }) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const insets = useSafeAreaInsets();
   const copy = toastCopy(entry.type, entry.ctx);
   const dotColor = toastDotColor(entry.type);
@@ -297,7 +298,7 @@ function ToastCard({
         // role=status — RN 접근성. 에러는 alert 톤.
         accessibilityLiveRegion="polite"
         accessibilityRole={entry.type === 'error' ? 'alert' : 'text'}
-        style={[styles.card, animStyle]}
+        style={[styles.card, { backgroundColor: t.surfaceRaised, borderColor: t.border }, animStyle]}
       >
         {/* 인디케이터 dot — DESIGN.md L256 (6×6). info/save/remove=accent, error=danger. */}
         {entry.type === 'error' ? (
@@ -377,10 +378,9 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    backgroundColor: colors.surfaceRaised,
+    // 색(backgroundColor·borderColor)은 inline — Animated.View 정적 style 에 동적 색 금지
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     // DESIGN.md shadow-toast 톤 — 짙은 그림자.
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.dataMedium,
     fontSize: 11,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.aquaText,
     letterSpacing: 1.6, // uppercase 톤 — Geist Mono eyebrow (web 0.15em ≈ 1.6px@11)
   },
 });

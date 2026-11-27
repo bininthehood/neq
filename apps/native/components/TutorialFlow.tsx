@@ -13,7 +13,7 @@ import SwipeLeftDemo from './tutorial/SwipeLeftDemo';
 import SwipeRightDemo from './tutorial/SwipeRightDemo';
 import SwipeDownDemo from './tutorial/SwipeDownDemo';
 import TapDemo from './tutorial/TapDemo';
-import { colors, spacing, radius } from '../lib/tokens';
+import { colors, spacing, radius, useThemeColors } from '../lib/tokens';
 import { easings, durations, fonts, fontsV2 } from '@neq/design';
 
 /**
@@ -257,12 +257,12 @@ function Dot({ active, passed }: { active: boolean; passed: boolean }) {
     });
   }, [active, passed, width, color]);
 
+  // worklet 안이라 동적 색(colors.*) 대신 hex (lib/tokens.ts Reanimated 규칙)
+  const t = useThemeColors();
   const dotStyle = useAnimatedStyle(() => {
-    // tokens 가 `as const` 라 literal 타입이 좁게 잡혀 reassign 시 TS2322.
-    // worklet 안에서 string 으로 우선 캐스팅 후 분기.
-    let bg: string = colors.borderSubtle;
-    if (color.value > 0.75) bg = colors.accent;
-    else if (color.value > 0.25) bg = colors.textMuted;
+    let bg = t.borderSubtle;
+    if (color.value > 0.75) bg = t.aquaText;
+    else if (color.value > 0.25) bg = t.textMuted;
     return {
       width: width.value,
       height: 6,
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   stepNumber: {
     // 03_p1-1#5: textMuted → accent (amber). web tut-step-label 정합.
     // transient overlay 카운트 제외 정책 (DESIGN L34) — amber 안전.
-    color: colors.accent,
+    color: colors.aquaText,
     fontSize: 11,
     fontFamily: fonts.data,
     letterSpacing: 1.5,

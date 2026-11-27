@@ -47,7 +47,7 @@ import { getOTTOpenCandidates, getOTTIcon, getPrimaryCountryName, getGenreLabels
 import { displayProviders } from '../lib/providers';
 import { ArrivalProbe } from './ArrivalProbe';
 import { fonts, fontsV2, easings, durations } from '@neq/design';
-import { colors, radius, spacing, shadowsNative } from '../lib/tokens';
+import { colors, radius, spacing, shadowsNative, useThemeColors } from '../lib/tokens';
 import { track } from '../lib/analytics';
 import { env, isArrivalProbeEnabled } from '../lib/env';
 import { isSaved, toggleSaved } from '../lib/store';
@@ -127,6 +127,7 @@ export default function DetailSheet({
   mode = 'detail',
   onStartMix,
 }: Props) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const insets = useSafeAreaInsets();
   // 2026-07-13 — translateY 가 진입/드래그/퇴장 슬라이드 전부 담당 (SearchSheet 정합).
   // Modal 은 transparent + animationType="none" — OS 애니메이션 주체 제거로
@@ -744,10 +745,10 @@ export default function DetailSheet({
       accessibilityLabel={`${rec.title} 상세 정보`}
     >
       {mode !== 'share' ? (
-        <Animated.View style={[styles.dim, dimStyle]} pointerEvents="none" />
+        <Animated.View style={[styles.dim, { backgroundColor: t.overlayHeavy }, dimStyle]} pointerEvents="none" />
       ) : null}
       <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.sheet, sheetStyle]}>
+          <Animated.View style={[styles.sheet, { backgroundColor: t.bg }, sheetStyle]}>
             {/* 2026-07-10 — Gesture.Native 래핑: 스크롤 recognizer 를 RNGH 에 편입해
                 pan(simultaneousWithExternalGesture) 과 병행 인식 (pan 정의 주석 참조). */}
             <GestureDetector gesture={nativeScroll}>
@@ -780,7 +781,7 @@ export default function DetailSheet({
                   />
                 ) : null}
                 <LinearGradient
-                  colors={['transparent', 'rgba(18,17,14,0.4)', colors.bg]}
+                  colors={['transparent', 'rgba(18,17,14,0.4)', t.bg]}
                   locations={[0, 0.5, 1]}
                   style={StyleSheet.absoluteFill}
                   pointerEvents="none"
@@ -1158,7 +1159,7 @@ export default function DetailSheet({
                 >
                   <IconSave
                     size={16}
-                    color={savedStatus ? colors.accent : colors.textInverse}
+                    color={savedStatus ? colors.limeText : colors.textInverse}
                     filled={savedStatus}
                   />
                   <Text
@@ -1735,13 +1736,12 @@ const styles = StyleSheet.create({
   rootTransparent: {
     backgroundColor: 'transparent',
   },
+  // dim·sheet 색은 inline (useThemeColors) — Animated.View 정적 style 에 동적 색 금지
   dim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayHeavy,
   },
   sheet: {
     flex: 1,
-    backgroundColor: colors.bg,
   },
   // hero 위 absolute, scroll 무관.
   // 2026-06-15 (build 27) — 좌측 history nav (← →) + 우측 X 닫기. space-between.
@@ -1842,7 +1842,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   ratingPillText: {
-    color: colors.accent,
+    color: colors.lime, // 포스터 위 어두운 받침 — 테마 무관 밝은 라임
     fontSize: 11,
     fontFamily: fontsV2.data,
     letterSpacing: 0.2,
@@ -1892,7 +1892,7 @@ const styles = StyleSheet.create({
     paddingLeft: 12,
     paddingVertical: 4,
     borderLeftWidth: 2,
-    borderLeftColor: colors.accentBorder,
+    borderLeftColor: colors.aquaBorder,
   },
   // PR2 — reason text: Fraunces italic 13 (anti-slop #6 예외 2 정합), 13 × 1.45 ≈ 19.
   reasonText: {
@@ -1967,7 +1967,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionTitleAmber: {
-    color: colors.accent,
+    color: colors.aquaText,
   },
   overview: {
     color: colors.textSecondary,
@@ -2049,9 +2049,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
     borderWidth: 1,
-    borderColor: colors.accent,
+    borderColor: colors.lime,
     minHeight: 48,
   },
   // 저장됨 상태 — #5: 배경 투명 + accent text/icon 유지 → "떠 있는" 느낌.
@@ -2059,7 +2059,7 @@ const styles = StyleSheet.create({
   // amber 카운트 제외 (Save = 브랜드 닻, DESIGN.md L37).
   ctaPrimarySaved: {
     backgroundColor: 'transparent',
-    borderColor: colors.accentBorder,
+    borderColor: colors.limeText,
     ...shadowsNative.sm,
   },
   ctaPrimaryText: {
@@ -2068,7 +2068,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   ctaPrimarySavedText: {
-    color: colors.accent,
+    color: colors.limeText,
   },
   ctaGhost: {
     flex: 1,

@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs + 2,
   },
   personaRowActive: {
-    borderColor: colors.accentBorder,
+    borderColor: colors.aquaBorder,
   },
   personaRowInactive: {
     borderColor: colors.borderSubtle,
@@ -276,14 +276,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   personaNameActive: {
-    color: colors.accent,
+    color: colors.aquaText,
   },
   personaFavorites: {
     color: colors.textMuted,
     fontSize: 12,
   },
   activeMark: {
-    color: colors.accent,
+    color: colors.aquaText,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   modalBtnConfirm: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
   },
   modalBtnDisabled: {
     backgroundColor: colors.surface,

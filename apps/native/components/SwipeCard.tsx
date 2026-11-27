@@ -14,7 +14,7 @@ import type { Recommendation } from '../lib/types';
 import { getOTTIcon, getGenreLabels } from '@neq/core';
 import { displayProviders } from '../lib/providers';
 import { fontsV2, easings, durations } from '@neq/design';
-import { colors, radius, shadowsNative } from '../lib/tokens';
+import { colors, radius, shadowsNative, useThemeColors } from '../lib/tokens';
 
 // 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
 //   - dismissX / isDismissing prop 폐기. dragX 단일 SharedValue 로 PWA 정합.
@@ -131,6 +131,7 @@ export default function SwipeCard({
   dismissCardIdSV,
   holdSV,
 }: Props) {
+  const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const absorbProgress = useSharedValue(0); // 0=normal, 1=fully absorbed
 
   useEffect(() => {
@@ -234,7 +235,7 @@ export default function SwipeCard({
 
   return (
     <Animated.View
-      style={[styles.card, cardStyle]}
+      style={[styles.card, { backgroundColor: t.surface }, cardStyle]}
       // 2026-06-06 (B-3 E2E 결정성) — refresh-race-2026-06-06.test.ts 가 page source
       // 의 title StaticText 휴리스틱으로 카드 시그니처를 비교했었음. testID 도입 후
       // refresh-race spec 의 snapshotCardSignatures 가 swipe-card-{tmdbId} 정확 매칭
@@ -260,6 +261,7 @@ export function CardInner({
   immersive: boolean;
   depth: number;
 }) {
+  const t = useThemeColors(); // LinearGradient 색은 hex (lib/tokens.ts)
   // 2026-05-20 — Recommendation.type 3종 (`'movie' | 'series' | 'variety'`) 확장 완료.
   // 서버 enrichment 가 TV + Reality/Talk 장르 통과 시 'variety' 라벨. as string 캐스팅
   // 제거하고 직접 매핑.
@@ -300,7 +302,7 @@ export function CardInner({
       {/* bottom gradient overlay — 텍스트 가독. CardVariantA 정합 3-stop:
           50% transparent → 92% bg-overlay-heavy → 100% bg-overlay-solid. */}
       <LinearGradient
-        colors={['transparent', colors.overlayHeavy, colors.overlaySolid]}
+        colors={['transparent', t.overlayHeavy, t.overlaySolid]}
         locations={[0.5, 0.92, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
@@ -375,7 +377,7 @@ const styles = StyleSheet.create({
     right: 12,
     borderRadius: radius.xl, // T-1 정정 후 16px (PWA --radius-xl 정합)
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    // backgroundColor 는 inline (useThemeColors) — Animated.View 정적 style 에 동적 색 금지
     // C-2 / T-2 — CardVariantA boxShadow var(--shadow-lg). shadowsNative 헬퍼 경유.
     ...shadowsNative.lg,
   },
@@ -405,7 +407,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   ratingPillText: {
-    color: colors.accent,
+    color: colors.lime, // 포스터 위 어두운 받침 — 테마 무관
     fontSize: 11,
     fontFamily: fontsV2.data,
     letterSpacing: 0.2,
@@ -434,7 +436,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.displayItalic,
     fontStyle: 'italic',
     fontSize: 13,
-    color: colors.accent,
+    color: colors.aqua, // 포스터 그라디언트 위 — 테마 무관 원색
     letterSpacing: 0.26,
     marginBottom: 6,
   },

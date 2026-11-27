@@ -30,7 +30,7 @@ import {
 } from '../lib/store';
 import { fetchGenresForIds } from '../lib/api';
 import type { Recommendation, SavedItem, WatchReaction } from '../lib/types';
-import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
+import { colors, radius, spacing, fontsV2, shadowsNative, useThemeColors } from '../lib/tokens';
 import { useToast } from '../contexts/ToastContext';
 import { track } from '../lib/analytics';
 import { displayProviders } from '../lib/providers';
@@ -1109,6 +1109,7 @@ function SavedActionSheet({
   paddingBottom: number;
   children: React.ReactNode;
 }) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const translateY = useSharedValue(SHEET_SLIDE_RANGE);
   useEffect(() => {
     return () => cancelAnimation(translateY);
@@ -1128,7 +1129,7 @@ function SavedActionSheet({
   return (
     <Modal visible={open} transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
       {/* backdrop — 시트와 분리된 fade. 탭 = 닫기 (accessible=false: wrap a11y 흡수 트랩). */}
-      <Animated.View style={[styles.menuBackdrop, dimStyle]}>
+      <Animated.View style={[styles.menuBackdrop, { backgroundColor: t.overlayHeavy }, dimStyle]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessible={false} />
       </Animated.View>
       <Animated.View style={[styles.menuSheetWrap, sheetStyle]} pointerEvents="box-none">
@@ -1251,7 +1252,7 @@ function PosterCard({
           style={[styles.reportBang, styles.reportBangFloat]}
           hitSlop={8}
         >
-          <View style={styles.reportBangTilt}><IconBang size={15} color={colors.accent} /></View>
+          <View style={styles.reportBangTilt}><IconBang size={15} color={colors.aquaText} /></View>
         </Pressable>
       )}
       {/* 2026-07-10 — 완료 배지: '✓ 시청' 칩 → 느낌표 배지와 동형 원형 ✓.
@@ -1266,7 +1267,7 @@ function PosterCard({
           hitSlop={8}
         >
           <View style={styles.reportBangTilt}>
-            <IconCheckPop size={14} color={colors.accent} />
+            <IconCheckPop size={14} color={colors.aquaText} />
           </View>
         </Pressable>
       )}
@@ -1287,7 +1288,7 @@ function PosterCard({
         >
           <IconArchive
             size={14}
-            color={isArchived ? colors.accent : colors.textMuted}
+            color={isArchived ? colors.aquaText : colors.textMuted}
           />
         </Pressable>
       )}
@@ -1402,7 +1403,7 @@ function ListCard({
               style={styles.reportBang}
               hitSlop={8}
             >
-              <View style={styles.reportBangTilt}><IconBang size={15} color={colors.accent} /></View>
+              <View style={styles.reportBangTilt}><IconBang size={15} color={colors.aquaText} /></View>
             </Pressable>
           ) : (
             <Pressable
@@ -1414,7 +1415,7 @@ function ListCard({
               hitSlop={8}
             >
               <View style={styles.reportBangTilt}>
-                <IconCheckPop size={14} color={colors.accent} />
+                <IconCheckPop size={14} color={colors.aquaText} />
               </View>
             </Pressable>
           )}
@@ -1437,7 +1438,7 @@ function ListCard({
         >
           <IconArchive
             size={14}
-            color={isArchived ? colors.accent : colors.textMuted}
+            color={isArchived ? colors.aquaText : colors.textMuted}
           />
         </Pressable>
       )}
@@ -1552,7 +1553,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   viewFilterTabActive: {
-    borderBottomColor: colors.accent,
+    borderBottomColor: colors.aquaText,
   },
   viewFilterLabel: {
     color: colors.textMuted,
@@ -1592,7 +1593,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
   },
   // 활성 필터 chip 행 — web SavedFilters 활성 chip 정합.
   activeChipsRow: {
@@ -1610,9 +1611,9 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: 10,
     borderRadius: 999,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.aquaDim,
     borderWidth: 1,
-    borderColor: colors.accentBorderLight,
+    borderColor: colors.aquaBorder,
   },
   activeChipIcon: {
     width: 14,
@@ -1622,12 +1623,12 @@ const styles = StyleSheet.create({
   activeChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.accent,
+    color: colors.aquaText,
   },
   activeChipX: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.accent,
+    color: colors.aquaText,
   },
   empty: {
     flex: 1,
@@ -1659,8 +1660,7 @@ const styles = StyleSheet.create({
   },
   // 2026-07-10 — long-press 하단 액션 시트 (SavedFilterSheet 시각 계열).
   menuBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayHeavy,
+    ...StyleSheet.absoluteFillObject, // 색은 inline (Animated.View — useThemeColors)
   },
   menuSheetWrap: {
     position: 'absolute',
@@ -1866,7 +1866,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   listRating: {
-    color: colors.accent,
+    color: colors.limeText,
     fontSize: 12,
     // 2026-04-29 fontsV2 — data = Geist Mono.
     fontFamily: fontsV2.data,
@@ -1935,7 +1935,7 @@ const styles = StyleSheet.create({
   // 4종 reaction 색상 — web text-accent / text-secondary / text-muted / text-danger 정합.
   statLoved: {
     fontSize: 12,
-    color: colors.accent,
+    color: colors.limeText,
   },
   statGood: {
     fontSize: 12,

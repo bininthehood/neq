@@ -58,7 +58,7 @@ function TabItem({
   label: string;
   focused: boolean;
 }) {
-  const tint = focused ? colors.accent : colors.textMuted;
+  const tint = focused ? colors.aquaText : colors.textMuted;
   return (
     <View style={{ alignItems: 'center', gap: 3, minWidth: 60 }}>
       {icon({ color: tint, active: focused })}

@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   chipActive: {
-    borderBottomColor: colors.accent,
+    borderBottomColor: colors.aquaText,
   },
   chipOpen: {
     transform: [{ scale: 1.02 }],
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   // accentDim 면 패턴(이전 결정 잔재)은 anti-slop #6 예외 2(reason 한정) 위반.
   // web FilterChips: background var(--accent) + color var(--text-inverse).
   optionActive: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
   },
   optionText: {
     color: colors.textSecondary,
@@ -523,8 +523,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   myOTTChipActive: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
+    backgroundColor: colors.lime,
+    borderColor: colors.lime,
   },
   myOTTChipDisabled: {
     opacity: 0.5,

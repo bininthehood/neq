@@ -407,7 +407,7 @@ export default function OnboardingStepFavorites({ onNext }: Props) {
                     ListFooterComponent={
                       feed?.loading ? (
                         <View style={styles.carouselFooter}>
-                          <ActivityIndicator size="small" color={colors.accent} />
+                          <ActivityIndicator size="small" color={colors.aquaText} />
                         </View>
                       ) : null
                     }
@@ -544,11 +544,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  searchResultSelected: { backgroundColor: colors.accentDim ?? 'rgba(218,165,32,0.15)', borderColor: colors.accent },
+  searchResultSelected: { backgroundColor: colors.aquaDim, borderColor: colors.aquaText },
   searchResultImage: { width: 48, height: 72, borderRadius: radius.sm, backgroundColor: colors.surface },
   searchResultTitle: { color: colors.textPrimary, fontSize: fontSizePx.base, fontWeight: '500' },
   searchResultYear: { color: colors.textMuted, fontSize: fontSizePx.sm, marginTop: 2 },
-  checkMark: { color: colors.accent, fontSize: 18, marginLeft: 'auto' },
+  checkMark: { color: colors.aquaText, fontSize: 18, marginLeft: 'auto' },
 
   carouselSection: {},
   carouselLabel: { color: colors.textPrimary, fontSize: fontSizePx.sm, fontWeight: '600', paddingHorizontal: spacing.lg, marginBottom: spacing.xs },
@@ -565,7 +565,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     position: 'relative',
   },
-  carouselImageSelected: { borderColor: colors.accent, borderWidth: 1.5 },
+  carouselImageSelected: { borderColor: colors.aquaText, borderWidth: 1.5 },
   carouselCheck: {
     position: 'absolute',
     top: 4,
@@ -573,11 +573,11 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.lime,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  carouselCheckText: { color: colors.bg, fontSize: 12, lineHeight: 14, fontWeight: '700' },
+  carouselCheckText: { color: colors.textInverse, fontSize: 12, lineHeight: 14, fontWeight: '700' },
   carouselTitle: { color: colors.textMuted, fontSize: fontSizePx.xs, marginTop: 4 },
   carouselTitleSelected: { color: colors.textPrimary },
   carouselFooter: {
@@ -588,10 +588,10 @@ const styles = StyleSheet.create({
 
   footer: { paddingHorizontal: spacing.md, paddingBottom: spacing.xl, paddingTop: spacing.xs, gap: spacing.xs },
   cta: { paddingVertical: 14, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center', minHeight: 48 },
-  ctaActive: { backgroundColor: colors.accent },
+  ctaActive: { backgroundColor: colors.lime },
   ctaDisabled: { backgroundColor: colors.surface },
   ctaText: { fontSize: fontSizePx.base, fontWeight: '700' },
-  ctaTextActive: { color: colors.bg },
+  ctaTextActive: { color: colors.textInverse },
   ctaTextDisabled: { color: colors.textMuted },
   skip: { paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
   skipText: { color: colors.textSecondary, fontSize: fontSizePx.sm },

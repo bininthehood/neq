@@ -80,7 +80,7 @@ export function calcOTTDistribution(saved: SavedItem[]): DistributionRow[] {
   }
   if (counts.size === 0) return [];
   const max = Math.max(...counts.values());
-  const palette = [colors.accent, '#9B8AE0', '#E08A6C', '#7BA08A', '#5B9BC4'];
+  const palette = [colors.lime, '#9B8AE0', '#E08A6C', '#7BA08A', '#5B9BC4'];
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)

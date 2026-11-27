@@ -70,7 +70,7 @@ import {
   type RecentSearch,
   type TrendingItem,
 } from '../lib/recent-searches';
-import { colors, radius, spacing } from '../lib/tokens';
+import { colors, radius, spacing, useThemeColors } from '../lib/tokens';
 import { IconClose } from './Icons';
 import ApertureBreathLoader from './feedback/ApertureBreathLoader';
 import { fonts, easings } from '@neq/design';
@@ -120,6 +120,7 @@ export default function SearchSheet({
   onWorkSelected,
   preserveStateOnClose = false,
 }: Props) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const [query, setQuery] = useState('');
   const [data, setData] = useState<GroupedSearchResponse | null>(null);
   const [isFetching, setIsFetching] = useState(false);
@@ -420,7 +421,7 @@ export default function SearchSheet({
         accessibilityViewIsModal
         accessibilityLabel="검색 시트"
       >
-        <Animated.View style={[styles.dim, dimStyle]}>
+        <Animated.View style={[styles.dim, { backgroundColor: t.overlayHeavy }, dimStyle]}>
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={onClose}
@@ -430,7 +431,7 @@ export default function SearchSheet({
         </Animated.View>
 
           <GestureDetector gesture={pan}>
-          <Animated.View style={[styles.sheet, sheetStyle]}>
+          <Animated.View style={[styles.sheet, { backgroundColor: t.bg }, sheetStyle]}>
             {/* 2026-07-10 v2 — pan 은 시트 전체 (헤더 한정 폐기). */}
             <View>
             {/* handle */}
@@ -933,7 +934,7 @@ function PersonCard({
       <View
         style={[
           styles.personAvatar,
-          isSelected && { borderColor: colors.accent, borderWidth: 2 },
+          isSelected && { borderColor: colors.aquaText, borderWidth: 2 },
         ]}
       >
         {person.profileUrl ? (
@@ -954,7 +955,7 @@ function PersonCard({
       <Text
         style={[
           styles.personName,
-          isSelected && { color: colors.accent, fontWeight: '600' },
+          isSelected && { color: colors.aquaText, fontWeight: '600' },
         ]}
         numberOfLines={1}
       >
@@ -1062,9 +1063,9 @@ function PersonWorksPanel({
 // ─────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  // dim·sheet 색은 inline (useThemeColors) — Animated.View 정적 style 에 동적 색 금지
   dim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayHeavy,
   },
   sheet: {
     position: 'absolute',
@@ -1072,7 +1073,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: SHEET_MAX_HEIGHT,
-    backgroundColor: colors.bg,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
   },
@@ -1181,11 +1181,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 4,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: colors.accentDim,
+    backgroundColor: colors.aquaDim,
     borderWidth: 1,
-    borderColor: colors.accentDim,
+    borderColor: colors.aquaDim,
   },
-  trendingChipText: { color: colors.accent, fontSize: 12, fontWeight: '500' },
+  trendingChipText: { color: colors.aquaText, fontSize: 12, fontWeight: '500' },
 
   // loading
   centered: {
@@ -1247,7 +1247,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   sectionLabel: {
-    color: colors.accent,
+    color: colors.aquaText,
     fontSize: 11,
     fontFamily: fonts.data,
     textTransform: 'uppercase',
@@ -1319,7 +1319,7 @@ const styles = StyleSheet.create({
   },
   personAvatarImg: { width: '100%', height: '100%' },
   personAvatarFallback: {
-    color: colors.accent,
+    color: colors.aquaText,
     fontSize: 24,
     fontFamily: fonts.display,
   },
@@ -1352,7 +1352,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderTopColor: colors.accentBorder,
+    borderTopColor: colors.aquaBorder,
   },
   personWorksLoading: {
     paddingVertical: spacing.lg,

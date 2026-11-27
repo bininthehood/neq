@@ -95,7 +95,7 @@ export default function OnboardingStepOTT({
                 styles.row,
                 {
                   backgroundColor: on ? colors.surfaceRaised : colors.surface,
-                  borderColor: on ? colors.accent : colors.border,
+                  borderColor: on ? colors.lime : colors.border,
                   opacity: isComingSoon ? 0.5 : pressed ? 0.92 : 1,
                 },
               ]}
@@ -123,12 +123,12 @@ export default function OnboardingStepOTT({
                   style={[
                     styles.check,
                     {
-                      backgroundColor: on ? colors.accent : 'transparent',
-                      borderColor: on ? colors.accent : colors.border,
+                      backgroundColor: on ? colors.lime : 'transparent',
+                      borderColor: on ? colors.lime : colors.border,
                     },
                   ]}
                 >
-                  {on && <IconCheck size={12} color={colors.bg} />}
+                  {on && <IconCheck size={12} color={colors.textInverse} />}
                 </View>
               )}
             </Pressable>
@@ -143,7 +143,7 @@ export default function OnboardingStepOTT({
           style={({ pressed }) => [
             styles.cta,
             {
-              backgroundColor: hasSelection ? colors.accent : colors.surfaceRaised,
+              backgroundColor: hasSelection ? colors.lime : colors.surfaceRaised,
               opacity: pressed && hasSelection ? 0.85 : 1,
             },
           ]}
@@ -151,7 +151,7 @@ export default function OnboardingStepOTT({
           <Text
             style={[
               styles.ctaLabel,
-              { color: hasSelection ? colors.bg : colors.textMuted },
+              { color: hasSelection ? colors.textInverse : colors.textMuted },
             ]}
           >
             시작하기

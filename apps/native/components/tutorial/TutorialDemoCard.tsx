@@ -6,7 +6,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Recommendation } from '../../lib/types';
 import { CardInner } from '../SwipeCard';
-import { colors, radius, shadowsNative } from '../../lib/tokens';
+import { radius, shadowsNative, useThemeColors } from '../../lib/tokens';
 
 /**
  * TutorialFlow v3.2 — 풀사이즈 데모 카드 (2026-06-04 통합 → 6/4 산업표준 마이그레이션).
@@ -73,6 +73,7 @@ export default function TutorialDemoCard({
 
   // CardInner 는 immersive=false (정보 영역 노출) + depth=0 (top 카드 동등).
   // useMemo 로 stable reference — Demo 가 sharedValue 변동마다 리렌더하지 않도록.
+  const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const cardContent = useMemo(
     () => <CardInner rec={rec} immersive={false} depth={0} />,
     [rec],
@@ -93,7 +94,7 @@ export default function TutorialDemoCard({
       ]}
       pointerEvents="none"
     >
-      <Animated.View style={[styles.card, cardStyle]}>
+      <Animated.View style={[styles.card, { backgroundColor: t.surface }, cardStyle]}>
         {cardContent}
       </Animated.View>
     </View>
@@ -108,7 +109,6 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: radius.xl,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
     // 반투명 — 실제 SwipeCard 와 시각 정합 100% 이라 사용자가 가이드 카드를 실제 카드로
     // 착각 (첫 step 인지 실패 → 무의식 swipe 후 두 번째 step 만 인지). overlay 톤 (0.7)
     // 정합으로 반투명화 → "가이드 layer" 명확 구분.

@@ -1,7 +1,7 @@
 import { StyleSheet, Dimensions } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 import type { Recommendation } from '../lib/types';
-import { colors, radius, shadowsNative } from '../lib/tokens';
+import { radius, shadowsNative, useThemeColors } from '../lib/tokens';
 import { CardInner } from './SwipeCard';
 import type { SharedValue } from 'react-native-reanimated';
 
@@ -22,6 +22,7 @@ interface Props {
 // 마운트되는데, 둘의 정보 영역이 통째로 바뀌어 "깜빡임" 으로 인지됐다.
 // `CardInner` 로 통일 → overlay → 새 top 전환 시 시각 100% 동일 → 깜빡임 0.
 export default function PrevCardOverlay({ rec, overlayX }: Props) {
+  const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const style = useAnimatedStyle(() => {
     'worklet';
     // 2026-05-18 — Fabric folly::ConversionError abort 방어 (NaN/Infinity guard).
@@ -31,7 +32,7 @@ export default function PrevCardOverlay({ rec, overlayX }: Props) {
   });
 
   return (
-    <Animated.View style={[styles.card, style]}>
+    <Animated.View style={[styles.card, { backgroundColor: t.surface }, style]}>
       <CardInner rec={rec} immersive={false} depth={0} />
     </Animated.View>
   );
@@ -48,7 +49,6 @@ const styles = StyleSheet.create({
     right: 12,
     borderRadius: radius.xl,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
     zIndex: 100,
     ...shadowsNative.lg,
   },

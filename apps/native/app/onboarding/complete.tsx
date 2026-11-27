@@ -14,7 +14,7 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { colors, spacing, fonts, fontSizePx, easings } from '../../lib/tokens';
+import { colors, spacing, fonts, fontSizePx, easings, useThemeColors } from '../../lib/tokens';
 import { track } from '../../lib/analytics';
 import { getActivePersona } from '../../lib/store';
 import type { FavoriteMeta } from '../../lib/types';
@@ -60,6 +60,7 @@ interface OrbitPosterProps {
  * Reanimated worklet 으로 60fps 보장. JS 스레드 부하 없음.
  */
 function OrbitPoster({ meta, index }: OrbitPosterProps) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const angle = (index / POSTER_COUNT) * Math.PI * 2 - Math.PI / 2;
   const txStart = Math.cos(angle) * POSTER_RADIUS;
   const tyStart = Math.sin(angle) * POSTER_RADIUS;
@@ -106,7 +107,7 @@ function OrbitPoster({ meta, index }: OrbitPosterProps) {
 
   return (
     <Animated.View
-      style={[styles.poster, animatedStyle]}
+      style={[styles.poster, { backgroundColor: t.surface }, animatedStyle]}
       importantForAccessibility="no"
     >
       {meta?.posterUrl ? (
@@ -125,6 +126,7 @@ function OrbitPoster({ meta, index }: OrbitPosterProps) {
 }
 
 export default function OnboardingCompleteScreen() {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const navigatedRef = useRef(false);
   const mountedAtRef = useRef<number>(Date.now());
   const [favoritesMeta, setFavoritesMeta] = useState<FavoriteMeta[]>([]);
@@ -202,7 +204,7 @@ export default function OnboardingCompleteScreen() {
           <View style={styles.orbitArea}>
             {/* 중앙 amber pulse halo */}
             <Animated.View
-              style={[styles.glow, pulseStyle]}
+              style={[styles.glow, { backgroundColor: t.limeDim, shadowColor: t.lime }, pulseStyle]}
               importantForAccessibility="no"
             />
             {/* 5장 포스터 orbit */}
@@ -241,9 +243,8 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: colors.accentDim,
+    // 색(backgroundColor·shadowColor)은 inline — Animated.View 정적 style 에 동적 색 금지
     // shadow 로 halo 추가 (RN 은 radial-gradient 없으므로 shadow 로 대체)
-    shadowColor: colors.accent,
     shadowOpacity: 0.5,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 0 },
@@ -255,7 +256,6 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 6,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
     shadowColor: '#000',
     shadowOpacity: 0.25,
     shadowRadius: 8,

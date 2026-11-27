@@ -118,11 +118,11 @@ export default function PersonaContextSelector({ onNext, initial }: Props) {
           accessibilityState={{ disabled: !ready }}
           style={({ pressed }) => [
             styles.cta,
-            { backgroundColor: ready ? colors.accent : colors.surfaceRaised },
+            { backgroundColor: ready ? colors.lime : colors.surfaceRaised },
             pressed && ready && styles.ctaPressed,
           ]}
         >
-          <Text style={[styles.ctaLabel, { color: ready ? colors.bg : colors.textMuted }]}>
+          <Text style={[styles.ctaLabel, { color: ready ? colors.textInverse : colors.textMuted }]}>
             다음
           </Text>
         </Pressable>
@@ -152,16 +152,16 @@ function Pill({
       style={({ pressed }) => [
         styles.pill,
         {
-          backgroundColor: selected ? colors.accent : colors.surface,
-          borderColor: selected ? colors.accent : colors.border,
+          backgroundColor: selected ? colors.lime : colors.surface,
+          borderColor: selected ? colors.lime : colors.border,
         },
         pressed && { opacity: 0.85 },
       ]}
     >
       {multiSelect && selected ? (
-        <Text style={[styles.pillCheck, { color: colors.bg }]}>✓ </Text>
+        <Text style={[styles.pillCheck, { color: colors.textInverse }]}>✓ </Text>
       ) : null}
-      <Text style={[styles.pillLabel, { color: selected ? colors.bg : colors.textPrimary }]}>
+      <Text style={[styles.pillLabel, { color: selected ? colors.textInverse : colors.textPrimary }]}>
         {label}
       </Text>
     </Pressable>

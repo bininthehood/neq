@@ -5,7 +5,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { colors, spacing, durations, easings, fonts } from '../../lib/tokens';
+import { colors, spacing, durations, easings, fonts, useThemeColors } from '../../lib/tokens';
 import { WORDMARK_ASSET, WORDMARK_ASPECT_RATIO } from './data';
 
 /**
@@ -103,9 +103,11 @@ function ProgressSegment({ index, current }: { index: number; current: number })
     }),
   );
 
+  // worklet → hex 만 (lib/tokens.ts Reanimated 규칙)
+  const t = useThemeColors();
   const animatedStyle = useAnimatedStyle(() => ({
     backgroundColor:
-      activeProgress.value > 0.5 ? colors.accent : colors.border,
+      activeProgress.value > 0.5 ? t.aquaText : t.border,
     opacity: opacityProgress.value,
   }));
 

@@ -43,7 +43,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { getOTTIcon } from '@neq/core';
 import { easings } from '@neq/design';
-import { colors, radius, spacing, fontsV2 } from '../../lib/tokens';
+import { colors, radius, spacing, fontsV2, useThemeColors } from '../../lib/tokens';
 import { IconClose } from '../Icons';
 import { SORT_OPTIONS, type SavedSort } from './SavedSortControl';
 
@@ -83,6 +83,7 @@ export default function SavedFilterSheet({
   genreFilter,
   setGenreFilter,
 }: Props) {
+  const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   // #6 — 연·월 그룹 토글 제거. sheet 는 OTT + 정렬 + (초기화 대칭용) 장르만.
   const hasActive =
     ottFilter !== null || sortBy !== 'saved' || genreFilter !== null;
@@ -157,14 +158,20 @@ export default function SavedFilterSheet({
       statusBarTranslucent
     >
       {/* dim backdrop — 탭하면 닫힘. translateY 연동 opacity. */}
-      <Animated.View style={[styles.backdrop, dimStyle]}>
+      <Animated.View style={[styles.backdrop, { backgroundColor: t.overlayHeavy }, dimStyle]}>
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={onClose}
           accessibilityLabel="필터 닫기"
         />
       </Animated.View>
-      <Animated.View style={[styles.sheet, sheetStyle]}>
+      <Animated.View
+        style={[
+          styles.sheet,
+          { backgroundColor: t.surface, borderTopColor: t.borderSubtle },
+          sheetStyle,
+        ]}
+      >
         {/* pan-down dismiss 는 header(grabber+제목 row) 에만 부착 — 아래 body
             ScrollView 세로 드래그와 충돌 방지. */}
         <GestureDetector gesture={pan}>
@@ -227,7 +234,7 @@ export default function SavedFilterSheet({
                 >
                   전체
                 </Text>
-                {ottFilter === null && <CheckMark color={colors.accent} />}
+                {ottFilter === null && <CheckMark color={colors.aquaText} />}
               </Pressable>
               {availableOTTs.map(({ name, count }) => {
                 const isActive = ottFilter === name;
@@ -263,7 +270,7 @@ export default function SavedFilterSheet({
                       </Text>
                       <Text style={styles.rowCount}>{count}</Text>
                     </View>
-                    {isActive && <CheckMark color={colors.accent} />}
+                    {isActive && <CheckMark color={colors.aquaText} />}
                   </Pressable>
                 );
               })}
@@ -295,7 +302,7 @@ export default function SavedFilterSheet({
                     </Text>
                     <Text style={styles.rowDesc}>{opt.desc}</Text>
                   </View>
-                  {isActive && <CheckMark color={colors.accent} />}
+                  {isActive && <CheckMark color={colors.aquaText} />}
                 </Pressable>
               );
             })}
@@ -307,9 +314,9 @@ export default function SavedFilterSheet({
 }
 
 const styles = StyleSheet.create({
+  // backdrop·sheet 색은 inline (useThemeColors) — Animated.View 정적 style 에 동적 색 금지
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlayHeavy,
   },
   sheet: {
     position: 'absolute',
@@ -317,11 +324,9 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     maxHeight: '78%',
-    backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
     borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle,
   },
   grabberWrap: {
     alignItems: 'center',
@@ -426,7 +431,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   rowTitleActive: {
-    color: colors.accent,
+    color: colors.aquaText,
     fontWeight: '600',
   },
   rowCount: {

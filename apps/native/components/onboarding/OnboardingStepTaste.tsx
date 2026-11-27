@@ -67,7 +67,7 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
         <Text
           style={[
             styles.counter,
-            { color: enough ? colors.accent : colors.textMuted },
+            { color: enough ? colors.limeText : colors.textMuted },
           ]}
         >
           {genres.size} / {MIN_GENRES}+
@@ -84,18 +84,18 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
               style={({ pressed }) => [
                 styles.chip,
                 {
-                  backgroundColor: on ? colors.accent : colors.surface,
-                  borderColor: on ? colors.accent : colors.border,
+                  backgroundColor: on ? colors.lime : colors.surface,
+                  borderColor: on ? colors.lime : colors.border,
                   opacity: pressed ? 0.85 : 1,
                 },
               ]}
             >
-              {on && <Text style={[styles.chipCheck, { color: colors.bg }]}>✓ </Text>}
+              {on && <Text style={[styles.chipCheck, { color: colors.textInverse }]}>✓ </Text>}
               <Text
                 style={[
                   styles.chipLabel,
                   {
-                    color: on ? colors.bg : colors.textPrimary,
+                    color: on ? colors.textInverse : colors.textPrimary,
                     fontWeight: on ? '600' : '500',
                   },
                 ]}
@@ -114,7 +114,7 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
           style={({ pressed }) => [
             styles.cta,
             {
-              backgroundColor: enough ? colors.accent : colors.surfaceRaised,
+              backgroundColor: enough ? colors.lime : colors.surfaceRaised,
               opacity: pressed && enough ? 0.85 : 1,
             },
           ]}
@@ -122,7 +122,7 @@ export default function OnboardingStepTaste({ onNext, initialGenres = [] }: Prop
           <Text
             style={[
               styles.ctaLabel,
-              { color: enough ? colors.bg : colors.textMuted },
+              { color: enough ? colors.textInverse : colors.textMuted },
             ]}
           >
             {ctaLabel}

@@ -11,7 +11,7 @@ import Animated, {
   interpolate,
   Easing,
 } from 'react-native-reanimated';
-import { colors, fontSizePx } from '../../lib/tokens';
+import { colors, fontSizePx, useThemeColors } from '../../lib/tokens';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 /**
@@ -143,8 +143,10 @@ export default function ApertureBreathLoader({ message, size = 64 }: Props) {
     return { opacity };
   });
 
-  // ring stroke color — opacity 는 animated style 이 modulate. base color 는 amber.
-  const ringBorder = 'rgba(196,163,90,1)';
+  // ring·glow·dot 은 Animated.View 정적 style → 동적 색 금지, hex (lib/tokens.ts Reanimated 규칙).
+  // 로더 색 = 아쿠아 (워드마크 색). opacity 는 animated style 이 modulate.
+  const t = useThemeColors();
+  const ringBorder = t.aqua;
 
   return (
     <View
@@ -188,7 +190,7 @@ export default function ApertureBreathLoader({ message, size = 64 }: Props) {
               width: glowD,
               height: glowD,
               borderRadius: glowD / 2,
-              backgroundColor: colors.accent,
+              backgroundColor: t.aqua,
             },
             glowStyle,
           ]}
@@ -202,7 +204,7 @@ export default function ApertureBreathLoader({ message, size = 64 }: Props) {
               width: dotD,
               height: dotD,
               borderRadius: dotD / 2,
-              backgroundColor: colors.accent,
+              backgroundColor: t.aqua,
             },
             dotStyle,
           ]}

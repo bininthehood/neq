@@ -36,7 +36,7 @@ import {
   type MonthlyWatchResult,
 } from '../lib/profile-stats';
 import type { WatchReport, SavedItem } from '../lib/types';
-import { colors, radius, spacing, fontsV2, shadowsNative } from '../lib/tokens';
+import { colors, radius, spacing, fontsV2, shadowsNative, useThemeColors } from '../lib/tokens';
 import { usePersona } from '../contexts/PersonaContext';
 import PersonaSection from '../components/PersonaSection';
 import SearchSheet from '../components/SearchSheet';
@@ -91,11 +91,14 @@ const COMING_SOON_PROVIDER_IDS = new Set(
 
 function MonthlyBar({
   heightPx,
-  color,
+  isCurrent,
 }: {
   heightPx: number;
-  color: string;
+  isCurrent: boolean;
 }) {
+  // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙) — 동적 colors.* 를 prop 으로 받지 않는다.
+  const t = useThemeColors();
+  const color = isCurrent ? t.lime : t.limeDim;
   const h = useSharedValue(0);
   useEffect(() => {
     h.value = withTiming(heightPx, {
@@ -474,7 +477,7 @@ export default function ProfileScreen() {
                       backgroundColor: on
                         ? colors.surfaceRaised
                         : colors.surface,
-                      borderColor: on ? colors.accent : colors.border,
+                      borderColor: on ? colors.lime : colors.border,
                       opacity: isComingSoon ? 0.5 : pressed ? 0.92 : 1,
                     },
                   ]}
@@ -509,12 +512,12 @@ export default function ProfileScreen() {
                       style={[
                         styles.ottCheck,
                         {
-                          backgroundColor: on ? colors.accent : 'transparent',
-                          borderColor: on ? colors.accent : colors.border,
+                          backgroundColor: on ? colors.lime : 'transparent',
+                          borderColor: on ? colors.lime : colors.border,
                         },
                       ]}
                     >
-                      {on && <IconCheck size={12} color={colors.bg} />}
+                      {on && <IconCheck size={12} color={colors.textInverse} />}
                     </View>
                   )}
                 </Pressable>
@@ -544,7 +547,7 @@ export default function ProfileScreen() {
                     <View style={styles.monthlyBarFrame}>
                       <MonthlyBar
                         heightPx={heightPx}
-                        color={b.isCurrent ? colors.accent : colors.accentDim}
+                        isCurrent={b.isCurrent}
                       />
                     </View>
                     <Text
@@ -715,7 +718,7 @@ const styles = StyleSheet.create({
     fontFamily: fontsV2.data,
   },
   statValueAccent: {
-    color: colors.accent,
+    color: colors.limeText,
   },
   statLabel: {
     color: colors.textMuted,
@@ -783,7 +786,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   monthlyMonthLabelCurrent: {
-    color: colors.accent,
+    color: colors.limeText,
   },
   monthlyFooter: {
     color: colors.textMuted,
@@ -791,7 +794,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   monthlyFooterAccent: {
-    color: colors.accent,
+    color: colors.limeText,
     fontWeight: '600',
   },
   // 구독 OTT 섹션 (2026-06-15) — onboarding step 9 (`OnboardingStepOTT.tsx`)
