@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRecommendations, getRecommendationsStreaming } from "@/lib/recommend";
 import { checkDailyRecommendationBudget, checkRateLimit } from "@/lib/rate-limit";
+import { isHiddenRec, parseHiddenKeys } from "@/lib/recommend/hidden-keys";
 
 /** 다양한 플랫폼/프록시 환경에서 클라이언트 IP를 안정적으로 추출 */
 function getClientIp(req: NextRequest): string {
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
     tasteGenres: rawTasteGenres,
     subscribedOtt: rawSubscribedOtt,
     tasteSummary: rawTasteSummary,
+    hiddenKeys: rawHiddenKeys,
   } = await req.json();
 
   // 페르소나 v2 (PR 2): tasteSummary 선택적 입력. 문자열만 허용 (length 가드는
@@ -74,6 +76,11 @@ export async function POST(req: NextRequest) {
   const excludeIds = Array.isArray(rawExcludeIds)
     ? rawExcludeIds.filter((x: unknown): x is number => typeof x === "number").slice(0, 300)
     : undefined;
+
+  // hiddenKeys 검증: "movie:123" / "tv:123" 문자열, 최대 500개. 없으면 빈 Set (예전 앱).
+  //   카드를 내보내기 직전 아래 두 곳(스트리밍 onCard·비스트리밍 배열)에서만 거른다 —
+  //   lib 의 모든 경로(미리보기·LLM 픽·phase2·탐색·콜드스타트·폴백)가 이 두 출구로만 나감.
+  const hidden = parseHiddenKeys(rawHiddenKeys);
 
   // savedTmdbIds 검증: 숫자 배열, 최대 50개 (취향벡터 합산용 — 과다 평균 희석 방지).
   const savedTmdbIds = Array.isArray(rawSavedTmdbIds)
@@ -140,7 +147,9 @@ export async function POST(req: NextRequest) {
             savedCount,
             onboardingCount,
             {
-              onCard: (rec) => emit({ type: "card", rec }),
+              onCard: (rec) => {
+                if (!isHiddenRec(rec, hidden)) emit({ type: "card", rec });
+              },
               onTimings: (timings) => emit({ type: "timings", timings }),
               onUsage: (usage) => emit({ type: "usage", usage }),
               // Phase A-4 (2026-06-06) — LLM meta (diversity_axis / temperature
@@ -200,7 +209,10 @@ export async function POST(req: NextRequest) {
     // Phase A-4 (2026-06-06) — meta (LLM diversity_axis / temperature / seed)
     // response body 포함. 클라이언트 useRecommendations.ts 의 metaToProps 가
     // `srv_*` prefix props 로 PostHog 매핑.
-    const body: Record<string, unknown> = { recommendations, timings };
+    const body: Record<string, unknown> = {
+      recommendations: recommendations.filter((rec) => !isHiddenRec(rec, hidden)),
+      timings,
+    };
     if (usage) body.usage = usage;
     if (meta) body.meta = meta;
     return NextResponse.json(body, { headers });
