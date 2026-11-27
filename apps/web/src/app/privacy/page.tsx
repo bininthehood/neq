@@ -24,6 +24,7 @@ export default function PrivacyPolicyPage() {
           <li>회원가입 없음 — 익명 사용자 식별자만 사용해요.</li>
           <li>개인을 식별할 수 있는 정보 (이름·이메일·전화번호 등) 는 수집하지 않아요.</li>
           <li>광고·마케팅·제3자 트래킹 목적의 데이터 전송이 없어요.</li>
+          <li>품질 개선을 위해 서비스 이용 화면을 기록할 수 있어요 — 입력한 글자와 이미지는 가려서 기록해요.</li>
           <li>저장된 취향 데이터는 디바이스 reset 또는 앱 삭제로 즉시 폐기할 수 있어요.</li>
         </ul>
       </section>
@@ -53,6 +54,13 @@ export default function PrivacyPolicyPage() {
         <p className="mb-2 text-neutral-300">
           이름, 이메일, 전화번호, 주소, 결제 정보, 정확한 위치, 연락처, 사진,
           마이크/카메라 입력, 광고 ID — 모두 수집하지 않아요.
+        </p>
+        <h3 className="mb-1 mt-3 font-medium">2.5 서비스 이용 화면 기록 (Session Replay)</h3>
+        <p className="mb-2 text-neutral-300">
+          PostHog 분석 도구로 앱·웹 이용 화면을 기록할 수 있어요. 화면 구성과 터치·클릭·스크롤
+          같은 동작을 기록하며, 익명 식별자와 연결돼요. 입력한 글자와 이미지는 가린 상태로
+          기록해요. 소리, 카메라 화면, neq 밖의 다른 앱 화면은 기록하지 않아요. 기록은 버그
+          재현과 사용성 개선에만 쓰며, 모든 이용이 아닌 일부 표본만 기록될 수 있어요.
         </p>
       </section>
 
@@ -125,7 +133,7 @@ export default function PrivacyPolicyPage() {
               <tr className="border-b border-neutral-900">
                 <td className="py-2 pr-3">PostHog Inc.</td>
                 <td className="py-2 pr-3">미국</td>
-                <td className="py-2 pr-3">익명 distinct_id, 사용 이벤트</td>
+                <td className="py-2 pr-3">익명 distinct_id, 사용 이벤트, 서비스 이용 화면 기록 (가림 처리)</td>
                 <td className="py-2 pr-3">HTTPS 전송</td>
               </tr>
               <tr className="border-b border-neutral-900">
@@ -161,6 +169,7 @@ export default function PrivacyPolicyPage() {
         <ul className="ml-4 list-disc space-y-1 text-neutral-300">
           <li>사용자 콘텐츠 (취향·저장): 디바이스에 영구 보관 — reset/삭제 즉시 폐기</li>
           <li>분석 이벤트 (PostHog): 1년 후 자동 삭제</li>
+          <li>서비스 이용 화면 기록 (PostHog): 30일 후 자동 삭제</li>
           <li>서버 로그: 90일 후 자동 삭제</li>
         </ul>
       </section>
