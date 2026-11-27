@@ -40,9 +40,7 @@ const ONBOARDED_KEY = 'neq_onboarded';
 // (web 의 v1 sync limitation 과 정합 — 비-default persona 일 때 동기화 skip 동일).
 const PERSONAS_KEY = 'neq_personas';
 const ACTIVE_PERSONA_KEY = 'neq_active_persona_id';
-// W5 Task B — Discover 첫 진입 4단계 튜토리얼 (TutorialFlow v3) 노출 여부.
-// web `localStorage.tutorialV3Shown === "1"` 과 동일한 의미/값.
-// 양 플랫폼이 같은 익명 식별자를 공유하지 않으므로 디바이스별 1회만 노출.
+// 옛 TutorialFlow v3 노출 표시 — 1.1.0 에서 카드 위 조작 힌트(lib/onboarding)로 대체. 초기화 때 옛 값 정리용으로만 남김.
 const TUTORIAL_V3_KEY = 'tutorialV3Shown';
 // Night Pool 5단계 — "관심 없음" 영구 숨김. 기기 기준(계획 X3), 재설치 시 사라짐. sync 대상 아님.
 const HIDDEN_KEY = 'neq_hidden_keys';
@@ -627,8 +625,7 @@ export async function clearAccountPrefs(): Promise<void> {
 // favorites 는 native 에 페르소나 구조가 없으므로 saved 갯수로 대체 (의도: 기존 사용자
 // 데이터가 있는 경우에도 가드를 통과하도록).
 //
-// 호출자: `app/index.tsx` (Discover) 의 첫 mount effect 에서 false 면
-// `router.replace('/onboarding')`.
+// 1.1.0 온보딩 A안부터 강제 진입 가드에 쓰지 않는다 (first_open 기존 사용자 판정에만).
 
 export async function hasOnboarded(): Promise<boolean> {
   try {
@@ -647,35 +644,6 @@ export async function setOnboarded(): Promise<void> {
 
 export async function clearOnboarded(): Promise<void> {
   await AsyncStorage.removeItem(ONBOARDED_KEY);
-}
-
-// ---------- tutorial v3 flag (W5 Task B) ----------
-//
-// web `apps/web/src/app/discover/page.tsx` 의 localStorage `tutorialV3Shown === "1"`
-// 과 동일 의미. Discover 첫 진입 시 4단계 튜토리얼을 1회만 보여주기 위한 가드.
-//
-// 값 '1' = 노출 완료 / 부재 = 미노출. web 과 동일 문자열 사용 (혹시라도 양 플랫폼이
-// 같은 storage 를 공유하는 향후 시나리오에 호환 유지).
-//
-// 호출자:
-//   - `app/index.tsx` Discover 의 mount effect 에서 false 면 TutorialFlow 마운트
-//   - TutorialFlow 의 onClose 콜백에서 `markTutorialV3Seen()` 호출
-
-export async function hasSeenTutorialV3(): Promise<boolean> {
-  try {
-    const v = await AsyncStorage.getItem(TUTORIAL_V3_KEY);
-    return v === '1';
-  } catch {
-    return false;
-  }
-}
-
-export async function markTutorialV3Seen(): Promise<void> {
-  await AsyncStorage.setItem(TUTORIAL_V3_KEY, '1');
-}
-
-export async function clearTutorialV3(): Promise<void> {
-  await AsyncStorage.removeItem(TUTORIAL_V3_KEY);
 }
 
 // ---------- hidden ("관심 없음") ----------
@@ -711,6 +679,9 @@ export async function consumeFirstOpen(): Promise<'new' | 'existing' | null> {
     if (await AsyncStorage.getItem(FIRST_OPEN_KEY)) return null;
     const existing = (await hasOnboarded()) || (await getSaved()).length > 0;
     await AsyncStorage.setItem(FIRST_OPEN_KEY, '1');
+    // 1.1.0 온보딩 A안 — 신규 설치만 'A'. 기존 사용자(neq_onboarded·저장 있음)는 표시 없음 = 기존 흐름.
+    // 설치 단위 키라 '모든 데이터 초기화'에도 남는다 (FIRST_OPEN_KEY 와 같음).
+    if (!existing) await AsyncStorage.setItem('neq_onboarding_variant', 'A');
     return existing ? 'existing' : 'new';
   } catch {
     return null;

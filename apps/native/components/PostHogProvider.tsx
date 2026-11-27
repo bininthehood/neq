@@ -16,6 +16,7 @@ import Constants from 'expo-constants';
 import { AccessibilityInfo, Platform } from 'react-native';
 import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { env } from '../lib/env';
+import { GESTURE_SCHEME, getOnboardingVariant } from '../lib/onboarding';
 import { attachPostHogInstance, detachPostHogInstance } from '../lib/analytics';
 
 interface Props {
@@ -62,6 +63,12 @@ export default function PostHogProvider({ children }: Props): React.ReactElement
     // TestFlight 는 스토어와 같은 production 바이너리라 JS·빌드 env 로 구분 불가 (계획 결정 기록 참조).
     // 네이티브 익명 사용자는 사람 프로필이 없어 사람 속성이 저장되지 않는다 → 모든 이벤트에 붙는 슈퍼 속성으로.
     if (__DEV__) client.register({ is_internal_build: true });
+    // 1.1.0 — 조작 체계(card_swiped down 의 뜻이 1.0.x 저장 → 이전 작품) + 온보딩 A안 (협의체 정의).
+    // onboarding_variant 는 1.1.0 신규 설치만 'A' — 없으면 기존 흐름. 첫 실행은 _layout 이 first_open 직전에 등록.
+    client.register({ gesture_scheme: GESTURE_SCHEME });
+    void getOnboardingVariant().then((v) => {
+      if (v) client.register({ onboarding_variant: v });
+    });
     // 2026-11-27 — 실기기에서 유리가 실제로 켜졌는지 (1.1.0(49) "평평해 보임" 피드백).
     // glass_available = isLiquidGlassAvailable() 원값(iOS 26 + Xcode 26 빌드), 투명도 줄이기면 대체 면이 그려진다.
     // 슈퍼 속성이라 매 실행 덮어씀 — OS 업데이트·설정 변경도 따라간다.

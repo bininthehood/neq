@@ -1,18 +1,20 @@
 import { useEffect } from 'react';
-import { Tabs, router, useSegments } from 'expo-router';
+import { Tabs, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { View, Pressable } from 'react-native';
 import { Text } from '../components/Text';
 import * as SplashScreen from 'expo-splash-screen';
-import { consumeFirstOpen, hasOnboarded } from '../lib/store';
+import Constants from 'expo-constants';
+import { consumeFirstOpen } from '../lib/store';
+import { countTap, markAppOpen } from '../lib/onboarding';
 import { colors, fontsV2 } from '../lib/tokens';
 import { useSync } from '../hooks/useSync';
 import PostHogProvider from '../components/PostHogProvider';
 import { PersonaProvider } from '../contexts/PersonaContext';
 import { ToastProvider } from '../contexts/ToastContext';
-import { track } from '../lib/analytics';
+import { registerSuperProps, track } from '../lib/analytics';
 import { IconDiscover, IconBookmark, IconUser, IconMix } from '../components/Icons';
 import { GlassSurface } from '../components/GlassSurface';
 import { TAB_BAR_BOTTOM, TAB_BAR_HEIGHT } from '../lib/tab-bar';
@@ -112,29 +114,20 @@ export default function RootLayout() {
 
   // app_open — root mount 1회 발사. PostHog 미초기화 상태에서도 큐잉되어 안전.
   useEffect(() => {
+    markAppOpen();
     track('app_open', { platform: 'native' });
     // 2026-11-27 — 설치 후 첫 실행 1회 (app_open 과 별개 이벤트). 업데이트로 들어온 기존 사용자는 제외.
+    // 1.1.0 — 신규면 온보딩 A안 표시(neq_onboarding_variant) 도 여기서 (store.consumeFirstOpen).
     void consumeFirstOpen().then((kind) => {
-      if (kind === 'new') track('first_open', { platform: 'native' });
+      if (kind === 'new') {
+        registerSuperProps({ onboarding_variant: 'A' });
+        track('first_open', { platform: 'native', app_version: Constants.expoConfig?.version ?? null });
+      }
     });
   }, []);
 
-  // W5 Task A 회귀 fix — root 레벨 onboarding 가드.
-  // Discover (app/index.tsx) 의 useFocusEffect 가드와 함께 작동. root mount 시
-  // hasOnboarded() 평가 후 false 면 즉시 router.replace. setRootGuard 같은 토글
-  // 상태 없이 effect 만으로 처리 — 2026-05-28 fix.
-  //
-  // 2026-05-27 시도 → 2026-05-28 revert:
-  // 'pending'/'pass' state + pending 동안 빈 View 차단 패턴을 도입했으나, Provider
-  // tree 와 빈 View 사이 전환이 children 전체를 매 cycle 마다 unmount/remount
-  // 시키며 무한 loop 유발 (5/28 시뮬레이터 검증: _layout 2292번 mount, 빈 검은
-  // 화면 영구 노출). race 차단은 Discover 의 useFocusEffect 만으로 충분.
-  useEffect(() => {
-    (async () => {
-      const ok = await hasOnboarded();
-      if (!ok) router.replace('/onboarding');
-    })();
-  }, []);
+  // 1.1.0 온보딩 A안 (2026-11-27) — 루트의 강제 온보딩 진입(router.replace('/onboarding')) 제거.
+  // 신규도 바로 발견 카드. neq_onboarded 는 읽지도 쓰지도 않으므로 기존 사용자 상태는 그대로.
 
   // 2026-05-28 mount race fix — `if (!fontsLoaded) return <View />` 게이트 제거.
   // 위 useEffect 주석 참조. Tabs 즉시 mount → 첫 frame a11y tree 노출 보장.
@@ -143,7 +136,8 @@ export default function RootLayout() {
   return (
     <PostHogProvider>
       <PersonaProvider>
-        <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }}>
+        {/* onTouchStart — first_card_viewed 의 taps_since_open (버블링 관찰만, 터치를 가로채지 않음) */}
+        <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.bg }} onTouchStart={countTap}>
           {/* initialMetrics — useSafeAreaInsets 측정 race 차단. splash 직후
               SafeAreaView 마진이 늦게 적용되어 콘텐츠가 줄어드는 reflow 방지. */}
           <SafeAreaProvider initialMetrics={initialWindowMetrics}>

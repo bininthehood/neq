@@ -1,4 +1,4 @@
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
@@ -23,6 +23,8 @@ import { colors } from '../../lib/tokens';
  */
 export default function TasteSurveyRoute() {
   const router = useRouter();
+  // 1.1.0 온보딩 A안 — 발견의 "취향 더 알려 주기" 제안에서 왔으면 발견으로 돌아간다.
+  const { from } = useLocalSearchParams<{ from?: string }>();
   const [mountKey, setMountKey] = useState<number>(() => Date.now());
   const isFirstFocusRef = useRef(true);
 
@@ -37,7 +39,7 @@ export default function TasteSurveyRoute() {
   );
 
   function close() {
-    router.replace('/profile');
+    router.replace(from === 'discover' ? '/' : '/profile');
   }
 
   return (
