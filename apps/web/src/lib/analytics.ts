@@ -107,6 +107,16 @@ export type NekoEvent =
   | "not_interested"
   | "save_failed"
   | "first_open"
+  // 1.1.0 온보딩 A안 (네이티브, 협의체 정의 2026-11-27)
+  | "first_card_viewed"
+  | "first_save"
+  | "tab_swiped"
+  | "ott_prompt_shown"
+  | "ott_prompt_completed"
+  | "ott_prompt_dismissed"
+  | "taste_prompt_shown"
+  | "taste_prompt_accepted"
+  | "taste_prompt_dismissed"
   | "detail_opened"
   | "detail_related_clicked"
   // 시청 리포트

@@ -1,6 +1,8 @@
 import { useCallback, useState } from 'react';
 import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { Text } from '../components/Text';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useTabSwipe } from '../hooks/useTabSwipe';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
@@ -31,6 +33,8 @@ import { Button } from '../components/Button';
  * 브리지: setPendingMixSeed → router.push('/') → Discover focus 시 consume.
  */
 export default function MixScreen() {
+  // 1.1.0 — 좌우 스와이프 = 탭 이동
+  const tabSwipe = useTabSwipe('mix');
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -75,6 +79,7 @@ export default function MixScreen() {
   }
 
   return (
+    <GestureDetector gesture={tabSwipe}>
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         {/* 4차 — 영문 표기 'Que' (neq 어원 라틴어 neque 착안, 사용자 확정. 'Cue' 아님) */}
@@ -163,6 +168,7 @@ export default function MixScreen() {
         onClose={() => setSearchOpen(false)}
       />
     </SafeAreaView>
+    </GestureDetector>
   );
 }
 

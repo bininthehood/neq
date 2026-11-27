@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   View,
   StyleSheet,
   Pressable,
-  Dimensions,
   Share,
-  type LayoutRectangle,
+  Modal,
 } from 'react-native';
 import { Text } from '../components/Text';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +12,6 @@ import { Image } from 'expo-image';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   useSharedValue,
-  useAnimatedReaction,
   runOnJS,
   withTiming,
   withSequence,
@@ -23,7 +21,7 @@ import Animated, {
 import { router, useFocusEffect, usePathname } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { subscribedOttToFilterOTTs } from '@neq/core';
-import SwipeCard from '../components/SwipeCard';
+import SwipeCard, { SaveSticker } from '../components/SwipeCard';
 import SkeletonCard from '../components/SkeletonCard';
 import FilterChips, { OTT_OPTIONS } from '../components/FilterChips';
 import DiscoverHeader from '../components/DiscoverHeader';
@@ -33,9 +31,9 @@ import { Button } from '../components/Button';
 import { GlassSurface } from '../components/GlassSurface';
 import { TAB_BAR_SPACE } from '../lib/tab-bar';
 import { IconArchive, IconRefresh, IconMoreVertical } from '../components/Icons';
-import TutorialFlow, {
-  type TutorialStep,
-} from '../components/TutorialFlow';
+import OnboardingStepOTT from '../components/onboarding/OnboardingStepOTT';
+import { useReducedMotion } from '../hooks/useReducedMotion';
+import GestureHint from '../components/GestureHint';
 import SearchSheet from '../components/SearchSheet';
 import ApertureBreathLoader from '../components/feedback/ApertureBreathLoader';
 import { buildSeededMixItems, mergeGenreQueueItems, mixLabelOf } from '../lib/mix-utils';
@@ -63,16 +61,36 @@ import {
   buildFeedbackInputs,
   clearRecHistory,
   getSaved,
-  hasOnboarded,
-  hasSeenTutorialV3,
-  markTutorialV3Seen,
   toggleSaved,
   getHiddenKeys,
   addHiddenKey,
   removeHiddenKey,
 } from '../lib/store';
 import { filterHidden, hiddenKeyOf } from '../lib/hidden-keys';
-import { classifySwipe, lockAxis, resolveAxis, type Axis } from '../lib/swipe-classify';
+import {
+  classifySwipe,
+  lockAxis,
+  resolveAxis,
+  tabAfterSwipe,
+  TAB_EVENT_NAME,
+  DOUBLE_TAP_MAX_DELAY,
+  TAP_MAX_DISTANCE,
+  TAP_MAX_MS,
+  type Axis,
+} from '../lib/swipe-classify';
+import {
+  nextHint,
+  getHintsDone,
+  markHintDone,
+  subscribeHintsDone,
+  decideSavePrompt,
+  getPromptFlags,
+  markPromptDone,
+  getOnboardingVariant,
+  consumeOnce,
+  sinceOpen,
+  type HintStep,
+} from '../lib/onboarding';
 import { computeV2Inputs } from '../lib/v2-input-utils';
 import { track } from '../lib/analytics';
 import { usePersona } from '../contexts/PersonaContext';
@@ -88,40 +106,21 @@ import type {
   RelatedWorksResponse,
 } from '../lib/types';
 import { colors, spacing, radius, shadowsNative } from '../lib/tokens';
-import { easings, durations, fontsV2 } from '@neq/design';
+import { easings, fontsV2 } from '@neq/design';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// Stage 4 D1 (swipe-stack.jsx) / G1-A (Handoff v2 Phase B+C):
-// THRESH=70, TAP=8/300ms — 좌(next)/우(prev overlay)/아래(save). ↑ 진입 제거 → 탭 단일 진입.
-//
-// 사이클 2 단일화: 콜백 타이밍은 `@neq/design` durations.swipeSaveDismiss / swipePassDismiss.
-// (feedback_swipe_ux.md 잠금: save 480ms / pass 360ms)
-// 2026-11-27 Night Pool 5단계 — 임계·판정은 lib/swipe-classify.ts (순수 함수 + 경계 테스트).
 // ponytail: 8s first-card 타임아웃, cold-start 감안. 잦은 오폴백이면 상향.
 // release/Hermes 빌드에서 reader.read() 가 에러 없이 stall 하면 스트림 await 가
 // 영영 안 끝나 SkeletonCard 영원 → 첫 카드 미도착 시 스트림 중단 + 비스트리밍 폴백.
 const FIRST_CARD_TIMEOUT_MS = 8000;
-// 03_p0-2 fix (한손 thumb flick 인식). 거리 임계는 그대로 유지 — 두 손 사용자의
-// 의도 swipe 보수성 보존. velocity 보조만 추가: 빠른 flick 이면 짧은 변위로도 trigger.
-// 좌/우/아래 모두 동일 패턴 적용 (좌·우는 velocityX, 아래는 velocityY).
-// PWA useSwipeGesture 의 velocity 보조 (안 B 권고) 정합.
-// 메모리 [Pan gesture offset 임계 충돌] 회피 — activeOffset/failOffset 도입 X.
-const SAVE_ABSORB_MS = durations.swipeSaveDismiss; // 480
-
-// 2026-06-10 swipe anim 재설계 (`_workspace/07_redesign-spec-swipe-anim-2026-06-10.md`):
-//   - PASS_DISMISS_MS / PASS_DISMISS_SLIDE_MS / PASS_DISMISS_BEZIER 폐기.
-//   - dismissX SharedValue / dismissingTmdbId state / passAdvanceTimer ref 폐기.
-//   - dismissThenNext / advancePassIndex 함수 폐기.
-//   - handleSwipeLeft 단순화 — setTopIdx 즉시 + dragX withTiming(0).
-//   - PWA `useSwipeGesture.ts:205-208` (dragX 비리셋 + nextCard) 1:1 포팅.
-// 좌 swipe 시각/콜백 곡선은 SWIPE_LEFT_MS (300ms) + easings.spring 으로 통일.
-const SWIPE_LEFT_MS = 300;
-const SWIPE_LEFT_BEZIER = Easing.bezier(...easings.spring);
-// ux-review WARN #3 — TutorialFlow snap-back 등 임계 미달 복귀는 durations.moderate(250) 미만
-// 으로 더 빠른 200ms (인지 가벼움). easings.spring 곡선은 유지.
+// 1.1.0 숏폼식 세로 피드 — 판정은 lib/swipe-classify.ts. 넘김 = 위치 SharedValue(pageSV) 보간.
+const PAGE_MS = 280;
+const PAGE_EASING = Easing.bezier(...easings.enter);
 const SNAPBACK_MS = 200;
 // 관심 없음 퇴장 — 작아지며(0.6) 어둡게 가라앉기, 220ms ease-in (DESIGN.md Motion).
 const HIDE_SINK_MS = 220;
+// 마운트 창: 이전 1장 + 현재 + 다음 3장. 빠르게 연속으로 넘겨 React commit 이 2장 늦어도 빈 화면 없음.
+const WINDOW_BEFORE = 1;
+const WINDOW_AFTER = 3;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -143,42 +142,9 @@ function toApiFilter(
 }
 
 export default function DiscoverScreen() {
-  // W5 Task A — onboarding 진입 가드.
-  //
-  // root layout (`app/_layout.tsx`) 이 `Tabs` 만 export 하므로 Discover (`app/index.tsx`)
-  // 가 사실상 첫 진입 화면이다. 첫 mount 시 `hasOnboarded()` 를 평가해
-  // false 면 즉시 `/onboarding` 으로 replace. 깜빡임 방지를 위해 결정 전까지는
-  // null 을 렌더 (Tabs 의 scene background = colors.bg 가 그대로 노출).
-  //
-  // 2026-05-27 fix — `useFocusEffect` 로 focus 시마다 재평가.
-  // 기존: `useEffect([])` 한 번만 평가. Tabs `lazy:false` 로 startup pre-mount 된 Discover 는
-  //       onboarding 진입 시 guard 가 redirect 로 잠긴 뒤, `/onboarding/complete` 가
-  //       `router.replace('/')` 해도 Discover 는 이미 mounted 라 useEffect 재실행 X →
-  //       `onboardCheck='redirect'` 잔존 → 빈 SafeAreaView 노출 ("Discover 안 넘어감").
-  // 변경: `useFocusEffect` 의 effect 가 화면이 focus 될 때마다 재평가하므로 onboarding
-  //       완료 후 `router.replace('/')` → Discover focus → `hasOnboarded()` 'true' →
-  //       `onboardCheck='pass'` 로 전환되어 정상 렌더.
-  const [onboardCheck, setOnboardCheck] = useState<'pending' | 'pass' | 'redirect'>(
-    'pending',
-  );
-  useFocusEffect(
-    useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        const ok = await hasOnboarded();
-        if (cancelled) return;
-        if (ok) {
-          setOnboardCheck('pass');
-        } else {
-          setOnboardCheck('redirect');
-          router.replace('/onboarding');
-        }
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, []),
-  );
+  // 1.1.0 온보딩 A안 (2026-11-27) — 첫 실행 강제 온보딩 진입 제거. 신규도 바로 이 화면(트렌딩 콜드 스타트).
+  // 기존 10단계 화면은 프로필(취향 추가·OTT)과 저장 뒤 제안에서 재사용한다.
+  const reducedMotion = useReducedMotion();
 
   // 페르소나 전환 — Discover 헤더 chip 에서 사용 (web `DiscoverHeader` 정합).
   const persona = usePersona();
@@ -193,28 +159,23 @@ export default function DiscoverScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [topIdx, setTopIdx] = useState(0);
-  // 2026-06-06 (P1 애니메이션 Fix B) — drag 추적 SharedValue 화.
-  // 진단: `_workspace/02_p1_animation.md` §3 (root cause 2).
-  //
-  // 기존: useState. pan.onUpdate 가 매 frame `runOnJS(setDragX)` → React reconcile
-  //   → SwipeCard re-render → worklet 재계산. 60Hz × 5~7 runOnJS/frame.
-  // 변경: useSharedValue. worklet 안에서 `dragX.value = ...` 직접 update,
-  //   SwipeCard 의 worklet 가 `dragX.value` 직접 read → UI thread 만으로 매 frame
-  //   처리. runOnJS 호출은 commit 시점 (gesture end → action) 만 남는다.
+  // 세로 피드 위치 — UI 스레드 값 (SwipeCard: translateY = (index − pageSV) × feedH + dragY).
+  // pageTargetSV = 넘김이 향하는 페이지. 제스처 worklet 이 먼저 옮기고 React topIdx 는 마운트 창만 정한다.
+  const pageSV = useSharedValue(0);
+  const pageTargetSV = useSharedValue(0);
+  const feedH = useSharedValue(0);
+  const deckLenSV = useSharedValue(0);
+  // 제스처가 요청한 마지막 topIdx — 이 값과 다른 topIdx commit(처음으로·되돌리기·새 로드·큐 전환)은 점프.
+  const gestureTopRef = useRef(0);
+  const inMixRef = useRef(false);
   const dragX = useSharedValue(0);
-  // Stage 4 D1: 위/아래 스와이프 변위
   const dragY = useSharedValue(0);
-  // 2026-06-10 swipe anim 재설계 — zeroDragSV 폐기. 비탑 카드도 dragX 직접 전달
-  // (PWA 정합: promote 시 SharedValue 연속성 보장).
-  const [isDragging, setIsDragging] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   // Night Pool 5단계 — "관심 없음" 숨김 키 (movie:1 / tv:1). 덱 파생 단계에서 거른다.
   const [hiddenKeys, setHiddenKeys] = useState<ReadonlySet<string>>(new Set());
-  // Stage 4 D1: save 흡수 모션 + flash
-  const [saveAbsorbing, setSaveAbsorbing] = useState(false);
   const [saveFlash, setSaveFlash] = useState(false);
-  const saveBtnRef = useRef<View>(null);
-  const [saveTargetPoint, setSaveTargetPoint] = useState<{ x: number; y: number } | null>(null);
+  // 더블탭 저장 "찜!" 팝 (0→1→0)
+  const stickerP = useSharedValue(0);
 
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterOrigin, setFilterOrigin] = useState<FilterOrigin>('all');
@@ -235,59 +196,22 @@ export default function DiscoverScreen() {
   const [subscribedOtt, setSubscribedOtt] = useState<number[]>([]);
   const prevFilterOTTsRef = useRef<Set<string> | null>(null);
 
-  // W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
-  //
-  // 동작 모델 (web `apps/web/src/app/discover/page.tsx` 정합):
-  //   1. mount 직후 AsyncStorage `tutorialV3Shown` 점검 → tutorialEligible
-  //   2. 첫 카드 로드 (recs.length > 0) 완료 시 tutorialActive = true
-  //   3. TutorialFlow 마운트 후 사용자가 좌/우/하/탭 4 액션을 실습할 때마다 카운터 증가
-  //   4. TutorialFlow 가 카운터 변동을 감지해 자동 다음 단계 진행
-  //   5. 4단계 완료 또는 건너뛰기 → handleTutorialClose → markTutorialV3Seen() + tutorialActive=false
-  //
-  // 카운터는 각 액션 핸들러에서 emit (handleSwipeLeft / onPrevCard / triggerSaveAbsorption / handleCardTap).
-  const [tutorialEligible, setTutorialEligible] = useState(false);
-  const [tutorialActive, setTutorialActive] = useState(false);
-  // 튜토리얼 현재 step — TutorialFlow 의 onStepChange 로 emit. step 별 action whitelist 가드.
-  // null = 비활성. swipe_left/right/down 단계 중 탭은 silent ignore (DetailSheet open 차단).
-  const [tutorialStep, setTutorialStep] = useState<TutorialStep | null>(null);
-  const [leftSwipeCount, setLeftSwipeCount] = useState(0);
-  const [rightSwipeCount, setRightSwipeCount] = useState(0);
-  const [saveActionCount, setSaveActionCount] = useState(0);
-  const [detailOpenCount, setDetailOpenCount] = useState(0);
-  // TutorialFlow 풀사이즈 데모 카드 좌표 정합용 — stackWrap (실제 SwipeCard 부모) 의
-  // onLayout 측정값. hardcoded HEADER/FILTER/ACTION 차감 대신 동적 측정.
-  // 산업표준 패턴 (ref + onLayout) — FilterChips 등 sibling 추가/제거에 자동 정합.
-  const [stackRect, setStackRect] = useState<LayoutRectangle | null>(null);
+  // 1.1.0 온보딩 A안 — 카드 위 조작 힌트 (한 번에 하나, 해 보면 사라짐). TutorialFlow v3 대체.
+  const [hintsDone, setHintsDone] = useState<HintStep[] | null>(null);
+  // 이번 세션에서 본 카드 수 (힌트 노출 시점·first_save cards_seen)
+  const [cardsSeen, setCardsSeen] = useState(0);
+  const [savePrompt, setSavePrompt] = useState<'ott' | 'taste' | null>(null);
 
-  const prevOverlayX = useSharedValue(-SCREEN_WIDTH);
-  // 2026-06-10 swipe anim v3 — dismiss 모션 SharedValue 분리.
-  // dragX 는 drag 추적 전용. 옛 top 의 slide-out (-300 → -SCREEN_W) 은 dismissX.
-  // dismissCardIdSV 가 dismiss 진행 카드의 tmdbId 보유 (-1 = idle). worklet 안에서
-  // tmdbId 매칭으로 옛 top 만 dismissX 적용 → 새 top / 비탑 영향 0.
-  // SharedValue 라 React state isDismissing prop 의 commit 전이 race 없음.
-  const dismissX = useSharedValue(0);
-  const dismissCardIdSV = useSharedValue<number>(-1);
   // 배치 G — 첫 카드 힌트 worklet 측 1회 게이트 (0=미발사, 1=발사됨).
   const firstCardHintGate = useSharedValue(0);
   // 2026-07-10 — hold(long-press) 활성화 펄스 (게스처 정의는 아래 longPress).
   const holdSV = useSharedValue(0);
-  // TutorialFlow step whitelist worklet 가드용 — pan.onEnd 안에서 React state
-  // 직접 참조 불가 (worklet 컨텍스트). state(`tutorialStep`) 와 useEffect 동기화.
-  // 인코딩: 0=null(비활성), 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
-  // pan.onEnd 가 step 별 허용/차단 결정에 참조. onUpdate 는 변경 없음 (drag 시각 따라옴
-  // 유지) — onEnd 시점에서만 dismiss/prev 진행을 가드하여 사용자 자연 인지 보존.
-  const tutorialStepSV = useSharedValue(0);
-  // Night Pool 5단계 — 방향 잠금(첫 10px 축, 0=미정) + 관심 없음 가라앉기.
-  // sinkCardIdSV 는 dismissCardIdSV 와 같은 패턴: tmdbId 매칭 카드만 sinkP 를 쓴다.
+  // 방향 잠금(첫 10px 축, 0=미정) + 관심 없음 가라앉기.
+  // sinkCardIdSV: 가라앉는 카드 tmdbId, sinkIdxSV: 그 덱 인덱스(뒤 카드가 한 칸 당겨 깔림).
   const axisSV = useSharedValue<Axis>(0);
   const sinkCardIdSV = useSharedValue<number>(-1);
+  const sinkIdxSV = useSharedValue<number>(-1);
   const sinkP = useSharedValue(0);
-  // 2026-06-10 swipe anim 재설계 v2 — PWA 정합 정정.
-  // dismissX SharedValue / dismissingTmdbId state 는 폐기 유지 (race source).
-  // passAdvanceTimer ref 복원 — PWA `discover/page.tsx:215-224` 의 nextCard 패턴
-  // (setDragX(-600) 으로 옛 top 슬라이드 아웃 + setTimeout 360ms 안에 setTopIdx+setDragX(0))
-  // 정합. dragX 단일 SharedValue 로 옛 top 의 slide-out 모션 표현.
-  const passAdvanceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 2026-06-06 (P0 stack 겹침) — 직전 in-flight stream abort 용 controller.
   // load() 진입 시 이전 controller.abort() + 새 controller 발급 → 옛 stream 의
   // onCard 가 새 stack 에 끼어드는 race 차단. PWA `useRecommendations.ts:221, 461-462`
@@ -300,48 +224,15 @@ export default function DiscoverScreen() {
   // 자세한 배경: `_workspace/06_research-infinite-scroll-2026-06-06.md` §4.1
   const [exhausted, setExhausted] = useState(false);
   const exhaustedRef = useRef(false);
-  // 언마운트 시 in-flight stream + 진행 중인 passAdvance 타이머 정리.
+  // 언마운트 시 in-flight stream 정리.
   useEffect(() => {
     return () => {
       loadAbortRef.current?.abort();
       loadAbortRef.current = null;
       mixFetchAbortRef.current?.abort();
       mixFetchAbortRef.current = null;
-      if (passAdvanceTimer.current) {
-        clearTimeout(passAdvanceTimer.current);
-        passAdvanceTimer.current = null;
-      }
     };
   }, []);
-
-  // 2026-06-06 (P1 애니메이션 Fix B) — savePulling boolean throttle.
-  // ActionBar 의 savePulling prop 은 `dragY > 30 && isDragging` 인데 dragY 가
-  // SharedValue 화되며 React state 가 아니게 됨. UI 측에서 30 임계를 넘나드는
-  // 순간에만 React state 를 토글하여 ActionBar re-render 빈도 = 0~2회/제스처.
-  // runOnJS 호출 빈도 = 매 frame → 임계 traverse 시점만 으로 ~30배 감소.
-  const [savePulling, setSavePulling] = useState(false);
-  useAnimatedReaction(
-    () => dragY.value > 30,
-    (over, prev) => {
-      if (over !== prev) runOnJS(setSavePulling)(over);
-    },
-  );
-
-  // tutorialStep state → tutorialStepSV sharedValue 동기화 (worklet 가드용).
-  // 인코딩: null=0, swipe_left=1, swipe_right=2, swipe_down=3, tap=4.
-  useEffect(() => {
-    if (tutorialStep === null) {
-      tutorialStepSV.value = 0;
-    } else if (tutorialStep === 'swipe_left') {
-      tutorialStepSV.value = 1;
-    } else if (tutorialStep === 'swipe_right') {
-      tutorialStepSV.value = 2;
-    } else if (tutorialStep === 'swipe_down') {
-      tutorialStepSV.value = 3;
-    } else if (tutorialStep === 'tap') {
-      tutorialStepSV.value = 4;
-    }
-  }, [tutorialStep, tutorialStepSV]);
 
   // 2026-07-08 — Seeded Mix 2차: 덱 주입.
   // 1차(후보 패널) 를 승격 — 믹스 시작 시 카드 덱이 seed 기반 후보로 교체된다.
@@ -369,23 +260,12 @@ export default function DiscoverScreen() {
   // 카드 케밥(⋮) 인라인 메뉴 — 1차 MIX 칩이 "별점 밑 chip 같다" 는 피드백으로 교체.
   const [cardMenuOpen, setCardMenuOpen] = useState(false);
 
-  // 2026-06-10 swipe anim v3 — dismissCardIdSV 안전 리셋.
-  // topIdx 변경 시 (좌 swipe advance / prev / 기타 진입) React commit + paint 후
-  // 본 effect 발화. 그 시점에 옛 top 은 이미 unmount → 옛 top 의 worklet 평가
-  // 트리거 없음. 새 top 은 tmdbId 매칭 안 됨이라 dismissCardIdSV 변경 영향 0.
-  // 옛 top 이 prev 로 cardsToShow 에 재진입한 경우에도 worklet 의 isDismissing
-  // 가드가 false 가 되어 dismissX 무시 → 정상 위치 등장.
+  // top 전환 시 hold 램프 하드 리셋 (onFinalize 이중 안전망). 일반·큐 덱 공통.
   useEffect(() => {
-    if (dismissCardIdSV.value !== -1) {
-      dismissCardIdSV.value = -1;
-    }
-    // 2026-07-10 — hold 램프 하드 리셋 (top 전환 시 잔존 방어 — onFinalize 이중 안전망).
     holdSV.value = 0;
-    // 2026-07-08 Seeded Mix 2차 — mix 덱 advance (mixTopIdx) 도 동일 리셋 경로.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [topIdx, mixTopIdx]);
 
-  const [prevActive, setPrevActive] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -460,10 +340,8 @@ export default function DiscoverScreen() {
       if (!opts?.silent) {
         setRecs([]);
         setTopIdx(0);
-        setPrevActive(false);
         dragX.value = 0;
         dragY.value = 0;
-        prevOverlayX.value = -SCREEN_WIDTH;
       }
       invalidatePrefetchCache();
 
@@ -709,7 +587,7 @@ export default function DiscoverScreen() {
         setState('error');
       }
     },
-    // prevOverlayX / dragX / dragY 는 SharedValue ref 이므로 stable. 의존성 0 유지.
+    // dragX / dragY 는 SharedValue ref 이므로 stable. 의존성 0 유지.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -833,12 +711,8 @@ export default function DiscoverScreen() {
   );
 
   useEffect(() => {
-    // W5 Task A — onboarding 가드 통과 전에는 추천 fetch 보류.
-    // pending 상태에서 호출하면 anon 사용자에게 cold-start 추천이 먼저 캐싱돼서
-    // onboarding 완료 후 첫 카드가 onboarding 결과를 반영하지 못한다.
-    if (onboardCheck !== 'pass') return;
     load();
-  }, [load, onboardCheck]);
+  }, [load]);
 
   // 2026-06-11 (build 24 hotfix) — persona switch / create 후 자동 reload.
   // 사용자 보고: Profile 에서 새 취향 생성 후 Discover 진입 시 추천이 새 취향으로 재계산 X.
@@ -847,7 +721,6 @@ export default function DiscoverScreen() {
   // sentinel ref 첫 값 null = mount 초기화 (mount useEffect 가 처리), 그 후 변경만 감지.
   const prevActivePersonaIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (onboardCheck !== 'pass') return;
     if (prevActivePersonaIdRef.current === null) {
       prevActivePersonaIdRef.current = persona.activePersonaId;
       return;
@@ -856,42 +729,13 @@ export default function DiscoverScreen() {
       prevActivePersonaIdRef.current = persona.activePersonaId;
       load();
     }
-  }, [persona.activePersonaId, load, onboardCheck]);
+  }, [persona.activePersonaId, load]);
 
-  // W5 Task B — TutorialFlow v3 노출 정책.
-  // onboarding 가드 통과 후 1회만 AsyncStorage 점검. flag 가 없으면 eligible=true.
+  // 조작 힌트 완료 목록 + 온보딩 변형. 큐·저장 탭의 좌우 스와이프 완료도 구독으로 받는다.
   useEffect(() => {
-    if (onboardCheck !== 'pass') return;
-    let cancelled = false;
-    hasSeenTutorialV3().then((seen) => {
-      if (cancelled) return;
-      setTutorialEligible(!seen);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [onboardCheck]);
-
-  // 첫 카드 로드 완료 → tutorialActive=true. eligible=false 면 무시.
-  // tutorialActive 가 의존성에서 빠진 이유: 자기 자신 트리거 방지 (web 정본과 동일).
-  useEffect(() => {
-    if (!tutorialEligible) return;
-    if (state !== 'ready') return;
-    if (recs.length === 0) return;
-    if (tutorialActive) return;
-    setTutorialActive(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tutorialEligible, state, recs.length]);
-
-  const handleTutorialClose = useCallback(
-    (_reason: 'completed' | 'skipped', _payload: { stepsCompleted: number; atStep: TutorialStep }) => {
-      void markTutorialV3Seen();
-      setTutorialActive(false);
-      setTutorialEligible(false);
-      setTutorialStep(null);
-    },
-    [],
-  );
+    void getHintsDone().then(setHintsDone);
+    return subscribeHintsDone(setHintsDone);
+  }, []);
 
   // #17 prefetch 트리거 — 남은 카드 5장 이하 시 다음 배치 백그라운드 로드.
   // 2026-06-06 (Tier 3 단기 incident 해소) — exhausted lock 가드 페기.
@@ -1051,19 +895,31 @@ export default function DiscoverScreen() {
   const activeDeck = inMix ? filterHidden(mixDeck, hiddenKeys) : filteredRecs;
   const activeTopIdx = inMix ? mixTopIdx : topIdx;
   const currentRec = activeDeck[activeTopIdx];
-  const prevRec = activeTopIdx > 0 ? activeDeck[activeTopIdx - 1] : null;
 
-  /** mix 모드 인지 top advance — 일반/믹스 덱 각자의 topIdx 만 이동. */
-  function advanceTop() {
-    if (inMix) setMixTopIdx((i) => Math.min(i + 1, mixDeck.length));
-    else setTopIdx((i) => Math.min(i + 1, recs.length));
-  }
+  // 제스처 worklet 이 쓰는 덱 길이 (다음 작품 유무). 끝 +1 까지 넘기면 "더 가져오는 중" 로더.
+  useEffect(() => {
+    deckLenSV.value = activeDeck.length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeDeck.length]);
+
+  // 제스처가 아닌 topIdx 변경(처음으로·되돌리기·새 로드·큐 시작/해제) → 위치를 바로 그 페이지로.
+  // 제스처 넘김은 worklet 이 pageSV 를 먼저 옮겨 두므로 건드리지 않는다 (빠른 연속 넘김 중 commit 이 늦어도 안 튐).
+  useLayoutEffect(() => {
+    if (activeTopIdx === gestureTopRef.current && inMixRef.current === inMix) return;
+    inMixRef.current = inMix;
+    gestureTopRef.current = activeTopIdx;
+    cancelAnimation(pageSV);
+    pageSV.value = activeTopIdx;
+    pageTargetSV.value = activeTopIdx;
+    dragY.value = 0;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTopIdx, inMix]);
 
   /**
    * 사이클 2 통일 매핑 (web `vibrate(...)` 와 인지 강도 정합):
-   *   - light  : pass(left swipe), tap, rewind/refresh — web vibrate('light')=8ms
-   *   - medium : save 흡수, prev card 진입             — web vibrate('medium')=14ms
-   *   - heavy  : 오류 (현재 미사용)                    — web vibrate('heavy')=24ms
+   *   - light  : 다음/이전 넘김, 탭 — web vibrate('light')=8ms
+   *   - medium : 저장 취소 — web vibrate('medium')=14ms
+   *   저장 확정은 success 1회 (DESIGN.md 햅틱).
    */
   function hapticLight() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -1072,179 +928,142 @@ export default function DiscoverScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
   }
 
-  function toNext() {
+  /** 위·아래 넘김 commit (worklet 이 pageSV 를 이미 target 으로 보간 중). */
+  function onFeedNav(target: number, action: 'next' | 'prev') {
+    gestureTopRef.current = target;
+    if (inMix) setMixTopIdx(target);
+    else setTopIdx(target);
     hapticLight();
-    advanceTop();
+    const rec = activeDeck[activeTopIdx];
+    if (rec) {
+      // 협의체 정의: direction 물리 방향 그대로 — 'up'=다음, 'down'=이전 (1.0.x down=저장과 뜻이 다름, gesture_scheme 으로 구분)
+      track('card_swiped', { direction: action === 'next' ? 'up' : 'down', tmdb_id: rec.tmdbId, title: rec.title });
+    }
+    if (action === 'next') completeHint('swipe_up_next');
   }
 
-  /**
-   * 2026-06-10 swipe anim v3 — dismiss 모션 SharedValue 분리.
-   *
-   * v2 결함 (사용자 피드백 "넘긴 작품이 1회 깜빡임"):
-   *   - v2: dragX 를 -SCREEN_W 로 보간 후 360ms 시점에 dragX=0 즉시 리셋.
-   *   - 그 시점에 옛 top 이 아직 cardsToShow 에 있고 isTop=true → worklet 재평가
-   *     → tx = dragX = 0 → 옛 top 이 화면 밖에서 *중앙으로 점프* (한 프레임).
-   *   - React commit 후 unmount 이지만 그 한 프레임 깜빡임이 인지됨.
-   *
-   * v3: dragX 와 dismissX 분리.
-   *   - dragX: drag 추적 전용. 좌 swipe trigger 즉시 0 으로 리셋 (옛 top 영향 0 —
-   *     아래 isDismissing 가드로 dragX 사용 안 함).
-   *   - dismissX: 옛 top 의 slide-out 전용. -300 (사용자 마지막) → -SCREEN_W 보간.
-   *   - dismissCardIdSV: SharedValue. 옛 top tmdbId 보유. worklet 안에서 tmdbId
-   *     매칭으로 dismissX 적용 카드 식별. React state 가 아닌 SharedValue 라
-   *     commit 전이 race 0.
-   *   - advance 시점에 dismissX 리셋 안 함 (다음 swipe 가 덮어쓰기) → 옛 top 의
-   *     중앙 점프 없음. dismissCardIdSV 도 setTopIdx 와 같이 -1 로 리셋.
-   *
-   * 새 top / 비탑 카드는 dismissCardIdSV 매칭 안 됨 → dragX 만 사용 → 옛 top
-   * slide-out 진행과 무관하게 위치 0 유지 → 깜빡임 0.
-   */
-  function handleSwipeLeftAnim() {
-    if (!activeDeck[activeTopIdx]) return;
-    const curId = activeDeck[activeTopIdx].tmdbId;
-    // 빠른 연속 swipe: 직전 보간/타이머 정리.
-    cancelAnimation(dragX);
-    cancelAnimation(dragY);
-    cancelAnimation(dismissX);
-    if (passAdvanceTimer.current) {
-      clearTimeout(passAdvanceTimer.current);
-      passAdvanceTimer.current = null;
-    }
+  /** 좌우 스와이프 = 탭 이동 (발견 ↔ 큐 ↔ 저장). 발견에서 오른쪽(이전 탭)은 없음. */
+  function onTabSwipe(action: 'tab_next' | 'tab_prev') {
+    const to = tabAfterSwipe('index', action);
+    if (!to) return;
     hapticLight();
-    setIsDragging(false);
-
-    // Phase 1 — dismiss 모션 설정.
-    // 1. dismissCardIdSV 에 옛 top tmdbId 기록 → 옛 top 의 worklet 이 isDismissing=true
-    //    → dismissX 사용 시작.
-    // 2. dismissX 시작점 = dragX.value (사용자 마지막 위치, 예: -300). 자연 연장.
-    // 3. dismissX withTiming(-SCREEN_W). 옛 top 카드 화면 밖으로 슬라이드.
-    // 4. dragX = 0 즉시. 옛 top 은 isDismissing 가드라 영향 0. 새 top / 비탑도 영향 0.
-    dismissCardIdSV.value = curId;
-    dismissX.value = dragX.value;
-    dismissX.value = withTiming(-SCREEN_WIDTH, {
-      duration: SWIPE_LEFT_MS,
-      easing: SWIPE_LEFT_BEZIER,
-    });
-    dragX.value = 0;
-    dragY.value = withTiming(0, {
-      duration: SWIPE_LEFT_MS,
-      easing: SWIPE_LEFT_BEZIER,
-    });
-
-    // Phase 2: 360ms 후 advance — setTopIdx 만 호출.
-    //   dismissCardIdSV = -1 리셋은 본 함수 안에서 *직접 호출 금지*.
-    //   직접 호출 시 UI thread 가 React commit 보다 먼저 message 처리 → 옛 top 의
-    //   worklet 재평가 → isDismissing=false → tx=dragX=0 → 옛 top 이 화면 밖 →
-    //   중앙으로 한 프레임 점프 → 사용자 인지 1회 깜빡임.
-    //   대신 아래 useEffect(topIdx) 가 React commit + paint 후 발화 → 옛 top
-    //   이미 unmount → 평가 트리거 없음 → 깜빡임 0.
-    passAdvanceTimer.current = setTimeout(() => {
-      advanceTop();
-      passAdvanceTimer.current = null;
-    }, 360);
+    track('tab_swiped', { from: TAB_EVENT_NAME.index, to: TAB_EVENT_NAME[to] });
+    completeHint('swipe_tab');
+    router.navigate(to === 'mix' ? '/mix' : '/saved');
   }
 
-  function toPrev() {
-    // 사이클 2 통일 매핑: prev card 진입 = medium (web vibrate('medium')=14ms 와 정합)
-    hapticMedium();
-    if (inMix) setMixTopIdx((i) => Math.max(i - 1, 0));
-    else setTopIdx((i) => Math.max(i - 1, 0));
-    // W5 Task B — TutorialFlow v3: 우 스와이프(prev overlay) 신호 emit.
-    // rewind 버튼은 setTopIdx(0) 으로 직접 호출하므로 본 카운터에 안 잡힘 (web 정본 정합).
-    setRightSwipeCount((c) => c + 1);
+  // ── 조작 힌트 (온보딩 A안) ──
+  const activeHint: HintStep | null =
+    hintsDone && (state === 'ready' || inMix) && currentRec && !detailOpen && !searchOpen && !cardMenuOpen
+      ? nextHint(hintsDone, cardsSeen)
+      : null;
+  const shownHintRef = useRef<HintStep | null>(null);
+  useEffect(() => {
+    if (!activeHint || shownHintRef.current === activeHint) return;
+    shownHintRef.current = activeHint;
+    track('tutorial_step_shown', { step: activeHint, cards_seen: cardsSeen });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeHint]);
+
+  /** 해 봤으면 완료 — 보여 주던 힌트면 tutorial_completed, 미리 해 본 건 조용히 완료. */
+  function completeHint(step: HintStep) {
+    const wasShown = shownHintRef.current === step;
+    void markHintDone(step).then((first) => {
+      if (first && wasShown) track('tutorial_completed', { step, cards_seen: cardsSeenRef.current });
+    });
   }
+  function skipHint(step: HintStep) {
+    void markHintDone(step).then((first) => {
+      if (first) track('tutorial_skipped', { step, cards_seen: cardsSeenRef.current });
+    });
+  }
+  const cardsSeenRef = useRef(0);
+  cardsSeenRef.current = cardsSeen;
 
   /**
-   * 2026-05-20 prev overlay 도착 단일 commit fix.
-   *
-   * 기존 결함: worklet 콜백에서 `runOnJS(toPrev)` + `runOnJS(setPrevActive)` 를 두 번
-   * 따로 호출. 각 runOnJS 는 별개 JS task → React 18 batched update 밖이라 두 번의
-   * 별개 commit 발생.
-   *   - commit 1: topIdx 변경 → 새 top SwipeCard mount + 옛 top depth=1 전환.
-   *               PrevCardOverlay 는 여전히 mounted (zIndex 100 으로 위에 깔림).
-   *   - commit 2: prevActive=false → PrevCardOverlay unmount → 새 top 노출.
-   * 두 commit 사이 한 프레임 갭 + 옛 top 의 depth withTiming 첫 step 이 backstage 에서
-   * 진행되어, PrevCardOverlay 사라지는 순간 옛 top 이 이미 작아져 있는 게 살짝 보임 →
-   * "미세한 깜빡임" 인지.
-   *
-   * 새 구조: 두 setState 를 단일 JS 함수에서 호출 → React 18 auto-batched → 단일 commit.
-   * PWA `useSwipeGesture.ts:189-199` 의 `setTimeout(setTopIdx + setPrevOverlayX(null), 300)`
-   * 단일 task 패턴과 정합.
+   * 저장 (더블탭·버튼 공통). 저장해도 카드는 제자리 — 넘어가지 않는다 (제임스 확정).
+   * "찜!" 팝 + 저장 버튼 번쩍 + success 햅틱 1회. card_saved 는 저장 성공 뒤 (5단계 순서 유지).
    */
-  function handlePrevArrival() {
-    toPrev();
-    setPrevActive(false);
-  }
-
-  /**
-   * Stage 4 D1: save 흡수 모션 트리거. (swipe-stack.jsx 패턴)
-   *  - save 버튼 좌표 measure → 카드 흡수 목표점
-   *  - flash 600ms / 흡수 480ms 동기화
-   *  - 480ms 후 다음 카드로 advance
-   *  - 이미 저장된 상태면 unsave 만 (흡수 모션 없음, flash 만)
-   */
-  async function triggerSaveAbsorption(reason: 'swipe_down' | 'button') {
-    if (!currentRec || saveAbsorbing) return;
-    const id = currentRec.tmdbId;
-    const alreadySaved = savedIds.has(id);
-
-    // save 버튼 좌표 measure (네이티브 절대 좌표)
-    if (saveBtnRef.current) {
-      saveBtnRef.current.measureInWindow((x, y, w, h) => {
-        setSaveTargetPoint({ x: x + w / 2, y: y + h / 2 });
-      });
-    }
-
-    // 사이클 2 통일 매핑: save 액션 = medium (web vibrate('medium')=14ms 와 정합)
-    hapticMedium();
-
-    if (alreadySaved) {
-      // unsave: 흡수 모션 없음
-      const nowSaved = await toggleSaved(currentRec);
-      setSavedIds((prev) => {
-        const next = new Set(prev);
-        if (nowSaved) next.add(id);
-        else next.delete(id);
-        return next;
-      });
-      track('card_unsaved', { tmdb_id: id });
-      setSaveFlash(true);
-      setTimeout(() => setSaveFlash(false), 600);
-      return;
-    }
-
+  async function saveCurrent(method: 'double_tap' | 'button') {
+    const rec = currentRec;
+    if (!rec || savedIds.has(rec.tmdbId)) return;
     let nowSaved: boolean;
     try {
-      nowSaved = await toggleSaved(currentRec);
+      nowSaved = await toggleSaved(rec);
     } catch {
-      // save_failed 는 toggleSaved 가 발사. 흡수 모션 없이 카드 제자리 + 알림.
+      // save_failed 는 toggleSaved 가 발사. 카드 제자리 + 알림.
       toast.show('error', { ctx: { message: '저장하지 못했어요' } });
       return;
     }
-    track('card_saved', { tmdb_id: id, title: currentRec.title, source: reason });
-    // W5 Task B — TutorialFlow v3: save 신호 emit (swipe_down / button 둘 다).
-    // unsave 는 카운트 X — web 정본 정합.
-    setSaveActionCount((c) => c + 1);
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (nowSaved) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-    setSaveAbsorbing(true);
+    if (!nowSaved) return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    // 이름·기존 속성 유지(주지표 연속성) + method 추가. source 값은 1.0.x swipe_down 대신 double_tap.
+    track('card_saved', { tmdb_id: rec.tmdbId, title: rec.title, source: method, method });
+    setSavedIds((prev) => new Set(prev).add(rec.tmdbId));
     setSaveFlash(true);
     setTimeout(() => setSaveFlash(false), 600);
-    setTimeout(() => {
-      setSaveAbsorbing(false);
-      setSaveTargetPoint(null);
-      advanceTop();
-      dragX.value = 0;
-      dragY.value = 0;
-    }, SAVE_ABSORB_MS);
+    stickerP.value = reducedMotion
+      ? withSequence(withTiming(1, { duration: 0 }), withTiming(1, { duration: 600 }), withTiming(0, { duration: 0 }))
+      : withSequence(
+          withTiming(1, { duration: 160, easing: Easing.bezier(...easings.enter) }),
+          withTiming(1, { duration: 420 }),
+          withTiming(0, { duration: 200 }),
+        );
+    if (method === 'double_tap') completeHint('double_tap_save');
+    void afterSave(method);
   }
 
+  /** 첫 저장 계측 + 저장 뒤 제안 (A안 신규만). */
+  async function afterSave(method: 'double_tap' | 'button' | 'detail') {
+    const variant = await getOnboardingVariant();
+    if (variant !== 'A') return;
+    if (await consumeOnce('first_save')) {
+      track('first_save', { ms_since_open: sinceOpen().ms_since_open, cards_seen: cardsSeenRef.current, method });
+    }
+    const [saved, flags, prefs] = await Promise.all([getSaved(), getPromptFlags(), getAccountPrefs()]);
+    const prompt = decideSavePrompt({
+      isVariantA: true,
+      savesCount: saved.length,
+      ...flags,
+      hasOtt: prefs.subscribedOtt.length > 0,
+    });
+    if (!prompt) return;
+    // 저장 팝이 끝난 뒤에 띄운다
+    setTimeout(() => {
+      setSavePrompt(prompt);
+      track(prompt === 'ott' ? 'ott_prompt_shown' : 'taste_prompt_shown', { saves_count: saved.length });
+    }, 700);
+  }
+
+  function closeSavePrompt(kind: 'ott' | 'taste', outcome: 'completed' | 'dismissed' | 'accepted', extra?: { providers_count?: number }) {
+    void markPromptDone(kind);
+    setSavePrompt(null);
+    void getSaved().then((saved) => {
+      const event =
+        kind === 'ott'
+          ? outcome === 'completed' ? 'ott_prompt_completed' : 'ott_prompt_dismissed'
+          : outcome === 'accepted' ? 'taste_prompt_accepted' : 'taste_prompt_dismissed';
+      track(event, { saves_count: saved.length, ...extra });
+    });
+  }
+
+  /** 저장 버튼 = 저장/저장 취소 토글 (기존). */
   async function toggleLike() {
-    triggerSaveAbsorption('button');
+    const rec = currentRec;
+    if (!rec) return;
+    if (!savedIds.has(rec.tmdbId)) {
+      void saveCurrent('button');
+      return;
+    }
+    hapticMedium();
+    const nowSaved = await toggleSaved(rec);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (nowSaved) next.add(rec.tmdbId);
+      else next.delete(rec.tmdbId);
+      return next;
+    });
+    track('card_unsaved', { tmdb_id: rec.tmdbId });
   }
 
   async function handleShare() {
@@ -1284,12 +1103,6 @@ export default function DiscoverScreen() {
   // 8px / 300ms 미만 = 탭 → DetailSheet. ↑ 스와이프 진입은 제거됨.
   // 탭 source 는 PostHog 매핑 일관 — "card_tap".
   function handleCardTap() {
-    // TutorialFlow swipe 단계 (swipe_left/right/down) 중 탭은 silent ignore.
-    // DetailSheet open 차단 + detailOpenCount 증가 차단 (step 'tap' 진행 트리거 방지).
-    // 'tap' 단계에서만 탭 허용. 비활성 (tutorialStep===null) 이면 정상 동작.
-    if (tutorialActive && tutorialStep !== null && tutorialStep !== 'tap') {
-      return;
-    }
     if (currentRec) {
       track('detail_opened', {
         tmdb_id: currentRec.tmdbId,
@@ -1303,22 +1116,34 @@ export default function DiscoverScreen() {
     // 잔존 (onFinalize 리셋만으로 불충분 — 시뮬 재보고). Modal 열기 전 하드 0.
     holdSV.value = 0;
     setDetailOpen(true);
-    // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit.
-    setDetailOpenCount((c) => c + 1);
   }
 
+  // 한 번 탭 = 상세. 더블탭 실패를 기다리므로 최대 DOUBLE_TAP_MAX_DELAY 늦게 열린다 (영향 분석 §1 대가).
   const tap = Gesture.Tap()
-    .maxDuration(300)
-    .maxDistance(8)
+    .maxDuration(TAP_MAX_MS)
+    .maxDistance(TAP_MAX_DISTANCE)
     .onStart(() => {
       runOnJS(handleCardTap)();
     });
 
+  /** 더블탭 = 저장만. 이미 저장이면 무시 (저장 취소는 버튼). */
+  function handleDoubleTap() {
+    holdSV.value = 0;
+    void saveCurrent('double_tap');
+  }
+  const doubleTap = Gesture.Tap()
+    .numberOfTaps(2)
+    .maxDelay(DOUBLE_TAP_MAX_DELAY)
+    .maxDistance(TAP_MAX_DISTANCE)
+    .onStart(() => {
+      runOnJS(handleDoubleTap)();
+    });
+
   // 2026-07-10 — hold(long-press) = 케밥 메뉴 열기. holdSV 는 활성화 순간 펄스
   // (SwipeCard worklet 소비 — 선언은 상단 SharedValue 클러스터).
+  // 1.1.0 — 길게 누르기 메뉴 = "관심 없음" (+ 일반 덱이면 "큐 시작"). 큐 중에도 연다 (숨김은 큐 덱에도 걸림).
   function handleHoldMenuOpen() {
-    if (inMix) return; // 중첩 큐 금지 — 큐 중 hold 메뉴 없음 (케밥 버튼과 동일 규칙)
-    handleCardMenuPress();
+    handleCardMenuPress('long_press');
   }
 
   // 2026-07-10 v2 — active 효과 단순화 (사용자 결정). 사전 램프(onBegin 시작)는
@@ -1340,10 +1165,11 @@ export default function DiscoverScreen() {
   // 2026-07-08 — Seeded Mix 2차: 케밥 메뉴 → 믹스 시작 (덱 주입).
   // 케밥/메뉴는 GestureDetector 바깥 absolute overlay (1차 검증 구조) — tap 제스처
   // 선점/DetailSheet 오픈과 원천 분리.
-  function handleCardMenuPress() {
-    // 튜토리얼 진행 중엔 silent ignore — handleCardTap 의 step 가드와 정합.
-    if (tutorialActive && tutorialStep !== null) return;
+  // 메뉴를 연 경로 — not_interested source (협의체 정의 'long_press', 케밥 버튼은 'kebab_menu')
+  const menuViaRef = useRef<'long_press' | 'kebab_menu'>('kebab_menu');
+  function handleCardMenuPress(via: 'long_press' | 'kebab_menu' = 'kebab_menu') {
     if (!currentRec) return;
+    menuViaRef.current = via;
     hapticLight();
     setCardMenuOpen(true);
   }
@@ -1356,8 +1182,6 @@ export default function DiscoverScreen() {
     // recHistory 활성 + saved 제외를 related 경로에도 적용해 "이미 본 카드" 를 걷어냄.
     opts?: { refresh?: boolean },
   ) {
-    if (tutorialActive && tutorialStep !== null) return;
-    if (saveAbsorbing) return;
     setCardMenuOpen(false);
     // 3차 — 테마 큐 payload 확장 (theme_kind + 장르 큐의 genre_id).
     // 작품 큐 (케밥/DetailSheet) 는 기존 payload 그대로.
@@ -1386,17 +1210,10 @@ export default function DiscoverScreen() {
     setMixCandidatesLoaded(false);
     mixQueueRef.current = [];
     mixHydratingRef.current = false;
-    if (passAdvanceTimer.current) {
-      clearTimeout(passAdvanceTimer.current);
-      passAdvanceTimer.current = null;
-    }
     cancelAnimation(dragX);
     cancelAnimation(dragY);
     dragX.value = 0;
     dragY.value = 0;
-    prevOverlayX.value = -SCREEN_WIDTH;
-    setPrevActive(false);
-    setIsDragging(false);
 
     // DetailSheet 의 related fetch 패턴 재사용 — variety 는 TMDB TV(series) 매핑.
     const type = seed.type === 'movie' ? 'movie' : 'series';
@@ -1471,10 +1288,6 @@ export default function DiscoverScreen() {
   function handleMixRelease() {
     mixFetchAbortRef.current?.abort();
     mixFetchAbortRef.current = null;
-    if (passAdvanceTimer.current) {
-      clearTimeout(passAdvanceTimer.current);
-      passAdvanceTimer.current = null;
-    }
     mixQueueRef.current = [];
     mixHydratingRef.current = false;
     setMixSeed(null);
@@ -1486,9 +1299,6 @@ export default function DiscoverScreen() {
     cancelAnimation(dragY);
     dragX.value = 0;
     dragY.value = 0;
-    prevOverlayX.value = -SCREEN_WIDTH;
-    setPrevActive(false);
-    setIsDragging(false);
   }
 
   // lazy hydrate pump — mix 덱을 top 앞 3장까지만 유지, 큐에서 1건씩 순차 hydrate.
@@ -1588,26 +1398,16 @@ export default function DiscoverScreen() {
     }, []),
   );
 
-  function handleSwipeDown() {
-    if (currentRec) {
-      track('card_swiped', {
-        direction: 'down',
-        tmdb_id: currentRec.tmdbId,
-        title: currentRec.title,
-      });
-    }
-    void triggerSaveAbsorption('swipe_down');
-  }
-
   // ── Night Pool 5단계 — "관심 없음" (위 스와이프 · 상세 시트 버튼) ──
   // 되돌리기는 토스트가 3초 뒤 부를 수 있어 최신 덱을 ref 로 읽는다 (클로저 stale 방지).
   const liveDeckRef = useRef({ ratedRecs, mixDeck, inMix, hiddenKeys });
   liveDeckRef.current = { ratedRecs, mixDeck, inMix, hiddenKeys };
 
   // 숨긴 카드가 덱에서 빠진 commit 뒤에 가라앉기 상태 해제 — 해제를 먼저 하면 옛 카드가
-  // 한 프레임 제자리로 튀어 보인다 (dismissCardIdSV 리셋과 같은 이유).
+  // 한 프레임 제자리로 튀어 보인다. commit 뒤엔 뒤 카드 인덱스가 이미 한 칸 당겨져 sinkIdx 해제도 무변화.
   useEffect(() => {
     sinkCardIdSV.value = -1;
+    sinkIdxSV.value = -1;
     sinkP.value = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hiddenKeys]);
@@ -1615,7 +1415,7 @@ export default function DiscoverScreen() {
   // 성능(5단계) — 다음에 쌓일 카드(top+3~+5) 포스터를 미리 메모리 캐시에 디코드해 둔다.
   // 카드 교체 때 새로 마운트되는 3번째 카드의 네트워크 로드·디코드가 교체 프레임에 겹치지 않게.
   const upcomingPosterKey = activeDeck
-    .slice(activeTopIdx + 3, activeTopIdx + 6)
+    .slice(activeTopIdx + WINDOW_AFTER + 1, activeTopIdx + WINDOW_AFTER + 4)
     .map((r) => r.posterUrl ?? '')
     .join('|');
   useEffect(() => {
@@ -1639,11 +1439,27 @@ export default function DiscoverScreen() {
       providers_count: currentRec.providers.length,
       saved: savedIds.has(currentRec.tmdbId),
     });
+    setCardsSeen((n) => n + 1);
+    // 온보딩 A안 — 설치 후 첫 카드 순간 1회 (A안 신규만, 기존 사용자의 "첫 카드"는 이미 지났다)
+    const rec = currentRec;
+    const source = inMix ? 'mix_deck' : 'discover_stack';
+    void getOnboardingVariant().then(async (v) => {
+      if (v === 'A' && (await consumeOnce('first_card'))) {
+        track('first_card_viewed', { ...sinceOpen(), tmdb_id: rec.tmdbId, source });
+      }
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRec, activeTopIdx, state, inMix]);
 
-  function commitHide(rec: Recommendation, source: 'swipe_up' | 'detail_button') {
+  type HideSource = 'long_press' | 'kebab_menu' | 'detail_button';
+  function commitHide(rec: Recommendation, source: HideSource) {
     const key = hiddenKeyOf(rec);
+    // 현재 카드보다 앞의 카드를 숨기면(검색 상세 등) 덱이 당겨지므로 위치도 한 칸 당긴다.
+    const idx = activeDeck.findIndex((r) => r.tmdbId === rec.tmdbId && r.type === rec.type);
+    if (idx >= 0 && idx < activeTopIdx) {
+      if (inMix) setMixTopIdx((i) => Math.max(0, i - 1));
+      else setTopIdx((i) => Math.max(0, i - 1));
+    }
     setHiddenKeys((prev) => new Set(prev).add(key));
     void addHiddenKey(key);
     track('not_interested', {
@@ -1656,7 +1472,7 @@ export default function DiscoverScreen() {
     toast.show('hide', { ctx: { title: rec.title }, onAction: () => undoHide(rec, source) });
   }
 
-  function undoHide(rec: Recommendation, source: 'swipe_up' | 'detail_button') {
+  function undoHide(rec: Recommendation, source: HideSource) {
     const key = hiddenKeyOf(rec);
     const live = liveDeckRef.current;
     const next = new Set(live.hiddenKeys);
@@ -1684,264 +1500,99 @@ export default function DiscoverScreen() {
     toast.show('info', { ctx: { message: '되돌렸어요' } });
   }
 
-  function handleSwipeUp() {
+  /** 길게 누르기·케밥 메뉴 "관심 없음" — 가라앉기(220ms) 뒤 commitHide. 뒤 카드가 제자리로 당겨 깔린다. */
+  function hideFromMenu() {
     const rec = currentRec;
-    // 좌 스와이프 진행 중·저장 흡수 중엔 무시 (handleSwipeLeft 의 연속 스와이프 가드와 같은 규칙)
-    if (!rec || passAdvanceTimer.current || saveAbsorbing || sinkCardIdSV.value !== -1) {
-      dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-      return;
-    }
+    setCardMenuOpen(false);
+    if (!rec || sinkCardIdSV.value !== -1) return;
+    const source = menuViaRef.current;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid).catch(() => {});
-    track('card_swiped', { direction: 'up', tmdb_id: rec.tmdbId, title: rec.title });
-    // 위 끌기는 카드를 올리지 않으므로(SwipeCard) dragY 를 바로 0 → 스티커만 사라지고 다음 카드는 제자리.
-    dragY.value = 0;
+    if (source === 'long_press') completeHint('long_press_hide');
+    sinkIdxSV.value = activeTopIdx;
     sinkCardIdSV.value = rec.tmdbId;
     sinkP.value = 0;
     sinkP.value = withTiming(1, { duration: HIDE_SINK_MS, easing: Easing.in(Easing.ease) });
-    setTimeout(() => commitHide(rec, 'swipe_up'), HIDE_SINK_MS);
+    setTimeout(() => commitHide(rec, source), HIDE_SINK_MS);
   }
 
-  function handleSwipeLeft() {
-    // 2026-06-11 사용자 피드백 #4 — 빠른 연속 swipe race fix.
-    // 진단: 직전 swipe 의 passAdvanceTimer (360ms) 미처리 동안 새 swipe trigger
-    // 시 topIdx 가 아직 advance 안 됨 → `recs[topIdx]` = 옛 작품 → dismissCardIdSV
-    // 가 같은 tmdbId 로 재할당 → 같은 작품 반복 dismiss → 사용자 인지 "같은 작품
-    // 계속 넘기는 현상".
-    // 수정: PWA `useSwipeGesture.onTouchStart:106` 의 `if (swiping) return;` 정합.
-    // passAdvanceTimer 살아있으면 새 swipe 무시 + drag 위치 snap-back. 360ms 마다
-    // 1 swipe 처리 → 빠른 연속 swipe 시 일부 swipe 무시되지만 PWA 와 인지 동등.
-    if (passAdvanceTimer.current) {
-      dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-      dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-      return;
-    }
-    if (currentRec) {
-      track('card_swiped', {
-        direction: 'left',
-        tmdb_id: currentRec.tmdbId,
-        title: currentRec.title,
-      });
-    }
-    // W5 Task B — TutorialFlow v3: 좌 스와이프 신호 emit.
-    setLeftSwipeCount((c) => c + 1);
-    handleSwipeLeftAnim();
-  }
-
-  // 배치 G — 첫 카드 힌트. 첫 카드(topIdx===0)에서 우 드래그 시 1회 toast.
-  // web `useSwipeGesture.ts:131-133` 의 setFirstCardHint(true) 정합.
-  // 튜토리얼이 떠 있는 동안엔 발사하지 않음 (TutorialFlow 가 이미 안내 중 — 중복 회피).
+  // 배치 G — 첫 카드 힌트. 첫 카드에서 아래로(이전) 끌면 1회 toast + 고무줄 복귀.
   function showFirstCardHint() {
     if (firstCardHintShownRef.current) return;
-    if (tutorialActive) return;
     firstCardHintShownRef.current = true;
     toast.show('info', { ctx: { message: '첫 번째 작품이에요' }, duration: 1800 });
+  }
+
+  /** 넘김 정착 — 끌던 거리를 위치에 접어 넣고 target 페이지로 보간 (UI 스레드). */
+  function settlePage(target: number) {
+    'worklet';
+    const H = feedH.value > 0 ? feedH.value : 1;
+    pageSV.value = pageSV.value - dragY.value / H;
+    dragY.value = 0;
+    pageTargetSV.value = target;
+    pageSV.value = withTiming(target, { duration: PAGE_MS, easing: PAGE_EASING });
   }
 
   const pan = Gesture.Pan()
     .onBegin(() => {
       axisSV.value = 0;
-      // 성능(5단계): isDragging 은 튜토리얼 데모만 읽는다 → 평소엔 터치마다 화면 전체 재렌더 2회를 내지 않음.
-      if (tutorialStepSV.value !== 0) runOnJS(setIsDragging)(true);
+    })
+    .onStart(() => {
+      // 넘김 보간 중에 다시 잡으면 그 자리에서 손가락이 이어받는다 (빠른 연속 넘김).
+      cancelAnimation(pageSV);
     })
     .onUpdate((e) => {
-      // Night Pool 5단계 — 방향 잠금: 처음 10px 움직인 축으로 고정 (그 전엔 큰 쪽).
+      // 방향 잠금: 처음 10px 움직인 축으로 고정 (그 전엔 큰 쪽).
       axisSV.value = lockAxis(axisSV.value, e.translationX, e.translationY);
-      const horizontalNow = resolveAxis(axisSV.value, e.translationX, e.translationY) === 1;
-
-      // TutorialFlow step whitelist — drag 자체 차단 (옵션 A 완전 잠금).
-      // 인코딩: 0=비활성, 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
-      // 가이드된 방향 외 swipe 는 dragX/Y/prevOverlayX 변화 차단 → 카드 안 따라옴.
-      const tStep = tutorialStepSV.value;
-      if (tStep !== 0) {
-        // tap (4) 단계: 모든 swipe 차단.
-        if (tStep === 4) return;
-        if (horizontalNow) {
-          // horizontal: 우 swipe(prev) → 2, 좌 swipe(next) → 1.
-          if (e.translationX > 0 && prevRec) {
-            if (tStep !== 2) return;
-          } else {
-            if (tStep !== 1) return;
-          }
-        } else {
-          // vertical (down): 3. 위(관심 없음)는 튜토리얼 단계가 없어 잠금.
-          if (tStep !== 3 || e.translationY < 0) return;
-        }
+      if (resolveAxis(axisSV.value, e.translationX, e.translationY) === 1) {
+        // 좌우 = 탭 이동 예고 — 카드는 조금만 따라온다.
+        dragY.value = 0;
+        dragX.value = Math.max(-36, Math.min(36, e.translationX * 0.2));
+        return;
       }
-
-      // 2026-06-06 (P1 애니메이션 Fix B) — dragX/dragY 를 worklet 안에서 직접
-      // SharedValue 로 업데이트. 매 frame `runOnJS(setDragX)` JS thread 왕복 제거.
-      // setPrevActive 만 React state 라 runOnJS 잔존 (state transition 1~2회/제스처).
-      if (horizontalNow) {
-        // horizontal
-        if (e.translationX > 0 && prevRec) {
-          runOnJS(setPrevActive)(true);
-          prevOverlayX.value = -SCREEN_WIDTH + e.translationX;
-          dragX.value = 0;
-          dragY.value = 0;
-        } else {
-          runOnJS(setPrevActive)(false);
-          dragX.value = e.translationX;
-          dragY.value = 0;
-          // 배치 G — 첫 카드(prevRec 없음 = topIdx 0) 우 드래그 30px+ → 힌트.
-          // web `useSwipeGesture.ts:133` 의 `dx > 30` 임계 정합. firstCardHintGate
-          // shared value 로 worklet 측 1회 게이트 — runOnJS 다발 호출 방지.
-          // (showFirstCardHint 의 ref 가드가 JS 측 멱등성도 별도 보장.)
-          if (
-            !prevRec &&
-            e.translationX > 30 &&
-            firstCardHintGate.value === 0
-          ) {
-            firstCardHintGate.value = 1;
-            runOnJS(showFirstCardHint)();
-          }
-        }
-      } else {
-        // vertical — 아래(저장)·위(관심 없음, Night Pool 5단계 재도입) 모두 dragY 로 추적.
-        runOnJS(setPrevActive)(false);
-        dragX.value = 0;
-        dragY.value = Math.max(-160, Math.min(140, e.translationY));
+      dragX.value = 0;
+      const target = pageTargetSV.value;
+      const atFirst = target <= 0;
+      const atEnd = target >= deckLenSV.value;
+      let dy = e.translationY;
+      // 첫 카드에서 아래 / 끝에서 위 = 고무줄
+      if ((dy > 0 && atFirst) || (dy < 0 && atEnd)) dy = dy * 0.3;
+      dragY.value = dy;
+      if (atFirst && e.translationY > 30 && firstCardHintGate.value === 0) {
+        firstCardHintGate.value = 1;
+        runOnJS(showFirstCardHint)();
       }
     })
     .onEnd((e) => {
-      if (tutorialStepSV.value !== 0) runOnJS(setIsDragging)(false);
-      // Night Pool 5단계 — 판정은 lib/swipe-classify (거리 임계 + 03_p0-2 튕김 보조 + 방향 잠금).
-      const horizontal = resolveAxis(axisSV.value, e.translationX, e.translationY) === 1;
+      const target = pageTargetSV.value;
       const action = classifySwipe({
         axis: axisSV.value,
         dx: e.translationX,
         dy: e.translationY,
         vx: e.velocityX,
         vy: e.velocityY,
-        hasPrev: !!prevRec,
-        screenWidth: SCREEN_WIDTH,
+        hasPrev: target > 0,
+        hasNext: target < deckLenSV.value,
       });
-
-      // TutorialFlow step whitelist 가드.
-      // 인코딩: 0=비활성, 1=swipe_left, 2=swipe_right, 3=swipe_down, 4=tap.
-      // 가이드된 방향 외 swipe 는 silent ignore — dismiss/prev 진행을 차단하고
-      // dragX/dragY 리셋 (snap-back 시각 유지). onUpdate 의 drag 추적 자체는 정상 동작.
-      const tStep = tutorialStepSV.value;
-      if (tStep !== 0) {
-        // 'tap' 단계 (4): 모든 swipe 차단. 탭은 별도 Gesture.Tap 으로 통과.
-        if (tStep === 4) {
-          // prev overlay 진행 중이면 snap-back (revert) — 시각 복귀.
-          if (e.translationX > 0 && prevRec) {
-            prevOverlayX.value = withTiming(
-              -SCREEN_WIDTH,
-              { duration: 300, easing: Easing.bezier(...easings.enter) },
-              () => {
-                runOnJS(setPrevActive)(false);
-              },
-            );
-          }
-          dragX.value = 0;
-          dragY.value = 0;
-          return;
-        }
-        if (horizontal) {
-          // 우 swipe (prev overlay) — swipe_right (2) 만 허용.
-          if (e.translationX > 0 && prevRec) {
-            if (tStep !== 2) {
-              // revert (snap-back). drag tracking 은 onUpdate 가 이미 추적했으므로
-              // overlay 만 원위치로 시각 복귀.
-              prevOverlayX.value = withTiming(
-                -SCREEN_WIDTH,
-                { duration: 300, easing: Easing.bezier(...easings.enter) },
-                () => {
-                  runOnJS(setPrevActive)(false);
-                },
-              );
-              dragX.value = 0;
-              dragY.value = 0;
-              return;
-            }
-          } else {
-            // 좌 swipe (next/dismiss) — swipe_left (1) 만 허용.
-            if (tStep !== 1) {
-              dragX.value = 0;
-              dragY.value = 0;
-              return;
-            }
-          }
-        } else {
-          // 아래 swipe (save) — swipe_down (3) 만 허용. 위(관심 없음)는 튜토리얼 중 차단.
-          if (tStep !== 3 || action === 'hide') {
-            dragX.value = 0;
-            dragY.value = 0;
-            return;
-          }
-        }
+      dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: PAGE_EASING });
+      if (action === 'next' || action === 'prev') {
+        const t = target + (action === 'next' ? 1 : -1);
+        settlePage(t);
+        runOnJS(onFeedNav)(t, action);
+        return;
       }
-
-      if (horizontal) {
-        if (e.translationX > 0 && prevRec) {
-          if (action === 'prev') {
-            // 2026-05-20 PWA 정합 — prev overlay 도착 시 깜빡임 fix.
-            // 기존: withTiming(0, 220) → 콜백에서 `prevOverlayX = -SCREEN_WIDTH` 즉시
-            // 점프 + setTopIdx + setPrevActive(false). UI 메시지 순서 때문에 overlay 가
-            // 한 프레임 -SCREEN_WIDTH 로 튀고 그 사이 옛 top 카드가 노출 → 깜빡임.
-            // PWA `useSwipeGesture.ts:189` 정합: `setPrevOverlayX(0)` (CSS transition
-            // 으로 도착) + `setTimeout(setTopIdx + setPrevOverlayX(null), 300)` —
-            // overlay 가 0 위치에서 그대로 unmount, 동시에 새 top SwipeCard 가 0
-            // 위치에서 mount → 시각 100% 연속.
-            // 곡선/duration 도 PWA `transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)`
-            // (easings.enter) 으로 정합.
-            prevOverlayX.value = withTiming(
-              0,
-              { duration: 300, easing: Easing.bezier(...easings.enter) },
-              () => {
-                // 단일 runOnJS → handlePrevArrival 안에서 setTopIdx + setPrevActive(false)
-                // 동시 호출 → React 18 batched single commit. (두 runOnJS 분할 시 두 번의
-                // commit 발생 → 한 프레임 갭 → 미세 깜빡임.)
-                // -SCREEN_WIDTH 점프 제거 — overlay 는 0 위치에서 React unmount.
-                // 다음 prev swipe 시작 시 onUpdate 가 -SCREEN_WIDTH+dx 로 갱신.
-                runOnJS(handlePrevArrival)();
-              },
-            );
-          } else {
-            // revert — duration/곡선 PWA 정합.
-            prevOverlayX.value = withTiming(
-              -SCREEN_WIDTH,
-              { duration: 300, easing: Easing.bezier(...easings.enter) },
-              () => {
-                runOnJS(setPrevActive)(false);
-              },
-            );
-          }
-        } else {
-          // 좌 (next) — 거리 임계 OR velocity 보조.
-          if (action === 'next') {
-            // 2026-06-10 swipe anim 재설계 — handleSwipeLeft 가 setTopIdx + dragX
-            // withTiming(0) 을 직접 처리. dragX 리셋 X — 옛/새 top 보간 연속성 유지.
-            runOnJS(handleSwipeLeft)();
-            // dragY 도 handleSwipeLeftAnim 안에서 withTiming(0) 처리.
-          } else {
-            // 임계 미달 snap-back — withTiming 으로 부드러운 복귀 (ux-review WARN #3:
-            // 200ms < durations.moderate=250). 즉시 0 점프 회피.
-            dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-            dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-          }
-        }
-      } else {
-        // vertical — 아래 = 저장, 위 = 관심 없음 (Night Pool 5단계 재도입).
-        if (action === 'save') {
-          runOnJS(handleSwipeDown)();
-          // triggerSaveAbsorption 내부에서 흡수 모션 종료 시 dragX/dragY 리셋.
-          dragX.value = 0;
-          dragY.value = 0;
-        } else if (action === 'hide') {
-          // dragY 는 handleSwipeUp 이 가라앉기 시작점으로 넘긴 뒤 0 으로.
-          dragX.value = 0;
-          runOnJS(handleSwipeUp)();
-        } else {
-          // 임계 미달 snap-back — withTiming 으로 부드러운 복귀.
-          dragX.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-          dragY.value = withTiming(0, { duration: SNAPBACK_MS, easing: SWIPE_LEFT_BEZIER });
-        }
-      }
+      // 제자리 복귀 (보간 중 잡았다 놓은 경우도 target 으로)
+      settlePage(target);
+      if (action === 'tab_next' || action === 'tab_prev') runOnJS(onTabSwipe)(action);
+    })
+    .onFinalize(() => {
+      // 취소(시스템 제스처 등)로 끝나도 위치가 어중간하게 남지 않게
+      if (dragY.value !== 0) settlePage(pageTargetSV.value);
     });
 
   const cardsToShow = activeDeck.slice(activeTopIdx, activeTopIdx + 3);
+  // 세로 피드 마운트 창 (위치는 SwipeCard worklet 이 index·pageSV 로 계산)
+  const windowStart = Math.max(0, activeTopIdx - WINDOW_BEFORE);
+  const feedWindow = activeDeck.slice(windowStart, activeTopIdx + WINDOW_AFTER + 1);
   // 3차 — 큐 진행 카운트 총량. mixQueueRef 는 ref 지만 mixPump 가 hydrate 1건마다
   // 리렌더를 일으켜 렌더 시점 값이 최신 (pump effect 참조).
   const mixTotal = inMix ? mixDeck.length + mixQueueRef.current.length : 0;
@@ -2075,7 +1726,9 @@ export default function DiscoverScreen() {
 
       <View
         style={styles.stackWrap}
-        onLayout={(e) => setStackRect(e.nativeEvent.layout)}
+        onLayout={(e) => {
+          feedH.value = e.nativeEvent.layout.height;
+        }}
       >
         {/* 4차-2 — 큐 하이라이트: 솔리드 컨테이너 + 카드 4px 패딩 인셋.
             mixBar(캡)와 같은 인셋(8) 로 한 덩어리, 하단은 bottom 4 로 하트와 분리. */}
@@ -2153,64 +1806,44 @@ export default function DiscoverScreen() {
           </View>
         )}
 
-        {(state === 'ready' || inMix) && cardsToShow.length > 0 && (
-          // 2026-07-10 — longPress 는 Simultaneous 병행: tap(≤300ms)/pan(이동)과
-          // 시간·거리 조건이 자연 배타라 우선순위 대기 없이 공존.
-          <GestureDetector gesture={Gesture.Simultaneous(Gesture.Exclusive(tap, pan), longPress)}>
-            <Animated.View style={[styles.stack, inMix && styles.mixStackInset]}>
-              {/* 2026-05-20 prev overlay 통합 — PrevCardOverlay 별도 컴포넌트 폐기.
-                  prev card 를 stack render 의 마지막(=가장 위)에 prepend 해서
-                  SwipeCard 의 isPrev 모드로 표시. 도착 시 setTopIdx(i-1) 로
-                  cardsToShow 가 prev 카드를 흡수 → React key 기반 reconcile 로
-                  *동일 인스턴스*가 isPrev=true → false 로 prop 만 변경.
-                  native view 보존 → BlurView/shadow/image 안정화 유지 → 깜빡임 0. */}
-              {(() => {
-                const renderOrder = [
-                  ...cardsToShow.slice().reverse(),
-                  ...(prevActive && prevRec ? [prevRec] : []),
-                ];
-                return renderOrder.map((rec, i) => {
-                  const isPrev =
-                    !!(prevActive && prevRec) && i === renderOrder.length - 1;
-                  const depth = isPrev ? 0 : cardsToShow.length - 1 - i;
-                  const isTop = !isPrev && depth === 0;
-                  return (
-                    <SwipeCard
-                      key={rec.tmdbId}
-                      rec={rec}
-                      isTop={isTop}
-                      depth={depth}
-                      // 2026-06-10 swipe anim 재설계 — 비탑 카드도 dragX 전달.
-                      // worklet 안 `tx = isTop ? dragX.value : 0` 이 isTop=false 분기에서
-                      // 0 처리. 다만 좌 swipe trigger 시 새 top (이전 depth=1) 이 promote
-                      // 되며 React key 보존 → 같은 SwipeCard 인스턴스의 isTop prop 이
-                      // false→true 로 바뀜. 그 순간 dragX SharedValue 가 이미 -300 →
-                      // 새 top worklet 이 -300 위치에서 0 으로 슬라이드 보간 (PWA 정합).
-                      // 따라서 비탑도 dragX 를 받아야 promote 시 SharedValue 연속성 보장.
-                      dragX={dragX}
-                      dragY={dragY}
-                      immersive={isTop && immersive}
-                      absorbing={isTop && saveAbsorbing}
-                      saveTargetPoint={saveTargetPoint}
-                      // 2026-05-20 prev overlay 통합
-                      isPrev={isPrev}
-                      prevOverlayX={isPrev ? prevOverlayX : undefined}
-                      // 2026-06-10 swipe anim v3 — dismiss 모션 분리.
-                      // 모든 카드에 dismissX + dismissCardIdSV 전달. worklet 안에서
-                      // tmdbId 매칭으로 옛 top 만 dismissX 적용 → 새 top / 비탑 영향 0.
-                      dismissX={dismissX}
-                      dismissCardIdSV={dismissCardIdSV}
-                      // 2026-07-10 — hold 눌림 램프 (top 카드만 worklet 에서 반영).
-                      holdSV={holdSV}
-                      sinkCardIdSV={sinkCardIdSV}
-                      sinkP={sinkP}
-                    />
-                  );
-                });
-              })()}
+        {(state === 'ready' || inMix) && feedWindow.length > 0 && (
+          // 1.1.0 — 더블탭(저장)·탭(상세)·팬(넘김·탭 이동) 은 배타, longPress(메뉴)는 시간 조건이 달라 병행.
+          // 한 번 탭은 더블탭 실패를 기다린다 (DOUBLE_TAP_MAX_DELAY).
+          <GestureDetector
+            gesture={Gesture.Simultaneous(Gesture.Exclusive(doubleTap, tap, pan), longPress)}
+          >
+            <Animated.View
+              style={[styles.stack, styles.feedClip, inMix && styles.mixStackInset]}
+              testID="discover-feed"
+            >
+              {feedWindow.map((rec, i) => {
+                const index = windowStart + i;
+                const isTop = index === activeTopIdx;
+                return (
+                  <SwipeCard
+                    key={rec.tmdbId}
+                    rec={rec}
+                    index={index}
+                    isTop={isTop}
+                    pageSV={pageSV}
+                    feedH={feedH}
+                    dragY={dragY}
+                    dragX={dragX}
+                    immersive={isTop && immersive}
+                    holdSV={holdSV}
+                    sinkCardIdSV={sinkCardIdSV}
+                    sinkIdxSV={sinkIdxSV}
+                    sinkP={sinkP}
+                  />
+                );
+              })}
+              <SaveSticker stickerP={stickerP} reduced={reducedMotion} />
             </Animated.View>
           </GestureDetector>
         )}
+
+        {/* 온보딩 A안 — 카드 위 조작 힌트 (한 번에 하나). 글자는 터치를 막지 않고 닫기 버튼만 받는다. */}
+        {activeHint && <GestureHint step={activeHint} onClose={() => skipHint(activeHint)} />}
 
         {/* 2026-06-06 (Tier 3 단기 incident 해소) — EmptyState UI 페기.
             무한 스크롤 의도 (사용자 명시 "EmptyState 화면 자체가 없어야"). 빈 응답
@@ -2222,10 +1855,10 @@ export default function DiscoverScreen() {
             Pressable 이 터치를 소비하므로 tap 제스처(DetailSheet 진입)와 원천 분리.
             currentRec(=top 카드) 기준 단일 렌더라 뒤 카드/EmptyState 노출 자체가 없음.
             믹스 중엔 숨김 (중첩 믹스는 후속 과제). */}
-        {state === 'ready' && cardsToShow.length > 0 && !inMix && (
+        {(state === 'ready' || inMix) && cardsToShow.length > 0 && (
           <Pressable
             style={styles.cardMenuBtn}
-            onPress={handleCardMenuPress}
+            onPress={() => handleCardMenuPress('kebab_menu')}
             hitSlop={8}
             accessibilityRole="button"
             accessibilityLabel="카드 메뉴"
@@ -2246,15 +1879,28 @@ export default function DiscoverScreen() {
               testID="card-menu-backdrop"
             />
             <View style={styles.cardMenu} testID="card-menu">
+              {/* 중첩 큐 금지 — 큐 중엔 "큐 시작" 없이 "관심 없음" 만 */}
+              {!inMix && (
+                <Pressable
+                  style={({ pressed }) => [styles.cardMenuItem, pressed && styles.cardMenuItemPressed]}
+                  onPress={() => handleMixStart(currentRec, 'native_card_menu')}
+                  accessibilityRole="button"
+                  testID="card-menu-mix"
+                >
+                  <Text style={styles.cardMenuItemText} numberOfLines={1}>
+                    {currentRec.title} 큐 시작
+                  </Text>
+                </Pressable>
+              )}
+              {/* 치우는 동작이라 중성색 (라임·아쿠아 안 씀). 서버 hiddenKeys·5단계 숨김 저장소 그대로. */}
               <Pressable
                 style={({ pressed }) => [styles.cardMenuItem, pressed && styles.cardMenuItemPressed]}
-                onPress={() => handleMixStart(currentRec, 'native_card_menu')}
+                onPress={hideFromMenu}
                 accessibilityRole="button"
-                testID="card-menu-mix"
+                accessibilityLabel="관심 없음"
+                testID="card-menu-hide"
               >
-                <Text style={styles.cardMenuItemText} numberOfLines={1}>
-                  {currentRec.title} 큐 시작
-                </Text>
+                <Text style={styles.cardMenuItemText}>관심 없음</Text>
               </Pressable>
             </View>
           </>
@@ -2336,12 +1982,9 @@ export default function DiscoverScreen() {
               rewind 는 활성 덱 처음으로, refresh 는 믹스 해제 후 일반 새로고침. */}
           {(state === 'ready' || inMix) && currentRec && (
             <ActionBar
-              ref={saveBtnRef}
               isSaved={isLiked}
               canRewind={activeTopIdx > 0}
               saveFlash={saveFlash}
-              savePulling={savePulling}
-              dragY={dragY}
               onRewind={() => (inMix ? setMixTopIdx(0) : setTopIdx(0))}
               onShare={handleShare}
               onOpenDetail={() => {
@@ -2354,8 +1997,6 @@ export default function DiscoverScreen() {
                   source: 'action_bar',
                 });
                 setDetailOpen(true);
-                // W5 Task B — TutorialFlow v3: Detail 진입 신호 emit (ActionBar 경로).
-                setDetailOpenCount((c) => c + 1);
               }}
               onRefresh={() => {
                 // 4차 — 큐 중 새로고침 = 해제가 아니라 같은 seed/테마로 큐 재생성
@@ -2420,6 +2061,10 @@ export default function DiscoverScreen() {
           setReturnToDetailAfterSearch(false);
           commitHide(hideRec, 'detail_button');
         }}
+        onSaved={(savedRec) => {
+          setSavedIds((prev) => new Set(prev).add(savedRec.tmdbId));
+          void afterSave('detail');
+        }}
       />
 
       <SearchSheet
@@ -2455,23 +2100,45 @@ export default function DiscoverScreen() {
         }}
       />
 
-      {/* W5 Task B — TutorialFlow v3 (Discover 첫 진입 4단계 튜토리얼).
-          마운트 조건: tutorialActive (state=ready + recs[0] 로드 후 1회) + recs[0] 존재.
-          dim overlay 는 pointerEvents="box-none" — 사용자가 실제 카드를 만져야 진행. */}
-      {tutorialActive && recs[0] && stackRect && (
-        <TutorialFlow
-          recForDemo={recs[0]}
-          stackRect={stackRect}
-          isDragging={isDragging}
-          userActionSignals={{
-            leftSwipeCount,
-            rightSwipeCount,
-            saveActionCount,
-            detailOpenCount,
-          }}
-          onStepChange={setTutorialStep}
-          onClose={handleTutorialClose}
-        />
+      {/* 온보딩 A안 — 저장 뒤 제안. OTT 는 기존 온보딩 OTT 화면을 시트로, 취향은 기존 설문 라우트로. */}
+      <Modal
+        visible={savePrompt === 'ott'}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => closeSavePrompt('ott', 'dismissed')}
+      >
+        <SafeAreaView style={styles.promptSheet} edges={['bottom']}>
+          <View style={styles.promptClose}>
+            <Button label="닫기" size="sm" variant="ghost" onPress={() => closeSavePrompt('ott', 'dismissed')} />
+          </View>
+          <OnboardingStepOTT
+            initialProviders={subscribedOtt}
+            onNext={() => {
+              void getAccountPrefs().then((prefs) => {
+                setSubscribedOtt(prefs.subscribedOtt);
+                const n = prefs.subscribedOtt.length;
+                closeSavePrompt('ott', n > 0 ? 'completed' : 'dismissed', n > 0 ? { providers_count: n } : undefined);
+              });
+            }}
+          />
+        </SafeAreaView>
+      </Modal>
+      {savePrompt === 'taste' && (
+        <View style={styles.tastePrompt} testID="taste-prompt">
+          <GlassSurface radius={radius.toast} />
+          <Text style={styles.tastePromptText}>저장한 작품이 쌓였어요. 취향을 더 알려 주면 추천이 맞춰져요</Text>
+          <View style={styles.tastePromptActions}>
+            <Button label="나중에" size="sm" variant="ghost" onPress={() => closeSavePrompt('taste', 'dismissed')} />
+            <Button
+              label="취향 더 알려 주기"
+              size="sm"
+              onPress={() => {
+                closeSavePrompt('taste', 'accepted');
+                (router.push as (href: string) => void)('/onboarding/taste-survey?from=discover');
+              }}
+            />
+          </View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -2582,6 +2249,27 @@ const styles = StyleSheet.create({
   mixStackInset: {
     marginTop: 4,
   },
+  // 세로 피드 — 위아래 카드가 칩 줄 위·탭바 아래로 새어 보이지 않게
+  feedClip: { overflow: 'hidden' },
+  promptSheet: { flex: 1, backgroundColor: colors.bg },
+  promptClose: { alignItems: 'flex-end', paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
+  // 취향 제안 — 액션바 위 유리 카드 (토스트 재질)
+  tastePrompt: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: TAB_BAR_SPACE + ACTION_BAR_HEIGHT + 20,
+    padding: spacing.md,
+    gap: spacing.sm,
+    zIndex: 40,
+  },
+  tastePromptText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    fontFamily: fontsV2.bodySemi,
+    lineHeight: 21,
+  },
+  tastePromptActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
   // seed 미니 포스터 (작품 큐만) — 2:3 비율 26×39, radius 6.
   mixBarPoster: {
     width: 26,

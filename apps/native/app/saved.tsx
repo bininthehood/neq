@@ -9,6 +9,8 @@ import {
   Modal,
 } from 'react-native';
 import { Text } from '../components/Text';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useTabSwipe } from '../hooks/useTabSwipe';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { router, useFocusEffect } from 'expo-router';
@@ -171,6 +173,8 @@ function IconCalendar({ size = 16, color }: { size?: number; color: string }) {
 }
 
 export default function SavedScreen() {
+  // 1.1.0 — 좌우 스와이프 = 탭 이동
+  const tabSwipe = useTabSwipe('saved');
   const [items, setItems] = useState<SavedItem[]>([]);
   // 뷰 모드. 첫 mount 시 AsyncStorage 에서 복원.
   const [viewMode, setViewMode] = useState<SavedViewMode>('grid');
@@ -563,6 +567,7 @@ export default function SavedScreen() {
   // 2026-05-20 — SafeAreaView edges 에서 'bottom' 제거. BottomTabs 자체 bottom inset
   // 처리와 중복되어 FlatList 마지막 row 가 잘리는 회귀 (사용자 보고). ['top'] 만 처리.
   return (
+    <GestureDetector gesture={tabSwipe}>
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* 헤더 — 좌:title (자연 폭) / 우:search (자연 폭) / 중앙:viewMode 토글 (absolute center).
           web saved/page.tsx 헤더 (좌 H1 / 중앙 grid·list·preview / 우 search) 정합.
@@ -1087,6 +1092,7 @@ export default function SavedScreen() {
         setGenreFilter={setGenreFilter}
       />
     </SafeAreaView>
+    </GestureDetector>
   );
 }
 

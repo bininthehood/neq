@@ -6,7 +6,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   Easing,
-  type SharedValue,
 } from 'react-native-reanimated';
 import { colors, radius, spacing, easings, durations, shadowsNative, useThemeColors } from '../lib/tokens';
 import { GlassGroup, GlassSurface, useGlassEnabled } from './GlassSurface';
@@ -22,15 +21,8 @@ interface Props {
   onToggleSave: () => void;
   /** Stage 4 D1: save 직후 번쩍 강조 (600ms 자동 해제 호출자 책임) */
   saveFlash?: boolean;
-  /** 사용자가 카드를 아래로 끌고 있는 중 — save 버튼 살짝 부풀음 */
-  savePulling?: boolean;
-  /** Night Pool 5단계 — 카드 세로 변위. 아래로 끄는 거리에 비례해 저장 버튼이 최대 1.14배 (DESIGN.md Motion). */
-  dragY?: SharedValue<number>;
 }
-
-/** 저장 임계(swipe-classify SWIPE_DOWN_THRESHOLD 70)를 지나 100px 에서 최대 */
-const PULL_FULL_PX = 100;
-const PULL_MAX_SCALE = 1.14;
+// 1.1.0 숏폼식 조작 — 아래 끌기가 저장이 아니라 이전 작품이라 끌기 비례 확대(5단계 1.14배) 삭제. 번쩍(1.15)만 남김.
 
 const SPRING_BEZIER = Easing.bezier(...easings.spring);
 
@@ -44,15 +36,12 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
     onRefresh,
     onToggleSave,
     saveFlash = false,
-    savePulling = false,
-    dragY,
   },
   saveBtnRef,
 ) {
   const scale = useSharedValue(1);
 
   useEffect(() => {
-    // 끌기 확대는 아래 worklet 이 dragY 로 직접 — 여기선 저장 직후 번쩍만.
     const target = saveFlash ? 1.15 : 1;
     scale.value = withTiming(target, {
       duration: durations.quick,
@@ -63,13 +52,11 @@ const ActionBar = forwardRef<View, Props>(function ActionBar(
   const saveBtnAnimStyle = useAnimatedStyle(() => {
     'worklet';
     // 2026-05-18 — Fabric NaN/Infinity guard.
-    const y = dragY ? dragY.value : 0;
-    const pull = Math.min(1, Math.max(0, y / PULL_FULL_PX));
-    const s = Math.max(scale.value, 1 + (PULL_MAX_SCALE - 1) * pull);
+    const s = scale.value;
     return { transform: [{ scale: Number.isFinite(s) ? s : 1 }] };
   });
 
-  const saveActive = isSaved || saveFlash || savePulling;
+  const saveActive = isSaved || saveFlash;
   // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙) — StyleSheet 대신 inline.
   const t = useThemeColors();
   const glass = useGlassEnabled();

@@ -113,6 +113,8 @@ interface Props {
    * 미지정 또는 share mode 면 버튼 미노출 (발견 화면만 지정).
    */
   onHide?: (rec: Recommendation) => void;
+  /** 1.1.0 — 상세에서 저장했을 때 (발견: 저장 표시 동기화 + 첫 저장 계측·제안). 저장 취소엔 안 부름. */
+  onSaved?: (rec: Recommendation) => void;
 }
 
 function metaInfo(r: Recommendation): string {
@@ -135,6 +137,7 @@ export default function DetailSheet({
   mode = 'detail',
   onStartMix,
   onHide,
+  onSaved,
 }: Props) {
   const t = useThemeColors(); // Animated.* · worklet · LinearGradient 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
   const insets = useSafeAreaInsets();
@@ -688,8 +691,13 @@ export default function DetailSheet({
         title: rec.title,
         source: mode === 'share' ? 'native_share' : 'native_detail',
       });
+      // 협의체 정의 — card_saved 에 method 'detail' (발견에서 연 상세만: onSaved 지정 화면)
+      if (onSaved) {
+        track('card_saved', { tmdb_id: rec.tmdbId, title: rec.title, source: 'detail', method: 'detail' });
+        onSaved(rec);
+      }
     }
-  }, [rec, mode]);
+  }, [rec, mode, onSaved]);
 
   async function openProvider(providerName: string, watchLink: string | null) {
     if (!rec) return;

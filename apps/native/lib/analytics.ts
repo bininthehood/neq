@@ -49,6 +49,13 @@ const PENDING_MAX = 200; // 메모리 보호. 일반적으로 init 직전 1~5건
 export function attachPostHogInstance(instance: PostHog | null | undefined): void {
   if (!instance) return;
   phInstance = instance;
+  // 큐잉된 이벤트보다 슈퍼 속성을 먼저 — 첫 실행 first_open 에도 onboarding_variant 가 붙게.
+  if (pendingSuper) {
+    try {
+      instance.register(pendingSuper);
+    } catch {}
+    pendingSuper = null;
+  }
   if (pendingQueue.length === 0) return;
   for (const item of pendingQueue.splice(0, pendingQueue.length)) {
     try {
@@ -57,6 +64,19 @@ export function attachPostHogInstance(instance: PostHog | null | undefined): voi
       // 무시 — 이벤트 1건 실패가 앱 흐름을 막지 않게
     }
   }
+}
+
+let pendingSuper: Record<string, string | boolean> | null = null;
+
+/** 슈퍼 속성 (모든 이후 이벤트에 붙음). init 전이면 attach 때 이벤트 flush 보다 먼저 등록. */
+export function registerSuperProps(props: Record<string, string | boolean>): void {
+  if (phInstance) {
+    try {
+      phInstance.register(props);
+    } catch {}
+    return;
+  }
+  pendingSuper = { ...(pendingSuper ?? {}), ...props };
 }
 
 export function detachPostHogInstance(): void {
@@ -127,6 +147,16 @@ export type NekoEvent =
   // 2026-11-27 — 저장 실패 (reason, error_name, tmdb_id) · 설치 후 첫 실행 (app_open 과 별개)
   | 'save_failed'
   | 'first_open'
+  // 1.1.0 온보딩 A안 (네이티브, 협의체 정의 2026-11-27)
+  | 'first_card_viewed'
+  | 'first_save'
+  | 'tab_swiped'
+  | 'ott_prompt_shown'
+  | 'ott_prompt_completed'
+  | 'ott_prompt_dismissed'
+  | 'taste_prompt_shown'
+  | 'taste_prompt_accepted'
+  | 'taste_prompt_dismissed'
   | 'detail_opened'
   | 'detail_related_clicked'
   // 2026-07-08 — Native Seeded Mix MVP (Discover 카드 MIX 버튼).
