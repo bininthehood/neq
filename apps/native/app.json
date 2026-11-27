@@ -17,6 +17,15 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.neq.app",
       "buildNumber": "48",
+      "splash": {
+        "image": "./assets/splash-icon-light.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#EAF6F5",
+        "dark": {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#071B20"
+        }
+      },
       "associatedDomains": [
         "applinks:neq.me"
       ],

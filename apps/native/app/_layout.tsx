@@ -133,7 +133,7 @@ export default function RootLayout() {
           {/* initialMetrics — useSafeAreaInsets 측정 race 차단. splash 직후
               SafeAreaView 마진이 늦게 적용되어 콘텐츠가 줄어드는 reflow 방지. */}
           <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-            <StatusBar style="light" />
+            <StatusBar style="auto" />
             {/* ToastProvider — SafeAreaProvider 내부 마운트 (toast viewport 가
                 useSafeAreaInsets 사용). 탭 화면 전역에서 useToast() 접근 가능. */}
             <ToastProvider>

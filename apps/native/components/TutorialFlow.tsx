@@ -14,8 +14,11 @@ import SwipeLeftDemo from './tutorial/SwipeLeftDemo';
 import SwipeRightDemo from './tutorial/SwipeRightDemo';
 import SwipeDownDemo from './tutorial/SwipeDownDemo';
 import TapDemo from './tutorial/TapDemo';
-import { colors, spacing, radius, useThemeColors } from '../lib/tokens';
+import { colors, spacing, radius, palette } from '../lib/tokens';
 import { easings, durations, fontsV2 } from '@neq/design';
+
+// 어두운 scrim 위 글자·선 — 테마 무관 다크 팔레트
+const ON_INK = palette.dark;
 
 /**
  * TutorialFlow v3 — Discover 첫 진입 4단계 튜토리얼 (native).
@@ -259,9 +262,9 @@ function Dot({ active, passed }: { active: boolean; passed: boolean }) {
   }, [active, passed, width, color]);
 
   // worklet 안이라 동적 색(colors.*) 대신 hex (lib/tokens.ts Reanimated 규칙)
-  const t = useThemeColors();
+  const t = palette.dark; // 튜토리얼은 두 테마 모두 어두운 scrim 위 — 다크 hex 고정 (Reanimated 에도 안전)
   const dotStyle = useAnimatedStyle(() => {
-    let bg = t.borderSubtle;
+    let bg: string = t.borderSubtle;
     if (color.value > 0.75) bg = t.aquaText;
     else if (color.value > 0.25) bg = t.textMuted;
     return {
@@ -304,7 +307,7 @@ const styles = StyleSheet.create({
     // 03_p1-1#1: dataReg(Geist Mono — 한글 폴백 깨짐) → fontsV2.body
     // (= undefined → RN system font, iOS San Francisco. 한글 가독성 우수).
     // size 12→13, color textSecondary→textPrimary 로 시인성 승격.
-    color: colors.textPrimary,
+    color: ON_INK.textPrimary,
     fontSize: 13,
     fontFamily: fontsV2.body,
     fontWeight: '500',
@@ -316,7 +319,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   stepNumber: {
-    color: colors.aquaText,
+    color: ON_INK.aquaText,
     fontSize: 12,
     fontFamily: fontsV2.dataMedium,
   },

@@ -14,8 +14,11 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Recommendation } from '../../lib/types';
 import { easings, fontsV2 } from '@neq/design';
-import { colors, spacing } from '../../lib/tokens';
+import { spacing, palette } from '../../lib/tokens';
 import TutorialDemoCard from './TutorialDemoCard';
+
+// 어두운 scrim 위 글자·선 — 테마 무관 다크 팔레트
+const ON_INK = palette.dark;
 
 /**
  * TutorialFlow v3.2 — 2단계: 우 스와이프 (이전 카드 overlay).
@@ -110,10 +113,10 @@ export default function SwipeRightDemo({ recForDemo, stackRect }: Props) {
       <View style={styles.arrowHint} pointerEvents="none">
         <Animated.View style={arrowStyle}>
           <Svg width={32} height={32} viewBox="0 0 24 24">
-            <Line x1={5} y1={12} x2={19} y2={12} stroke={colors.aquaText} strokeWidth={2} strokeLinecap="round" />
+            <Line x1={5} y1={12} x2={19} y2={12} stroke={ON_INK.aquaText} strokeWidth={2} strokeLinecap="round" />
             <Polyline
               points="12 5 19 12 12 19"
-              stroke={colors.aquaText}
+              stroke={ON_INK.aquaText}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -161,7 +164,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   headline: {
-    color: colors.textPrimary,
+    color: ON_INK.textPrimary,
     fontFamily: fontsV2.body,
     fontSize: 16,
     fontWeight: '500',
@@ -169,7 +172,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   sub: {
-    color: colors.textSecondary,
+    color: ON_INK.textSecondary,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

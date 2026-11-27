@@ -13,8 +13,11 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Recommendation } from '../../lib/types';
 import { easings, fontsV2 } from '@neq/design';
-import { colors, spacing, useThemeColors } from '../../lib/tokens';
+import { spacing, palette } from '../../lib/tokens';
 import TutorialDemoCard from './TutorialDemoCard';
+
+// 어두운 scrim 위 글자·선 — 테마 무관 다크 팔레트
+const ON_INK = palette.dark;
 
 /**
  * TutorialFlow v3.2 — 4단계: 탭 (Detail 진입).
@@ -90,7 +93,7 @@ export default function TapDemo({ recForDemo, stackRect }: Props) {
     };
   }, [cardScale, ringScale, ringOpacity]);
 
-  const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
+  const t = palette.dark; // 튜토리얼은 두 테마 모두 어두운 scrim 위 — 다크 hex 고정 (Reanimated 에도 안전)
   const ringStyle = useAnimatedStyle(() => ({
     opacity: ringOpacity.value,
     transform: [{ scale: ringScale.value }],
@@ -156,7 +159,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   headline: {
-    color: colors.textPrimary,
+    color: ON_INK.textPrimary,
     fontFamily: fontsV2.body,
     fontSize: 16,
     fontWeight: '500',
@@ -164,7 +167,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   sub: {
-    color: colors.textSecondary,
+    color: ON_INK.textSecondary,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

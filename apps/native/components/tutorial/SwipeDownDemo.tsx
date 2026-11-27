@@ -12,8 +12,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Recommendation } from '../../lib/types';
 import { easings, fontsV2 } from '@neq/design';
-import { colors, spacing } from '../../lib/tokens';
+import { spacing, palette } from '../../lib/tokens';
 import TutorialDemoCard from './TutorialDemoCard';
+
+// 어두운 scrim 위 글자·선 — 테마 무관 다크 팔레트
+const ON_INK = palette.dark;
 
 /**
  * TutorialFlow v3.2 — 3단계: 아래 스와이프 (저장).
@@ -123,7 +126,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   headline: {
-    color: colors.textPrimary,
+    color: ON_INK.textPrimary,
     fontFamily: fontsV2.body,
     fontSize: 16,
     fontWeight: '500',
@@ -131,7 +134,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   sub: {
-    color: colors.textSecondary,
+    color: ON_INK.textSecondary,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 18,

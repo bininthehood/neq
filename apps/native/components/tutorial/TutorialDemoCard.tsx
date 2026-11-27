@@ -6,7 +6,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { Recommendation } from '../../lib/types';
 import { CardInner } from '../SwipeCard';
-import { radius, shadowsNative, useThemeColors } from '../../lib/tokens';
+import { radius, shadowsNative, palette } from '../../lib/tokens';
 
 /**
  * TutorialFlow v3.2 — 풀사이즈 데모 카드 (2026-06-04 통합 → 6/4 산업표준 마이그레이션).
@@ -73,7 +73,7 @@ export default function TutorialDemoCard({
 
   // CardInner 는 immersive=false (정보 영역 노출) + depth=0 (top 카드 동등).
   // useMemo 로 stable reference — Demo 가 sharedValue 변동마다 리렌더하지 않도록.
-  const t = useThemeColors(); // Animated.View 색은 hex 만 (lib/tokens.ts Reanimated 규칙)
+  const t = palette.dark; // 튜토리얼은 두 테마 모두 어두운 scrim 위 — 다크 hex 고정 (Reanimated 에도 안전)
   const cardContent = useMemo(
     () => <CardInner rec={rec} immersive={false} depth={0} />,
     [rec],
