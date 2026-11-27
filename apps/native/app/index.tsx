@@ -954,7 +954,7 @@ export default function DiscoverScreen() {
 
   // ── 조작 힌트 (온보딩 A안) ──
   const activeHint: HintStep | null =
-    hintsDone && (state === 'ready' || inMix) && currentRec && !detailOpen && !searchOpen && !cardMenuOpen
+    hintsDone && (state === 'ready' || inMix) && currentRec && !detailOpen && !searchOpen && !cardMenuOpen && !savePrompt
       ? nextHint(hintsDone, cardsSeen)
       : null;
   const shownHintRef = useRef<HintStep | null>(null);
@@ -2113,6 +2113,7 @@ export default function DiscoverScreen() {
           </View>
           <OnboardingStepOTT
             initialProviders={subscribedOtt}
+            submitLabel="저장하기"
             onNext={() => {
               void getAccountPrefs().then((prefs) => {
                 setSubscribedOtt(prefs.subscribedOtt);
@@ -2126,7 +2127,7 @@ export default function DiscoverScreen() {
       {savePrompt === 'taste' && (
         <View style={styles.tastePrompt} testID="taste-prompt">
           <GlassSurface radius={radius.toast} />
-          <Text style={styles.tastePromptText}>저장한 작품이 쌓였어요. 취향을 더 알려 주면 추천이 맞춰져요</Text>
+          <Text style={styles.tastePromptText}>취향을 더 알려 주면 추천이 더 잘 맞아요</Text>
           <View style={styles.tastePromptActions}>
             <Button label="나중에" size="sm" variant="ghost" onPress={() => closeSavePrompt('taste', 'dismissed')} />
             <Button

@@ -29,11 +29,14 @@ const OTT_ICON_LOOKUP: Record<string, string> = {
 interface Props {
   onNext: () => void;
   initialProviders?: number[];
+  /** 1.1.0 — 저장 뒤 OTT 제안 시트에서 재사용할 때 "시작하기" 대신 */
+  submitLabel?: string;
 }
 
 export default function OnboardingStepOTT({
   onNext,
   initialProviders = [],
+  submitLabel = '시작하기',
 }: Props) {
   // 2026-06-11 — comingSoon OTT 는 initial state 에서 자동 제외 (재진입 시 안전).
   // 기존 사용자가 Coupang Play 선택 상태로 onboarding 재진입해도 자동 deselect.
@@ -154,7 +157,7 @@ export default function OnboardingStepOTT({
               { color: hasSelection ? colors.textInverse : colors.textMuted },
             ]}
           >
-            시작하기
+            {submitLabel}
           </Text>
         </Pressable>
         <Pressable onPress={skip} style={styles.skipBtn}>
