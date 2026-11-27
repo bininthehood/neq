@@ -31,6 +31,7 @@ const dark = {
   textPrimary: '#F3FAF8',
   textSecondary: '#A9C2C0',
   textMuted: '#6F8E8C',
+  textMeta: '#74918F', // 작은 보조 글자(메타·캡션) — bg 5.2 · surface 4.7 (muted 는 surface 4.49)
   textInverse: '#071B20', // lime·danger 채움 위 글자
   textPrimaryDim: 'rgba(243, 250, 248, 0.07)',
 
@@ -40,6 +41,7 @@ const dark = {
   limeDim: 'rgba(216, 245, 71, 0.14)',
   aqua: '#58DCCB',
   aquaText: '#58DCCB',
+  wordmark: '#58DCCB', // 워드마크 tint 전용 (사용자 결정 2026-11-26 — UI 글자색과 분리)
   aquaDim: 'rgba(88, 220, 203, 0.14)',
   aquaBorder: 'rgba(88, 220, 203, 0.30)',
 
@@ -76,7 +78,8 @@ const light: Record<PaletteKey, string> = {
 
   textPrimary: '#0F2A2F',
   textSecondary: '#43626A',
-  textMuted: '#6A858A', // 3.6:1 — 큰 글자·힌트 전용
+  textMuted: '#6A858A', // 3.6:1 — 큰 글자·힌트·아이콘 전용
+  textMeta: '#4F6D73', // 작은 보조 글자 — bg 5.0 · raised 4.5 (라이트 textMuted 대체)
   textInverse: '#0F2A2F',
   textPrimaryDim: 'rgba(15, 42, 47, 0.07)',
 
@@ -84,7 +87,8 @@ const light: Record<PaletteKey, string> = {
   limeText: '#4E6E00',
   limeDim: 'rgba(78, 110, 0, 0.12)',
   aqua: '#58DCCB',
-  aquaText: '#007B72',
+  aquaText: '#00716A', // 옅은 아쿠아 면(aquaDim) 위에서도 4.5+ (#007B72 는 4.1)
+  wordmark: '#007B72', // 워드마크는 DESIGN.md 결정값 그대로
   aquaDim: 'rgba(0, 123, 114, 0.10)',
   aquaBorder: 'rgba(0, 123, 114, 0.30)',
 
@@ -93,7 +97,7 @@ const light: Record<PaletteKey, string> = {
   dangerOverlay: 'rgba(192, 57, 43, 0.18)',
   warning: '#8A6100',
   warningDim: 'rgba(138, 97, 0, 0.12)',
-  info: '#007B72',
+  info: '#00716A',
   infoDim: 'rgba(0, 123, 114, 0.10)',
   success: '#4E6E00',
   successDim: 'rgba(78, 110, 0, 0.12)',

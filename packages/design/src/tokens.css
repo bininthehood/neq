@@ -28,6 +28,7 @@
   --text-primary:     #F3FAF8;
   --text-secondary:   #A9C2C0;
   --text-muted:       #6F8E8C;
+  --text-meta:        #74918F;   /* 작은 보조 글자 (bg 5.2 · surface 4.7) */
   --text-inverse:     #071B20;   /* lime·danger 채움 위 글자 */
   --text-primary-dim: rgba(243, 250, 248, 0.07);
 
@@ -37,6 +38,7 @@
   --lime-dim:         rgba(216, 245, 71, 0.14);
   --aqua:             #58DCCB;
   --aqua-text:        #58DCCB;
+  --wordmark:         #58DCCB;
   --aqua-dim:         rgba(88, 220, 203, 0.14);
   --aqua-border:      rgba(88, 220, 203, 0.30);
 
@@ -140,6 +142,7 @@
     --text-primary:     #0F2A2F;
     --text-secondary:   #43626A;
     --text-muted:       #6A858A;   /* 큰 글자·힌트 전용 */
+    --text-meta:        #4F6D73;   /* 작은 보조 글자 (bg 5.0 · raised 4.5) */
     --text-inverse:     #0F2A2F;
     --text-primary-dim: rgba(15, 42, 47, 0.07);
 
@@ -147,7 +150,8 @@
     --lime-text:        #4E6E00;
     --lime-dim:         rgba(78, 110, 0, 0.12);
     --aqua:             #58DCCB;
-    --aqua-text:        #007B72;
+    --aqua-text:        #00716A;
+    --wordmark:         #007B72;
     --aqua-dim:         rgba(0, 123, 114, 0.10);
     --aqua-border:      rgba(0, 123, 114, 0.30);
 
@@ -156,7 +160,7 @@
     --danger-overlay:   rgba(192, 57, 43, 0.18);
     --warning:          #8A6100;
     --warning-dim:      rgba(138, 97, 0, 0.12);
-    --info:             #007B72;
+    --info:             #00716A;
     --info-dim:         rgba(0, 123, 114, 0.10);
     --success:          #4E6E00;
     --success-dim:      rgba(78, 110, 0, 0.12);

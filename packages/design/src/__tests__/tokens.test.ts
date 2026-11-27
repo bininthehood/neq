@@ -64,6 +64,16 @@ const contrast = (a: string, b: string) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
+// rgba(r,g,b,a) 를 불투명 hex 바탕 위에 합성한 hex
+const over = (rgba: string, base: string) => {
+  const [r, g, b, a] = rgba.match(/[\d.]+/g)!.map(Number);
+  const hex = [r, g, b]
+    .map((c, i) => Math.round(c * a + parseInt(base.slice(1 + i * 2, 3 + i * 2), 16) * (1 - a)))
+    .map((c) => c.toString(16).padStart(2, '0'))
+    .join('');
+  return `#${hex}`;
+};
+
 describe('대비', () => {
   it('계산기 자체 검사: 흑백 21:1', () => {
     expect(contrast('#000000', '#FFFFFF')).toBeCloseTo(21, 1);
@@ -84,7 +94,44 @@ describe('대비', () => {
       expect(contrast(p.aquaText, p.bg)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(p.danger, p.bg)).toBeGreaterThanOrEqual(4.5);
     });
+    it(`${theme}: 작은 보조 글자 textMeta ≥ 4.5 (bg·surface)`, () => {
+      expect(contrast(p.textMeta, p.bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.textMeta, p.surface)).toBeGreaterThanOrEqual(4.5);
+    });
   }
+
+  // 3단계 라이트 전용 규칙 (계획 3단계 · DESIGN.md 라이트 표)
+  describe('light 전용', () => {
+    const p = palette.light;
+    const surfaces = { bg: p.bg, surface: p.surface, surfaceRaised: p.surfaceRaised };
+    for (const [name, bg] of Object.entries(surfaces)) {
+      it(`본문 textPrimary·textSecondary·textMeta on ${name} ≥ 4.5`, () => {
+        expect(contrast(p.textPrimary, bg)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(p.textSecondary, bg)).toBeGreaterThanOrEqual(4.5);
+        expect(contrast(p.textMeta, bg)).toBeGreaterThanOrEqual(4.5);
+      });
+      it(`큰 글자·힌트 textMuted on ${name} ≥ 3.0`, () => {
+        expect(contrast(p.textMuted, bg)).toBeGreaterThanOrEqual(3.0);
+      });
+    }
+    it('라임은 글자로 못 쓴다(bg 대비 < 3) → 테두리·글자는 limeText(≥ 3.0 UI, ≥ 4.5 글자)', () => {
+      expect(contrast(p.lime, p.bg)).toBeLessThan(3.0);
+      expect(contrast(p.limeText, p.bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.limeText, p.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.limeText, p.surfaceRaised)).toBeGreaterThanOrEqual(3.0);
+    });
+    it('aquaText 링크·현재 탭 on bg·surface·raised, 옅은 아쿠아 면(aquaDim) 위 ≥ 4.5', () => {
+      expect(contrast(p.aquaText, p.bg)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.aquaText, p.surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.aquaText, p.surfaceRaised)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.aquaText, over(p.aquaDim, p.bg))).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(p.aquaText, over(p.aquaDim, p.surface))).toBeGreaterThanOrEqual(4.5);
+    });
+    it('워드마크는 DESIGN.md 결정값 (#58DCCB / #007B72)', () => {
+      expect(palette.dark.wordmark).toBe('#58DCCB');
+      expect(p.wordmark).toBe('#007B72');
+    });
+  });
 });
 
 describe('accent 삭제 (D5)', () => {
