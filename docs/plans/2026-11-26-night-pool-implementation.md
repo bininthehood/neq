@@ -321,6 +321,22 @@ NO UNRESOLVED DECISIONS
 | 2026-11-27 | 탭 구조: 4번째 슬롯 = 프로필(라벨 '프로필', lazy 기본), 검색 = 각 화면(발견·큐·저장·프로필) 헤더 우상단 '검색 열기' 버튼이 자기 SearchSheet 를 직접 엶. `app/search.tsx`·`lib/search-trigger.ts` 삭제, `search_opened` 는 각 버튼에서 | 제임스 요청(f2f60b7 의 반대). 탭 가로채기가 없어져 트리거 모듈이 필요 없음. 프로필 헤더의 '닫기'는 탭이 됐으니 검색으로. 웹(PWA)은 6단계 범위라 미변경 |
 | 2026-11-27 | E2E: `tapTab('검색')` → `tapTab('검색 열기')`(regression·extended), light-mode 는 `tapTab('프로필')`, 탭 라벨 4종 검사 = 발견·큐·저장·프로필 | `tapByLabel('프로필')` 을 쓰는 나머지 스펙은 탭 접근성 라벨이 같아 그대로 동작 |
 | 2026-11-27 | 카드 유리 = 정적 "유리 테두리"(림 1.5 + 안쪽 잉크 1 + 위 72px 반사광), `CardInner` 안(이전 카드 오버레이와 동일), 테마 무관. DESIGN.md anti-slop #12 를 "포스터 면" 금지로 좁힘 | 제임스 요청 "카드가 평면". 움직이는 카드 위 `GlassView` 는 매 프레임 뒤를 다시 샘플링하고 2026-06 깜빡임 이력 → 포스터를 덮지 않는 가장 가벼운 방식부터. 프레임 전후 같음(아래 결과) |
+| 2026-11-27 | (1.1.0 숏폼식 조작) 정의는 제임스 확정 그대로: 위 = 다음 · 아래 = 이전 · 좌우 = 탭 이동(발견↔큐↔저장, 프로필 제외) · 탭 = 상세 · 더블탭 = 저장만 · 길게 누르기 = 관심 없음. 시제품 스위치 없이 본 구현 | 제임스 확정. 출시 전이라 보호할 사용자가 없고 스위치는 판정·배치·안내·E2E 를 두 벌로 만든다(영향 분석 §7). 되돌릴 길은 커밋 분리 |
+| 2026-11-27 | 카드 위치 = UI 스레드 값 `translateY = (덱 인덱스 − pageSV) × 피드 높이 + 끌기`. React `topIdx` 는 마운트 창(이전 1 + 현재 + 다음 3)만 정함. 제스처가 아닌 topIdx 변경(처음으로·되돌리기·새 로드·큐 시작/해제)만 layout effect 에서 pageSV 를 점프 | 영향 분석 §1 pageSV 권고. 인덱스가 덱 기준이라 commit 이 늦어도 위치가 안 바뀜 → 360ms 연속 스와이프 가드·dismissX·이전 카드 오버레이·깜빡임 보정 주석들이 통째로 필요 없어짐 |
+| 2026-11-27 | 넘김 = enter 곡선 280ms, 보간 중에 다시 잡으면 그 자리에서 손가락이 이어받고 target 기준으로 다음/이전 판정. 첫 카드 아래·끝 위는 고무줄 0.3배. 끝 +1 까지는 넘어가 "추천을 더 가져오는 중" 로더(기존 동작 유지) | 빠른 연속 튕김을 버리지 않는 것이 숏폼 조작의 핵심(§1). 끝에서 막아 버리면 prefetch 가 비었을 때 피드백이 없음 |
+| 2026-11-27 | 임계: 세로·가로 모두 80px 또는 튕김 600px/s + 30px(같은 방향만), 방향 잠금 10px 유지, 더블탭 대기 250ms. 상수는 `lib/swipe-classify.ts` 한 곳(실기기 조정 손잡이) | 영향 분석 §1 값. 세로 100 은 저장·숨김 오조작 방지용이었는데 둘 다 제스처에서 빠짐. 더블탭 대기 = 한 번 탭(상세) 지연이라 실기기에서 200~250 사이로 조정 |
+| 2026-11-27 | 저장 = 카드 제자리 + "찜!" 팝(0.6→1.1, 160ms 뒤 420ms 머무름) + 저장 버튼 번쩍 + success 햅틱 1회. 흡수 모션·자동 전진·`measureInWindow` 삭제. 저장 버튼은 저장/취소 토글 유지 | 제임스 확정(저장해도 넘어가지 않음). 햅틱은 DESIGN.md "저장 확정 success 1회"(이전 medium) |
+| 2026-11-27 | 관심 없음 메뉴: 길게 누르기·케밥 공통, 큐 중에도 열고 큐 중엔 "큐 시작" 대신 "관심 없음" 만. 가라앉는 동안 뒤 카드를 한 칸 당겨 밑에 깔아(`sinkIdxSV`) commit 뒤 덱 인덱스가 당겨져도 위치 그대로 | 세로 피드에선 카드 뒤가 비어 있어 가라앉으면 빈 화면이 보임. 당김 규칙이 index 기반이라 숨김 commit 과 sink 해제 순서에 상관없이 튐 없음. hiddenKeys·저장소·필터·토스트·되돌리기는 5단계 그대로 |
+| 2026-11-27 | `not_interested` source = 'long_press'(협의체 정의) · 'kebab_menu' · 'detail_button' | 정의에 케밥 경로가 없어 long_press 로 섞으면 "길게 누르기 발견율"이 부풀려짐 → 값 하나만 추가(이벤트·키는 그대로) |
+| 2026-11-27 | 큐·저장 좌우 = `hooks/useTabSwipe` (activeOffsetX ±20 · failOffsetY ±15, 겹치지 않는 범위). 발견은 카드 Pan 안에서 축 잠금으로 처리, 끌면 카드가 최대 36pt 따라옴. 탭 전환 animation 은 'none' 유지 | 'shift' 는 탭바 누름에도 걸려 2026-05-20 "즉시 전환" 결정을 뒤집음 + 손가락 따라오는 pager 는 네이티브 모듈 필요. 실기기에서 방향감이 부족하면 그때 |
+| 2026-11-27 | 첫 사용 안내: TutorialFlow v3·데모 4종·PrevCardOverlay(죽은 코드) 삭제 → 카드 위 힌트 한 줄씩(`components/GestureHint`, 유리 알약, 글자는 터치 통과·닫기만 받음). 순서 위로 넘기기(1번째 카드) → 더블탭 저장(3번째) → 좌우 탭 이동(5번째) → 길게 누르기(7번째), 앞 힌트를 끝내야 다음. 해 보면 완료, 닫기 = skipped | 온보딩 A안 정의. "이후" 시점은 정의가 없어 두 장 간격으로 띄움(같은 손잡이 `HINT_MIN_CARDS`). 힌트 문구 해요체·느낌표 없음 |
+| 2026-11-27 | 조작 힌트는 기존 사용자(neq_onboarded)에게도 보임. 저장 뒤 제안·onboarding_variant·first_card_viewed·first_save 는 A안 신규만 | 조작은 모든 사용자에게 바뀌어(1.0.x 아래 = 저장 → 이전) 안내 없이 두면 기존 사용자가 저장하려다 이전 작품으로 감. 기존 사용자 데이터(neq_onboarded·저장·페르소나)는 읽기·쓰기 모두 안 건드림 — 제임스 판단으로 기존 사용자 힌트를 끄려면 `nextHint` 호출 조건 한 줄 |
+| 2026-11-27 | 온보딩 A안: 루트 `_layout`·발견의 `router.replace('/onboarding')` 가드 제거, 신규 판정은 `consumeFirstOpen`(neq_onboarded 또는 저장 있음 = 기존) 에서 `neq_onboarding_variant='A'` 기록. 변형·힌트·제안 완료 키는 설치 단위라 '모든 데이터 초기화'에도 남김 | 데이터 마이그레이션 없음 — 새 키만 추가. 초기화한 사람에게 첫 경험을 다시 보이면 신규 지표가 부풀려짐(first_open 과 같은 규칙). 한계: 1.0.x 에서 온보딩 도중 나간 사람은 신규(A)로 셈(first_open 과 동일 한계) |
+| 2026-11-27 | 저장 뒤 제안: 첫 저장 직후 OTT 시트(기존 `OnboardingStepOTT` 재사용, 버튼만 '저장하기' prop), 이미 OTT 를 정했으면 안 물음. 저장 3개 뒤 "취향 더 알려 주기" 유리 카드 → 수락하면 기존 `onboarding/taste-survey?from=discover`(끝나면 발견으로). 둘 다 한 번만. 익명 유지 | 온보딩 A안 정의. 프로필은 이미 취향 추가(같은 설문 라우트)·구독 OTT 섹션이 있어 재사용 완료. Welcome·이름·장르 단계는 진입 경로 없이 코드만 남음(삭제는 별도 결정) |
+| 2026-11-27 | 계측(협의체 정의 그대로): 슈퍼 속성 `gesture_scheme='shortform_v1'`(전원)·`onboarding_variant='A'`(신규, `registerSuperProps` 로 first_open 전에 등록) · `card_swiped` direction up=다음/down=이전(좌우 없음) · `card_saved` 기존 속성 + `method`(double_tap·button·detail), source 값도 같은 값 · `tab_swiped{from,to}` · `tutorial_step_shown/completed/skipped{step,cards_seen}` · `first_open{platform,app_version}` · `first_card_viewed{ms_since_open,taps_since_open,tmdb_id,source}` · `first_save{ms_since_open,cards_seen,method}` · `ott_prompt_*{saves_count,(providers_count)}` · `taste_prompt_*{saves_count}`. card_viewed 이름·속성 그대로 | 주지표 연속성. 영향 분석이 제안한 card_viewed nav/is_revisit·card_menu_opened 는 정의 밖이라 넣지 않음. taps_since_open = 루트 뷰 onTouchStart 관찰(가로채지 않음) |
+| 2026-11-27 | 발견에서 연 상세 시트의 저장도 `card_saved{source:'detail',method:'detail'}` 발사(+ 첫 저장·제안 연결). 1.0.x 에선 상세 저장이 `share_saved` 만이었음 | 협의체 정의의 method 'detail'. 저장 화면·공유 진입 상세는 onSaved 미지정이라 그대로 |
+| 2026-11-27 | **1.1.0 지표는 조작 변경(gesture_scheme shortform_v1)과 온보딩 A안을 포함하므로 1.0.4와 직접 비교 시 주석 필요** | `card_swiped down` 뜻 반전, card_saved 에 상세 저장 포함, 첫 실행 화면 없음이 한 빌드에 겹쳐 원인을 나눠 볼 수 없음(실트래픽 일 1~3 명이라 A/B 불가). 버전 비교 보조 지표는 "첫 세션 1회 이상 저장한 사용자 비율" |
+| 2026-11-27 | E2E: 헬퍼 `visibleCardId`(page source y 좌표로 보이는 카드)·`swipeFeed`·`swipeTab`·`hideViaLongPress`·`selectedTab`(탭 traits Selected)·`dismissSavePromptIfAny`. not-interested(길게 누르기·케밥·위로 밀기 비숨김)·refresh-race(위 넘김 + 실제 넘어감 확인)·regression(위/아래 복귀·더블탭 비토글·좌우 탭 순서)·swipe-loading(세로 + 본 카드 ≥4 로 거짓 통과 차단) 수정. `swipe-card.test` 삭제(regression 과 중복·가로 전제), `hybrid-onboarding` → `onboarding-a-2026-11-27` 대체(강제 온보딩 걷기는 도달 불가) | 영향 분석 §5. 마지막 id = 맨 위 카드 가정은 세로 피드(덱 순서 렌더)에서 깨짐. iOS 는 testID 가 name 이라 메뉴 항목은 testID 로 찾음 |
 
 ### 4단계 결과 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
 
@@ -390,3 +406,32 @@ NO UNRESOLVED DECISIONS
   12. 토스트(첫 카드에서 우 스와이프 "첫 번째 작품이에요")가 위에서 내려오고 유리로 보임
   13. PostHog: TestFlight 기기 이벤트에 `$app_version` 1.1.0 · `$app_build` 49, `card_viewed`·`saved_viewed`·`not_interested`·`first_open`(새로 설치한 경우) 도착, 세션 리플레이에서 포스터·입력이 가려져 보이는지. TestFlight 이벤트는 `is_internal_build` 가 안 붙으므로(결정 기록) 제임스 기기 distinct_id 로 거를 것
 - 주의: 서버 PR #55(hiddenKeys)는 아직 main 미배포 — 앱 필터만으로 숨김이 동작하지만, 숨긴 작품이 서버 응답에 섞여 한 배치의 카드 수가 줄 수 있다. 심사 제출용 빌드는 PR #55 배포 뒤.
+
+### 1.1.0 숏폼식 조작 + 온보딩 A안 결과 (2026-11-27, iPhone 17 Pro 시뮬 · iOS 26.5)
+
+계획: `~/.orca/bots/bot/reports/neq-feed-gesture-impact-20261127.md`(영향 분석 §7) + `neq-onboarding-A-metrics-20261127.md`(계측 정의). 결정은 위 결정 기록 "(1.1.0 …)" 행들.
+
+**검증:** tsc 네이티브·웹·core 0 · vitest 네이티브 84/84(새: swipe-classify 16 — 80 경계·튕김 600/30·반대 방향 속도·첫 카드 아래·끝 위·축 잠금·탭 순서, onboarding 14 — 신규/기존/저장만 있는 1.0.x/재실행·힌트 순서·저장 뒤 제안) · 웹(+core+design) 705/705 · core 116/116 · eslint 오류 0(경고 33, 이전 34). Appium: regression 13/13 · not-interested 3/3 · refresh-race 4/4(교집합 0) · regression-swipe-loading 2/2(본 카드 6장) · onboarding-a 2/2 · light-mode 2/2 · extended 2/2 · filters 6/6 · persona-taste-survey 3/3 · onboarding-favorites 4/4 · shared-mode 4/4 · my-ott-toggle 4/4(T2~T4 는 OTT 0건이라 스펙 내부 SKIP — 기존 설계). 신규 상태(저장소 비움) 다크·라이트로 첫 카드 힌트 → 3번째 카드 더블탭 힌트 → "찜!" 팝 → OTT 시트 → 저장 3개 뒤 취향 제안 → 좌우 탭 힌트 → 길게 누르기 메뉴·숨김·되돌리기 스크린샷 확인.
+
+**빠른 연속 넘김 프레임 (Debug·Metro, 앱 안에서 프로그램으로 다음 작품 15회, UI `useFrameCallback`·JS rAF, 임시 계측 — 커밋 안 함)**
+| 조건 | 간격 | UI 25ms 초과 / 15회 | UI 최악 | JS 25ms 초과 | JS 최악 | 실제 넘어간 수 |
+|---|---|---|---|---|---|---|
+| 전 (좌 스와이프, 3df2b02+49) | 450ms | 15 · 17 · 13 | 44~52ms | 38~41 | 112~121ms | 15 |
+| 후 (세로 피드 pageSV) | 450ms | 1 · 5 · 4 | 45~65ms | 19~21 | 145~158ms | 15 |
+| 전 | 200ms | 7 · 2 | 41~43ms | 18~20 | 89~92ms | ~8 (360ms 가드가 나머지 버림) |
+| 후 | 200ms | 2 · 2 · 2 | 37~43ms | 17~21 | 131~140ms | 15 |
+- UI 지연 프레임이 3~10배 줄었다 — 덱 전진 commit 이 더 이상 화면 위치를 움직이지 않아서(5단계 원인). 200ms 간격에서도 15번 모두 넘어간다.
+- JS 최악 프레임은 늘었다(마운트 창 5장 + 화면 전체 재렌더). 위치가 UI 스레드라 움직임을 막지 않지만, 실기기에서 빠른 넘김 중 끊기면 5단계 "더 줄이려면 ①"(덱 컴포넌트 분리)이 다음 단계.
+- 200ms "후" 실행의 UI 프레임 수가 201~222 로 기대(~234)보다 적다 — 시뮬 계측 편차로 보이나 원인 미확인. TestFlight 실기기 Instruments 로 다시 볼 것.
+
+**발견한 것:** "찜!" 스티커가 카드(zIndex 10) 밑에 깔려 안 보였다 → zIndex 30. 힌트 알약(34%)과 스티커(30%)가 겹쳐 힌트를 44% 로.
+
+**실기기에서 볼 것 (TestFlight, 제임스)**
+1. 위·아래 넘김 손맛 — 80px·튕김 600px/s, 빠르게 연속으로 넘길 때 끊김(특히 iPhone 15 Plus). 첫 카드 아래 고무줄 + "첫 번째 작품이에요"
+2. 한 번 탭 → 상세가 더블탭 대기(250ms)로 늦게 느껴지는지 (늦으면 `DOUBLE_TAP_MAX_DELAY` 200)
+3. 더블탭 → "찜!" 팝·저장 버튼 번쩍·success 햅틱, 카드 제자리, 한 번 더 더블탭해도 저장 유지, 저장 버튼으로 취소
+4. 좌우 → 발견 ↔ 큐 ↔ 저장(저장 끝·발견 끝에선 그대로), 큐 포스터 가로 줄·저장 장르 칩 줄 가로 스크롤과 안 부딪치는지, 저장 세로 스크롤 중 탭이 안 바뀌는지
+5. 길게 누르기 → 메뉴 "관심 없음" → 가라앉기(뒤 카드가 밑에 보임) → 토스트 → 되돌리기. 큐 중에도 메뉴가 열리는지
+6. 앱 삭제 후 새로 설치 → 온보딩 화면 없이 바로 카드, 힌트 순서(1·3·5·7번째 카드), 첫 저장 직후 OTT 시트 1회, 저장 3개 뒤 취향 제안 → 설문 → 발견 복귀
+7. 1.0.4 에서 쓰던 기기 업데이트 → 저장·페르소나·온보딩 상태 그대로, OTT·취향 제안은 안 뜸(조작 힌트만)
+8. PostHog: 이벤트에 `gesture_scheme=shortform_v1`, 새 설치 기기만 `onboarding_variant=A`(first_open 포함). `card_swiped` direction up/down, `card_saved` method, `tab_swiped`, `not_interested` source long_press, `tutorial_*` step·cards_seen, `first_card_viewed`·`first_save`·`ott_prompt_*`·`taste_prompt_*` 도착
